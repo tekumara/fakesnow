@@ -1,4 +1,4 @@
-# mocksnow
+# fakesnow
 
 Mock SnowflakeDB locally
 

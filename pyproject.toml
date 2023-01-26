@@ -1,5 +1,5 @@
 [project]
-name = "mocksnow"
+name = "fakesnow"
 description = "Mock SnowflakeDB locally"
 version = "0.0.0"
 readme = "README.md"
