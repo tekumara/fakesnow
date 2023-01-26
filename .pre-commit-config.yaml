@@ -1,0 +1,35 @@
+# unless otherwise specified, hooks run on push only
+default_stages: [push]
+repos:
+  # formatters and linters are available in the virtualenv so they can be run from the makefile & vscode
+  - repo: local
+    hooks:
+    hooks:
+      - id: black
+        name: black
+        entry: .venv/bin/black
+        language: system
+        types: [python]
+        require_serial: true
+      - id: ruff
+        name: ruff
+        entry: .venv/bin/ruff
+        language: system
+        types: [python]
+  # these hooks require the project's virtualenv
+  - repo: local
+    hooks:
+      - id: pyright
+        name: pyright
+        entry: make pyright
+        # run on all files
+        pass_filenames: false
+        language: system
+        types: [python]
+      - id: test
+        name: test
+        entry: make test
+        # run on all files
+        pass_filenames: false
+        language: system
+        types: [python]

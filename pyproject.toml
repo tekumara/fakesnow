@@ -1,0 +1,71 @@
+[project]
+name = "mocksnow"
+description = "Mock SnowflakeDB locally"
+version = "0.0.0"
+readme = "README.md"
+requires-python = ">=3.9"
+
+[project.optional-dependencies]
+dev = [
+    "black~=22.12",
+    "build~=0.10",
+    "pre-commit~=3.0",
+    "pytest~=7.2",
+    "ruff~=0.0.235",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+exclude = ["tests*"]
+
+# use PyCharm default line length of 120
+
+[build-system]
+requires = ["setuptools~=66.1", "wheel~=0.37"]
+
+[tool.black]
+line-length = 120
+
+[tool.ruff]
+line-length = 120
+
+# rules to enable/ignore
+select = [
+    # pyflakes
+    "F",
+    # pycodestyle
+    "E",
+    "W",
+    # type annotations
+    "ANN",
+    # pep8-naming
+    "N",
+    # bugbear
+    "B",
+    # isort
+    "I",
+    # flake8-unused-arguments
+    "ARG",
+]
+ignore = [
+    # allow untyped self and cls args, and no return type from dunder methods
+    "ANN101",
+    "ANN102",
+    "ANN204",
+    # allow == True because pandas dataframes overload equality
+    "E712",
+]
+# first-party imports for sorting
+src = ["."]
+
+fix = true
+
+[tool.ruff.per-file-ignores]
+# imports in __init__.py don't need to be used in __init__.py
+"__init__.py" = ["F401"]
+# test functions don't need return types
+"tests/*" = ["ANN201", "ANN202"]
+
+[tool.ruff.flake8-annotations]
+# allow *args: Any, **kwargs: Any
+allow-star-arg-any = true

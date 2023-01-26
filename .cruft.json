@@ -1,0 +1,15 @@
+{
+  "template": "git@github.com:tekumara/python-typed-template.git",
+  "commit": "fb1f525b150988747a30641a6949818483c1b61b",
+  "checkout": null,
+  "context": {
+    "cookiecutter": {
+      "repo_name": "mocksnow",
+      "package_name": "mocksnow",
+      "distribution_name": "mocksnow",
+      "description": "Mock SnowflakeDB locally",
+      "_template": "git@github.com:tekumara/python-typed-template.git"
+    }
+  },
+  "directory": null
+}
