@@ -5,7 +5,8 @@ version = "0.0.0"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
-    "snowflake-connector-python"
+    "snowflake-connector-python",
+    "duckdb"
 ]
 
 [project.optional-dependencies]

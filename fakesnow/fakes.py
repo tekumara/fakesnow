@@ -1,19 +1,22 @@
 from __future__ import annotations
 from typing import Any, Sequence
 from typing_extensions import Self
+from unittest.mock import MagicMock
 
 from snowflake.connector.cursor import SnowflakeCursor
 from snowflake.connector import SnowflakeConnection
 import duckdb
+from duckdb import DuckDBPyConnection
 
-class FakeSnowflakeCursor(SnowflakeCursor):
 
+class FakeSnowflakeCursor:
     def __init__(
         self,
-        connection: SnowflakeConnection,
+        connection: DuckDBPyConnection,
         use_dict_result: bool = False,
     ) -> None:
         self._connection = connection
+        super().__init__()
 
     def __enter__(self) -> Self:
         return self
@@ -22,21 +25,17 @@ class FakeSnowflakeCursor(SnowflakeCursor):
         pass
 
     def execute(
-        self,
-        command: str,
-        params: Sequence[Any] | dict[Any, Any] | None = None,
-        *args
-    ):
-        pass
+        self, command: str, params: Sequence[Any] | dict[Any, Any] | None = None, *args, **kwargs
+    ) -> FakeSnowflakeCursor:
+        print(command)
+        self._connection.execute(command)
+        return self
 
     def fetchall(self) -> list[tuple] | list[dict]:
-        return []
+        return self._connection.fetchall()
 
-    # def __getattr__(self, attr):
-    #     raise NotImplementedError(f"{attr} not implemented on {self.__class__}")
 
 class FakeSnowflakeConnection(SnowflakeConnection):
-
     def __init__(self, *args, **kwargs):
         pass
 
@@ -49,7 +48,5 @@ class FakeSnowflakeConnection(SnowflakeConnection):
     def connect(self, **kwargs) -> None:
         return
 
-    def cursor(
-        self, cursor_class: type[SnowflakeCursor] = FakeSnowflakeCursor
-    ) -> FakeSnowflakeCursor:
+    def cursor(self, cursor_class: type[SnowflakeCursor] = FakeSnowflakeCursor) -> FakeSnowflakeCursor:
         return FakeSnowflakeCursor(self)
