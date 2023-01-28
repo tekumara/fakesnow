@@ -12,5 +12,5 @@ def conn() -> Iterator[snowflake.connector.SnowflakeConnection]:
     Yield a snowflake connection once per session.
     """
     with fakesnow.mock():
-        with snowflake.connector.connect() as conn:
-            yield conn
+        with snowflake.connector.connect() as c:
+            yield c
