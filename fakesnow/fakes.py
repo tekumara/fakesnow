@@ -1,12 +1,14 @@
 from __future__ import annotations
-from typing import Any, Sequence
-from typing_extensions import Self
-from unittest.mock import MagicMock
 
-from snowflake.connector.cursor import SnowflakeCursor
-from snowflake.connector import SnowflakeConnection
+from types import TracebackType
+from typing import Any, Optional, Sequence, Type
+
 import duckdb
+import snowflake.connector.errors
 from duckdb import DuckDBPyConnection
+from snowflake.connector import SnowflakeConnection
+from snowflake.connector.cursor import SnowflakeCursor
+from typing_extensions import Self
 
 
 class FakeSnowflakeCursor:
@@ -21,14 +23,23 @@ class FakeSnowflakeCursor:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, type, value, traceback):
-        pass
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]] = ...,
+        exc_value: Optional[BaseException] = ...,
+        traceback: Optional[TracebackType] = ...,
+    ) -> bool:
+        return False
 
     def execute(
-        self, command: str, params: Sequence[Any] | dict[Any, Any] | None = None, *args, **kwargs
+        self, command: str, params: Sequence[Any] | dict[Any, Any] | None = None, *args: Any, **kwargs: Any
     ) -> FakeSnowflakeCursor:
-        print(command)
-        self._connection.execute(command)
+
+        try:
+            self._connection.execute(command)
+        except duckdb.CatalogException as e:
+            raise snowflake.connector.errors.ProgrammingError(e.args[0]) from e
+
         return self
 
     def fetchall(self) -> list[tuple] | list[dict]:
@@ -36,16 +47,21 @@ class FakeSnowflakeCursor:
 
 
 class FakeSnowflakeConnection(SnowflakeConnection):
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args: Any, **kwargs: Any):
         pass
 
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(self, type, value, traceback):
-        pass
+    def __exit__(
+        self,
+        exc_type: Optional[Type[BaseException]] = ...,
+        exc_value: Optional[BaseException] = ...,
+        traceback: Optional[TracebackType] = ...,
+    ) -> bool:
+        return False
 
-    def connect(self, **kwargs) -> None:
+    def connect(self, **kwargs: Any) -> None:
         return
 
     def cursor(self, cursor_class: type[SnowflakeCursor] = FakeSnowflakeCursor) -> FakeSnowflakeCursor:

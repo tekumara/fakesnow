@@ -4,11 +4,10 @@ from contextlib import contextmanager
 from typing import Any, Iterator
 from unittest.mock import create_autospec, patch
 
+import duckdb
 import snowflake.connector
 
 import fakesnow.fakes as fakes
-import duckdb
-
 
 # def mock_execute(
 #     command: str,

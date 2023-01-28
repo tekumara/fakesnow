@@ -1,3 +1,4 @@
+import pytest
 import snowflake.connector
 
 conn_info = dict(
@@ -18,3 +19,13 @@ def test_example(conn: snowflake.connector.SnowflakeConnection):
         result = cur.fetchall()
 
         assert result == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+
+def test_non_existant_table_throws_snowflake_exception(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
+            cur.execute("select * from this_table_does_not_exist")
+
+def test_create_fully_qualified_schema(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create schema if not exists staging.jaffles")
