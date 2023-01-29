@@ -16,10 +16,15 @@ def test_example(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
         cur.execute("select id, first_name, last_name from customers")
+        cur.execute("select id, first_name, last_name from customers")
         result = cur.fetchall()
 
         assert result == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
+def test_example_with_database(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create schema if not exists prod.jaffles")
+        cur.execute("create table prod.jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
 def test_non_existant_table_throws_snowflake_exception(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
