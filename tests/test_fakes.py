@@ -1,6 +1,7 @@
 import pytest
 import snowflake.connector
 
+
 def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
@@ -11,6 +12,7 @@ def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
 
         assert result == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
+
 def test_fetchone(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
@@ -19,7 +21,8 @@ def test_fetchone(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("select id, first_name, last_name from customers")
         result = cur.fetchone()
 
-        assert result == (1, 'Jenny', 'P')
+        assert result == (1, "Jenny", "P")
+
 
 def test_qualified_with_database(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
@@ -41,6 +44,7 @@ def test_uses_connection_database_and_schema(conn: snowflake.connector.Snowflake
 
             assert result == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
+
 def test_use_schema(conn: snowflake.connector.SnowflakeConnection):
     with snowflake.connector.connect() as conn:
         with conn.cursor() as cur:
@@ -48,6 +52,7 @@ def test_use_schema(conn: snowflake.connector.SnowflakeConnection):
             cur.execute("create table jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
             cur.execute("use schema jaffles")
             cur.execute("insert into customers values (1, 'Jenny', 'P')")
+
 
 def test_non_existant_table_throws_snowflake_exception(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:

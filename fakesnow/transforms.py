@@ -28,11 +28,7 @@ def database_as_schema(expression: exp.Expression) -> exp.Expression:
         if not node.parent:
             raise Exception(f"No parent for table expression {node.sql()}")
 
-        if (
-            (kind := node.parent.args.get("kind", None))
-            and isinstance(kind, str)
-            and kind.upper() == "SCHEMA"
-        ):
+        if (kind := node.parent.args.get("kind", None)) and isinstance(kind, str) and kind.upper() == "SCHEMA":
             if "db" not in node.args or node.args["db"] is None:
                 # "schema" expression isn't qualified with a database
                 return node

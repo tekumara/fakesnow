@@ -56,7 +56,8 @@ class FakeSnowflakeCursor:
     def fetchone(self) -> dict | tuple | None:
         return self.duck_conn.fetchone()
 
-class FakeSnowflakeConnection():
+
+class FakeSnowflakeConnection:
     def __init__(
         self,
         duck_conn: DuckDBPyConnection,
