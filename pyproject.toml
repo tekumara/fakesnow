@@ -5,8 +5,9 @@ version = "0.0.0"
 readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
+    "duckdb",
     "snowflake-connector-python",
-    "duckdb"
+    "sqlglot",
 ]
 
 [project.optional-dependencies]
@@ -48,8 +49,6 @@ select = [
     "B",
     # isort
     "I",
-    # flake8-unused-arguments
-    "ARG",
 ]
 ignore = [
     # allow untyped self and cls args, and no return type from dunder methods

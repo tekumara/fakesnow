@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from types import TracebackType
 from typing import Any, Optional, Sequence, Type
+from sqlglot import parse_one, exp
 
 import duckdb
 import snowflake.connector.errors
@@ -9,6 +10,8 @@ from duckdb import DuckDBPyConnection
 from snowflake.connector import SnowflakeConnection
 from snowflake.connector.cursor import SnowflakeCursor
 from typing_extensions import Self
+from sqlglot.dialects.snowflake import Snowflake
+import fakesnow.transforms as transforms
 
 
 class FakeSnowflakeCursor:
@@ -34,9 +37,11 @@ class FakeSnowflakeCursor:
     def execute(
         self, command: str, params: Sequence[Any] | dict[Any, Any] | None = None, *args: Any, **kwargs: Any
     ) -> FakeSnowflakeCursor:
+        parsed = parse_one(command, read="snowflake")
+        transformed = transforms.database_prefix(parsed).sql()
 
         try:
-            self._connection.execute(command)
+            self._connection.execute(transformed)
         except duckdb.CatalogException as e:
             raise snowflake.connector.errors.ProgrammingError(e.args[0]) from e
 

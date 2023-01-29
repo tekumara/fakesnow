@@ -16,11 +16,10 @@ import fakesnow.fakes as fakes
 #     print(command)
 
 
-
 @contextmanager
 def mock() -> Iterator[None]:
     with patch.object(snowflake.connector, "connect", autospec=True) as connect:
-        duck_conn = duckdb.connect(database=':memory:')
+        duck_conn = duckdb.connect(database=":memory:")
 
         fake_cursor = fakes.FakeSnowflakeCursor(duck_conn)
 
