@@ -5,12 +5,11 @@ from typing import Any, Iterable, Optional, Sequence, Type
 
 import duckdb
 import snowflake.connector.errors
+import sqlglot
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import SnowflakeCursor
-from snowflake.connector import SnowflakeConnection
 from sqlglot import parse_one
 from typing_extensions import Self
-import sqlglot
 
 import fakesnow.transforms as transforms
 

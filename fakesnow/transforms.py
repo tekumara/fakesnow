@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 from sqlglot import exp
 
 
@@ -8,9 +10,9 @@ def database_as_schema(expression: exp.Expression) -> exp.Expression:
 
     Example:
         >>> import sqlglot
-        >>> sqlglot.parse_one("SELECT * FROM prod.staging.jaffles").transform(database_prefix).sql()
+        >>> sqlglot.parse_one("SELECT * FROM prod.staging.jaffles").transform(database_as_schema).sql()
         'SELECT * FROM prod_staging.jaffles'
-        >>> sqlglot.parse_one("CREATE SCHEMA prod.staging").transform(database_prefix).sql()
+        >>> sqlglot.parse_one("CREATE SCHEMA prod.staging").transform(database_as_schema).sql()
         'CREATE SCHEMA prod_staging'
     Args:
         expression (exp.Expression): the expression that will be transformed.
@@ -26,8 +28,12 @@ def database_as_schema(expression: exp.Expression) -> exp.Expression:
         if not node.parent:
             raise Exception(f"No parent for table expression {node.sql()}")
 
-        if "kind" in node.parent.args and node.parent.args['kind'].upper() == "SCHEMA":
-            if "db" not in node.args or node.args['db'] is None:
+        if (
+            (kind := node.parent.args.get("kind", None))
+            and isinstance(kind, str)
+            and kind.upper() == "SCHEMA"
+        ):
+            if "db" not in node.args or node.args["db"] is None:
                 # "schema" expression isn't qualified with a database
                 return node
 
@@ -48,9 +54,43 @@ def database_as_schema(expression: exp.Expression) -> exp.Expression:
 
         return exp.Table(**{**node.args, "catalog": None, "db": nid})
 
-
     # transform all table expressions
     # NB: sqlglot treats "identifier" in "create schema identifier" as a part of a table expression
     return expression.transform(
         lambda node: transform_table(node) if isinstance(node, exp.Table) else node,
+    )
+
+
+def set_schema(expression: exp.Expression) -> exp.Expression:
+    """Transform use schema to set schema.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("USE SCHEMA foo").transform(set_schema).sql()
+        'SET schema = foo'
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    def transform_use(node: exp.Use) -> exp.Command | exp.Use:
+        if (
+            (kind := node.args.get("kind", None))
+            and isinstance(kind, exp.Var)
+            and kind.name
+            and kind.name.upper() == "SCHEMA"
+        ):
+            if not node.this:
+                raise Exception(f"No identifier for USE expression {node}")
+
+            name = node.this.name
+
+            return exp.Command(this="SET", expression=exp.Literal.string(f"schema = {name}"))
+
+        return node
+
+    return expression.transform(
+        lambda node: transform_use(node) if isinstance(node, exp.Use) else node,
     )
