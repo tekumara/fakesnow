@@ -47,3 +47,11 @@ def test_non_existant_table_throws_snowflake_exception(conn: snowflake.connector
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
             cur.execute("select * from this_table_does_not_exist")
+
+
+def test_execute_string(conn: snowflake.connector.SnowflakeConnection):
+    [_, cur2] = conn.execute_string(
+        """ create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar);
+            select count(*) customers """
+    )
+    assert [(1,)] == cur2.fetchall()

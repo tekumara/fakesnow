@@ -1,14 +1,16 @@
 from __future__ import annotations
 
 from types import TracebackType
-from typing import Any, Optional, Sequence, Type
+from typing import Any, Iterable, Optional, Sequence, Type
 
 import duckdb
 import snowflake.connector.errors
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import SnowflakeCursor
+from snowflake.connector import SnowflakeConnection
 from sqlglot import parse_one
 from typing_extensions import Self
+import sqlglot
 
 import fakesnow.transforms as transforms
 
@@ -49,7 +51,7 @@ class FakeSnowflakeCursor:
         return self.duck_conn.fetchall()
 
 
-class FakeSnowflakeConnection:
+class FakeSnowflakeConnection():
     def __init__(
         self,
         duck_conn: DuckDBPyConnection,
@@ -67,7 +69,7 @@ class FakeSnowflakeConnection:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(
+    def __exit__(  # pyright: ignore[reportIncompatibleMethodOverride]
         self,
         exc_type: Optional[Type[BaseException]] = ...,
         exc_value: Optional[BaseException] = ...,
@@ -75,5 +77,17 @@ class FakeSnowflakeConnection:
     ) -> bool:
         return False
 
-    def cursor(self, cursor_class: type[SnowflakeCursor] = FakeSnowflakeCursor) -> FakeSnowflakeCursor:
+    def cursor(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self, cursor_class: Type[SnowflakeCursor] = SnowflakeCursor
+    ) -> FakeSnowflakeCursor:
         return FakeSnowflakeCursor(_duck_conn=self._duck_conn)
+
+    def execute_string(  # pyright: ignore[reportIncompatibleMethodOverride]
+        self,
+        sql_text: str,
+        remove_comments: bool = False,
+        return_cursors: bool = True,
+        cursor_class: Type[SnowflakeCursor] = SnowflakeCursor,
+        **kwargs: dict[str, Any],
+    ) -> Iterable[FakeSnowflakeCursor]:
+        return [self.cursor().execute(e.sql()) for e in sqlglot.parse(sql_text, read="snowflake") if e]
