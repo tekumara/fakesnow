@@ -36,8 +36,12 @@ class FakeSnowflakeCursor:
     def execute(
         self, command: str, params: Sequence[Any] | dict[Any, Any] | None = None, *args: Any, **kwargs: Any
     ) -> FakeSnowflakeCursor:
-        parsed = parse_one(command, read="snowflake")
-        transformed = transforms.database_as_schema(parsed).sql()
+        expression = parse_one(command, read="snowflake")
+
+        for t in [transforms.database_as_schema, transforms.set_schema]:
+            expression = t(expression)
+
+        transformed = expression.sql()
 
         try:
             self.duck_conn.execute(transformed)

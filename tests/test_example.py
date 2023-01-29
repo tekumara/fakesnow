@@ -41,6 +41,14 @@ def test_uses_connection_database_and_schema(conn: snowflake.connector.Snowflake
 
             assert result == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
+def test_use_schema(conn: snowflake.connector.SnowflakeConnection):
+
+    with snowflake.connector.connect() as conn:
+        with conn.cursor() as cur:
+            cur.execute("create schema jaffles")
+            cur.execute("create table jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+            cur.execute("use schema jaffles")
+            cur.execute("insert into customers values (1, 'Jenny', 'P')")
 
 def test_non_existant_table_throws_snowflake_exception(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
