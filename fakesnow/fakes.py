@@ -38,7 +38,7 @@ class FakeSnowflakeCursor:
         self, command: str, params: Sequence[Any] | dict[Any, Any] | None = None, *args: Any, **kwargs: Any
     ) -> FakeSnowflakeCursor:
         parsed = parse_one(command, read="snowflake")
-        transformed = transforms.database_prefix(parsed).sql()
+        transformed = transforms.database_as_schema(parsed).sql()
 
         try:
             self._connection.execute(transformed)

@@ -1,26 +1,35 @@
 import sqlglot
 
-from fakesnow.transforms import database_prefix
+from fakesnow.transforms import database_as_schema
 
 
 def test_database_prefix() -> None:
     assert (
-        sqlglot.parse_one("SELECT * FROM staging.jaffles").transform(database_prefix).sql()
-        == "SELECT * FROM staging_jaffles"
+        sqlglot.parse_one("SELECT * FROM prod.staging.jaffles").transform(database_as_schema).sql()
+        == "SELECT * FROM prod_staging.jaffles"
     )
 
     assert (
-        sqlglot.parse_one("SELECT * FROM staging.jaffles AS jaffs").transform(database_prefix).sql()
-        == "SELECT * FROM staging_jaffles AS jaffs"
+        sqlglot.parse_one("SELECT * FROM staging.jaffles").transform(database_as_schema).sql()
+        == "SELECT * FROM staging.jaffles"
     )
 
     assert (
-        sqlglot.parse_one("CREATE SCHEMA IF NOT EXISTS staging.jaffles").transform(database_prefix).sql()
-        == "CREATE SCHEMA IF NOT EXISTS staging_jaffles"
+        sqlglot.parse_one("SELECT * FROM jaffles").transform(database_as_schema).sql()
+        == "SELECT * FROM jaffles"
     )
 
     assert (
-        sqlglot.parse_one("CREATE SCHEMA IF NOT EXISTS jaffles").transform(database_prefix).sql()
-        == "CREATE SCHEMA IF NOT EXISTS jaffles"
+        sqlglot.parse_one("CREATE SCHEMA prod.staging").transform(database_as_schema).sql()
+        == "CREATE SCHEMA prod_staging"
     )
 
+    assert (
+        sqlglot.parse_one("CREATE SCHEMA staging").transform(database_as_schema).sql()
+        == "CREATE SCHEMA staging"
+    )
+
+    assert (
+        sqlglot.parse_one("DROP SCHEMA prod.staging").transform(database_as_schema).sql()
+        == "DROP SCHEMA prod_staging"
+    )
