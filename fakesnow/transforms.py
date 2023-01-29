@@ -1,4 +1,4 @@
-from sqlglot import parse_one, exp
+from sqlglot import exp
 
 
 def database_as_schema(expression: exp.Expression) -> exp.Expression:
@@ -20,12 +20,15 @@ def database_as_schema(expression: exp.Expression) -> exp.Expression:
     """
 
     def transform_table(node: exp.Table) -> exp.Table:
+        # sqlglot catalog = snowflake database
+        # sqlglot db = snowflake schema
+
         if not node.parent:
             raise Exception(f"No parent for table expression {node.sql()}")
 
         if "kind" in node.parent.args and node.parent.args['kind'].upper() == "SCHEMA":
             if "db" not in node.args or node.args['db'] is None:
-                # schema expression isn't qualified with a database
+                # "schema" expression isn't qualified with a database
                 return node
 
             name = node.args["db"].name + "_" + node.args["this"].name
@@ -48,8 +51,6 @@ def database_as_schema(expression: exp.Expression) -> exp.Expression:
 
     # transform all table expressions
     # NB: sqlglot treats "identifier" in "create schema identifier" as a part of a table expression
-    # sqlglot catalog = snowflake database
-    # sqlglot db = snowflake schema
     return expression.transform(
         lambda node: transform_table(node) if isinstance(node, exp.Table) else node,
     )

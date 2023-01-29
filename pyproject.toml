@@ -14,6 +14,7 @@ dependencies = [
 dev = [
     "black~=22.12",
     "build~=0.10",
+    "docformatter~=1.5",
     "pre-commit~=3.0",
     "pytest~=7.2",
     "ruff~=0.0.235",
@@ -30,6 +31,12 @@ requires = ["setuptools~=66.1", "wheel~=0.37"]
 
 [tool.black]
 line-length = 120
+
+[tool.docformatter]
+pre-summary-newline = true
+recursive = true
+wrap-descriptions = 120
+wrap-summaries = 120
 
 [tool.ruff]
 line-length = 120

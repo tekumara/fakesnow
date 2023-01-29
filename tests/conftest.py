@@ -6,7 +6,7 @@ import snowflake.connector
 import fakesnow
 
 
-@pytest.fixture(scope="session")
+@pytest.fixture
 def conn() -> Iterator[snowflake.connector.SnowflakeConnection]:
     """
     Yield a snowflake connection once per session.
