@@ -53,6 +53,8 @@ class FakeSnowflakeCursor:
     def fetchall(self) -> list[tuple] | list[dict]:
         return self.duck_conn.fetchall()
 
+    def fetchone(self) -> dict | tuple | None:
+        return self.duck_conn.fetchone()
 
 class FakeSnowflakeConnection():
     def __init__(
@@ -63,6 +65,7 @@ class FakeSnowflakeConnection():
         *args: Any,
         **kwargs: Any,
     ):
+        # TODO handle if database only supplied
         if schema:
             self._schema = f"{database}_{schema}" if database else schema
             duck_conn.execute(f"set schema = '{self._schema}'")
