@@ -1,5 +1,6 @@
 import pytest
 import snowflake.connector
+import snowflake.connector.cursor
 
 
 def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
@@ -13,6 +14,20 @@ def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
         assert result == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
 
+def test_fetchall_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        cur.execute("insert into customers values (1, 'Jenny', 'P')")
+        cur.execute("insert into customers values (2, 'Jasper', 'M')")
+        cur.execute("select id, first_name, last_name from customers")
+        result = cur.fetchall()
+
+        assert result == [
+            {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
+            {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
+        ]
+
+
 def test_fetchone(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
@@ -22,6 +37,19 @@ def test_fetchone(conn: snowflake.connector.SnowflakeConnection):
         result = cur.fetchone()
 
         assert result == (1, "Jenny", "P")
+
+def test_fetchone_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        cur.execute("insert into customers values (1, 'Jenny', 'P')")
+        cur.execute("insert into customers values (2, 'Jasper', 'M')")
+        cur.execute("select id, first_name, last_name from customers")
+        result = cur.fetchone()
+
+        assert result == [
+            {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
+        ]
+
 
 def test_connect_with_database_and_schema(conn: snowflake.connector.SnowflakeConnection):
     # connect without default database and schema
