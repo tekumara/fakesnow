@@ -1,19 +1,20 @@
 from __future__ import annotations
 
 from types import TracebackType
-from typing import Any, Iterable, Iterator, Optional, Sequence, Type, cast
+from typing import Any, Iterable, Optional, Sequence, Type, Union, cast
 
 import duckdb
+import pyarrow.lib
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
-from snowflake.connector.cursor import SnowflakeCursor, DictCursor
+from snowflake.connector.cursor import DictCursor, SnowflakeCursor
 from snowflake.connector.result_batch import ResultBatch
 from sqlglot import parse_one
 from typing_extensions import Self
 
 import fakesnow.transforms as transforms
-import pyarrow.lib
+
 
 class FakeSnowflakeCursor:
     def __init__(
@@ -25,8 +26,8 @@ class FakeSnowflakeCursor:
 
         Args:
             duck_conn (DuckDBPyConnection): DuckDB connection.
-            use_dict_result (bool, optional): If true results are list[dict] otherwise they
-                are list[tuple]. Defaults to False.
+            use_dict_result (bool, optional): If true results are returned as dict otherwise they
+                are returned as tuple. Defaults to False.
         """
         self._duck_conn = duck_conn
         self._use_dict_result = use_dict_result
@@ -67,19 +68,19 @@ class FakeSnowflakeCursor:
             return self._duck_conn.fetchall()
 
     def fetchone(self) -> dict | tuple | None:
-        if self._use_dict_result:
-            if not self._arrow_table:
-                self._arrow_table = self._duck_conn.fetch_arrow_table()
-                self._arrow_table_fetch_one_index = -1
+        if not self._use_dict_result:
+            return cast(Union[tuple,None], self._duck_conn.fetchone())
 
-            self._arrow_table_fetch_one_index += 1
-            try:
-                return self._arrow_table.take([self._arrow_table_fetch_one_index]).to_pylist()
-            except pyarrow.lib.ArrowIndexError:
-                return None
+        if not self._arrow_table:
+            self._arrow_table = self._duck_conn.fetch_arrow_table()
+            self._arrow_table_fetch_one_index = -1
 
-        else:
-            return cast(tuple, self._duck_conn.fetchone())
+        self._arrow_table_fetch_one_index += 1
+
+        try:
+            return self._arrow_table.take([self._arrow_table_fetch_one_index]).to_pylist()
+        except pyarrow.lib.ArrowIndexError:
+            return None
 
     def get_result_batches(self) -> list[ResultBatch] | None:
         return []
