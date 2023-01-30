@@ -9,9 +9,8 @@ def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
         cur.execute("select id, first_name, last_name from customers")
-        result = cur.fetchall()
 
-        assert result == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+        assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
 
 def test_fetchall_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
@@ -20,9 +19,8 @@ def test_fetchall_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
         cur.execute("select id, first_name, last_name from customers")
-        result = cur.fetchall()
 
-        assert result == [
+        assert cur.fetchall() == [
             {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
             {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
         ]
@@ -34,9 +32,10 @@ def test_fetchone(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
         cur.execute("select id, first_name, last_name from customers")
-        result = cur.fetchone()
 
-        assert result == (1, "Jenny", "P")
+        assert cur.fetchone() == (1, "Jenny", "P")
+        assert cur.fetchone() == (2, "Jasper", "M")
+        assert not cur.fetchone()
 
 def test_fetchone_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
@@ -44,11 +43,14 @@ def test_fetchone_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
         cur.execute("select id, first_name, last_name from customers")
-        result = cur.fetchone()
 
-        assert result == [
+        assert cur.fetchone() == [
             {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
         ]
+        assert cur.fetchone() == [
+            {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
+        ]
+        assert not cur.fetchone()
 
 
 def test_connect_with_database_and_schema(conn: snowflake.connector.SnowflakeConnection):

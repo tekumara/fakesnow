@@ -13,7 +13,7 @@ from sqlglot import parse_one
 from typing_extensions import Self
 
 import fakesnow.transforms as transforms
-
+import pyarrow.lib
 
 class FakeSnowflakeCursor:
     def __init__(
@@ -57,6 +57,7 @@ class FakeSnowflakeCursor:
         except duckdb.CatalogException as e:
             raise snowflake.connector.errors.ProgrammingError(e.args[0]) from e
 
+        self._arrow_table = None
         return self
 
     def fetchall(self) -> list[tuple] | list[dict]:
@@ -67,7 +68,16 @@ class FakeSnowflakeCursor:
 
     def fetchone(self) -> dict | tuple | None:
         if self._use_dict_result:
-            return self._duck_conn.fetch_arrow_table().slice(length=1).to_pylist()
+            if not self._arrow_table:
+                self._arrow_table = self._duck_conn.fetch_arrow_table()
+                self._arrow_table_fetch_one_index = -1
+
+            self._arrow_table_fetch_one_index += 1
+            try:
+                return self._arrow_table.take([self._arrow_table_fetch_one_index]).to_pylist()
+            except pyarrow.lib.ArrowIndexError:
+                return None
+
         else:
             return cast(tuple, self._duck_conn.fetchone())
 
