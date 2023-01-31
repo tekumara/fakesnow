@@ -65,17 +65,7 @@ def test_get_result_batches(conn: snowflake.connector.SnowflakeConnection):
 
         rows = [row for batch in batches for row in batch]
         assert rows == [(1, "Jenny", "P"), (2, "Jasper", "M")]
-
-
-# def test_get_result_batches_multiple(conn: snowflake.connector.SnowflakeConnection):
-#     with conn.cursor() as cur:
-#         cur.execute("CREATE table t as select range i from range(3000);")
-#         cur.execute("SELECT i FROM t")
-#         batches = cur.get_result_batches()
-#         assert batches
-
-#         # duckdb will generate batches of max 1024 rows
-#         assert len(batches) == 3
+        assert sum(batch.rowcount for batch in batches) == 2
 
 
 def test_get_result_batches_dict(conn: snowflake.connector.SnowflakeConnection):
@@ -92,6 +82,7 @@ def test_get_result_batches_dict(conn: snowflake.connector.SnowflakeConnection):
             {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
             {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
         ]
+        assert sum(batch.rowcount for batch in batches) == 2
 
 
 def test_connect_with_database_and_schema(conn: snowflake.connector.SnowflakeConnection):

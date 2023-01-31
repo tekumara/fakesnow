@@ -5,7 +5,6 @@ from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Sequence, T
 
 import duckdb
 import pyarrow.lib
-
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
@@ -18,6 +17,7 @@ import fakesnow.transforms as transforms
 
 if TYPE_CHECKING:
     import pandas
+
 
 class FakeSnowflakeCursor:
     def __init__(
@@ -72,7 +72,7 @@ class FakeSnowflakeCursor:
 
     def fetchone(self) -> dict | tuple | None:
         if not self._use_dict_result:
-            return cast(Union[tuple,None], self._duck_conn.fetchone())
+            return cast(Union[tuple, None], self._duck_conn.fetchone())
 
         if not self._arrow_table:
             self._arrow_table = self._duck_conn.fetch_arrow_table()
@@ -101,29 +101,30 @@ class FakeSnowflakeCursor:
 
 
 class DuckResultBatch(ResultBatch):
-
     def __init__(self, use_dict_result: bool, batch: pyarrow.RecordBatch):
         self._use_dict_result = use_dict_result
         self._batch = batch
 
     def create_iter(
-        self, **kwargs
+        self, **kwargs: dict[str, Any]
     ) -> (
-        Iterator[dict | Exception]
-        | Iterator[tuple | Exception]
-        | Iterator[pyarrow.Table]
-        | Iterator[pandas.DataFrame]
+        Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pandas.DataFrame]
     ):
         if self._use_dict_result:
             return iter(self._batch.to_pylist())
 
         return iter(tuple(d.values()) for d in self._batch.to_pylist())
 
+    @property
+    def rowcount(self) -> int:
+        return self._batch.num_rows
+
     def to_pandas(self) -> pandas.DataFrame:
         raise NotImplementedError()
 
     def to_arrow(self) -> pyarrow.Table:
         raise NotImplementedError()
+
 
 class FakeSnowflakeConnection:
     def __init__(
@@ -167,4 +168,3 @@ class FakeSnowflakeConnection:
     ) -> Iterable[FakeSnowflakeCursor]:
         cursors = [self.cursor(cursor_class).execute(e.sql()) for e in sqlglot.parse(sql_text, read="snowflake") if e]
         return cursors if return_cursors else []
-
