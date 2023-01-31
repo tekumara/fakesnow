@@ -57,6 +57,7 @@ def database_as_schema(expression: exp.Expression) -> exp.Expression:
     )
 
 
+# TODO: move this into a Dialect as a transpilation
 def set_schema(expression: exp.Expression) -> exp.Expression:
     """Transform use schema to set schema.
 

@@ -37,6 +37,7 @@ def test_fetchone(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchone() == (2, "Jasper", "M")
         assert not cur.fetchone()
 
+
 def test_fetchone_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
@@ -51,6 +52,46 @@ def test_fetchone_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
             {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
         ]
         assert not cur.fetchone()
+
+
+def test_get_result_batches(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        cur.execute("insert into customers values (1, 'Jenny', 'P')")
+        cur.execute("insert into customers values (2, 'Jasper', 'M')")
+        cur.execute("select id, first_name, last_name from customers")
+        batches = cur.get_result_batches()
+        assert batches
+
+        rows = [row for batch in batches for row in batch]
+        assert rows == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+
+
+# def test_get_result_batches_multiple(conn: snowflake.connector.SnowflakeConnection):
+#     with conn.cursor() as cur:
+#         cur.execute("CREATE table t as select range i from range(3000);")
+#         cur.execute("SELECT i FROM t")
+#         batches = cur.get_result_batches()
+#         assert batches
+
+#         # duckdb will generate batches of max 1024 rows
+#         assert len(batches) == 3
+
+
+def test_get_result_batches_dict(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        cur.execute("insert into customers values (1, 'Jenny', 'P')")
+        cur.execute("insert into customers values (2, 'Jasper', 'M')")
+        cur.execute("select id, first_name, last_name from customers")
+        batches = cur.get_result_batches()
+        assert batches
+
+        rows = [row for batch in batches for row in batch]
+        assert rows == [
+            {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
+            {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
+        ]
 
 
 def test_connect_with_database_and_schema(conn: snowflake.connector.SnowflakeConnection):

@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 from types import TracebackType
-from typing import Any, Iterable, Optional, Sequence, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Sequence, Type, Union, cast
 
 import duckdb
 import pyarrow.lib
+
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
@@ -15,6 +16,8 @@ from typing_extensions import Self
 
 import fakesnow.transforms as transforms
 
+if TYPE_CHECKING:
+    import pandas
 
 class FakeSnowflakeCursor:
     def __init__(
@@ -26,8 +29,8 @@ class FakeSnowflakeCursor:
 
         Args:
             duck_conn (DuckDBPyConnection): DuckDB connection.
-            use_dict_result (bool, optional): If true results are returned as dict otherwise they
-                are returned as tuple. Defaults to False.
+            use_dict_result (bool, optional): If true rows are returned as dicts otherwise they
+                are returned as tuples. Defaults to False.
         """
         self._duck_conn = duck_conn
         self._use_dict_result = use_dict_result
@@ -83,8 +86,44 @@ class FakeSnowflakeCursor:
             return None
 
     def get_result_batches(self) -> list[ResultBatch] | None:
-        return []
+        # chunk_size is multiple of 1024
+        # see https://github.com/duckdb/duckdb/issues/4755
+        reader = self._duck_conn.fetch_record_batch(chunk_size=1024)
 
+        batches = []
+        while True:
+            try:
+                batches.append(DuckResultBatch(self._use_dict_result, reader.read_next_batch()))
+            except StopIteration:
+                break
+
+        return batches
+
+
+class DuckResultBatch(ResultBatch):
+
+    def __init__(self, use_dict_result: bool, batch: pyarrow.RecordBatch):
+        self._use_dict_result = use_dict_result
+        self._batch = batch
+
+    def create_iter(
+        self, **kwargs
+    ) -> (
+        Iterator[dict | Exception]
+        | Iterator[tuple | Exception]
+        | Iterator[pyarrow.Table]
+        | Iterator[pandas.DataFrame]
+    ):
+        if self._use_dict_result:
+            return iter(self._batch.to_pylist())
+
+        return iter(tuple(d.values()) for d in self._batch.to_pylist())
+
+    def to_pandas(self) -> pandas.DataFrame:
+        raise NotImplementedError()
+
+    def to_arrow(self) -> pyarrow.Table:
+        raise NotImplementedError()
 
 class FakeSnowflakeConnection:
     def __init__(
