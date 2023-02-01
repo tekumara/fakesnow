@@ -8,7 +8,7 @@ import pyarrow.lib
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
-from snowflake.connector.cursor import DictCursor, SnowflakeCursor
+from snowflake.connector.cursor import DictCursor, ResultMetadata, SnowflakeCursor
 from snowflake.connector.result_batch import ResultBatch
 from sqlglot import parse_one
 from typing_extensions import Self
@@ -45,6 +45,35 @@ class FakeSnowflakeCursor:
         traceback: Optional[TracebackType] = ...,
     ) -> bool:
         return False
+
+    def describe(self, command: str, *args: Any, **kwargs: Any) -> list[ResultMetadata]:
+        """Return the schema of the result without executing the query.
+
+        Takes the same arguments as execute
+
+        Returns:
+            list[ResultMetadata]: _description_
+        """
+
+        def as_snowflake_type_code(typ: str) -> Optional[int]:
+            # see https://docs.snowflake.com/en/user-guide/python-connector-api.html#type-codes
+            if typ == "NUMBER":
+                return 0
+            elif type == "STRING":
+                return 2
+            else:
+                return None
+
+        # TODO: use sqlglot to add LIMIT 0
+        self.execute(command, *args, **kwargs)
+        t: pyarrow.Schema = self._duck_conn.fetch_arrow_table().schema
+
+        meta = [
+            ResultMetadata(name, as_snowflake_type_code(typ), None, None, None, None, None)
+            for (name, typ, _, _, _, _, _) in cast(tuple, self._duck_conn.description)
+        ]
+
+        return meta
 
     def execute(
         self, command: str, params: Sequence[Any] | dict[Any, Any] | None = None, *args: Any, **kwargs: Any
