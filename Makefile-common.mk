@@ -54,7 +54,7 @@ test: $(venv)
 
 ## build python distribution
 dist: $(venv)
-	rm -rf dist *.egg-info
+	rm -rf build dist *.egg-info
 	$(venv)/bin/python -m build --sdist --wheel
 
 ## run pre-commit git hooks on all files

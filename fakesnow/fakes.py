@@ -4,7 +4,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Sequence, Type, Union, cast
 
 import duckdb
-import pyarrow.lib
+import pyarrow
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
@@ -12,6 +12,7 @@ from snowflake.connector.cursor import DictCursor, ResultMetadata, SnowflakeCurs
 from snowflake.connector.result_batch import ResultBatch
 from sqlglot import parse_one
 from typing_extensions import Self
+import pyarrow.types
 
 import fakesnow.transforms as transforms
 
@@ -55,22 +56,28 @@ class FakeSnowflakeCursor:
             list[ResultMetadata]: _description_
         """
 
-        def as_snowflake_type_code(typ: str) -> Optional[int]:
+        def as_snowflake_type_code(typ: pyarrow.DataType) -> Optional[int]:
             # see https://docs.snowflake.com/en/user-guide/python-connector-api.html#type-codes
-            if typ == "NUMBER":
+            # and https://arrow.apache.org/docs/python/api/datatypes.html#type-checking
+            if pyarrow.types.is_integer(typ):
                 return 0
-            elif type == "STRING":
+            elif pyarrow.types.is_decimal(typ):
+                return 0
+            elif pyarrow.types.is_string(typ):
                 return 2
+            elif pyarrow.types.is_floating(typ):
+                return 1
             else:
+                # TODO handle more types
                 return None
 
         # TODO: use sqlglot to add LIMIT 0
         self.execute(command, *args, **kwargs)
-        t: pyarrow.Schema = self._duck_conn.fetch_arrow_table().schema
+        schema: pyarrow.Schema = self._duck_conn.fetch_arrow_table().schema
 
         meta = [
             ResultMetadata(name, as_snowflake_type_code(typ), None, None, None, None, None)
-            for (name, typ, _, _, _, _, _) in cast(tuple, self._duck_conn.description)
+            for (name, typ) in zip(schema.names, schema.types)
         ]
 
         return meta

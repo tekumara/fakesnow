@@ -64,6 +64,8 @@ ignore = [
     "ANN204",
     # allow == True because pandas dataframes overload equality
     "E712",
+    # only relevant for python >= 3.10
+    "B905"
 ]
 # first-party imports for sorting
 src = ["."]
