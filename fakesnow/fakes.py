@@ -78,15 +78,19 @@ class FakeSnowflakeCursor:
                 )
             elif column_type == "VARCHAR":
                 return ResultMetadata(
-                    name=column_name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True           # type: ignore # noqa: E501
+                    name=column_name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True   # type: ignore # noqa: E501
                 )
             elif column_type == "FLOAT":
                 return ResultMetadata(
-                    name=column_name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True               # type: ignore # noqa: E501
+                    name=column_name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
+                )
+            elif column_type == "TIMESTAMP":
+                return ResultMetadata(
+                    name=column_name, type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True             # type: ignore # noqa: E501
                 )
             else:
                 # TODO handle more types
-                raise NotImplementedError(f"for type {column_type}")
+                raise NotImplementedError(f"for column type {column_type}")
 
         # fmt: on
 

@@ -7,7 +7,7 @@ requires-python = ">=3.9"
 dependencies = [
     "duckdb",
     "snowflake-connector-python",
-    "sqlglot",
+    "sqlglot>=10.6.1",
 ]
 
 [project.optional-dependencies]

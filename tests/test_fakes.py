@@ -5,7 +5,7 @@ import snowflake.connector.cursor
 
 def test_describe(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
-        cur.execute("create table customers (ID int, CNAME varchar, AMOUNT decimal(10,2), PCT REAL)")
+        cur.execute("create table customers (ID int, CNAME varchar, AMOUNT decimal(10,2), PCT real, UPDATE_AT timestamp)")
         metadata = cur.describe("select * from customers")
 
         # fmt: off
@@ -21,6 +21,9 @@ def test_describe(conn: snowflake.connector.SnowflakeConnection):
             ),
             snowflake.connector.cursor.ResultMetadata(
                 name="PCT", type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True,       # type: ignore # noqa: E501
+            ),
+            snowflake.connector.cursor.ResultMetadata(
+                name='UPDATE_AT', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True        # type: ignore # noqa: E501
             ),
         ]
         # fmt: on
