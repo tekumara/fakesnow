@@ -11,16 +11,16 @@ def test_describe(conn: snowflake.connector.SnowflakeConnection):
         # fmt: off
         assert metadata == [
             snowflake.connector.cursor.ResultMetadata(
-                name="ID", type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True
+                name="ID", type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True              # type: ignore # noqa: E501
             ),
             snowflake.connector.cursor.ResultMetadata(
-                name="CNAME", type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True,  # noqa: E501
+                name="CNAME", type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True, # type: ignore # noqa: E501
             ),
             snowflake.connector.cursor.ResultMetadata(
-                name="AMOUNT", type_code=0, display_size=None, internal_size=None, precision=10, scale=2, is_nullable=True,         # noqa: E501
+                name="AMOUNT", type_code=0, display_size=None, internal_size=None, precision=10, scale=2, is_nullable=True,         # type: ignore # noqa: E501
             ),
             snowflake.connector.cursor.ResultMetadata(
-                name="PCT", type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True,       # noqa: E501
+                name="PCT", type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True,       # type: ignore # noqa: E501
             ),
         ]
         # fmt: on

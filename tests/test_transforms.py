@@ -1,6 +1,6 @@
 import sqlglot
 
-from fakesnow.transforms import database_as_schema, set_schema
+from fakesnow.transforms import as_describe, database_as_schema, set_schema
 
 
 def test_database_as_schema() -> None:
@@ -40,3 +40,10 @@ def test_set_schema() -> None:
     assert sqlglot.parse_one("USE SCHEMA foo").transform(set_schema).sql() == "SET schema = foo"
 
     assert sqlglot.parse_one("use schema bar").transform(set_schema).sql() == "SET schema = bar"
+
+
+def test_as_desribe() -> None:
+    assert (
+        sqlglot.parse_one("SELECT name FROM CUSTOMERS").transform(as_describe).sql()
+        == "DESCRIBE SELECT name FROM CUSTOMERS"
+    )

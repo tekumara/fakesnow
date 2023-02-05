@@ -1,18 +1,19 @@
 from __future__ import annotations
 
+import re
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Sequence, Type, Union, cast
 
 import duckdb
 import pyarrow
+import pyarrow.types
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import DictCursor, ResultMetadata, SnowflakeCursor
 from snowflake.connector.result_batch import ResultBatch
-from sqlglot import parse_one
+from sqlglot import exp, parse_one
 from typing_extensions import Self
-import pyarrow.types
 
 import fakesnow.transforms as transforms
 
@@ -57,42 +58,57 @@ class FakeSnowflakeCursor:
         """
 
         # fmt: off
-        def as_result_metadata(name: str, typ: pyarrow.DataType) -> ResultMetadata:
+        def as_result_metadata(column_name: str, column_type: str, _: str) -> ResultMetadata:
             # see https://docs.snowflake.com/en/user-guide/python-connector-api.html#type-codes
             # and https://arrow.apache.org/docs/python/api/datatypes.html#type-checking
-            if pyarrow.types.is_integer(typ):
+            # type ignore because of https://github.com/snowflakedb/snowflake-connector-python/issues/1423
+            if column_type == "INTEGER":
                 return ResultMetadata(
-                    name=name, type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True
+                    name=column_name, type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True                    # type: ignore # noqa: E501
                 )
-            elif pyarrow.types.is_decimal(typ):
+            elif column_type.startswith("DECIMAL"):
+                match = re.search(r'\((\d+),(\d+)\)', column_type)
+                if match:
+                    precision = int(match[1])
+                    scale = int(match[2])
+                else:
+                    precision = scale = None
                 return ResultMetadata(
-                    name=name, type_code=0, display_size=None, internal_size=None, precision=typ.precision, scale=typ.scale, is_nullable=True
+                    name=column_name, type_code=0, display_size=None, internal_size=None, precision=precision, scale=scale, is_nullable=True # type: ignore # noqa: E501
                 )
-            elif pyarrow.types.is_string(typ):
+            elif column_type == "VARCHAR":
                 return ResultMetadata(
-                    name=name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True
+                    name=column_name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True           # type: ignore # noqa: E501
                 )
-            elif pyarrow.types.is_floating(typ):
+            elif column_type == "FLOAT":
                 return ResultMetadata(
-                    name=name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True
+                    name=column_name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True               # type: ignore # noqa: E501
                 )
             else:
                 # TODO handle more types
-                return None
+                raise NotImplementedError(f"for type {column_type}")
+
         # fmt: on
 
-        # TODO: use sqlglot to add LIMIT 0
-        self.execute(command, *args, **kwargs)
-        schema: pyarrow.Schema = self._duck_conn.fetch_arrow_table().schema
+        describe = transforms.as_describe(parse_one(command, read="snowflake"))
+        self.execute(describe, *args, **kwargs)
 
-        meta = [as_result_metadata(name, typ) for (name, typ) in zip(schema.names, schema.types)]
+        meta = [
+            as_result_metadata(column_name, column_type, null)
+            for (column_name, column_type, null, _, _, _) in self._duck_conn.fetchall()
+        ]
 
         return meta
 
     def execute(
-        self, command: str, params: Sequence[Any] | dict[Any, Any] | None = None, *args: Any, **kwargs: Any
+        self,
+        command: str | exp.Expression,
+        params: Sequence[Any] | dict[Any, Any] | None = None,
+        *args: Any,
+        **kwargs: Any,
     ) -> FakeSnowflakeCursor:
-        expression = parse_one(command, read="snowflake")
+
+        expression = command if isinstance(command, exp.Expression) else parse_one(command, read="snowflake")
 
         for t in [transforms.database_as_schema, transforms.set_schema]:
             expression = t(expression)

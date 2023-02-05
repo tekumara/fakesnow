@@ -91,3 +91,19 @@ def set_schema(expression: exp.Expression) -> exp.Expression:
     return expression.transform(
         lambda node: transform_use(node) if isinstance(node, exp.Use) else node,
     )
+
+def as_describe(expression: exp.Expression) -> exp.Expression:
+    """Prepend describe to the expression.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("SELECT name FROM CUSTOMERS").transform(as_describe).sql()
+        'describe SELECT name FROM CUSTOMERS'
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    return exp.Describe(this=expression)
