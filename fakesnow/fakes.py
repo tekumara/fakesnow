@@ -56,29 +56,36 @@ class FakeSnowflakeCursor:
             list[ResultMetadata]: _description_
         """
 
-        def as_snowflake_type_code(typ: pyarrow.DataType) -> Optional[int]:
+        # fmt: off
+        def as_result_metadata(name: str, typ: pyarrow.DataType) -> ResultMetadata:
             # see https://docs.snowflake.com/en/user-guide/python-connector-api.html#type-codes
             # and https://arrow.apache.org/docs/python/api/datatypes.html#type-checking
             if pyarrow.types.is_integer(typ):
-                return 0
+                return ResultMetadata(
+                    name=name, type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True
+                )
             elif pyarrow.types.is_decimal(typ):
-                return 0
+                return ResultMetadata(
+                    name=name, type_code=0, display_size=None, internal_size=None, precision=typ.precision, scale=typ.scale, is_nullable=True
+                )
             elif pyarrow.types.is_string(typ):
-                return 2
+                return ResultMetadata(
+                    name=name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True
+                )
             elif pyarrow.types.is_floating(typ):
-                return 1
+                return ResultMetadata(
+                    name=name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True
+                )
             else:
                 # TODO handle more types
                 return None
+        # fmt: on
 
         # TODO: use sqlglot to add LIMIT 0
         self.execute(command, *args, **kwargs)
         schema: pyarrow.Schema = self._duck_conn.fetch_arrow_table().schema
 
-        meta = [
-            ResultMetadata(name, as_snowflake_type_code(typ), None, None, None, None, None)
-            for (name, typ) in zip(schema.names, schema.types)
-        ]
+        meta = [as_result_metadata(name, typ) for (name, typ) in zip(schema.names, schema.types)]
 
         return meta
 
