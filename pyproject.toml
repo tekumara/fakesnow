@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.9"
 dependencies = [
     "duckdb",
+    "pyarrow",
     "snowflake-connector-python",
     "sqlglot>=10.6.1",
 ]
@@ -15,6 +16,7 @@ dev = [
     "black~=22.12",
     "build~=0.10",
     "docformatter~=1.5",
+    "pandas",
     "pre-commit~=3.0",
     "pytest~=7.2",
     "ruff~=0.0.235",

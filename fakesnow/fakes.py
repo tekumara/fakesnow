@@ -2,10 +2,11 @@ from __future__ import annotations
 
 import re
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Optional, Sequence, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Literal, Optional, Sequence, Type, Union, cast
 
 import duckdb
 import pyarrow
+import pyarrow.lib
 import pyarrow.types
 import snowflake.connector.errors
 import sqlglot
@@ -18,7 +19,7 @@ from typing_extensions import Self
 import fakesnow.transforms as transforms
 
 if TYPE_CHECKING:
-    import pandas
+    import pandas as pd
 
 
 class FakeSnowflakeCursor:
@@ -171,7 +172,7 @@ class DuckResultBatch(ResultBatch):
     def create_iter(
         self, **kwargs: dict[str, Any]
     ) -> (
-        Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pandas.DataFrame]
+        Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]
     ):
         if self._use_dict_result:
             return iter(self._batch.to_pylist())
@@ -182,7 +183,7 @@ class DuckResultBatch(ResultBatch):
     def rowcount(self) -> int:
         return self._batch.num_rows
 
-    def to_pandas(self) -> pandas.DataFrame:
+    def to_pandas(self) -> pd.DataFrame:
         raise NotImplementedError()
 
     def to_arrow(self) -> pyarrow.Table:
@@ -231,3 +232,53 @@ class FakeSnowflakeConnection:
     ) -> Iterable[FakeSnowflakeCursor]:
         cursors = [self.cursor(cursor_class).execute(e.sql()) for e in sqlglot.parse(sql_text, read="snowflake") if e]
         return cursors if return_cursors else []
+
+    def insert_df(
+        self, df: pd.DataFrame, table_name: str, database: str | None = None, schema: str | None = None
+    ) -> int:
+        self._duck_conn.execute(f"INSERT INTO {table_name} SELECT * FROM df")
+        return self._duck_conn.fetchall()[0][0]
+
+
+def write_pandas(
+    conn: FakeSnowflakeConnection,
+    df: pd.DataFrame,
+    table_name: str,
+    database: str | None = None,
+    schema: str | None = None,
+    chunk_size: int | None = None,
+    compression: str = "gzip",
+    on_error: str = "abort_statement",
+    parallel: int = 4,
+    quote_identifiers: bool = True,
+    auto_create_table: bool = False,
+    create_temp_table: bool = False,
+    overwrite: bool = False,
+    table_type: Literal["", "temp", "temporary", "transient"] = "",
+    **kwargs: Any,
+) -> tuple[
+    bool,
+    int,
+    int,
+    Sequence[
+        tuple[
+            str,
+            str,
+            int,
+            int,
+            int,
+            int,
+            str | None,
+            int | None,
+            int | None,
+            str | None,
+        ]
+    ],
+]:
+    count = conn.insert_df(df, table_name, database, schema)
+
+    # mocks https://docs.snowflake.com/en/sql-reference/sql/copy-into-table.html#output
+    mock_copy_results = [('fakesnow/file0.txt', 'LOADED', count, count, 1, 0, None, None, None, None)]
+
+    # return success
+    return (True, len(mock_copy_results), count, mock_copy_results)

@@ -1,11 +1,15 @@
+import pandas as pd
 import pytest
 import snowflake.connector
 import snowflake.connector.cursor
+import snowflake.connector.pandas_tools
 
 
 def test_describe(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
-        cur.execute("create table customers (ID int, CNAME varchar, AMOUNT decimal(10,2), PCT real, UPDATE_AT timestamp)")
+        cur.execute(
+            "create table customers (ID int, CNAME varchar, AMOUNT decimal(10,2), PCT real, UPDATE_AT timestamp)"
+        )
         metadata = cur.describe("select * from customers")
 
         # fmt: off
@@ -151,3 +155,20 @@ def test_non_existant_table_throws_snowflake_exception(conn: snowflake.connector
     with conn.cursor() as cur:
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
             cur.execute("select * from this_table_does_not_exist")
+
+
+def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+
+        df = pd.DataFrame.from_records(
+            [
+                {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
+                {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
+            ]
+        )
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "customers")
+
+        cur.execute("select id, first_name, last_name from customers")
+
+        assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
