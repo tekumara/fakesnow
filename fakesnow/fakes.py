@@ -164,32 +164,6 @@ class FakeSnowflakeCursor:
         return batches
 
 
-class DuckResultBatch(ResultBatch):
-    def __init__(self, use_dict_result: bool, batch: pyarrow.RecordBatch):
-        self._use_dict_result = use_dict_result
-        self._batch = batch
-
-    def create_iter(
-        self, **kwargs: dict[str, Any]
-    ) -> (
-        Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]
-    ):
-        if self._use_dict_result:
-            return iter(self._batch.to_pylist())
-
-        return iter(tuple(d.values()) for d in self._batch.to_pylist())
-
-    @property
-    def rowcount(self) -> int:
-        return self._batch.num_rows
-
-    def to_pandas(self) -> pd.DataFrame:
-        raise NotImplementedError()
-
-    def to_arrow(self) -> pyarrow.Table:
-        raise NotImplementedError()
-
-
 class FakeSnowflakeConnection:
     def __init__(
         self,
@@ -209,7 +183,7 @@ class FakeSnowflakeConnection:
     def __enter__(self) -> Self:
         return self
 
-    def __exit__(  # pyright: ignore[reportIncompatibleMethodOverride]
+    def __exit__(
         self,
         exc_type: Optional[Type[BaseException]] = ...,
         exc_value: Optional[BaseException] = ...,
@@ -217,12 +191,10 @@ class FakeSnowflakeConnection:
     ) -> bool:
         return False
 
-    def cursor(  # pyright: ignore[reportIncompatibleMethodOverride]
-        self, cursor_class: Type[SnowflakeCursor] = SnowflakeCursor
-    ) -> FakeSnowflakeCursor:
+    def cursor(self, cursor_class: Type[SnowflakeCursor] = SnowflakeCursor) -> FakeSnowflakeCursor:
         return FakeSnowflakeCursor(duck_conn=self._duck_conn, use_dict_result=cursor_class == DictCursor)
 
-    def execute_string(  # pyright: ignore[reportIncompatibleMethodOverride]
+    def execute_string(
         self,
         sql_text: str,
         remove_comments: bool = False,
@@ -238,6 +210,30 @@ class FakeSnowflakeConnection:
     ) -> int:
         self._duck_conn.execute(f"INSERT INTO {table_name} SELECT * FROM df")
         return self._duck_conn.fetchall()[0][0]
+
+
+class DuckResultBatch(ResultBatch):
+    def __init__(self, use_dict_result: bool, batch: pyarrow.RecordBatch):
+        self._use_dict_result = use_dict_result
+        self._batch = batch
+
+    def create_iter(
+        self, **kwargs: dict[str, Any]
+    ) -> (Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]):
+        if self._use_dict_result:
+            return iter(self._batch.to_pylist())
+
+        return iter(tuple(d.values()) for d in self._batch.to_pylist())
+
+    @property
+    def rowcount(self) -> int:
+        return self._batch.num_rows
+
+    def to_pandas(self) -> pd.DataFrame:
+        raise NotImplementedError()
+
+    def to_arrow(self) -> pyarrow.Table:
+        raise NotImplementedError()
 
 
 def write_pandas(
@@ -278,7 +274,7 @@ def write_pandas(
     count = conn.insert_df(df, table_name, database, schema)
 
     # mocks https://docs.snowflake.com/en/sql-reference/sql/copy-into-table.html#output
-    mock_copy_results = [('fakesnow/file0.txt', 'LOADED', count, count, 1, 0, None, None, None, None)]
+    mock_copy_results = [("fakesnow/file0.txt", "LOADED", count, count, 1, 0, None, None, None, None)]
 
     # return success
     return (True, len(mock_copy_results), count, mock_copy_results)
