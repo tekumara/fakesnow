@@ -25,16 +25,19 @@ if TYPE_CHECKING:
 class FakeSnowflakeCursor:
     def __init__(
         self,
+        conn: FakeSnowflakeConnection,
         duck_conn: DuckDBPyConnection,
         use_dict_result: bool = False,
     ) -> None:
         """Create a fake snowflake cursor backed by DuckDB.
 
         Args:
+            conn (FakeSnowflakeConnection): Used to maintain current database and schema.
             duck_conn (DuckDBPyConnection): DuckDB connection.
             use_dict_result (bool, optional): If true rows are returned as dicts otherwise they
                 are returned as tuples. Defaults to False.
         """
+        self._conn = conn
         self._duck_conn = duck_conn
         self._use_dict_result = use_dict_result
 
@@ -115,8 +118,8 @@ class FakeSnowflakeCursor:
 
         expression = command if isinstance(command, exp.Expression) else parse_one(command, read="snowflake")
 
-        for t in [transforms.database_as_schema, transforms.set_schema]:
-            expression = t(expression)
+        expression = transforms.qualified_schema(expression, database=self._conn.database)
+        expression = transforms.set_schema(expression)
 
         transformed = expression.sql()
 
@@ -173,10 +176,13 @@ class FakeSnowflakeConnection:
         *args: Any,
         **kwargs: Any,
     ):
+        self.database = database
+        self.schema = schema
+        
         # TODO handle if database only supplied
-        if schema:
-            self._schema = f"{database}_{schema}" if database else schema
-            duck_conn.execute(f"set schema = '{self._schema}'")
+        if database and schema:
+            self._transformed_schema = f"{database}_{schema}" if database else schema
+            duck_conn.execute(f"set schema = '{self._transformed_schema}'")
 
         self._duck_conn = duck_conn
 
@@ -192,7 +198,7 @@ class FakeSnowflakeConnection:
         return False
 
     def cursor(self, cursor_class: Type[SnowflakeCursor] = SnowflakeCursor) -> FakeSnowflakeCursor:
-        return FakeSnowflakeCursor(duck_conn=self._duck_conn, use_dict_result=cursor_class == DictCursor)
+        return FakeSnowflakeCursor(conn=self, duck_conn=self._duck_conn, use_dict_result=cursor_class == DictCursor)
 
     def execute_string(
         self,

@@ -7,10 +7,15 @@ import fakesnow
 
 
 @pytest.fixture
-def conn() -> Iterator[snowflake.connector.SnowflakeConnection]:
+def _fake_snow() -> Iterator[None]:
+    with fakesnow.mock():
+        yield
+
+@pytest.fixture
+def conn(_fake_snow: None) -> Iterator[snowflake.connector.SnowflakeConnection]:
     """
     Yield a snowflake connection once per session.
     """
-    with fakesnow.mock():
-        with snowflake.connector.connect() as c:
-            yield c
+    with snowflake.connector.connect(database="db1") as c:
+        c.execute_string("CREATE SCHEMA IF NOT EXISTS schema1; USE SCHEMA schema1;")
+        yield c
