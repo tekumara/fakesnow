@@ -1,11 +1,14 @@
 from __future__ import annotations
+
 from typing import Optional
 
-from sqlglot import exp
 import snowflake.connector.errors
+from sqlglot import exp
 
 
-def qualified_schema(expression: exp.Expression, database: Optional[str]) -> exp.Expression:
+def qualified_schema(
+    expression: exp.Expression, database: Optional[str] = None, schema: Optional[str] = None
+) -> exp.Expression:
     """Qualify table expressions with their database and schema.
 
     Database names become a prefix of the schema. Needed to support the use of multiple Snowflake
@@ -13,12 +16,14 @@ def qualified_schema(expression: exp.Expression, database: Optional[str]) -> exp
 
     Example:
         >>> import sqlglot
-        >>> sqlglot.parse_one("SELECT * FROM prod.staging.jaffles").transform(qualified_schema).sql()
-        'SELECT * FROM prod_staging.jaffles'
-        >>> sqlglot.parse_one("CREATE SCHEMA prod.staging").transform(qualified_schema).sql()
-        'CREATE SCHEMA prod_staging'
-        >>> sqlglot.parse_one("SELECT * FROM staging.jaffles").transform(qualified_schema, database="prod").sql()
-        'SELECT * FROM prod_staging.jaffles'
+        >>> sqlglot.parse_one("SELECT * FROM customers").transform(qualified_schema, database="marts", schema="jaffles").sql()
+        'SELECT * FROM marts_jaffles.customers'
+        >>> sqlglot.parse_one("SELECT * FROM jaffles.customers").transform(qualified_schema, database="marts").sql()
+        'SELECT * FROM marts_jaffles.customers'
+        >>> sqlglot.parse_one("SELECT * FROM marts.jaffles.customers").transform(qualified_schema).sql()
+        'SELECT * FROM marts_jaffles.customers'
+
+        See tests for more examples.
     Args:
         expression (exp.Expression): the expression that will be transformed.
 
@@ -33,9 +38,10 @@ def qualified_schema(expression: exp.Expression, database: Optional[str]) -> exp
         if not node.parent:
             raise Exception(f"No parent for table expression {node.sql()}")
 
+        # SCHEMA expression, eg: "CREATE SCHEMA identifier"
         if (kind := node.parent.args.get("kind", None)) and isinstance(kind, str) and kind.upper() == "SCHEMA":
             if "db" not in node.args or node.args["db"] is None:
-                # "schema" expression isn't qualified with a database
+                # schema expression isn't qualified with a database
                 if not database:
                     raise snowflake.connector.errors.ProgrammingError(
                         msg=f"Cannot perform {node.parent.key.upper()} SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",
@@ -50,6 +56,7 @@ def qualified_schema(expression: exp.Expression, database: Optional[str]) -> exp
 
             return exp.Table(**{**node.args, "db": None, "name": name, "this": nid})
 
+        # TABLE expression, eg: "SELECT * FROM identifier"
         if "catalog" not in node.args or node.args["catalog"] is None:
             # table expression isn't qualified with a catalog
             if not database and (grandparent := node.parent.parent) and grandparent.key.upper() != "SELECT":
@@ -68,7 +75,6 @@ def qualified_schema(expression: exp.Expression, database: Optional[str]) -> exp
         return exp.Table(**{**node.args, "catalog": None, "db": nid})
 
     # transform all table expressions
-    # NB: sqlglot treats "identifier" in "create schema identifier" as a part of a table expression
     return expression.transform(
         lambda node: transform_table(node) if isinstance(node, exp.Table) else node,
     )
