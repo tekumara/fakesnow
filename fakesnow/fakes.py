@@ -17,6 +17,7 @@ from sqlglot import exp, parse_one
 from typing_extensions import Self
 
 import fakesnow.transforms as transforms
+import fakesnow.checks as checks
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -119,6 +120,7 @@ class FakeSnowflakeCursor:
         expression = command if isinstance(command, exp.Expression) else parse_one(command, read="snowflake")
 
         expression = transforms.database_prefix(expression, current_database=self._conn.database)
+        checks.has_database(expression)
         expression = transforms.set_schema(expression)
 
         transformed = expression.sql()
@@ -126,7 +128,13 @@ class FakeSnowflakeCursor:
         try:
             self._duck_conn.execute(transformed)
         except duckdb.CatalogException as e:
-            raise snowflake.connector.errors.ProgrammingError(e.args[0]) from e
+            # minimal processing to make it look like a snowflake exception, although message content is different
+            msg = cast(str, e.args[0]).split("\n")[0]
+            if "No schema named" in msg:
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg=msg.replace(f"{transforms.MISSING_DATABASE}_", "").replace("SET schema", "USE SCHEMA"), errno=2043, sqlstate="02000"
+                ) from None
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
 
         self._arrow_table = None
         return self

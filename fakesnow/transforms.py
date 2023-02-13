@@ -2,8 +2,9 @@ from __future__ import annotations
 
 from typing import Optional
 
-import snowflake.connector.errors
 from sqlglot import exp
+
+MISSING_DATABASE = "unqualified_and_no_current_database"
 
 
 def database_prefix(expression: exp.Expression, current_database: Optional[str] = None) -> exp.Expression:
@@ -44,13 +45,7 @@ def database_prefix(expression: exp.Expression, current_database: Optional[str] 
                 db_name = db.name
             else:
                 # schema expression isn't qualified with a database
-                if not current_database:
-                    raise snowflake.connector.errors.ProgrammingError(
-                        msg=f"Cannot perform {node.parent.key.upper()} SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",
-                        errno=90105,
-                        sqlstate="22000",
-                    )
-                db_name = current_database
+                db_name = current_database or MISSING_DATABASE
 
             name = f"{db_name}_{node.args['this'].name}"
 
@@ -59,7 +54,7 @@ def database_prefix(expression: exp.Expression, current_database: Optional[str] 
 
             return exp.Table(**{**node.args, "db": None, "name": name, "this": nid})
 
-        # TABLE expression, eg: "SELECT * FROM identifier"
+        # TABLE expression, eg: "SELECT * FROM identifier", or "CREATE TABLE ..."
 
         if not (db := node.args.get("db", None)):
             # no schema so nothing to do
@@ -68,15 +63,7 @@ def database_prefix(expression: exp.Expression, current_database: Optional[str] 
         if catalog := node.args.get("catalog", None):
             catalog_name = catalog.name
         else:
-            # table expression isn't qualified with a catalog
-            if not current_database:
-                # if (grandparent := node.parent.parent) and grandparent.key.upper() != "SELECT":
-                raise snowflake.connector.errors.ProgrammingError(
-                    msg=f"Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",
-                    errno=90105,
-                    sqlstate="22000",
-                )
-            catalog_name = current_database
+            catalog_name = current_database or MISSING_DATABASE
 
         # TODO: use quoted . like snowflake does
         new_db_name = f"{catalog_name}_{db.name}"
@@ -114,8 +101,7 @@ def set_schema(expression: exp.Expression) -> exp.Expression:
             and kind.name
             and kind.name.upper() == "SCHEMA"
         ):
-            if not node.this:
-                raise Exception(f"No identifier for USE expression {node}")
+            assert node.this, f"No identifier for USE expression {node}"
 
             name = node.this.name
 

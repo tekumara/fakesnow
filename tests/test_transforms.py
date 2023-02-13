@@ -1,23 +1,11 @@
 import sqlglot
-import pytest
-import snowflake.connector.errors
 
 from fakesnow.transforms import as_describe, database_prefix, set_schema
 
 
 def test_database_prefix_for_select_exp() -> None:
-    # no current database doesn't error on transform but will fail on execution
     assert (
-        sqlglot.parse_one("SELECT * FROM customers")
-        .transform(database_prefix)
-        .sql()
-        == "SELECT * FROM customers"
-    )
-
-    assert (
-        sqlglot.parse_one("SELECT * FROM customers")
-        .transform(database_prefix, current_database="marts")
-        .sql()
+        sqlglot.parse_one("SELECT * FROM customers").transform(database_prefix, current_database="marts").sql()
         == "SELECT * FROM customers"
     )
 
@@ -27,29 +15,37 @@ def test_database_prefix_for_select_exp() -> None:
     )
 
     assert (
-        sqlglot.parse_one("SELECT * FROM marts.jaffles.customers").transform(database_prefix, current_database="db1").sql()
+        sqlglot.parse_one("SELECT * FROM marts.jaffles.customers")
+        .transform(database_prefix, current_database="db1")
+        .sql()
         == "SELECT * FROM marts_jaffles.customers"
     )
 
+    # unqualified and no current database
 
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        sqlglot.parse_one("SELECT * FROM jaffles.customers").transform(database_prefix).sql()
+    # TODO: check doesn't error on transform but will fail on execution
+    assert (
+        sqlglot.parse_one("SELECT * FROM customers").transform(database_prefix, current_database=None).sql()
+        == "SELECT * FROM customers"
+    )
 
     assert (
-        "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
-        in str(excinfo.value)
+        sqlglot.parse_one("SELECT * FROM jaffles.customers").transform(database_prefix, current_database=None).sql()
+        == "SELECT * FROM unqualified_and_no_current_database_jaffles.customers"
     )
 
 
-def test_database_prefix_for_create_table_exp() -> None:
+def test_database_prefix_for_table_exp() -> None:
     assert (
-        sqlglot.parse_one("CREATE TABLE jaffles.customers (ID INT)").transform(database_prefix, current_database="marts").sql()
+        sqlglot.parse_one("CREATE TABLE jaffles.customers (ID INT)")
+        .transform(database_prefix, current_database="marts")
+        .sql()
         == "CREATE TABLE marts_jaffles.customers (ID INT)"
     )
 
-    ## TODO: check
+    # TODO: check doesn't error on transform but will fail on execution
     assert (
-        sqlglot.parse_one("CREATE TABLE customers (ID INT)").transform(database_prefix).sql()
+        sqlglot.parse_one("CREATE TABLE customers (ID INT)").transform(database_prefix, current_database=None).sql()
         == "CREATE TABLE customers (ID INT)"
     )
 
@@ -65,17 +61,14 @@ def test_database_prefix_for_schema_exp() -> None:
         == "CREATE SCHEMA marts_jaffles"
     )
 
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        sqlglot.parse_one("CREATE SCHEMA jaffles").transform(database_prefix).sql()
-
-    assert (
-        "090105 (22000): Cannot perform CREATE SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
-        in str(excinfo.value)
-    )
-
     assert (
         sqlglot.parse_one("CREATE SCHEMA jaffles").transform(database_prefix, current_database="marts").sql()
         == "CREATE SCHEMA marts_jaffles"
+    )
+
+    assert (
+        sqlglot.parse_one("CREATE SCHEMA jaffles").transform(database_prefix, current_database=None).sql()
+        == "CREATE SCHEMA unqualified_and_no_current_database_jaffles"
     )
 
     # variants in casing and command
@@ -91,15 +84,14 @@ def test_database_prefix_for_schema_exp() -> None:
 
     # use schema
 
-    assert sqlglot.parse_one("USE SCHEMA jaffles").transform(database_prefix, current_database="marts").sql() == "USE SCHEMA marts_jaffles"
-
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        sqlglot.parse_one("USE SCHEMA jaffles").transform(database_prefix).sql()
-
-    # NB: snowflake will generate a Object does not exist here. The error we return is more specific.
     assert (
-        "090105 (22000): Cannot perform USE SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
-        in str(excinfo.value)
+        sqlglot.parse_one("USE SCHEMA jaffles").transform(database_prefix, current_database="marts").sql()
+        == "USE SCHEMA marts_jaffles"
+    )
+
+    assert (
+        sqlglot.parse_one("USE SCHEMA jaffles").transform(database_prefix, current_database=None).sql()
+        == "USE SCHEMA unqualified_and_no_current_database_jaffles"
     )
 
 
