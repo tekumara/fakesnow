@@ -6,21 +6,16 @@ import snowflake.connector.errors
 from sqlglot import exp
 
 
-def qualified_schema(
-    expression: exp.Expression, database: Optional[str] = None, schema: Optional[str] = None
-) -> exp.Expression:
-    """Qualify table expressions with their database and schema.
+def database_prefix(expression: exp.Expression, current_database: Optional[str] = None) -> exp.Expression:
+    """Prefix schemas with the database used in the expression or the current database if none.
 
-    Database names become a prefix of the schema. Needed to support the use of multiple Snowflake
-    databases within in a single duckdb database.
+    Needed to support the use of multiple Snowflake databases within in a single duckdb database.
 
     Example:
         >>> import sqlglot
-        >>> sqlglot.parse_one("SELECT * FROM customers").transform(qualified_schema, database="marts", schema="jaffles").sql()
+        >>> sqlglot.parse_one("SELECT * FROM jaffles.customers").transform(database_prefix, database="marts").sql()
         'SELECT * FROM marts_jaffles.customers'
-        >>> sqlglot.parse_one("SELECT * FROM jaffles.customers").transform(qualified_schema, database="marts").sql()
-        'SELECT * FROM marts_jaffles.customers'
-        >>> sqlglot.parse_one("SELECT * FROM marts.jaffles.customers").transform(qualified_schema).sql()
+        >>> sqlglot.parse_one("SELECT * FROM marts.jaffles.customers").transform(database_prefix).sql()
         'SELECT * FROM marts_jaffles.customers'
 
         See tests for more examples.
@@ -38,36 +33,53 @@ def qualified_schema(
         if not node.parent:
             raise Exception(f"No parent for table expression {node.sql()}")
 
-        # SCHEMA expression, eg: "CREATE SCHEMA identifier"
-        if (kind := node.parent.args.get("kind", None)) and isinstance(kind, str) and kind.upper() == "SCHEMA":
-            if "db" not in node.args or node.args["db"] is None:
+        if (parent_kind := node.parent.args.get("kind", None)) and (
+            # "DROP/CREATE SCHEMA"
+            (isinstance(parent_kind, str) and parent_kind.upper() == "SCHEMA")
+            # "USE SCHEMA"
+            or (isinstance(parent_kind, exp.Var) and parent_kind.name.upper() == "SCHEMA")
+        ):
+
+            if db := node.args.get("db", None):
+                db_name = db.name
+            else:
                 # schema expression isn't qualified with a database
-                if not database:
+                if not current_database:
                     raise snowflake.connector.errors.ProgrammingError(
                         msg=f"Cannot perform {node.parent.key.upper()} SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",
                         errno=90105,
                         sqlstate="22000",
                     )
-                return node
+                db_name = current_database
 
-            name = node.args["db"].name + "_" + node.args["this"].name
+            name = f"{db_name}_{node.args['this'].name}"
+
             eid: exp.Identifier = node.args["this"]
             nid = exp.Identifier(**{**eid.args, "this": name})
 
             return exp.Table(**{**node.args, "db": None, "name": name, "this": nid})
 
         # TABLE expression, eg: "SELECT * FROM identifier"
-        if "catalog" not in node.args or node.args["catalog"] is None:
+
+        if not (db := node.args.get("db", None)):
+            # no schema so nothing to do
+            return node
+
+        if catalog := node.args.get("catalog", None):
+            catalog_name = catalog.name
+        else:
             # table expression isn't qualified with a catalog
-            if not database and (grandparent := node.parent.parent) and grandparent.key.upper() != "SELECT":
+            if not current_database:
+                # if (grandparent := node.parent.parent) and grandparent.key.upper() != "SELECT":
                 raise snowflake.connector.errors.ProgrammingError(
-                    msg=f"Cannot perform {grandparent.key.upper()} TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",
+                    msg=f"Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",
                     errno=90105,
                     sqlstate="22000",
                 )
-            return node
+            catalog_name = current_database
 
-        new_db_name = node.args["catalog"].name + "_" + node.args["db"].name
+        # TODO: use quoted . like snowflake does
+        new_db_name = f"{catalog_name}_{db.name}"
 
         eid: exp.Identifier = node.args["db"]
         nid = exp.Identifier(**{**eid.args, "this": new_db_name})

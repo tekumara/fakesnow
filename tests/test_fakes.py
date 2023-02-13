@@ -6,14 +6,14 @@ import snowflake.connector.pandas_tools
 
 
 def test_connect_without_database(_fake_snow: None):
-    with snowflake.connector.connect() as conn1:
-        with conn1.cursor() as cur:
+    with snowflake.connector.connect() as conn:
+        with conn.cursor() as cur:
 
             with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
                 cur.execute("create schema jaffles")
 
             assert (
-                "090105 (22000): Cannot perform CREATE SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
+                "090105 (22000): Cannot perform CREATE SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."    # noqa: E501
                 in str(excinfo.value)
             )
 
@@ -21,12 +21,24 @@ def test_connect_without_database(_fake_snow: None):
                 cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
             assert (
-                "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
+                "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."     # noqa: E501
                 in str(excinfo.value)
             )
 
+def test_connect_without_schema(_fake_snow: None):
 
-def test_connect_with_database_and_schema(_fake_snow: None):
+    with snowflake.connector.connect(database="db1") as conn:
+        with conn.cursor() as cur:
+
+            with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+                cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+
+            assert (
+                "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
+                in str(excinfo.value)
+            )
+
+def test_connect_different_sessions(_fake_snow: None):
     # connect without default database and schema
     with snowflake.connector.connect() as conn1:
         with conn1.cursor() as cur:
@@ -43,8 +55,8 @@ def test_connect_with_database_and_schema(_fake_snow: None):
             cur.execute("select id, first_name, last_name from marts.jaffles.customers")
             assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
-            # cur.execute("select id, first_name, last_name from jaffles.customers")
-            # assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+            cur.execute("select id, first_name, last_name from jaffles.customers")
+            assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
 def test_describe(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:

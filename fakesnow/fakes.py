@@ -118,7 +118,7 @@ class FakeSnowflakeCursor:
 
         expression = command if isinstance(command, exp.Expression) else parse_one(command, read="snowflake")
 
-        expression = transforms.qualified_schema(expression, database=self._conn.database)
+        expression = transforms.database_prefix(expression, current_database=self._conn.database)
         expression = transforms.set_schema(expression)
 
         transformed = expression.sql()
@@ -178,7 +178,7 @@ class FakeSnowflakeConnection:
     ):
         self.database = database
         self.schema = schema
-        
+
         # TODO handle if database only supplied
         if database and schema:
             self._transformed_schema = f"{database}_{schema}" if database else schema
