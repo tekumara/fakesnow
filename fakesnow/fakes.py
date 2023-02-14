@@ -290,6 +290,26 @@ class DuckResultBatch(ResultBatch):
         raise NotImplementedError()
 
 
+CopyResult = tuple[
+    str,
+    str,
+    int,
+    int,
+    int,
+    int,
+    Optional[str],
+    Optional[int],
+    Optional[int],
+    Optional[str],
+]
+
+WritePandasResult = tuple[
+    bool,
+    int,
+    int,
+    Sequence[CopyResult],
+]
+
 def write_pandas(
     conn: FakeSnowflakeConnection,
     df: pd.DataFrame,
@@ -306,25 +326,7 @@ def write_pandas(
     overwrite: bool = False,
     table_type: Literal["", "temp", "temporary", "transient"] = "",
     **kwargs: Any,
-) -> tuple[
-    bool,
-    int,
-    int,
-    Sequence[
-        tuple[
-            str,
-            str,
-            int,
-            int,
-            int,
-            int,
-            str | None,
-            int | None,
-            int | None,
-            str | None,
-        ]
-    ],
-]:
+) -> WritePandasResult:
     count = conn.insert_df(df, table_name, database, schema)
 
     # mocks https://docs.snowflake.com/en/sql-reference/sql/copy-into-table.html#output
