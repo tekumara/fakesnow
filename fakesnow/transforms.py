@@ -34,14 +34,14 @@ def database_prefix(expression: exp.Expression, current_database: Optional[str] 
         if not node.parent:
             raise Exception(f"No parent for table expression {node.sql()}")
 
-        if (parent_kind := node.parent.args.get("kind", None)) and (
+        if (parent_kind := node.parent.args.get("kind")) and (
             # "DROP/CREATE SCHEMA"
             (isinstance(parent_kind, str) and parent_kind.upper() == "SCHEMA")
             # "USE SCHEMA"
             or (isinstance(parent_kind, exp.Var) and parent_kind.name.upper() == "SCHEMA")
         ):
 
-            if db := node.args.get("db", None):
+            if db := node.args.get("db"):
                 db_name = db.name
             else:
                 # schema expression isn't qualified with a database
@@ -56,11 +56,11 @@ def database_prefix(expression: exp.Expression, current_database: Optional[str] 
 
         # TABLE expression, eg: "SELECT * FROM identifier", or "CREATE TABLE ..."
 
-        if not (db := node.args.get("db", None)):
+        if not (db := node.args.get("db")):
             # no schema so nothing to do
             return node
 
-        if catalog := node.args.get("catalog", None):
+        if catalog := node.args.get("catalog"):
             catalog_name = catalog.name
         else:
             catalog_name = current_database or MISSING_DATABASE
@@ -96,7 +96,7 @@ def set_schema(expression: exp.Expression) -> exp.Expression:
 
     def transform_use(node: exp.Use) -> exp.Command | exp.Use:
         if (
-            (kind := node.args.get("kind", None))
+            (kind := node.args.get("kind"))
             and isinstance(kind, exp.Var)
             and kind.name
             and kind.name.upper() == "SCHEMA"

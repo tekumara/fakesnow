@@ -15,7 +15,7 @@ def key_command(expression: exp.Expression) -> str:
         str: Command, eg: "CREATE SCHEMA", "SELECT", "SET" etc.
     """
 
-    kind = expression.args.get("kind", None)
+    kind = expression.args.get("kind")
 
     if isinstance(kind, str):
         # eg: "DROP/CREATE SCHEMA"

@@ -310,6 +310,7 @@ WritePandasResult = tuple[
     Sequence[CopyResult],
 ]
 
+
 def write_pandas(
     conn: FakeSnowflakeConnection,
     df: pd.DataFrame,
