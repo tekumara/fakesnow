@@ -5,6 +5,7 @@ import snowflake.connector
 
 pytest_plugins = ("fakesnow.fixtures",)
 
+
 @pytest.fixture
 def conn(_fake_snow: None) -> Iterator[snowflake.connector.SnowflakeConnection]:
     """

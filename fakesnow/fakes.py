@@ -118,12 +118,19 @@ class FakeSnowflakeCursor:
         *args: Any,
         **kwargs: Any,
     ) -> FakeSnowflakeCursor:
+        self._arrow_table = None
 
         expression = command if isinstance(command, exp.Expression) else parse_one(command, read="snowflake")
 
         expression = transforms.database_prefix(expression, current_database=self._conn.database)
-        checks.has_database(expression)
         expression = transforms.set_schema(expression)
+
+        if cmd := checks.command_missing_database(expression):
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
+                errno=90105,
+                sqlstate="22000",
+            )
 
         transformed = expression.sql()
 
@@ -139,16 +146,16 @@ class FakeSnowflakeCursor:
                     sqlstate="02000",
                 ) from None
             if SCHEMA_UNSET in msg:
-                op = expression.key.upper()
+                cmd = expression.key.upper()
                 if not self._conn.database:
                     raise snowflake.connector.errors.ProgrammingError(
-                        msg=f"Cannot perform {op}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
+                        msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
                         errno=90105,
                         sqlstate="22000",
                     ) from None
                 elif not self._conn.schema:
                     raise snowflake.connector.errors.ProgrammingError(
-                        msg=f"Cannot perform {op}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
+                        msg=f"Cannot perform {cmd}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
                         errno=90106,
                         sqlstate="22000",
                     ) from None
@@ -157,7 +164,6 @@ class FakeSnowflakeCursor:
 
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
 
-        self._arrow_table = None
         return self
 
     def fetchall(self) -> list[tuple] | list[dict]:
@@ -209,8 +215,9 @@ class FakeSnowflakeConnection:
         self.schema = schema
 
         if database and schema:
-            self._transformed_schema = f"{database}_{schema}" if database else schema
-            duck_conn.execute(f"set schema = '{self._transformed_schema}'")
+            # TODO: use . like snowflake does
+            transformed_schema = f"{database}_{schema}"
+            duck_conn.execute(f"set schema = '{transformed_schema}'")
         else:
             # duckdb will use the main catalog by default, but snowflake requires a database to be specified.
             # To mimic snowflake's behaviour we set the schema to a non-existant schema. This generates an error
