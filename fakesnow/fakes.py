@@ -16,11 +16,13 @@ from snowflake.connector.result_batch import ResultBatch
 from sqlglot import exp, parse_one
 from typing_extensions import Self
 
-import fakesnow.transforms as transforms
 import fakesnow.checks as checks
+import fakesnow.transforms as transforms
 
 if TYPE_CHECKING:
     import pandas as pd
+
+SCHEMA_UNSET = "schema_unset"
 
 
 class FakeSnowflakeCursor:
@@ -128,12 +130,31 @@ class FakeSnowflakeCursor:
         try:
             self._duck_conn.execute(transformed)
         except duckdb.CatalogException as e:
-            # minimal processing to make it look like a snowflake exception, although message content is different
+            # minimal processing to make it look like a snowflake exception, message content may differ
             msg = cast(str, e.args[0]).split("\n")[0]
             if "No schema named" in msg:
                 raise snowflake.connector.errors.ProgrammingError(
-                    msg=msg.replace(f"{transforms.MISSING_DATABASE}_", "").replace("SET schema", "USE SCHEMA"), errno=2043, sqlstate="02000"
+                    msg=msg.replace(f"{transforms.MISSING_DATABASE}_", "").replace("SET schema", "USE SCHEMA"),
+                    errno=2043,
+                    sqlstate="02000",
                 ) from None
+            if SCHEMA_UNSET in msg:
+                op = expression.key.upper()
+                if not self._conn.database:
+                    raise snowflake.connector.errors.ProgrammingError(
+                        msg=f"Cannot perform {op}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
+                        errno=90105,
+                        sqlstate="22000",
+                    ) from None
+                elif not self._conn.schema:
+                    raise snowflake.connector.errors.ProgrammingError(
+                        msg=f"Cannot perform {op}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
+                        errno=90106,
+                        sqlstate="22000",
+                    ) from None
+                else:
+                    raise AssertionError(f"Schema unset but {self._conn.database=} {self._conn.schema=}")
+
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
 
         self._arrow_table = None
@@ -187,10 +208,16 @@ class FakeSnowflakeConnection:
         self.database = database
         self.schema = schema
 
-        # TODO handle if database only supplied
         if database and schema:
             self._transformed_schema = f"{database}_{schema}" if database else schema
             duck_conn.execute(f"set schema = '{self._transformed_schema}'")
+        else:
+            # duckdb will use the main catalog by default, but snowflake requires a database to be specified.
+            # To mimic snowflake's behaviour we set the schema to a non-existant schema. This generates an error
+            # when the schema is unset and unqualified table names are used.
+            duck_conn.execute(
+                f"create schema {SCHEMA_UNSET}; set schema = '{SCHEMA_UNSET}'; drop schema {SCHEMA_UNSET}"
+            )
 
         self._duck_conn = duck_conn
 

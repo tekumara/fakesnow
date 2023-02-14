@@ -11,6 +11,7 @@ def _fake_snow() -> Iterator[None]:
     with fakesnow.mock():
         yield
 
+
 @pytest.fixture
 def conn(_fake_snow: None) -> Iterator[snowflake.connector.SnowflakeConnection]:
     """

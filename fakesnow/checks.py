@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-from typing import Optional
-
-import fakesnow.transforms as transforms
 import snowflake.connector.errors
 from sqlglot import exp
+
+import fakesnow.transforms as transforms
 
 
 def has_database(expression: exp.Expression) -> None:

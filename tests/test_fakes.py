@@ -22,7 +22,7 @@ def test_connect_without_database(_fake_snow: None):
                 cur.execute("SELECT * FROM jaffles.customers")
 
             assert (
-                "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
+                "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
                 in str(excinfo.value)
             )
 
@@ -46,8 +46,9 @@ def test_connect_without_database(_fake_snow: None):
             with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
                 cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
+            # actual snowflake error message reports CREATE TABLE.
             assert (
-                "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+                "090105 (22000): Cannot perform CREATE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
                 in str(excinfo.value)
             )
 
@@ -60,8 +61,9 @@ def test_connect_without_schema(_fake_snow: None):
             with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
                 cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
+            # actual snowflake error message reports CREATE TABLE.
             assert (
-                "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
+                "090106 (22000): Cannot perform CREATE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
                 in str(excinfo.value)
             )
 
