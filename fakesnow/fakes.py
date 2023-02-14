@@ -16,7 +16,7 @@ from snowflake.connector.result_batch import ResultBatch
 from sqlglot import exp, parse_one
 from typing_extensions import Self
 
-import fakesnow.checks as checks
+import fakesnow.expr as expr
 import fakesnow.transforms as transforms
 
 if TYPE_CHECKING:
@@ -125,28 +125,34 @@ class FakeSnowflakeCursor:
         expression = transforms.database_prefix(expression, current_database=self._conn.database)
         expression = transforms.set_schema(expression)
 
-        if cmd := checks.command_missing_database(expression):
+        cmd = expr.key_command(expression)
+        transformed = expression.sql()
+
+        if transforms.MISSING_DATABASE in transformed:
+            if cmd == "SET":
+                # USE SCHEMA
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg="SQL compilation error:\nObject does not exist, or operation cannot be performed.",  # noqa: E501
+                    errno=2043,
+                    sqlstate="02000",
+                )
+
             raise snowflake.connector.errors.ProgrammingError(
                 msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
                 errno=90105,
                 sqlstate="22000",
             )
 
-        transformed = expression.sql()
+        if cmd == "USE DATABASE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+            self._conn.database = ident.this
+            return self
 
         try:
             self._duck_conn.execute(transformed)
         except duckdb.CatalogException as e:
             # minimal processing to make it look like a snowflake exception, message content may differ
             msg = cast(str, e.args[0]).split("\n")[0]
-            if "No schema named" in msg:
-                raise snowflake.connector.errors.ProgrammingError(
-                    msg=msg.replace(f"{transforms.MISSING_DATABASE}_", "").replace("SET schema", "USE SCHEMA"),
-                    errno=2043,
-                    sqlstate="02000",
-                ) from None
             if SCHEMA_UNSET in msg:
-                cmd = expression.key.upper()
                 if not self._conn.database:
                     raise snowflake.connector.errors.ProgrammingError(
                         msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
@@ -160,7 +166,7 @@ class FakeSnowflakeCursor:
                         sqlstate="22000",
                     ) from None
                 else:
-                    raise AssertionError(f"Schema unset but {self._conn.database=} {self._conn.schema=}")
+                    raise AssertionError(f"Schema unset but {self._conn.database=} {self._conn.schema=}") from e
 
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
 

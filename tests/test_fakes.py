@@ -37,18 +37,16 @@ def test_connect_without_database(_fake_snow: None):
             with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
                 cur.execute("use schema jaffles")
 
-            # actual snowflake error message is:
-            #
-            # 002043 (02000): SQL compilation error:
-            # Object does not exist, or operation cannot be performed.
-            assert "002043 (02000): Catalog Error: USE SCHEMA: No schema named jaffles found." in str(excinfo.value)
+            assert (
+                "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed."
+                in str(excinfo.value)
+            )
 
             with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
                 cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
-            # actual snowflake error message reports CREATE TABLE.
             assert (
-                "090105 (22000): Cannot perform CREATE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+                "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
                 in str(excinfo.value)
             )
 
@@ -61,14 +59,13 @@ def test_connect_without_schema(_fake_snow: None):
             with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
                 cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
-            # actual snowflake error message reports CREATE TABLE.
             assert (
-                "090106 (22000): Cannot perform CREATE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
+                "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
                 in str(excinfo.value)
             )
 
 
-def test_connect_different_sessions(_fake_snow: None):
+def test_connect_different_sessions_use_database(_fake_snow: None):
     # connect without default database and schema
     with snowflake.connector.connect() as conn1:
         with conn1.cursor() as cur:
@@ -77,15 +74,16 @@ def test_connect_different_sessions(_fake_snow: None):
             cur.execute("create table marts.jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
             cur.execute("insert into marts.jaffles.customers values (1, 'Jenny', 'P')")
 
+            # use database and schema
+            cur.execute("use database marts")
+            cur.execute("use schema jaffles")
+            cur.execute("insert into customers values (2, 'Jasper', 'M')")
+
     # in a separate connection, connect using the database and schema from above
     with snowflake.connector.connect(database="marts", schema="jaffles") as conn2:
         with conn2.cursor() as cur:
-            cur.execute("insert into customers values (2, 'Jasper', 'M')")
 
-            cur.execute("select id, first_name, last_name from marts.jaffles.customers")
-            assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
-
-            cur.execute("select id, first_name, last_name from jaffles.customers")
+            cur.execute("select id, first_name, last_name from customers")
             assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
 
