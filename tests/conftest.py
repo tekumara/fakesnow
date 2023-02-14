@@ -3,14 +3,7 @@ from typing import Iterator
 import pytest
 import snowflake.connector
 
-import fakesnow
-
-
-@pytest.fixture
-def _fake_snow() -> Iterator[None]:
-    with fakesnow.mock():
-        yield
-
+pytest_plugins = ("fakesnow.fixtures",)
 
 @pytest.fixture
 def conn(_fake_snow: None) -> Iterator[snowflake.connector.SnowflakeConnection]:
