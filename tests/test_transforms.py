@@ -27,12 +27,12 @@ def test_database_prefix_for_select_exp() -> None:
 
     assert (
         sqlglot.parse_one("SELECT * FROM customers").transform(database_prefix, current_database=None).sql()
-        == "SELECT * FROM unqualified_and_no_current_database.customers"
+        == "SELECT * FROM unqualified_and_no_schema_set.customers"
     )
 
     assert (
         sqlglot.parse_one("SELECT * FROM jaffles.customers").transform(database_prefix, current_database=None).sql()
-        == "SELECT * FROM unqualified_and_no_current_database_jaffles.customers"
+        == "SELECT * FROM unqualified_and_no_schema_set_jaffles.customers"
     )
 
     # unqualified and no schema set
@@ -60,7 +60,7 @@ def test_database_prefix_for_table_exp() -> None:
 
     assert (
         sqlglot.parse_one("CREATE TABLE customers (ID INT)").transform(database_prefix, current_database=None).sql()
-        == "CREATE TABLE unqualified_and_no_current_database.customers (ID INT)"
+        == "CREATE TABLE unqualified_and_no_schema_set.customers (ID INT)"
     )
 
     assert (
@@ -87,7 +87,7 @@ def test_database_prefix_for_schema_exp() -> None:
 
     assert (
         sqlglot.parse_one("CREATE SCHEMA jaffles").transform(database_prefix, current_database=None).sql()
-        == "CREATE SCHEMA unqualified_and_no_current_database_jaffles"
+        == "CREATE SCHEMA unqualified_and_no_schema_set_jaffles"
     )
 
     # variants in casing and command
@@ -110,7 +110,7 @@ def test_database_prefix_for_schema_exp() -> None:
 
     assert (
         sqlglot.parse_one("USE SCHEMA jaffles").transform(database_prefix, current_database=None).sql()
-        == "USE SCHEMA unqualified_and_no_current_database_jaffles"
+        == "USE SCHEMA unqualified_and_no_schema_set_jaffles"
     )
 
 

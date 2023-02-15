@@ -4,8 +4,6 @@ from typing import Optional
 
 from sqlglot import exp
 
-MISSING_DATABASE = "unqualified_and_no_current_database"
-
 MISSING_SCHEMA = "unqualified_and_no_schema_set"
 
 
@@ -49,7 +47,7 @@ def database_prefix(
                 db_name = db.name
             else:
                 # schema expression isn't qualified with a database
-                db_name = current_database or MISSING_DATABASE
+                db_name = current_database or MISSING_SCHEMA
 
             name = f"{db_name}_{node.args['this'].name}"
 
@@ -62,18 +60,16 @@ def database_prefix(
 
         if not (db := node.args.get("db")):
             # no schema
-            if node.parent.key == "use" or (current_database and schema_set):
-                # no problem, search path contains current database
+            if node.parent.key == "use" or schema_set:
+                # no problem, search is set
                 return node
-            elif not current_database:
-                return exp.Table(**{**node.args, "catalog": MISSING_DATABASE})
             else:
                 return exp.Table(**{**node.args, "catalog": MISSING_SCHEMA})
 
         if catalog := node.args.get("catalog"):
             catalog_name = catalog.name
         else:
-            catalog_name = current_database or MISSING_DATABASE
+            catalog_name = current_database or MISSING_SCHEMA
 
         # TODO: use quoted . like snowflake does
         new_db_name = f"{catalog_name}_{db.name}"

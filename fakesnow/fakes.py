@@ -145,7 +145,7 @@ class FakeSnowflakeCursor:
 
         transformed = expression.sql()
 
-        if "unqualified_and_no" in transformed:
+        if transforms.MISSING_SCHEMA in transformed:
             if not self._conn.database:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
