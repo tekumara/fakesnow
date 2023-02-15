@@ -5,7 +5,9 @@ from fakesnow.transforms import as_describe, database_prefix, set_schema
 
 def test_database_prefix_for_select_exp() -> None:
     assert (
-        sqlglot.parse_one("SELECT * FROM customers").transform(database_prefix, current_database="marts").sql()
+        sqlglot.parse_one("SELECT * FROM customers")
+        .transform(database_prefix, current_database="marts", current_schema="jaffles")
+        .sql()
         == "SELECT * FROM customers"
     )
 
@@ -23,10 +25,9 @@ def test_database_prefix_for_select_exp() -> None:
 
     # unqualified and no current database
 
-    # TODO: check doesn't error on transform but will fail on execution
     assert (
         sqlglot.parse_one("SELECT * FROM customers").transform(database_prefix, current_database=None).sql()
-        == "SELECT * FROM customers"
+        == "SELECT * FROM unqualified_and_no_current_database.customers"
     )
 
     assert (
@@ -34,8 +35,24 @@ def test_database_prefix_for_select_exp() -> None:
         == "SELECT * FROM unqualified_and_no_current_database_jaffles.customers"
     )
 
+    # unqualified and no current schema
+
+    assert (
+        sqlglot.parse_one("SELECT * FROM customers")
+        .transform(database_prefix, current_database="marts", current_schema=None)
+        .sql()
+        == "SELECT * FROM unqualified_and_no_current_schema.customers"
+    )
+
 
 def test_database_prefix_for_table_exp() -> None:
+    assert (
+        sqlglot.parse_one("CREATE TABLE customers (ID INT)")
+        .transform(database_prefix, current_database="marts", current_schema="jaffles")
+        .sql()
+        == "CREATE TABLE customers (ID INT)"
+    )
+
     assert (
         sqlglot.parse_one("CREATE TABLE jaffles.customers (ID INT)")
         .transform(database_prefix, current_database="marts")
@@ -43,10 +60,16 @@ def test_database_prefix_for_table_exp() -> None:
         == "CREATE TABLE marts_jaffles.customers (ID INT)"
     )
 
-    # TODO: check doesn't error on transform but will fail on execution
     assert (
         sqlglot.parse_one("CREATE TABLE customers (ID INT)").transform(database_prefix, current_database=None).sql()
-        == "CREATE TABLE customers (ID INT)"
+        == "CREATE TABLE unqualified_and_no_current_database.customers (ID INT)"
+    )
+
+    assert (
+        sqlglot.parse_one("CREATE TABLE customers (ID INT)")
+        .transform(database_prefix, current_database="marts", current_schema=None)
+        .sql()
+        == "CREATE TABLE unqualified_and_no_current_schema.customers (ID INT)"
     )
 
 
@@ -92,6 +115,13 @@ def test_database_prefix_for_schema_exp() -> None:
     assert (
         sqlglot.parse_one("USE SCHEMA jaffles").transform(database_prefix, current_database=None).sql()
         == "USE SCHEMA unqualified_and_no_current_database_jaffles"
+    )
+
+
+def test_use_database() -> None:
+    assert (
+        sqlglot.parse_one("use database marts").transform(database_prefix, current_database=None).sql()
+        == "USE database marts"
     )
 
 

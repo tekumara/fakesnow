@@ -6,8 +6,12 @@ from sqlglot import exp
 
 MISSING_DATABASE = "unqualified_and_no_current_database"
 
+MISSING_SCHEMA = "unqualified_and_no_current_schema"
 
-def database_prefix(expression: exp.Expression, current_database: Optional[str] = None) -> exp.Expression:
+
+def database_prefix(
+    expression: exp.Expression, current_database: Optional[str] = None, current_schema: Optional[str] = None
+) -> exp.Expression:
     """Prefix schemas with the database used in the expression or the current database if none.
 
     Needed to support the use of multiple Snowflake databases within in a single duckdb database.
@@ -57,8 +61,14 @@ def database_prefix(expression: exp.Expression, current_database: Optional[str] 
         # TABLE expression, eg: "SELECT * FROM identifier", or "CREATE TABLE ..."
 
         if not (db := node.args.get("db")):
-            # no schema so nothing to do
-            return node
+            # no schema
+            if node.parent.key == "use" or (current_database and current_schema):
+                # no problem, search path contains current database
+                return node
+            elif not current_database:
+                return exp.Table(**{**node.args, "catalog": MISSING_DATABASE})
+            else:
+                return exp.Table(**{**node.args, "catalog": MISSING_SCHEMA})
 
         if catalog := node.args.get("catalog"):
             catalog_name = catalog.name

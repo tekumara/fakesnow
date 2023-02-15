@@ -16,7 +16,10 @@ def test_connect_without_database(_fake_snow: None):
             #
             # 002003 (42S02): SQL compilation error:
             # Object 'CUSTOMERS' does not exist or not authorized.
-            assert "002003 (42S02): Catalog Error: Table with name customers does not exist!" in str(excinfo.value)
+            assert (
+                "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+                in str(excinfo.value)
+            )
 
             with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
                 cur.execute("SELECT * FROM jaffles.customers")
@@ -53,8 +56,20 @@ def test_connect_without_database(_fake_snow: None):
 
 def test_connect_without_schema(_fake_snow: None):
 
-    with snowflake.connector.connect(database="db1") as conn:
+    with snowflake.connector.connect(database="marts") as conn:
         with conn.cursor() as cur:
+
+            with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+                cur.execute("SELECT * FROM customers")
+
+            # actual snowflake error message is:
+            #
+            # 002003 (42S02): SQL compilation error:
+            # Object 'CUSTOMERS' does not exist or not authorized.
+            assert (
+                "090106 (22000): Cannot perform SELECT. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
+                in str(excinfo.value)
+            )
 
             with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
                 cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
@@ -205,18 +220,18 @@ def test_get_result_batches_dict(conn: snowflake.connector.SnowflakeConnection):
         assert sum(batch.rowcount for batch in batches) == 2
 
 
+def test_non_existant_table_throws_snowflake_exception(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
+            cur.execute("select * from this_table_does_not_exist")
+
+
 def test_use_schema(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create schema jaffles")
         cur.execute("create table jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
         cur.execute("use schema jaffles")
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
-
-
-def test_non_existant_table_throws_snowflake_exception(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor() as cur:
-        with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
-            cur.execute("select * from this_table_does_not_exist")
 
 
 def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):
