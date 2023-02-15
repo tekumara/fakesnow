@@ -6,100 +6,112 @@ import snowflake.connector.pandas_tools
 
 
 def test_connect_without_database(_fake_snow: None):
-    with snowflake.connector.connect() as conn:
-        with conn.cursor() as cur:
+    with snowflake.connector.connect() as conn, conn.cursor() as cur:
 
-            with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-                cur.execute("SELECT * FROM customers")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("SELECT * FROM customers")
 
-            # actual snowflake error message is:
-            #
-            # 002003 (42S02): SQL compilation error:
-            # Object 'CUSTOMERS' does not exist or not authorized.
-            assert (
-                "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
-                in str(excinfo.value)
-            )
+        # actual snowflake error message is:
+        #
+        # 002003 (42S02): SQL compilation error:
+        # Object 'CUSTOMERS' does not exist or not authorized.
+        assert (
+            "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+            in str(excinfo.value)
+        )
 
-            with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-                cur.execute("SELECT * FROM jaffles.customers")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("SELECT * FROM jaffles.customers")
 
-            assert (
-                "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
-                in str(excinfo.value)
-            )
+        assert (
+            "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+            in str(excinfo.value)
+        )
 
-            with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-                cur.execute("create schema jaffles")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("create schema jaffles")
 
-            assert (
-                "090105 (22000): Cannot perform CREATE SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
-                in str(excinfo.value)
-            )
+        assert (
+            "090105 (22000): Cannot perform CREATE SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+            in str(excinfo.value)
+        )
 
-            with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-                cur.execute("use schema jaffles")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("use schema jaffles")
 
-            assert (
-                "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed."
-                in str(excinfo.value)
-            )
+        assert (
+            "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed."
+            in str(excinfo.value)
+        )
 
-            with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-                cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
-            assert (
-                "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
-                in str(excinfo.value)
-            )
+        assert (
+            "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+            in str(excinfo.value)
+        )
 
 
 def test_connect_without_schema(_fake_snow: None):
 
-    with snowflake.connector.connect(database="marts") as conn:
-        with conn.cursor() as cur:
+    with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
 
-            with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-                cur.execute("SELECT * FROM customers")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("SELECT * FROM customers")
 
-            # actual snowflake error message is:
-            #
-            # 002003 (42S02): SQL compilation error:
-            # Object 'CUSTOMERS' does not exist or not authorized.
-            assert (
-                "090106 (22000): Cannot perform SELECT. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
-                in str(excinfo.value)
-            )
+        # actual snowflake error message is:
+        #
+        # 002003 (42S02): SQL compilation error:
+        # Object 'CUSTOMERS' does not exist or not authorized.
+        assert (
+            "090106 (22000): Cannot perform SELECT. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
+            in str(excinfo.value)
+        )
 
-            with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-                cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
-            assert (
-                "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
-                in str(excinfo.value)
-            )
+        assert (
+            "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
+            in str(excinfo.value)
+        )
 
 
 def test_connect_different_sessions_use_database(_fake_snow: None):
     # connect without default database and schema
-    with snowflake.connector.connect() as conn1:
-        with conn1.cursor() as cur:
-            # use the table's fully qualified name
-            cur.execute("create schema marts.jaffles")
-            cur.execute("create table marts.jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
-            cur.execute("insert into marts.jaffles.customers values (1, 'Jenny', 'P')")
+    with snowflake.connector.connect() as conn1, conn1.cursor() as cur:
+        # use the table's fully qualified name
+        cur.execute("create schema marts.jaffles")
+        cur.execute("create table marts.jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        cur.execute("insert into marts.jaffles.customers values (1, 'Jenny', 'P')")
 
-            # use database and schema
-            cur.execute("use database marts")
-            cur.execute("use schema jaffles")
-            cur.execute("insert into customers values (2, 'Jasper', 'M')")
+        # use database and schema
+        cur.execute("use database marts")
+        cur.execute("use schema jaffles")
+        cur.execute("insert into customers values (2, 'Jasper', 'M')")
 
     # in a separate connection, connect using the database and schema from above
-    with snowflake.connector.connect(database="marts", schema="jaffles") as conn2:
-        with conn2.cursor() as cur:
+    with snowflake.connector.connect(database="marts", schema="jaffles") as conn2, conn2.cursor() as cur:
+        cur.execute("select id, first_name, last_name from customers")
+        assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
-            cur.execute("select id, first_name, last_name from customers")
-            assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+
+def test_connect_with_missing_schema(_fake_snow: None):
+    # connect with schema that doesn't exist
+    with snowflake.connector.connect(database="marts", schema="jaffles") as conn, conn.cursor() as cur:
+
+        # no schema set
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+
+        assert (
+            "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
+            in str(excinfo.value)
+        )
+
+        # schema still present on connection though
+        assert conn.schema == "jaffles"
 
 
 def test_describe(conn: snowflake.connector.SnowflakeConnection):

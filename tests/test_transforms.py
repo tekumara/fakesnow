@@ -6,7 +6,7 @@ from fakesnow.transforms import as_describe, database_prefix, set_schema
 def test_database_prefix_for_select_exp() -> None:
     assert (
         sqlglot.parse_one("SELECT * FROM customers")
-        .transform(database_prefix, current_database="marts", current_schema="jaffles")
+        .transform(database_prefix, current_database="marts", schema_set=True)
         .sql()
         == "SELECT * FROM customers"
     )
@@ -35,20 +35,18 @@ def test_database_prefix_for_select_exp() -> None:
         == "SELECT * FROM unqualified_and_no_current_database_jaffles.customers"
     )
 
-    # unqualified and no current schema
+    # unqualified and no schema set
 
     assert (
-        sqlglot.parse_one("SELECT * FROM customers")
-        .transform(database_prefix, current_database="marts", current_schema=None)
-        .sql()
-        == "SELECT * FROM unqualified_and_no_current_schema.customers"
+        sqlglot.parse_one("SELECT * FROM customers").transform(database_prefix, current_database="marts").sql()
+        == "SELECT * FROM unqualified_and_no_schema_set.customers"
     )
 
 
 def test_database_prefix_for_table_exp() -> None:
     assert (
         sqlglot.parse_one("CREATE TABLE customers (ID INT)")
-        .transform(database_prefix, current_database="marts", current_schema="jaffles")
+        .transform(database_prefix, current_database="marts", schema_set=True)
         .sql()
         == "CREATE TABLE customers (ID INT)"
     )
@@ -66,10 +64,8 @@ def test_database_prefix_for_table_exp() -> None:
     )
 
     assert (
-        sqlglot.parse_one("CREATE TABLE customers (ID INT)")
-        .transform(database_prefix, current_database="marts", current_schema=None)
-        .sql()
-        == "CREATE TABLE unqualified_and_no_current_schema.customers (ID INT)"
+        sqlglot.parse_one("CREATE TABLE customers (ID INT)").transform(database_prefix, current_database="marts").sql()
+        == "CREATE TABLE unqualified_and_no_schema_set.customers (ID INT)"
     )
 
 

@@ -6,11 +6,11 @@ from sqlglot import exp
 
 MISSING_DATABASE = "unqualified_and_no_current_database"
 
-MISSING_SCHEMA = "unqualified_and_no_current_schema"
+MISSING_SCHEMA = "unqualified_and_no_schema_set"
 
 
 def database_prefix(
-    expression: exp.Expression, current_database: Optional[str] = None, current_schema: Optional[str] = None
+    expression: exp.Expression, current_database: Optional[str] = None, schema_set: bool = False
 ) -> exp.Expression:
     """Prefix schemas with the database used in the expression or the current database if none.
 
@@ -62,7 +62,7 @@ def database_prefix(
 
         if not (db := node.args.get("db")):
             # no schema
-            if node.parent.key == "use" or (current_database and current_schema):
+            if node.parent.key == "use" or (current_database and schema_set):
                 # no problem, search path contains current database
                 return node
             elif not current_database:

@@ -134,10 +134,10 @@ class FakeSnowflakeCursor:
                     errno=2043,
                     sqlstate="02000",
                 )
-            self._conn.schema = ident.this
+            self._conn.schema_set = True
 
         expression = transforms.database_prefix(
-            expression, current_database=self._conn.database, current_schema=self._conn.schema
+            expression, current_database=self._conn.database, schema_set=self._conn.schema_set
         )
 
         # TODO: move into use schema block
@@ -145,21 +145,21 @@ class FakeSnowflakeCursor:
 
         transformed = expression.sql()
 
-        if "unqualified_and_no_current" in transformed:
+        if "unqualified_and_no" in transformed:
             if not self._conn.database:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
                     errno=90105,
                     sqlstate="22000",
                 ) from None
-            elif not self._conn.schema:
+            elif not self._conn.schema_set:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"Cannot perform {cmd}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
                     errno=90106,
                     sqlstate="22000",
                 ) from None
             else:
-                raise AssertionError(f"Schema unset but {self._conn.database=} {self._conn.schema=}")
+                raise AssertionError(f"unqualified_and_no_current but {self._conn.database=} {self._conn.schema_set=}")
 
         try:
             self._duck_conn.execute(transformed)
@@ -217,11 +217,18 @@ class FakeSnowflakeConnection:
     ):
         self.database = database
         self.schema = schema
+        self.schema_set = False
 
         if database and schema:
             # TODO: use . like snowflake does
             transformed_schema = f"{database}_{schema}"
-            duck_conn.execute(f"set schema = '{transformed_schema}'")
+
+            # check schema exists
+            if duck_conn.execute(
+                f"select * from duckdb_schemas() where schema_name = '{transformed_schema}'"
+            ).fetchone():
+                duck_conn.execute(f"set schema = '{transformed_schema}'")
+                self.schema_set = True
 
         self._duck_conn = duck_conn
 
