@@ -143,6 +143,8 @@ class FakeSnowflakeCursor:
         # TODO: move into use schema block
         expression = transforms.set_schema(expression)
 
+        expression = transforms.create_database(expression)
+
         transformed = expression.sql()
 
         if transforms.MISSING_SCHEMA in transformed:
@@ -163,6 +165,9 @@ class FakeSnowflakeCursor:
 
         try:
             self._duck_conn.execute(transformed)
+        except duckdb.BinderException as e:
+            msg = e.args[0]
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from None
         except duckdb.CatalogException as e:
             # minimal processing to make it look like a snowflake exception, message content may differ
             msg = cast(str, e.args[0]).split("\n")[0]
@@ -219,16 +224,16 @@ class FakeSnowflakeConnection:
         self.schema = schema
         self.schema_set = False
 
-        if database and schema:
-            # TODO: use . like snowflake does
-            transformed_schema = f"{database}_{schema}"
-
-            # check schema exists
-            if duck_conn.execute(
-                f"select * from duckdb_schemas() where schema_name = '{transformed_schema}'"
-            ).fetchone():
-                duck_conn.execute(f"set schema = '{transformed_schema}'")
-                self.schema_set = True
+        if (
+            database
+            and schema
+            and duck_conn.execute(
+                f"""select * from information_schema.schemata
+                where catalog_name = '{database}' and schema_name = '{schema}'"""
+            ).fetchone()
+        ):
+            duck_conn.execute(f"use {database}.{schema}")
+            self.schema_set = True
 
         self._duck_conn = duck_conn
 

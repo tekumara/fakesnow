@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from typing import Optional
+import re
+from typing import Optional, cast
 
 from sqlglot import exp
 
@@ -17,9 +18,9 @@ def database_prefix(
     Example:
         >>> import sqlglot
         >>> sqlglot.parse_one("SELECT * FROM jaffles.customers").transform(database_prefix, database="marts").sql()
-        'SELECT * FROM marts_jaffles.customers'
+        'SELECT * FROM marts.jaffles.customers'
         >>> sqlglot.parse_one("SELECT * FROM marts.jaffles.customers").transform(database_prefix).sql()
-        'SELECT * FROM marts_jaffles.customers'
+        'SELECT * FROM marts.jaffles.customers'
 
         See tests for more examples.
     Args:
@@ -49,7 +50,7 @@ def database_prefix(
                 # schema expression isn't qualified with a database
                 db_name = current_database or MISSING_SCHEMA
 
-            name = f"{db_name}_{node.args['this'].name}"
+            name = f"{db_name}.{node.args['this'].name}"
 
             eid: exp.Identifier = node.args["this"]
             nid = exp.Identifier(**{**eid.args, "this": name})
@@ -71,8 +72,7 @@ def database_prefix(
         else:
             catalog_name = current_database or MISSING_SCHEMA
 
-        # TODO: use quoted . like snowflake does
-        new_db_name = f"{catalog_name}_{db.name}"
+        new_db_name = f"{catalog_name}.{db.name}"
 
         eid: exp.Identifier = node.args["db"]
         nid = exp.Identifier(**{**eid.args, "this": new_db_name})
@@ -92,7 +92,7 @@ def set_schema(expression: exp.Expression) -> exp.Expression:
     Example:
         >>> import sqlglot
         >>> sqlglot.parse_one("USE SCHEMA foo").transform(set_schema).sql()
-        'SET schema = foo'
+        'USE foo'
     Args:
         expression (exp.Expression): the expression that will be transformed.
 
@@ -100,7 +100,7 @@ def set_schema(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression.
     """
 
-    def transform_use(node: exp.Use) -> exp.Command | exp.Use:
+    def transform_use(node: exp.Use) -> exp.Use:
         if (
             (kind := node.args.get("kind"))
             and isinstance(kind, exp.Var)
@@ -109,9 +109,8 @@ def set_schema(expression: exp.Expression) -> exp.Expression:
         ):
             assert node.this, f"No identifier for USE expression {node}"
 
-            name = node.this.name
-
-            return exp.Command(this="SET", expression=exp.Literal.string(f"schema = {name}"))
+            args = {k: v for k, v in node.args.items() if k != "kind"}
+            return exp.Use(**args)
 
         return node
 
@@ -135,3 +134,32 @@ def as_describe(expression: exp.Expression) -> exp.Expression:
     """
 
     return exp.Describe(this=expression)
+
+
+# TODO: move this into a Dialect as a transpilation
+def create_database(expression: exp.Expression) -> exp.Expression:
+    """Transform create database to attach database.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("CREATE database foo").transform(create_database).sql()
+        'ATTACH database ':memory:' as foo'
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    def transform_create_db(node: exp.Command) -> exp.Command:
+        if match := re.search("create database (\\w+)", cast(str, node.this), flags=re.IGNORECASE):
+            db_name = match[1]
+            return exp.Command(
+                this="ATTACH", expression=exp.Literal(this=f"DATABASE ':memory:' AS {db_name}", is_string=True)
+            )
+        else:
+            return node
+
+    return expression.transform(
+        lambda node: transform_create_db(node) if isinstance(node, exp.Command) else node,
+    )

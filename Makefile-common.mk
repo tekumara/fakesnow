@@ -17,7 +17,7 @@ $(pip):
 	$(pip) install pip~=22.3 wheel~=0.37
 
 $(venv): pyproject.toml $(pip)
-	$(pip) install -e '.[dev]'
+	$(pip) install -e '.[dev, notebook]'
 	touch $(venv)
 
 # delete the venv

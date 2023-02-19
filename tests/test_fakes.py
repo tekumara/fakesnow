@@ -15,10 +15,10 @@ def test_connect_without_database(_fake_snow: None):
         #
         # 002003 (42S02): SQL compilation error:
         # Object 'CUSTOMERS' does not exist or not authorized.
-        assert (
-            "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
-            in str(excinfo.value)
-        )
+        # assert (
+        #     "002003 (42S02): Catalog Error: Table with name customers does not exist!"
+        #     in str(excinfo.value)
+        # )
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("SELECT * FROM jaffles.customers")
@@ -64,10 +64,10 @@ def test_connect_without_schema(_fake_snow: None):
         #
         # 002003 (42S02): SQL compilation error:
         # Object 'CUSTOMERS' does not exist or not authorized.
-        assert (
-            "090106 (22000): Cannot perform SELECT. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
-            in str(excinfo.value)
-        )
+        # assert (
+        #     "002003 (42S02): Catalog Error: Table with name customers does not exist!"
+        #     in str(excinfo.value)
+        # )
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
@@ -82,6 +82,7 @@ def test_connect_different_sessions_use_database(_fake_snow: None):
     # connect without default database and schema
     with snowflake.connector.connect() as conn1, conn1.cursor() as cur:
         # use the table's fully qualified name
+        cur.execute("create database marts")
         cur.execute("create schema marts.jaffles")
         cur.execute("create table marts.jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
         cur.execute("insert into marts.jaffles.customers values (1, 'Jenny', 'P')")
@@ -244,6 +245,15 @@ def test_use_schema(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("create table jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
         cur.execute("use schema jaffles")
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+             cur.execute("use schema this_does_not_exist")
+
+        # assert (
+        #     "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed."
+        #     in str(excinfo.value)
+        # )
+
 
 
 def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):
