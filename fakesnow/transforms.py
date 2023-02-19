@@ -1,121 +1,62 @@
 from __future__ import annotations
 
 import re
-from typing import Optional, cast
+from typing import cast
 
 from sqlglot import exp
 
-MISSING_SCHEMA = "unqualified_and_no_schema_set"
+MISSING_DATABASE = "missing_database"
 
-
-def database_prefix(
-    expression: exp.Expression, current_database: Optional[str] = None, schema_set: bool = False
-) -> exp.Expression:
-    """Prefix schemas with the database used in the expression or the current database if none.
-
-    Needed to support the use of multiple Snowflake databases within in a single duckdb database.
+# TODO: move this into a Dialect as a transpilation
+def set_schema(expression: exp.Expression, current_database: str | None) -> exp.Expression:
+    """Transform USE SCHEMA/DATABASE to SET schema.
 
     Example:
         >>> import sqlglot
-        >>> sqlglot.parse_one("SELECT * FROM jaffles.customers").transform(database_prefix, database="marts").sql()
-        'SELECT * FROM marts.jaffles.customers'
-        >>> sqlglot.parse_one("SELECT * FROM marts.jaffles.customers").transform(database_prefix).sql()
-        'SELECT * FROM marts.jaffles.customers'
+        >>> sqlglot.parse_one("USE SCHEMA bar").transform(set_schema, current_database="foo").sql()
+        "SET schema = 'foo.bar'"
+        >>> sqlglot.parse_one("USE SCHEMA foo.bar").transform(set_schema).sql()
+        "SET schema = 'foo.bar'"
+        >>> sqlglot.parse_one("USE DATABASE marts").transform(set_schema).sql()
+        "SET schema = 'marts.main'"
 
         See tests for more examples.
     Args:
         expression (exp.Expression): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression.
+        exp.Expression: A SET schema expression if the input is a USE
+            expression, otherwise expression is returned as-is.
     """
 
-    def transform_table(node: exp.Table) -> exp.Table:
-        # sqlglot catalog = snowflake database
-        # sqlglot db = snowflake schema
+    def transform_use(node: exp.Use, kind_name: str) -> exp.Command:
+        assert node.this, f"No identifier for USE expression {node}"
 
-        if not node.parent:
-            raise Exception(f"No parent for table expression {node.sql()}")
-
-        if (parent_kind := node.parent.args.get("kind")) and (
-            # "DROP/CREATE SCHEMA"
-            (isinstance(parent_kind, str) and parent_kind.upper() == "SCHEMA")
-            # "USE SCHEMA"
-            or (isinstance(parent_kind, exp.Var) and parent_kind.name.upper() == "SCHEMA")
-        ):
-
-            if db := node.args.get("db"):
+        if kind_name == "DATABASE":
+            # duckdb's default schema is main
+            name = f"{node.this.name}.main"
+        else:
+            # SCHEMA
+            if db := node.this.args.get("db"):
                 db_name = db.name
             else:
-                # schema expression isn't qualified with a database
-                db_name = current_database or MISSING_SCHEMA
+                # isn't qualified with a database
+                db_name = current_database or MISSING_DATABASE
 
-            name = f"{db_name}.{node.args['this'].name}"
+            name = f"{db_name}.{node.this.name}"
 
-            eid: exp.Identifier = node.args["this"]
-            nid = exp.Identifier(**{**eid.args, "this": name})
+        return exp.Command(this="SET", expression=exp.Literal.string(f"schema = '{name}'"))
 
-            return exp.Table(**{**node.args, "db": None, "name": name, "this": nid})
-
-        # TABLE expression, eg: "SELECT * FROM identifier", or "CREATE TABLE ..."
-
-        if not (db := node.args.get("db")):
-            # no schema
-            if node.parent.key == "use" or schema_set:
-                # no problem, search is set
-                return node
-            else:
-                return exp.Table(**{**node.args, "catalog": MISSING_SCHEMA})
-
-        if catalog := node.args.get("catalog"):
-            catalog_name = catalog.name
-        else:
-            catalog_name = current_database or MISSING_SCHEMA
-
-        new_db_name = f"{catalog_name}.{db.name}"
-
-        eid: exp.Identifier = node.args["db"]
-        nid = exp.Identifier(**{**eid.args, "this": new_db_name})
-
-        return exp.Table(**{**node.args, "catalog": None, "db": nid})
-
-    # transform all table expressions
     return expression.transform(
-        lambda node: transform_table(node) if isinstance(node, exp.Table) else node,
-    )
-
-
-# TODO: move this into a Dialect as a transpilation
-def set_schema(expression: exp.Expression) -> exp.Expression:
-    """Transform use schema to set schema.
-
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("USE SCHEMA foo").transform(set_schema).sql()
-        'USE foo'
-    Args:
-        expression (exp.Expression): the expression that will be transformed.
-
-    Returns:
-        exp.Expression: The transformed expression.
-    """
-
-    def transform_use(node: exp.Use) -> exp.Use:
+        lambda node: transform_use(node, kind.name.upper())
         if (
-            (kind := node.args.get("kind"))
+            isinstance(node, exp.Use)
+            and (kind := node.args.get("kind"))
             and isinstance(kind, exp.Var)
             and kind.name
-            and kind.name.upper() == "SCHEMA"
-        ):
-            assert node.this, f"No identifier for USE expression {node}"
-
-            args = {k: v for k, v in node.args.items() if k != "kind"}
-            return exp.Use(**args)
-
-        return node
-
-    return expression.transform(
-        lambda node: transform_use(node) if isinstance(node, exp.Use) else node,
+            and kind.name.upper() in ["SCHEMA", "DATABASE"]
+        )
+        else node,
     )
 
 

@@ -1,130 +1,28 @@
 import sqlglot
 
-from fakesnow.transforms import as_describe, create_database, database_prefix, set_schema
+from fakesnow.transforms import as_describe, create_database, set_schema
 
 
-def test_database_prefix_for_select_exp() -> None:
+def test_use() -> None:
     assert (
-        sqlglot.parse_one("SELECT * FROM customers")
-        .transform(database_prefix, current_database="marts", schema_set=True)
-        .sql()
-        == "SELECT * FROM customers"
+        sqlglot.parse_one("use database marts").transform(set_schema, current_database=None).sql()
+        == "SET schema = 'marts.main'"
     )
 
     assert (
-        sqlglot.parse_one("SELECT * FROM jaffles.customers").transform(database_prefix, current_database="marts").sql()
-        == "SELECT * FROM marts.jaffles.customers"
+        sqlglot.parse_one("USE SCHEMA foo").transform(set_schema, current_database=None).sql()
+        == "SET schema = 'missing_database.foo'"
     )
 
     assert (
-        sqlglot.parse_one("SELECT * FROM marts.jaffles.customers")
-        .transform(database_prefix, current_database="db1")
-        .sql()
-        == "SELECT * FROM marts.jaffles.customers"
-    )
-
-    # unqualified and no current database
-
-    assert (
-        sqlglot.parse_one("SELECT * FROM customers").transform(database_prefix, current_database=None).sql()
-        == "SELECT * FROM unqualified_and_no_schema_set.customers"
+        sqlglot.parse_one("use schema bar").transform(set_schema, current_database="foo").sql()
+        == "SET schema = 'foo.bar'"
     )
 
     assert (
-        sqlglot.parse_one("SELECT * FROM jaffles.customers").transform(database_prefix, current_database=None).sql()
-        == "SELECT * FROM unqualified_and_no_schema_set.jaffles.customers"
+        sqlglot.parse_one("use schema foo.bar").transform(set_schema, current_database="marts").sql()
+        == "SET schema = 'foo.bar'"
     )
-
-    # unqualified and no schema set
-
-    assert (
-        sqlglot.parse_one("SELECT * FROM customers").transform(database_prefix, current_database="marts").sql()
-        == "SELECT * FROM unqualified_and_no_schema_set.customers"
-    )
-
-
-def test_database_prefix_for_table_exp() -> None:
-    assert (
-        sqlglot.parse_one("CREATE TABLE customers (ID INT)")
-        .transform(database_prefix, current_database="marts", schema_set=True)
-        .sql()
-        == "CREATE TABLE customers (ID INT)"
-    )
-
-    assert (
-        sqlglot.parse_one("CREATE TABLE jaffles.customers (ID INT)")
-        .transform(database_prefix, current_database="marts")
-        .sql()
-        == "CREATE TABLE marts.jaffles.customers (ID INT)"
-    )
-
-    assert (
-        sqlglot.parse_one("CREATE TABLE customers (ID INT)").transform(database_prefix, current_database=None).sql()
-        == "CREATE TABLE unqualified_and_no_schema_set.customers (ID INT)"
-    )
-
-    assert (
-        sqlglot.parse_one("CREATE TABLE customers (ID INT)").transform(database_prefix, current_database="marts").sql()
-        == "CREATE TABLE unqualified_and_no_schema_set.customers (ID INT)"
-    )
-
-
-def test_database_prefix_for_schema_exp() -> None:
-    assert (
-        sqlglot.parse_one("CREATE SCHEMA marts.jaffles").transform(database_prefix).sql()
-        == "CREATE SCHEMA marts.jaffles"
-    )
-
-    assert (
-        sqlglot.parse_one("CREATE SCHEMA marts.jaffles").transform(database_prefix, current_database="db1").sql()
-        == "CREATE SCHEMA marts.jaffles"
-    )
-
-    assert (
-        sqlglot.parse_one("CREATE SCHEMA jaffles").transform(database_prefix, current_database="marts").sql()
-        == "CREATE SCHEMA marts.jaffles"
-    )
-
-    assert (
-        sqlglot.parse_one("CREATE SCHEMA jaffles").transform(database_prefix, current_database=None).sql()
-        == "CREATE SCHEMA unqualified_and_no_schema_set.jaffles"
-    )
-
-    # variants in casing and command
-
-    assert (
-        sqlglot.parse_one("create schema marts.jaffles").transform(database_prefix).sql()
-        == "CREATE SCHEMA marts.jaffles"
-    )
-
-    assert (
-        sqlglot.parse_one("DROP SCHEMA marts.jaffles").transform(database_prefix).sql() == "DROP SCHEMA marts.jaffles"
-    )
-
-    # use schema
-
-    assert (
-        sqlglot.parse_one("USE SCHEMA jaffles").transform(database_prefix, current_database="marts").sql()
-        == "USE SCHEMA marts.jaffles"
-    )
-
-    assert (
-        sqlglot.parse_one("USE SCHEMA jaffles").transform(database_prefix, current_database=None).sql()
-        == "USE SCHEMA unqualified_and_no_schema_set.jaffles"
-    )
-
-
-def test_use_database() -> None:
-    assert (
-        sqlglot.parse_one("use database marts").transform(database_prefix, current_database=None).sql()
-        == "USE database marts"
-    )
-
-
-def test_set_schema() -> None:
-    assert sqlglot.parse_one("USE SCHEMA foo").transform(set_schema).sql() == "USE foo"
-
-    assert sqlglot.parse_one("use schema bar").transform(set_schema).sql() == "USE bar"
 
 
 def test_as_describe() -> None:

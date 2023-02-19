@@ -16,6 +16,7 @@ from snowflake.connector.result_batch import ResultBatch
 from sqlglot import exp, parse_one
 from typing_extensions import Self
 
+import fakesnow.checks as checks
 import fakesnow.expr as expr
 import fakesnow.transforms as transforms
 
@@ -125,9 +126,8 @@ class FakeSnowflakeCursor:
 
         if cmd == "USE DATABASE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             self._conn.database = ident.this
-            return self
 
-        if cmd == "USE SCHEMA" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+        if cmd == "USE SCHEMA":
             if not self._conn.database:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg="SQL compilation error:\nObject does not exist, or operation cannot be performed.",
@@ -136,32 +136,26 @@ class FakeSnowflakeCursor:
                 )
             self._conn.schema_set = True
 
-        expression = transforms.database_prefix(
-            expression, current_database=self._conn.database, schema_set=self._conn.schema_set
-        )
+        no_database, no_schema = checks.is_unqualified_table_expression(expression)
 
-        # TODO: move into use schema block
-        expression = transforms.set_schema(expression)
+        if no_database and not self._conn.database:
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
+                errno=90105,
+                sqlstate="22000",
+            ) from None
+        elif no_schema and not self._conn.schema_set:
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"Cannot perform {cmd}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
+                errno=90106,
+                sqlstate="22000",
+            ) from None
 
+        # TODO: move above, can assert schema is never unqualified
+        expression = transforms.set_schema(expression, current_database=self._conn.database)
         expression = transforms.create_database(expression)
 
         transformed = expression.sql()
-
-        if transforms.MISSING_SCHEMA in transformed:
-            if not self._conn.database:
-                raise snowflake.connector.errors.ProgrammingError(
-                    msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
-                    errno=90105,
-                    sqlstate="22000",
-                ) from None
-            elif not self._conn.schema_set:
-                raise snowflake.connector.errors.ProgrammingError(
-                    msg=f"Cannot perform {cmd}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
-                    errno=90106,
-                    sqlstate="22000",
-                ) from None
-            else:
-                raise AssertionError(f"unqualified_and_no_current but {self._conn.database=} {self._conn.schema_set=}")
 
         try:
             self._duck_conn.execute(transformed)
@@ -259,7 +253,11 @@ class FakeSnowflakeConnection:
         cursor_class: Type[SnowflakeCursor] = SnowflakeCursor,
         **kwargs: dict[str, Any],
     ) -> Iterable[FakeSnowflakeCursor]:
-        cursors = [self.cursor(cursor_class).execute(e.sql()) for e in sqlglot.parse(sql_text, read="snowflake") if e]
+        cursors = [
+            self.cursor(cursor_class).execute(e.sql(dialect="snowflake"))
+            for e in sqlglot.parse(sql_text, read="snowflake")
+            if e
+        ]
         return cursors if return_cursors else []
 
     def insert_df(

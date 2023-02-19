@@ -13,5 +13,7 @@ def conn(_fake_snow: None) -> Iterator[snowflake.connector.SnowflakeConnection]:
     """
     with snowflake.connector.connect(database="db1") as c:
         # TODO: autocreate database and schema
-        c.execute_string("CREATE database db1;CREATE SCHEMA IF NOT EXISTS schema1; USE SCHEMA schema1;")
+        c.execute_string(
+            "CREATE database db1; USE database db1; CREATE SCHEMA IF NOT EXISTS schema1; USE SCHEMA schema1;"
+        )
         yield c

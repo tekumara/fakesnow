@@ -98,21 +98,45 @@ def test_connect_different_sessions_use_database(_fake_snow: None):
         assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
 
-def test_connect_with_missing_schema(_fake_snow: None):
-    # connect with schema that doesn't exist
-    with snowflake.connector.connect(database="marts", schema="jaffles") as conn, conn.cursor() as cur:
+def test_connect_with_non_existent_db_or_schema(_fake_snow: None):
+    # can connect with db that doesn't exist
+    with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
 
-        # no schema set
+        # but no valid database set
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-            cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+            cur.execute("create table foobar (i int)")
+
+        # assert (
+        #     "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+        #     in str(excinfo.value)
+        # )
+
+        # database still present on connection
+        assert conn.database == "marts"
+
+    # can connect with schema that doesn't exist
+    with snowflake.connector.connect(database="db1", schema="jaffles") as conn, conn.cursor() as cur:
+
+        # but no valid schema set
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("create table foobar (i int)")
 
         assert (
             "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
             in str(excinfo.value)
         )
 
-        # schema still present on connection though
+        # schema still present on connection
         assert conn.schema == "jaffles"
+
+
+def test_current_database_schema(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("select current_database(), current_schema()")
+
+        assert cur.fetchall() == [
+            {"current_database()": "db1", "current_schema()": "schema1"},
+        ]
 
 
 def test_describe(conn: snowflake.connector.SnowflakeConnection):
@@ -239,21 +263,22 @@ def test_non_existant_table_throws_snowflake_exception(conn: snowflake.connector
             cur.execute("select * from this_table_does_not_exist")
 
 
-def test_use_schema(conn: snowflake.connector.SnowflakeConnection):
+def test_schema_create_and_use(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create schema jaffles")
         cur.execute("create table jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
         cur.execute("use schema jaffles")
+        # fully qualified works too
+        cur.execute("use schema db1.jaffles")
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
 
-        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-             cur.execute("use schema this_does_not_exist")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
+            cur.execute("use schema this_does_not_exist")
 
         # assert (
         #     "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed."
         #     in str(excinfo.value)
         # )
-
 
 
 def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):
