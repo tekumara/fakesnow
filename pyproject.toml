@@ -8,7 +8,7 @@ dependencies = [
     "duckdb~=0.7.0",
     # include the pandas extra to get compatible version of pyarrow
     "snowflake-connector-python[pandas]",
-    "sqlglot~=11.1.2",
+    "sqlglot @ git+https://github.com/tobymao/sqlglot.git@7ee8a3c",
 ]
 
 [project.optional-dependencies]
