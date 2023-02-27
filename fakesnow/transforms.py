@@ -1,8 +1,5 @@
 from __future__ import annotations
 
-import re
-from typing import cast
-
 from sqlglot import exp
 
 MISSING_DATABASE = "missing_database"
@@ -92,17 +89,15 @@ def create_database(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression.
     """
 
-    def transform_create_db(node: exp.Command) -> exp.Command:
-        if isinstance(node.expression, str) and (
-            match := re.search("database (\\w+)", cast(str, node.expression), flags=re.IGNORECASE)
-        ):
-            db_name = match[1]
-            return exp.Command(
-                this="ATTACH", expression=exp.Literal(this=f"DATABASE ':memory:' AS {db_name}", is_string=True)
-            )
-        else:
-            return node
+    def transform_create_db(node: exp.Create) -> exp.Command:
+        assert (ident := node.find(exp.Identifier)), f"No identifier in {node.sql}"
+        db_name = ident.this
+        return exp.Command(
+            this="ATTACH", expression=exp.Literal(this=f"DATABASE ':memory:' AS {db_name}", is_string=True)
+        )
 
     return expression.transform(
-        lambda node: transform_create_db(node) if isinstance(node, exp.Command) else node,
+        lambda node: transform_create_db(node)
+        if isinstance(node, exp.Create) and str(node.args.get("kind")).upper() == "DATABASE"
+        else node,
     )
