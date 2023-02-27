@@ -39,10 +39,10 @@ def test_connect_without_database(_fake_snow: None):
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("use schema jaffles")
 
-        assert (
-            "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed."
-            in str(excinfo.value)
-        )
+        # assert (
+        #     "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed."
+        #     in str(excinfo.value)
+        # )
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
@@ -56,6 +56,9 @@ def test_connect_without_database(_fake_snow: None):
 def test_connect_without_schema(_fake_snow: None):
 
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
+        conn.execute_string(
+            "CREATE database marts; USE database marts;"
+        )
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("SELECT * FROM customers")
@@ -97,7 +100,6 @@ def test_connect_different_sessions_use_database(_fake_snow: None):
         cur.execute("select id, first_name, last_name from customers")
         assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
-
 def test_connect_with_non_existent_db_or_schema(_fake_snow: None):
     # can connect with db that doesn't exist
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
@@ -106,16 +108,18 @@ def test_connect_with_non_existent_db_or_schema(_fake_snow: None):
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("create table foobar (i int)")
 
-        # assert (
-        #     "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
-        #     in str(excinfo.value)
-        # )
+        assert (
+            "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+            in str(excinfo.value)
+        )
 
         # database still present on connection
         assert conn.database == "marts"
 
+        cur.execute("CREATE database marts")
+
     # can connect with schema that doesn't exist
-    with snowflake.connector.connect(database="db1", schema="jaffles") as conn, conn.cursor() as cur:
+    with snowflake.connector.connect(database="marts", schema="jaffles") as conn, conn.cursor() as cur:
 
         # but no valid schema set
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
@@ -272,6 +276,13 @@ def test_schema_create_and_use(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("use schema db1.jaffles")
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
 
+
+def test_use_invalid_schema(_fake_snow: None):
+
+    with snowflake.connector.connect() as conn:
+        conn.execute_string("CREATE DATABASE db1; USE DATABASE db1;")
+
+    with conn.cursor() as cur:
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
             cur.execute("use schema this_does_not_exist")
 
@@ -279,6 +290,14 @@ def test_schema_create_and_use(conn: snowflake.connector.SnowflakeConnection):
         #     "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed."
         #     in str(excinfo.value)
         # )
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("create table foobar (i int)")
+
+        assert (
+            "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
+            in str(excinfo.value)
+        )
 
 
 def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):

@@ -124,21 +124,9 @@ class FakeSnowflakeCursor:
         expression = command if isinstance(command, exp.Expression) else parse_one(command, read="snowflake")
         cmd = expr.key_command(expression)
 
-        if cmd == "USE DATABASE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
-            self._conn.database = ident.this
-
-        if cmd == "USE SCHEMA":
-            if not self._conn.database:
-                raise snowflake.connector.errors.ProgrammingError(
-                    msg="SQL compilation error:\nObject does not exist, or operation cannot be performed.",
-                    errno=2043,
-                    sqlstate="02000",
-                )
-            self._conn.schema_set = True
-
         no_database, no_schema = checks.is_unqualified_table_expression(expression)
 
-        if no_database and not self._conn.database:
+        if no_database and not self._conn.database_set:
             raise snowflake.connector.errors.ProgrammingError(
                 msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
                 errno=90105,
@@ -166,6 +154,17 @@ class FakeSnowflakeCursor:
             # minimal processing to make it look like a snowflake exception, message content may differ
             msg = cast(str, e.args[0]).split("\n")[0]
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
+
+        if cmd == "USE DATABASE" and (ident := expression.find(exp.Literal)) and isinstance(ident.this, str):
+            assert (
+                match := re.search("schema = '(\\w+).(\\w+)'", ident.this)
+            ), f"Cannot extract db and schema from {ident.this}"
+
+            self._conn.database = match[1]
+            self._conn.database_set = True
+
+        if cmd == "USE SCHEMA":
+            self._conn.schema_set = True
 
         return self
 
@@ -216,6 +215,7 @@ class FakeSnowflakeConnection:
     ):
         self.database = database
         self.schema = schema
+        self.database_set = False
         self.schema_set = False
 
         if (
@@ -227,7 +227,17 @@ class FakeSnowflakeConnection:
             ).fetchone()
         ):
             duck_conn.execute(f"use {database}.{schema}")
+            self.database_set = True
             self.schema_set = True
+        elif (
+            database
+            and duck_conn.execute(
+                f"""select * from information_schema.schemata
+                where catalog_name = '{database}'"""
+            ).fetchone()
+        ):
+            duck_conn.execute(f"use {database}.main")
+            self.database_set = True
 
         self._duck_conn = duck_conn
 
