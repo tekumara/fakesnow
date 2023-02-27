@@ -21,6 +21,16 @@ def test_check_unqualified_create_table() -> None:
     )
 
 
+def test_check_unqualified_drop_table() -> None:
+
+    assert is_unqualified_table_expression(sqlglot.parse_one("DROP TABLE customers")) == (True, True)
+
+    assert is_unqualified_table_expression(sqlglot.parse_one("DROP TABLE jaffles.customers")) == (
+        True,
+        False,
+    )
+
+
 def test_check_unqualified_schema() -> None:
 
     # assert is_unqualified_table_expression(sqlglot.parse_one("CREATE SCHEMA jaffles")) == (True, False)
