@@ -210,6 +210,8 @@ class FakeSnowflakeConnection:
         duck_conn: DuckDBPyConnection,
         database: Optional[str] = None,
         schema: Optional[str] = None,
+        create_database: bool = True,
+        create_schema: bool = True,
         *args: Any,
         **kwargs: Any,
     ):
@@ -220,13 +222,34 @@ class FakeSnowflakeConnection:
 
         if (
             database
+            and create_database
+            and not duck_conn.execute(
+                f"""select * from information_schema.schemata
+                where catalog_name = '{database}'"""
+            ).fetchone()
+        ):
+            duck_conn.execute(f"ATTACH DATABASE ':memory:' AS {database}")
+
+        if (
+            database
+            and schema
+            and create_schema
+            and not duck_conn.execute(
+                f"""select * from information_schema.schemata
+                where catalog_name = '{database}' and schema_name = '{schema}'"""
+            ).fetchone()
+        ):
+            duck_conn.execute(f"CREATE SCHEMA {database}.{schema}")
+
+        if (
+            database
             and schema
             and duck_conn.execute(
                 f"""select * from information_schema.schemata
                 where catalog_name = '{database}' and schema_name = '{schema}'"""
             ).fetchone()
         ):
-            duck_conn.execute(f"use {database}.{schema}")
+            duck_conn.execute(f"SET schema='{database}.{schema}'")
             self.database_set = True
             self.schema_set = True
         elif (
@@ -236,7 +259,7 @@ class FakeSnowflakeConnection:
                 where catalog_name = '{database}'"""
             ).fetchone()
         ):
-            duck_conn.execute(f"use {database}.main")
+            duck_conn.execute(f"SET schema='{database}.main'")
             self.database_set = True
 
         self._duck_conn = duck_conn

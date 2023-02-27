@@ -24,7 +24,11 @@ import fakesnow.fakes as fakes
 
 
 @contextmanager
-def patch(extra_targets: str | Sequence[str] = []) -> Iterator[None]:
+def patch(
+    extra_targets: str | Sequence[str] = [],
+    create_database_on_connect: bool = True,
+    create_schema_on_connect: bool = True,
+) -> Iterator[None]:
     """Patch snowflake targets with fakes.
 
     The standard targets are:
@@ -33,6 +37,7 @@ def patch(extra_targets: str | Sequence[str] = []) -> Iterator[None]:
 
     Args:
         extra_targets (Sequence[types.ModuleType], optional): Extra targets to patch. Defaults to [].
+        auto_create_database
 
         Allows extra targets beyond the standard snowflake.connector targets to be patched. Needed because we cannot
         patch definitions, only usages, see https://docs.python.org/3/library/unittest.mock.html#where-to-patch
@@ -50,7 +55,12 @@ def patch(extra_targets: str | Sequence[str] = []) -> Iterator[None]:
     fake_fns = {
         # every time we connect, create a new cursor (ie: connection) so we can isolate each connection's
         # schema setting, see https://duckdb.org/docs/api/python/overview.html#startup--shutdown
-        snowflake.connector.connect: lambda **kwargs: fakes.FakeSnowflakeConnection(duck_conn.cursor(), **kwargs),
+        snowflake.connector.connect: lambda **kwargs: fakes.FakeSnowflakeConnection(
+            duck_conn.cursor(),
+            create_database=create_database_on_connect,
+            create_schema=create_schema_on_connect,
+            **kwargs,
+        ),
         snowflake.connector.pandas_tools.write_pandas: fakes.write_pandas,
     }
 

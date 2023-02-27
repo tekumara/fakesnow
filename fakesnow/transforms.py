@@ -84,7 +84,7 @@ def create_database(expression: exp.Expression) -> exp.Expression:
     Example:
         >>> import sqlglot
         >>> sqlglot.parse_one("CREATE database foo").transform(create_database).sql()
-        'ATTACH database ':memory:' as foo'
+        'ATTACH DATABASE ':memory:' as foo'
     Args:
         expression (exp.Expression): the expression that will be transformed.
 

@@ -5,7 +5,7 @@ import snowflake.connector.cursor
 import snowflake.connector.pandas_tools
 
 
-def test_connect_without_database(_fake_snow: None):
+def test_connect_without_database(_fake_snow_no_auto_create: None):
     with snowflake.connector.connect() as conn, conn.cursor() as cur:
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
@@ -53,12 +53,10 @@ def test_connect_without_database(_fake_snow: None):
         )
 
 
-def test_connect_without_schema(_fake_snow: None):
+def test_connect_without_schema(_fake_snow_no_auto_create: None):
 
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
-        conn.execute_string(
-            "CREATE database marts; USE database marts;"
-        )
+        conn.execute_string("CREATE database marts; USE database marts;")
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("SELECT * FROM customers")
@@ -81,7 +79,7 @@ def test_connect_without_schema(_fake_snow: None):
         )
 
 
-def test_connect_different_sessions_use_database(_fake_snow: None):
+def test_connect_different_sessions_use_database(_fake_snow_no_auto_create: None):
     # connect without default database and schema
     with snowflake.connector.connect() as conn1, conn1.cursor() as cur:
         # use the table's fully qualified name
@@ -100,7 +98,19 @@ def test_connect_different_sessions_use_database(_fake_snow: None):
         cur.execute("select id, first_name, last_name from customers")
         assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
-def test_connect_with_non_existent_db_or_schema(_fake_snow: None):
+
+def test_auto_create_connect_twice(_fake_snow: None):
+
+    with snowflake.connector.connect(database="db1", schema="schema1"):
+        # creates db2 and schema1
+        pass
+
+    with snowflake.connector.connect(database="db1", schema="schema1"):
+        # connects again and reuses db1 and schema1
+        pass
+
+
+def test_connect_with_non_existent_db_or_schema(_fake_snow_no_auto_create: None):
     # can connect with db that doesn't exist
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
 
@@ -277,7 +287,7 @@ def test_schema_create_and_use(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
 
 
-def test_use_invalid_schema(_fake_snow: None):
+def test_use_invalid_schema(_fake_snow_no_auto_create: None):
 
     with snowflake.connector.connect() as conn:
         conn.execute_string("CREATE DATABASE db1; USE DATABASE db1;")
