@@ -204,6 +204,9 @@ class FakeSnowflakeCursor:
         else:
             return self._duck_conn.fetchall()
 
+    def fetch_pandas_all(self, **kwargs: dict[str, Any]) -> pd.DataFrame:
+        return self._duck_conn.fetch_df()
+
     def fetchone(self) -> dict | tuple | None:
         if not self._use_dict_result:
             return cast(Union[tuple, None], self._duck_conn.fetchone())

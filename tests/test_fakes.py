@@ -3,6 +3,7 @@ import pytest
 import snowflake.connector
 import snowflake.connector.cursor
 import snowflake.connector.pandas_tools
+from pandas.testing import assert_frame_equal
 
 
 def test_connect_auto_create(_fake_snow: None):
@@ -238,6 +239,22 @@ def test_fetchone_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
             {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
         ]
         assert not cur.fetchone()
+
+
+def test_fetch_pandas_all(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        cur.execute("insert into customers values (1, 'Jenny', 'P')")
+        cur.execute("insert into customers values (2, 'Jasper', 'M')")
+        cur.execute("select id, first_name, last_name from customers")
+
+        expected_df = pd.DataFrame.from_records(
+            [
+                {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
+                {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
+            ]
+        )
+        assert_frame_equal(cur.fetch_pandas_all(), expected_df, check_dtype=False)
 
 
 def test_get_result_batches(conn: snowflake.connector.SnowflakeConnection):
