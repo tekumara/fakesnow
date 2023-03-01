@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from string import Template
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Iterable, Iterator, Literal, Optional, Sequence, Type, Union, cast
 
@@ -24,6 +25,18 @@ if TYPE_CHECKING:
     import pandas as pd
 
 SCHEMA_UNSET = "schema_unset"
+
+# use ext prefix in columns to disambiguate when joining with information_schema.tables
+SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT = Template(
+    """
+create table ${catalog}.information_schema.tables_ext (
+    ext_table_catalog varchar,
+    ext_table_schema varchar,
+    ext_table_name varchar,
+    comment varchar
+)
+"""
+)
 
 
 class FakeSnowflakeCursor:
@@ -139,9 +152,10 @@ class FakeSnowflakeCursor:
                 sqlstate="22000",
             ) from None
 
-        # TODO: move above, can assert schema is never unqualified
         expression = transforms.set_schema(expression, current_database=self._conn.database)
         expression = transforms.create_database(expression)
+        expression = transforms.remove_comment(expression)
+        expression = transforms.join_information_schema_ext(expression)
 
         transformed = expression.sql()
 
@@ -160,11 +174,27 @@ class FakeSnowflakeCursor:
                 match := re.search("schema = '(\\w+).(\\w+)'", ident.this)
             ), f"Cannot extract db and schema from {ident.this}"
 
-            self._conn.database = match[1]
+            self._conn.database = cast(str, match[1])
             self._conn.database_set = True
 
         if cmd == "USE SCHEMA":
             self._conn.schema_set = True
+
+        if cmd == "CREATE DATABASE":
+            # make sure every database has the info schema extension table
+            catalog = expression.args["db_name"] or self._conn.database
+            self._duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=catalog))
+
+        if cmd == "CREATE TABLE" and (table_comment := expression.args.get("table_comment")):
+            # store table comment, if any
+            assert (table := expression.find(exp.Table)), "Cannot find table"
+            catalog = table.catalog or self._conn.database
+            schema = table.db or self._conn.schema
+            self._duck_conn.execute(
+                f"""
+                insert into information_schema.tables_ext
+                values ('{catalog}', '{schema}', '{table.name}', '{table_comment}')"""
+            )
 
         return self
 
@@ -229,6 +259,7 @@ class FakeSnowflakeConnection:
             ).fetchone()
         ):
             duck_conn.execute(f"ATTACH DATABASE ':memory:' AS {database}")
+            duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=database))
 
         if (
             database

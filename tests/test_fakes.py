@@ -5,6 +5,17 @@ import snowflake.connector.cursor
 import snowflake.connector.pandas_tools
 
 
+def test_connect_auto_create(_fake_snow: None):
+
+    with snowflake.connector.connect(database="db1", schema="schema1"):
+        # creates db2 and schema1
+        pass
+
+    with snowflake.connector.connect(database="db1", schema="schema1"):
+        # connects again and reuses db1 and schema1
+        pass
+
+
 def test_connect_without_database(_fake_snow_no_auto_create: None):
     with snowflake.connector.connect() as conn, conn.cursor() as cur:
 
@@ -97,17 +108,6 @@ def test_connect_different_sessions_use_database(_fake_snow_no_auto_create: None
     with snowflake.connector.connect(database="marts", schema="jaffles") as conn2, conn2.cursor() as cur:
         cur.execute("select id, first_name, last_name from customers")
         assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
-
-
-def test_auto_create_connect_twice(_fake_snow: None):
-
-    with snowflake.connector.connect(database="db1", schema="schema1"):
-        # creates db2 and schema1
-        pass
-
-    with snowflake.connector.connect(database="db1", schema="schema1"):
-        # connects again and reuses db1 and schema1
-        pass
 
 
 def test_connect_with_non_existent_db_or_schema(_fake_snow_no_auto_create: None):
@@ -285,6 +285,17 @@ def test_schema_create_and_use(conn: snowflake.connector.SnowflakeConnection):
         # fully qualified works too
         cur.execute("use schema db1.jaffles")
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
+
+
+def test_table_comments(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        magic = "a kind of magic"
+        cur.execute(f"CREATE TABLE table1 (id int) COMMENT = '{magic}'")
+        cur.execute(
+            """SELECT COALESCE(COMMENT, '') FROM INFORMATION_SCHEMA.TABLES
+                    WHERE TABLE_NAME = 'table1' AND TABLE_SCHEMA = 'schema1' LIMIT 1"""
+        )
+        assert cur.fetchall() == [(magic,)]
 
 
 def test_use_invalid_schema(_fake_snow_no_auto_create: None):
