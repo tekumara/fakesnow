@@ -8,7 +8,7 @@ dependencies = [
     "duckdb~=0.7.0",
     # include the pandas extra to get compatible version of pyarrow
     "snowflake-connector-python[pandas]",
-    "sqlglot @ git+https://github.com/tobymao/sqlglot.git@refs/pull/1236/head",
+    "sqlglot @ git+https://github.com/tobymao/sqlglot.git@3fe65f9",
 ]
 
 [project.optional-dependencies]
@@ -82,8 +82,6 @@ src = ["."]
 fix = true
 
 [tool.ruff.per-file-ignores]
-# imports in __init__.py don't need to be used in __init__.py
-"__init__.py" = ["F401"]
 # test functions don't need return types
 "tests/*" = ["ANN201", "ANN202"]
 

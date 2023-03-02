@@ -1,24 +1,17 @@
 from __future__ import annotations
 
-import builtins
 import contextlib
 import sys
-import types
 import unittest.mock as mock
 from contextlib import contextmanager
-from dataclasses import dataclass
 from typing import (
-    Callable,
     Iterator,
-    List,
-    Mapping,
     Sequence,
 )
 
 import duckdb
 import snowflake.connector
 import snowflake.connector.pandas_tools
-from duckdb import DuckDBPyConnection
 
 import fakesnow.fakes as fakes
 

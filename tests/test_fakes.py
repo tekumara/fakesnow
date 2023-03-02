@@ -304,6 +304,14 @@ def test_schema_create_and_use(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
 
 
+def test_schema_drop(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create schema jaffles")
+        cur.execute("create table jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        # dropping schema drops its contents
+        cur.execute("drop schema jaffles")
+
+
 def test_table_comments(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         magic = "a kind of magic"

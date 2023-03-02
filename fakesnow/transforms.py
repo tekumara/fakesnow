@@ -177,3 +177,33 @@ def remove_comment(expression: exp.Expression) -> exp.Expression:
         return new_exp
 
     return expression
+
+
+def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:
+    """Drop schema cascade.
+
+    By default duckdb won't delete a schema if it contains tables, whereas snowflake will.
+    So we add the cascade keyword to mimic snowflake's behaviour.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("DROP SCHEMA schema1").transform(remove_comment).sql()
+        'DROP SCHEMA schema1 cascade'
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    if (
+        not isinstance(expression, exp.Drop)
+        or not (kind := expression.args.get("kind"))
+        or not isinstance(kind, str)
+        or kind.upper() != "SCHEMA"
+    ):
+        return expression
+
+    new = expression.copy()
+    new.args["cascade"] = True
+    return new

@@ -1,6 +1,13 @@
 import sqlglot
 
-from fakesnow.transforms import as_describe, create_database, join_information_schema_ext, remove_comment, set_schema
+from fakesnow.transforms import (
+    as_describe,
+    create_database,
+    drop_schema_cascade,
+    join_information_schema_ext,
+    remove_comment,
+    set_schema,
+)
 
 
 def test_as_describe() -> None:
@@ -31,6 +38,12 @@ def test_remove_comment() -> None:
     e = sqlglot.parse_one("create table table1(id int) comment = foobar").transform(remove_comment)
     assert e.sql() == "CREATE TABLE table1 (id INT)"
     assert e.args["table_comment"] == "foobar"
+
+
+def test_drop_schema_cascade() -> None:
+    assert (
+        sqlglot.parse_one("drop schema schema1").transform(drop_schema_cascade).sql() == "DROP schema schema1 CASCADE"
+    )
 
 
 def test_use() -> None:
