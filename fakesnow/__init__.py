@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import contextlib
+import importlib
 import sys
 import unittest.mock as mock
 from contextlib import contextmanager
@@ -65,11 +66,19 @@ def patch(
         module_name = ".".join(im.split(".")[:-1])
         fn_name = im.split(".")[-1]
         module = sys.modules.get(module_name)
-        assert module, f"No module {module}"
+        if not module:
+            # module may not be loaded yet, try to import it
+            module = importlib.import_module(module_name)
         fn = module.__dict__.get(fn_name)
         assert fn, f"No module var {im}"
+
+        # if we imported the module above, it'll already be mocked because
+        # it'll reference the standard targets which are mocked first
+        if isinstance(fn, mock.MagicMock):
+            continue
+
         fake = fake_fns.get(fn)
-        assert fake, f"Module var {im} is not one of {fake_fns.keys()}"
+        assert fake, f"Module var {im} is {fn} and not one of {fake_fns.keys()}"
 
         p = mock.patch(im, side_effect=fake)
         stack.enter_context(p)

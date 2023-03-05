@@ -29,6 +29,13 @@ def test_patch_this_modules_write_pandas() -> None:
         assert isinstance(write_pandas, MagicMock), "write_pandas is not mocked"
 
 
+def test_patch_other_unloaded_module() -> None:
+    with fakesnow.patch("tests.patch_other.connect"):
+        import tests.patch_other
+
+        assert isinstance(tests.patch_other.connect, MagicMock), "tests.patch_other.connect is not mocked"
+
+
 def test_cannot_patch_twice(_fake_snow_no_auto_create: None) -> None:
     # _fake_snow is the first patch
 
