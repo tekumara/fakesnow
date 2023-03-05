@@ -314,13 +314,20 @@ def test_schema_drop(conn: snowflake.connector.SnowflakeConnection):
 
 def test_table_comments(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
-        magic = "a kind of magic"
-        cur.execute(f"CREATE TABLE table1 (id int) COMMENT = '{magic}'")
-        cur.execute(
-            """SELECT COALESCE(COMMENT, '') FROM INFORMATION_SCHEMA.TABLES
-                    WHERE TABLE_NAME = 'table1' AND TABLE_SCHEMA = 'schema1' LIMIT 1"""
-        )
-        assert cur.fetchall() == [(magic,)]
+
+        def read_comment() -> str:
+            cur.execute(
+                """SELECT COALESCE(COMMENT, '') FROM INFORMATION_SCHEMA.TABLES
+                        WHERE TABLE_NAME = 'ingredients' AND TABLE_SCHEMA = 'schema1' LIMIT 1"""
+            )
+            return cur.fetchall()[0][0]
+
+        cur.execute("CREATE TABLE ingredients (id int) COMMENT = 'cheese'")
+        assert read_comment() == "cheese"
+        cur.execute("COMMENT ON TABLE ingredients IS 'pepperoni'")
+        assert read_comment() == "pepperoni"
+        cur.execute("COMMENT IF EXISTS ON TABLE schema1.ingredients IS 'mushrooms'")
+        assert read_comment() == "mushrooms"
 
 
 def test_use_invalid_schema(_fake_snow_no_auto_create: None):

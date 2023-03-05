@@ -4,8 +4,8 @@ from fakesnow.transforms import (
     as_describe,
     create_database,
     drop_schema_cascade,
+    extract_comment,
     join_information_schema_ext,
-    remove_comment,
     set_schema,
 )
 
@@ -30,14 +30,18 @@ def test_information_schema_ext() -> None:
     )
 
 
-def test_remove_comment() -> None:
-    e = sqlglot.parse_one("create table table1(id int) comment = 'foo bar'").transform(remove_comment)
+def test_extract_comment() -> None:
+    e = sqlglot.parse_one("create table table1(id int) comment = 'foo bar'").transform(extract_comment)
     assert e.sql() == "CREATE TABLE table1 (id INT)"
     assert e.args["table_comment"] == "foo bar"
 
-    e = sqlglot.parse_one("create table table1(id int) comment = foobar").transform(remove_comment)
+    e = sqlglot.parse_one("create table table1(id int) comment = foobar").transform(extract_comment)
     assert e.sql() == "CREATE TABLE table1 (id INT)"
     assert e.args["table_comment"] == "foobar"
+
+    e = sqlglot.parse_one("COMMENT ON TABLE table1 IS 'comment1'").transform(extract_comment)
+    assert e.sql() == "COMMENT ON TABLE table1 IS 'comment1'"
+    assert e.args["table_comment"] == "comment1"
 
 
 def test_drop_schema_cascade() -> None:

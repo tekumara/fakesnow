@@ -144,13 +144,17 @@ def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def remove_comment(expression: exp.Expression) -> exp.Expression:
-    """Remove table comment from the expression, if any.
+def extract_comment(expression: exp.Expression) -> exp.Expression:
+    """Extract table comment, removing it from the Expression.
+
+    duckdb doesn't support comments. So we remove them from the expression and store them in the table_comment arg.
 
     Example:
         >>> import sqlglot
-        >>> sqlglot.parse_one("CREATE TABLE table1 (id int) COMMENT = 'comment1'").transform(remove_comment).sql()
+        >>> sqlglot.parse_one("CREATE TABLE table1 (id int) COMMENT = 'comment1'").transform(extract_comment).sql()
         'CREATE TABLE table1 (id int)'
+        >>> sqlglot.parse_one("COMMENT ON TABLE table1 IS 'comment1'").transform(extract_comment).arg('table_comment')
+        'comment1'
     Args:
         expression (exp.Expression): the expression that will be transformed.
 
@@ -158,22 +162,28 @@ def remove_comment(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression, with any comment stored in the new 'table_comment' arg.
     """
 
-    if not isinstance(expression, exp.Create):
-        return expression
+    if isinstance(expression, exp.Create):
+        comment = None
+        if props := cast(exp.Properties, expression.args.get("properties")):
+            other_props = []
+            for p in props.expressions:
+                if isinstance(p, exp.SchemaCommentProperty) and (isinstance(p.this, (exp.Literal, exp.Var))):
+                    comment = p.this.this
+                else:
+                    other_props.append(p)
 
-    comment = None
-    if props := cast(exp.Properties, expression.args.get("properties")):
-        other_props = []
-        for p in props.expressions:
-            if isinstance(p, exp.SchemaCommentProperty) and (isinstance(p.this, (exp.Literal, exp.Var))):
-                comment = p.this.this
-            else:
-                other_props.append(p)
-
+            new_exp = expression.copy()
+            new_props: exp.Properties = new_exp.args["properties"]
+            new_props.args["expressions"] = other_props
+            new_exp.args["table_comment"] = comment
+            return new_exp
+    elif (
+        isinstance(expression, exp.Comment)
+        and (cexp := expression.args.get("expression"))
+        and isinstance(cexp, exp.Literal)
+    ):
         new_exp = expression.copy()
-        new_props: exp.Properties = new_exp.args["properties"]
-        new_props.args["expressions"] = other_props
-        new_exp.args["table_comment"] = comment
+        new_exp.args["table_comment"] = cexp.this
         return new_exp
 
     return expression

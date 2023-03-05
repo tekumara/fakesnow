@@ -33,7 +33,8 @@ create table ${catalog}.information_schema.tables_ext (
     ext_table_catalog varchar,
     ext_table_schema varchar,
     ext_table_name varchar,
-    comment varchar
+    comment varchar,
+    PRIMARY KEY(ext_table_catalog, ext_table_schema, ext_table_name)
 )
 """
 )
@@ -154,21 +155,22 @@ class FakeSnowflakeCursor:
 
         expression = transforms.set_schema(expression, current_database=self._conn.database)
         expression = transforms.create_database(expression)
-        expression = transforms.remove_comment(expression)
+        expression = transforms.extract_comment(expression)
         expression = transforms.join_information_schema_ext(expression)
         expression = transforms.drop_schema_cascade(expression)
 
         transformed = expression.sql()
 
-        try:
-            self._duck_conn.execute(transformed)
-        except duckdb.BinderException as e:
-            msg = e.args[0]
-            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from None
-        except duckdb.CatalogException as e:
-            # minimal processing to make it look like a snowflake exception, message content may differ
-            msg = cast(str, e.args[0]).split("\n")[0]
-            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
+        if cmd != "COMMENT TABLE":
+            try:
+                self._duck_conn.execute(transformed)
+            except duckdb.BinderException as e:
+                msg = e.args[0]
+                raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from None
+            except duckdb.CatalogException as e:
+                # minimal processing to make it look like a snowflake exception, message content may differ
+                msg = cast(str, e.args[0]).split("\n")[0]
+                raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
 
         if cmd == "USE DATABASE" and (ident := expression.find(exp.Literal)) and isinstance(ident.this, str):
             assert (
@@ -186,15 +188,18 @@ class FakeSnowflakeCursor:
             catalog = expression.args["db_name"] or self._conn.database
             self._duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=catalog))
 
-        if cmd == "CREATE TABLE" and (table_comment := expression.args.get("table_comment")):
+        if table_comment := expression.args.get("table_comment"):
             # store table comment, if any
             assert (table := expression.find(exp.Table)), "Cannot find table"
             catalog = table.catalog or self._conn.database
             schema = table.db or self._conn.schema
             self._duck_conn.execute(
                 f"""
-                insert into information_schema.tables_ext
-                values ('{catalog}', '{schema}', '{table.name}', '{table_comment}')"""
+                INSERT INTO information_schema.tables_ext
+                values ('{catalog}', '{schema}', '{table.name}', '{table_comment}')
+                ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name)
+                DO UPDATE SET comment = excluded.comment
+                """
             )
 
         return self
