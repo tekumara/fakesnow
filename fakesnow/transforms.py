@@ -251,3 +251,28 @@ def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:
     new = expression.copy()
     new.args["cascade"] = True
     return new
+
+
+def upper_case_unquoted_identifiers(expression: exp.Expression) -> exp.Expression:
+    """Upper case unquoted identifiers.
+
+    Snowflake represents case-insensitivity using upper-case identifiers in cursor results.
+    duckdb uses lowercase. We convert all unquoted identifiers to uppercase to match snowflake.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("select name, name as fname from customers").transform(upper_case_unquoted_identifiers).sql()
+        'SELECT NAME, NAME AS FNAME FROM CUSTOMERS'
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    if isinstance(expression, exp.Identifier) and not expression.quoted and isinstance(expression.this, str):
+        new = expression.copy()
+        new.args["this"] = expression.this.upper()
+        return new
+
+    return expression

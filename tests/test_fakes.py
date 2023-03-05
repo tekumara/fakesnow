@@ -125,7 +125,7 @@ def test_connect_with_non_existent_db_or_schema(_fake_snow_no_auto_create: None)
         )
 
         # database still present on connection
-        assert conn.database == "marts"
+        assert conn.database == "MARTS"
 
         cur.execute("CREATE database marts")
 
@@ -142,7 +142,7 @@ def test_connect_with_non_existent_db_or_schema(_fake_snow_no_auto_create: None)
         )
 
         # schema still present on connection
-        assert conn.schema == "jaffles"
+        assert conn.schema == "JAFFLES"
 
 
 def test_current_database_schema(conn: snowflake.connector.SnowflakeConnection):
@@ -150,7 +150,7 @@ def test_current_database_schema(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("select current_database(), current_schema()")
 
         assert cur.fetchall() == [
-            {"current_database()": "db1", "current_schema()": "schema1"},
+            {"current_database()": "DB1", "current_schema()": "SCHEMA1"},
         ]
 
 
@@ -318,7 +318,7 @@ def test_table_comments(conn: snowflake.connector.SnowflakeConnection):
         def read_comment() -> str:
             cur.execute(
                 """SELECT COALESCE(COMMENT, '') FROM INFORMATION_SCHEMA.TABLES
-                        WHERE TABLE_NAME = 'ingredients' AND TABLE_SCHEMA = 'schema1' LIMIT 1"""
+                        WHERE TABLE_NAME = 'INGREDIENTS' AND TABLE_SCHEMA = 'SCHEMA1' LIMIT 1"""
             )
             return cur.fetchall()[0][0]
 
@@ -335,6 +335,26 @@ def test_tags_noop(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("CREATE TABLE table1 (id int)")
         cur.execute("ALTER TABLE table1 SET TAG foo='bar'")
         cur.execute("ALTER TABLE table1 MODIFY COLUMN name1 SET TAG foo='bar'")
+
+
+def test_unquoted_identifiers_are_upper_cased(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("create table customers (id int, first_name varchar, last_name varchar)")
+        cur.execute("insert into customers values (1, 'Jenny', 'P')")
+        cur.execute("select first_name, first_name as fname from customers")
+
+        assert cur.fetchall() == [
+            {"FIRST_NAME": "Jenny", "FNAME": "Jenny"},
+        ]
+
+        cur.execute("select first_name, first_name as fname from customers")
+        batches = cur.get_result_batches()
+        assert batches
+
+        rows = [row for batch in batches for row in batch]
+        assert rows == [
+            {"FIRST_NAME": "Jenny", "FNAME": "Jenny"},
+        ]
 
 
 def test_use_invalid_schema(_fake_snow_no_auto_create: None):

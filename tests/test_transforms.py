@@ -9,6 +9,7 @@ from fakesnow.transforms import (
     join_information_schema_ext,
     set_schema,
     tag,
+    upper_case_unquoted_identifiers,
 )
 
 
@@ -75,4 +76,11 @@ def test_use() -> None:
     assert (
         sqlglot.parse_one("use schema foo.bar").transform(set_schema, current_database="marts").sql()
         == "SET schema = 'foo.bar'"
+    )
+
+
+def test_upper_case_unquoted_identifiers() -> None:
+    assert (
+        sqlglot.parse_one("select name, name as fname from customers").transform(upper_case_unquoted_identifiers).sql()
+        == "SELECT NAME, NAME AS FNAME FROM CUSTOMERS"
     )

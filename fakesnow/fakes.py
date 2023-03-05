@@ -153,18 +153,21 @@ class FakeSnowflakeCursor:
                 sqlstate="22000",
             ) from None
 
-        expression = transforms.set_schema(expression, current_database=self._conn.database)
-        expression = transforms.create_database(expression)
-        expression = transforms.extract_comment(expression)
-        expression = transforms.join_information_schema_ext(expression)
-        expression = transforms.drop_schema_cascade(expression)
-        expression = transforms.tag(expression)
+        transformed = (
+            expression.transform(transforms.upper_case_unquoted_identifiers)
+            .transform(transforms.set_schema, current_database=self._conn.database)
+            .transform(transforms.create_database)
+            .transform(transforms.extract_comment)
+            .transform(transforms.join_information_schema_ext)
+            .transform(transforms.drop_schema_cascade)
+            .transform(transforms.tag)
+        )
 
-        transformed = expression.sql()
+        sql = transformed.sql()
 
         if cmd != "COMMENT TABLE":
             try:
-                self._duck_conn.execute(transformed)
+                self._duck_conn.execute(sql)
             except duckdb.BinderException as e:
                 msg = e.args[0]
                 raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from None
@@ -173,7 +176,7 @@ class FakeSnowflakeCursor:
                 msg = cast(str, e.args[0]).split("\n")[0]
                 raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
 
-        if cmd == "USE DATABASE" and (ident := expression.find(exp.Literal)) and isinstance(ident.this, str):
+        if cmd == "USE DATABASE" and (ident := transformed.find(exp.Literal)) and isinstance(ident.this, str):
             assert (
                 match := re.search("schema = '(\\w+).(\\w+)'", ident.this)
             ), f"Cannot extract db and schema from {ident.this}"
@@ -186,12 +189,12 @@ class FakeSnowflakeCursor:
 
         if cmd == "CREATE DATABASE":
             # make sure every database has the info schema extension table
-            catalog = expression.args["db_name"] or self._conn.database
+            catalog = transformed.args["db_name"] or self._conn.database
             self._duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=catalog))
 
-        if table_comment := expression.args.get("table_comment"):
+        if table_comment := transformed.args.get("table_comment"):
             # store table comment, if any
-            assert (table := expression.find(exp.Table)), "Cannot find table"
+            assert (table := transformed.find(exp.Table)), "Cannot find table"
             catalog = table.catalog or self._conn.database
             schema = table.db or self._conn.schema
             self._duck_conn.execute(
@@ -255,52 +258,53 @@ class FakeSnowflakeConnection:
         *args: Any,
         **kwargs: Any,
     ):
-        self.database = database
-        self.schema = schema
+        # upper case database and schema like snowflake
+        self.database = database and database.upper()
+        self.schema = schema and schema.upper()
         self.database_set = False
         self.schema_set = False
 
         if (
-            database
+            self.database
             and create_database
             and not duck_conn.execute(
                 f"""select * from information_schema.schemata
-                where catalog_name = '{database}'"""
+                where catalog_name = '{self.database}'"""
             ).fetchone()
         ):
-            duck_conn.execute(f"ATTACH DATABASE ':memory:' AS {database}")
-            duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=database))
+            duck_conn.execute(f"ATTACH DATABASE ':memory:' AS {self.database}")
+            duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=self.database))
 
         if (
-            database
-            and schema
+            self.database
+            and self.schema
             and create_schema
             and not duck_conn.execute(
                 f"""select * from information_schema.schemata
-                where catalog_name = '{database}' and schema_name = '{schema}'"""
+                where catalog_name = '{self.database}' and schema_name = '{self.schema}'"""
             ).fetchone()
         ):
-            duck_conn.execute(f"CREATE SCHEMA {database}.{schema}")
+            duck_conn.execute(f"CREATE SCHEMA {self.database}.{self.schema}")
 
         if (
-            database
-            and schema
+            self.database
+            and self.schema
             and duck_conn.execute(
                 f"""select * from information_schema.schemata
-                where catalog_name = '{database}' and schema_name = '{schema}'"""
+                where catalog_name = '{self.database}' and schema_name = '{self.schema}'"""
             ).fetchone()
         ):
-            duck_conn.execute(f"SET schema='{database}.{schema}'")
+            duck_conn.execute(f"SET schema='{self.database}.{self.schema}'")
             self.database_set = True
             self.schema_set = True
         elif (
-            database
+            self.database
             and duck_conn.execute(
                 f"""select * from information_schema.schemata
-                where catalog_name = '{database}'"""
+                where catalog_name = '{self.database}'"""
             ).fetchone()
         ):
-            duck_conn.execute(f"SET schema='{database}.main'")
+            duck_conn.execute(f"SET schema='{self.database}.main'")
             self.database_set = True
 
         self._duck_conn = duck_conn
