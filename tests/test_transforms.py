@@ -7,6 +7,7 @@ from fakesnow.transforms import (
     drop_schema_cascade,
     extract_comment,
     join_information_schema_ext,
+    regex,
     set_schema,
     tag,
     upper_case_unquoted_identifiers,
@@ -50,6 +51,13 @@ def test_information_schema_ext() -> None:
     assert (
         sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(join_information_schema_ext).sql()
         == "SELECT * FROM INFORMATION_SCHEMA.TABLES LEFT JOIN information_schema.tables_ext ON tables.table_catalog = tables_ext.ext_table_catalog AND tables.table_schema = tables_ext.ext_table_schema AND tables.table_name = tables_ext.ext_table_name"  # noqa: e501
+    )
+
+
+def test_regex() -> None:
+    assert (
+        sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D', '')").transform(regex).sql()
+        == "SELECT REGEXP_REPLACE('abc123', '\\D', '', 'g')"
     )
 
 

@@ -294,6 +294,12 @@ def test_non_existant_table_throws_snowflake_exception(conn: snowflake.connector
             cur.execute("select * from this_table_does_not_exist")
 
 
+def test_regex(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("select regexp_replace('abc123', '\\\\D', '')")
+        assert cur.fetchone() == ("123",)
+
+
 def test_schema_create_and_use(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create schema jaffles")

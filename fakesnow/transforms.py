@@ -163,6 +163,52 @@ def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def regex(expression: exp.Expression) -> exp.Expression:
+    """Transform regex expressions from snowflake to duckdb.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D', '')").transform(tag).sql()
+        "SELECT regexp_replace('abc123', '\\D', '', 'g')"
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    if (
+        isinstance(expression, exp.Anonymous)
+        and isinstance(expression.this, str)
+        and "REGEXP_REPLACE" == expression.this.upper()
+    ):
+        new_exp = expression.copy()
+        new_args = new_exp.expressions
+
+        if len(new_args) > 3:
+            # see https://docs.snowflake.com/en/sql-reference/functions/regexp_replace
+            raise NotImplementedError(
+                "REGEXP_REPLACE with additional parameters (eg: <position>, <occurrence>, <parameters>) not supported"
+            )
+
+        # snowflake requires escaping backslashes in single-quoted string constants, but duckdb doesn't
+        # see https://docs.snowflake.com/en/sql-reference/functions-regexp#label-regexp-escape-character-caveats
+        new_args[1].args["this"] = new_args[1].this.replace("\\\\", "\\")
+
+        if len(new_args) == 2:
+            # if no replacement string, the snowflake default is ''
+            new_args.append(exp.Literal(this="", is_string=True))
+
+        # snowflake regex replacements are global
+        new_args.append(exp.Literal(this="g", is_string=True))
+
+        new_exp.args["expressions"] = new_args
+
+        return new_exp
+
+    return expression
+
+
 # TODO: move this into a Dialect as a transpilation
 def set_schema(expression: exp.Expression, current_database: str | None) -> exp.Expression:
     """Transform USE SCHEMA/DATABASE to SET schema.
