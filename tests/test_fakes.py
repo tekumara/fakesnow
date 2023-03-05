@@ -330,6 +330,13 @@ def test_table_comments(conn: snowflake.connector.SnowflakeConnection):
         assert read_comment() == "mushrooms"
 
 
+def test_tags_noop(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("CREATE TABLE table1 (id int)")
+        cur.execute("ALTER TABLE table1 SET TAG foo='bar'")
+        cur.execute("ALTER TABLE table1 MODIFY COLUMN name1 SET TAG foo='bar'")
+
+
 def test_use_invalid_schema(_fake_snow_no_auto_create: None):
 
     with snowflake.connector.connect() as conn:

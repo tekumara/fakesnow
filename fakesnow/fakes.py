@@ -158,6 +158,7 @@ class FakeSnowflakeCursor:
         expression = transforms.extract_comment(expression)
         expression = transforms.join_information_schema_ext(expression)
         expression = transforms.drop_schema_cascade(expression)
+        expression = transforms.tag(expression)
 
         transformed = expression.sql()
 

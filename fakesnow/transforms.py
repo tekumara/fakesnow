@@ -2,9 +2,11 @@ from __future__ import annotations
 
 from typing import cast
 
+import sqlglot
 from sqlglot import exp
 
 MISSING_DATABASE = "missing_database"
+SUCCESS_NO_OP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
 
 # TODO: move this into a Dialect as a transpilation
 def set_schema(expression: exp.Expression, current_database: str | None) -> exp.Expression:
@@ -185,6 +187,38 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
         new_exp = expression.copy()
         new_exp.args["table_comment"] = cexp.this
         return new_exp
+
+    return expression
+
+
+def tag(expression: exp.Expression) -> exp.Expression:
+    """Handle tags. Transfer tags into upserts of the tag table.
+
+    duckdb doesn't support tags. In lieu of a full implementation, for now we make it the SUCCESS_NO_OP.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'").transform(tag).sql()
+        "SELECT 'Statement executed successfully.'"
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    if isinstance(expression, exp.AlterTable) and (actions := expression.args.get("actions")):
+        for a in actions:
+            if isinstance(a, exp.SetTag):
+                return SUCCESS_NO_OP
+    elif (
+        isinstance(expression, exp.Command)
+        and (cexp := expression.args.get("expression"))
+        and isinstance(cexp, str)
+        and "SET TAG" in cexp.upper()
+    ):
+        # alter table modify column set tag
+        return SUCCESS_NO_OP
 
     return expression
 

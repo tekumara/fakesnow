@@ -1,12 +1,14 @@
 import sqlglot
 
 from fakesnow.transforms import (
+    SUCCESS_NO_OP,
     as_describe,
     create_database,
     drop_schema_cascade,
     extract_comment,
     join_information_schema_ext,
     set_schema,
+    tag,
 )
 
 
@@ -48,6 +50,10 @@ def test_drop_schema_cascade() -> None:
     assert (
         sqlglot.parse_one("drop schema schema1").transform(drop_schema_cascade).sql() == "DROP schema schema1 CASCADE"
     )
+
+
+def test_tag() -> None:
+    assert sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'", read="snowflake").transform(tag) == SUCCESS_NO_OP
 
 
 def test_use() -> None:
