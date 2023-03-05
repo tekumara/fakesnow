@@ -8,59 +8,6 @@ from sqlglot import exp
 MISSING_DATABASE = "missing_database"
 SUCCESS_NO_OP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
 
-# TODO: move this into a Dialect as a transpilation
-def set_schema(expression: exp.Expression, current_database: str | None) -> exp.Expression:
-    """Transform USE SCHEMA/DATABASE to SET schema.
-
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("USE SCHEMA bar").transform(set_schema, current_database="foo").sql()
-        "SET schema = 'foo.bar'"
-        >>> sqlglot.parse_one("USE SCHEMA foo.bar").transform(set_schema).sql()
-        "SET schema = 'foo.bar'"
-        >>> sqlglot.parse_one("USE DATABASE marts").transform(set_schema).sql()
-        "SET schema = 'marts.main'"
-
-        See tests for more examples.
-    Args:
-        expression (exp.Expression): the expression that will be transformed.
-
-    Returns:
-        exp.Expression: A SET schema expression if the input is a USE
-            expression, otherwise expression is returned as-is.
-    """
-
-    def transform_use(node: exp.Use, kind_name: str) -> exp.Command:
-        assert node.this, f"No identifier for USE expression {node}"
-
-        if kind_name == "DATABASE":
-            # duckdb's default schema is main
-            name = f"{node.this.name}.main"
-        else:
-            # SCHEMA
-            if db := node.this.args.get("db"):
-                db_name = db.name
-            else:
-                # isn't qualified with a database
-                db_name = current_database or MISSING_DATABASE
-
-            name = f"{db_name}.{node.this.name}"
-
-        return exp.Command(this="SET", expression=exp.Literal.string(f"schema = '{name}'"))
-
-    # TODO: simplify
-    return expression.transform(
-        lambda node: transform_use(node, kind.name.upper())
-        if (
-            isinstance(node, exp.Use)
-            and (kind := node.args.get("kind"))
-            and isinstance(kind, exp.Var)
-            and kind.name
-            and kind.name.upper() in ["SCHEMA", "DATABASE"]
-        )
-        else node,
-    )
-
 
 def as_describe(expression: exp.Expression) -> exp.Expression:
     """Prepend describe to the expression.
@@ -94,8 +41,8 @@ def create_database(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression, with the database name stored in the db_name arg.
     """
 
-    def transform_create_db(node: exp.Create) -> exp.Command:
-        assert (ident := node.find(exp.Identifier)), f"No identifier in {node.sql}"
+    if isinstance(expression, exp.Create) and str(expression.args.get("kind")).upper() == "DATABASE":
+        assert (ident := expression.find(exp.Identifier)), f"No identifier in {expression.sql}"
         db_name = ident.this
         return exp.Command(
             this="ATTACH",
@@ -103,23 +50,19 @@ def create_database(expression: exp.Expression) -> exp.Expression:
             db_name=db_name,
         )
 
-    # TODO: simplify
-    return expression.transform(
-        lambda node: transform_create_db(node)
-        if isinstance(node, exp.Create) and str(node.args.get("kind")).upper() == "DATABASE"
-        else node,
-    )
+    return expression
 
 
-def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
-    """Join to information_schema_ext to access additional metadata columns (eg: comment).
+def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:
+    """Drop schema cascade.
+
+    By default duckdb won't delete a schema if it contains tables, whereas snowflake will.
+    So we add the cascade keyword to mimic snowflake's behaviour.
 
     Example:
         >>> import sqlglot
-        >>> sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(join_information_schema_ext).sql()
-        'SELECT * FROM INFORMATION_SCHEMA.TABLES
-         LEFT JOIN information_schema.tables_ext ON tables.table_catalog = tables_ext.ext_table_catalog AND
-         tables.table_schema = tables_ext.ext_table_schema AND tables.table_name = tables_ext.ext_table_name'
+        >>> sqlglot.parse_one("DROP SCHEMA schema1").transform(remove_comment).sql()
+        'DROP SCHEMA schema1 cascade'
     Args:
         expression (exp.Expression): the expression that will be transformed.
 
@@ -128,22 +71,16 @@ def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
     """
 
     if (
-        isinstance(expression, exp.Select)
-        and (tbl_exp := expression.find(exp.Table))
-        and tbl_exp.name.upper() == "TABLES"
-        and tbl_exp.db.upper() == "INFORMATION_SCHEMA"
+        not isinstance(expression, exp.Drop)
+        or not (kind := expression.args.get("kind"))
+        or not isinstance(kind, str)
+        or kind.upper() != "SCHEMA"
     ):
-        return expression.join(
-            "information_schema.tables_ext",
-            on=(
-                "tables.table_catalog = tables_ext.ext_table_catalog",
-                "tables.table_schema = tables_ext.ext_table_schema",
-                "tables.table_name = tables_ext.ext_table_name",
-            ),
-            join_type="left",
-        )
+        return expression
 
-    return expression
+    new = expression.copy()
+    new.args["cascade"] = True
+    return new
 
 
 def extract_comment(expression: exp.Expression) -> exp.Expression:
@@ -191,6 +128,90 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
+    """Join to information_schema_ext to access additional metadata columns (eg: comment).
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(join_information_schema_ext).sql()
+        'SELECT * FROM INFORMATION_SCHEMA.TABLES
+         LEFT JOIN information_schema.tables_ext ON tables.table_catalog = tables_ext.ext_table_catalog AND
+         tables.table_schema = tables_ext.ext_table_schema AND tables.table_name = tables_ext.ext_table_name'
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    if (
+        isinstance(expression, exp.Select)
+        and (tbl_exp := expression.find(exp.Table))
+        and tbl_exp.name.upper() == "TABLES"
+        and tbl_exp.db.upper() == "INFORMATION_SCHEMA"
+    ):
+        return expression.join(
+            "information_schema.tables_ext",
+            on=(
+                "tables.table_catalog = tables_ext.ext_table_catalog",
+                "tables.table_schema = tables_ext.ext_table_schema",
+                "tables.table_name = tables_ext.ext_table_name",
+            ),
+            join_type="left",
+        )
+
+    return expression
+
+
+# TODO: move this into a Dialect as a transpilation
+def set_schema(expression: exp.Expression, current_database: str | None) -> exp.Expression:
+    """Transform USE SCHEMA/DATABASE to SET schema.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("USE SCHEMA bar").transform(set_schema, current_database="foo").sql()
+        "SET schema = 'foo.bar'"
+        >>> sqlglot.parse_one("USE SCHEMA foo.bar").transform(set_schema).sql()
+        "SET schema = 'foo.bar'"
+        >>> sqlglot.parse_one("USE DATABASE marts").transform(set_schema).sql()
+        "SET schema = 'marts.main'"
+
+        See tests for more examples.
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: A SET schema expression if the input is a USE
+            expression, otherwise expression is returned as-is.
+    """
+
+    if (
+        isinstance(expression, exp.Use)
+        and (kind := expression.args.get("kind"))
+        and isinstance(kind, exp.Var)
+        and kind.name
+        and kind.name.upper() in ["SCHEMA", "DATABASE"]
+    ):
+        assert expression.this, f"No identifier for USE expression {expression}"
+
+        if kind.name.upper() == "DATABASE":
+            # duckdb's default schema is main
+            name = f"{expression.this.name}.main"
+        else:
+            # SCHEMA
+            if db := expression.this.args.get("db"):
+                db_name = db.name
+            else:
+                # isn't qualified with a database
+                db_name = current_database or MISSING_DATABASE
+
+            name = f"{db_name}.{expression.this.name}"
+
+        return exp.Command(this="SET", expression=exp.Literal.string(f"schema = '{name}'"))
+
+    return expression
+
+
 def tag(expression: exp.Expression) -> exp.Expression:
     """Handle tags. Transfer tags into upserts of the tag table.
 
@@ -223,36 +244,6 @@ def tag(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:
-    """Drop schema cascade.
-
-    By default duckdb won't delete a schema if it contains tables, whereas snowflake will.
-    So we add the cascade keyword to mimic snowflake's behaviour.
-
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("DROP SCHEMA schema1").transform(remove_comment).sql()
-        'DROP SCHEMA schema1 cascade'
-    Args:
-        expression (exp.Expression): the expression that will be transformed.
-
-    Returns:
-        exp.Expression: The transformed expression.
-    """
-
-    if (
-        not isinstance(expression, exp.Drop)
-        or not (kind := expression.args.get("kind"))
-        or not isinstance(kind, str)
-        or kind.upper() != "SCHEMA"
-    ):
-        return expression
-
-    new = expression.copy()
-    new.args["cascade"] = True
-    return new
-
-
 def upper_case_unquoted_identifiers(expression: exp.Expression) -> exp.Expression:
     """Upper case unquoted identifiers.
 
@@ -261,8 +252,8 @@ def upper_case_unquoted_identifiers(expression: exp.Expression) -> exp.Expressio
 
     Example:
         >>> import sqlglot
-        >>> sqlglot.parse_one("select name, name as fname from customers").transform(upper_case_unquoted_identifiers).sql()
-        'SELECT NAME, NAME AS FNAME FROM CUSTOMERS'
+        >>> sqlglot.parse_one("select name, name as fname from table1").transform(upper_case_unquoted_identifiers).sql()
+        'SELECT NAME, NAME AS FNAME FROM TABLE1'
     Args:
         expression (exp.Expression): the expression that will be transformed.
 

@@ -26,10 +26,9 @@ def test_create_database() -> None:
     assert e.args["db_name"] == "foobar"
 
 
-def test_information_schema_ext() -> None:
+def test_drop_schema_cascade() -> None:
     assert (
-        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(join_information_schema_ext).sql()
-        == "SELECT * FROM INFORMATION_SCHEMA.TABLES LEFT JOIN information_schema.tables_ext ON tables.table_catalog = tables_ext.ext_table_catalog AND tables.table_schema = tables_ext.ext_table_schema AND tables.table_name = tables_ext.ext_table_name"  # noqa: e501
+        sqlglot.parse_one("drop schema schema1").transform(drop_schema_cascade).sql() == "DROP schema schema1 CASCADE"
     )
 
 
@@ -47,9 +46,10 @@ def test_extract_comment() -> None:
     assert e.args["table_comment"] == "comment1"
 
 
-def test_drop_schema_cascade() -> None:
+def test_information_schema_ext() -> None:
     assert (
-        sqlglot.parse_one("drop schema schema1").transform(drop_schema_cascade).sql() == "DROP schema schema1 CASCADE"
+        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(join_information_schema_ext).sql()
+        == "SELECT * FROM INFORMATION_SCHEMA.TABLES LEFT JOIN information_schema.tables_ext ON tables.table_catalog = tables_ext.ext_table_catalog AND tables.table_schema = tables_ext.ext_table_schema AND tables.table_name = tables_ext.ext_table_name"  # noqa: e501
     )
 
 
@@ -81,6 +81,6 @@ def test_use() -> None:
 
 def test_upper_case_unquoted_identifiers() -> None:
     assert (
-        sqlglot.parse_one("select name, name as fname from customers").transform(upper_case_unquoted_identifiers).sql()
-        == "SELECT NAME, NAME AS FNAME FROM CUSTOMERS"
+        sqlglot.parse_one("select name, name as fname from table1").transform(upper_case_unquoted_identifiers).sql()
+        == "SELECT NAME, NAME AS FNAME FROM TABLE1"
     )
