@@ -300,6 +300,12 @@ def test_regex(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchone() == ("123",)
 
 
+def test_object_type(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table table1 (name object)")
+        cur.execute("""insert into table1 (name) select parse_json('{"first":"foo", "last":"bar"}')""")
+
+
 def test_schema_create_and_use(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create schema jaffles")

@@ -163,6 +163,32 @@ def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def parse_json(expression: exp.Expression) -> exp.Expression:
+    """Convert parse_json() to json().
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("insert into table1 (name) select parse_json('{}')").transform(parse_json).sql()
+        "CREATE TABLE table1 (name JSON)"
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    if (
+        isinstance(expression, exp.Anonymous)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "PARSE_JSON"
+    ):
+        new_exp = expression.copy()
+        new_exp.args["this"] = "JSON"
+        return new_exp
+
+    return expression
+
+
 def regex(expression: exp.Expression) -> exp.Expression:
     """Transform regex expressions from snowflake to duckdb.
 
@@ -286,6 +312,28 @@ def tag(expression: exp.Expression) -> exp.Expression:
     ):
         # alter table modify column set tag
         return SUCCESS_NO_OP
+
+    return expression
+
+
+def to_json_type(expression: exp.Expression) -> exp.Expression:
+    """Convert OBJECT type to JSON.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("CREATE TABLE table1 (name object)").transform(to_json_type).sql()
+        "CREATE TABLE table1 (name JSON)"
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    if isinstance(expression, exp.DataType) and expression.this == exp.DataType.Type.OBJECT:
+        new_exp = expression.copy()
+        new_exp.args["this"] = exp.DataType.Type.JSON
+        return new_exp
 
     return expression
 

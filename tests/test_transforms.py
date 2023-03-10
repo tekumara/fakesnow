@@ -7,9 +7,11 @@ from fakesnow.transforms import (
     drop_schema_cascade,
     extract_comment,
     join_information_schema_ext,
+    parse_json,
     regex,
     set_schema,
     tag,
+    to_json_type,
     upper_case_unquoted_identifiers,
 )
 
@@ -54,6 +56,15 @@ def test_information_schema_ext() -> None:
     )
 
 
+def test_parse_json() -> None:
+    assert (
+        sqlglot.parse_one("""insert into table1 (name) select parse_json('{"first":"foo", "last":"bar"}')""")
+        .transform(parse_json)
+        .sql()
+        == """INSERT INTO table1 (name) SELECT JSON('{"first":"foo", "last":"bar"}')"""
+    )
+
+
 def test_regex() -> None:
     assert (
         sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D', '')").transform(regex).sql()
@@ -63,6 +74,13 @@ def test_regex() -> None:
 
 def test_tag() -> None:
     assert sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'", read="snowflake").transform(tag) == SUCCESS_NO_OP
+
+
+def test_to_json_type() -> None:
+    assert (
+        sqlglot.parse_one("CREATE TABLE table1 (name object)").transform(to_json_type).sql()
+        == "CREATE TABLE table1 (name JSON)"
+    )
 
 
 def test_use() -> None:

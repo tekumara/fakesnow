@@ -162,6 +162,8 @@ class FakeSnowflakeCursor:
             .transform(transforms.drop_schema_cascade)
             .transform(transforms.tag)
             .transform(transforms.regex)
+            .transform(transforms.to_json_type)
+            .transform(transforms.parse_json)
         )
 
         sql = transformed.sql()
