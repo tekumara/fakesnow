@@ -9,11 +9,11 @@ from snowflake.connector.pandas_tools import write_pandas
 import fakesnow
 
 
-def test_patch_snowflake_connector_connect(_fake_snow_no_auto_create: None) -> None:
+def test_patch_snowflake_connector_connect(_fakesnow_no_auto_create: None) -> None:
     assert isinstance(snowflake.connector.connect, MagicMock), "snowflake.connector.connect is not mocked"
 
 
-def test_patch_snowflake_connector_pandas_tools_write_pandas(_fake_snow_no_auto_create: None) -> None:
+def test_patch_snowflake_connector_pandas_tools_write_pandas(_fakesnow_no_auto_create: None) -> None:
     assert isinstance(
         snowflake.connector.pandas_tools.write_pandas, MagicMock
     ), "snowflake.connector.pandas_tools.write_pandas is not mocked"
@@ -36,8 +36,8 @@ def test_patch_other_unloaded_module() -> None:
         assert isinstance(tests.patch_other.connect, MagicMock), "tests.patch_other.connect is not mocked"
 
 
-def test_cannot_patch_twice(_fake_snow_no_auto_create: None) -> None:
-    # _fake_snow is the first patch
+def test_cannot_patch_twice(_fakesnow_no_auto_create: None) -> None:
+    # _fakesnow is the first patch
 
     with pytest.raises(AssertionError) as excinfo:
         # second patch will fail

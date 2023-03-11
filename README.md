@@ -25,12 +25,14 @@ pytest [fixtures](fakesnow/fixtures.py) are provided for testing. Example _conft
 
 ```python
 from typing import Iterator
+
+import fakesnow.fixtures
 import pytest
 
-pytest_plugins = ("fakesnow.fixtures",)
+pytest_plugins = fakesnow.fixtures.__name__
 
 @pytest.fixture(scope="session", autouse=True)
-def setup(_fake_snow_session: None) -> Iterator[None]:
+def setup(_fakesnow_session: None) -> Iterator[None]:
     # the standard imports are now patched
     ...
     yield

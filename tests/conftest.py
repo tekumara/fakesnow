@@ -3,11 +3,13 @@ from typing import Iterator
 import pytest
 import snowflake.connector
 
-pytest_plugins = ("fakesnow.fixtures",)
+import fakesnow.fixtures
+
+pytest_plugins = fakesnow.fixtures.__name__
 
 
 @pytest.fixture
-def conn(_fake_snow: None) -> Iterator[snowflake.connector.SnowflakeConnection]:
+def conn(_fakesnow: None) -> Iterator[snowflake.connector.SnowflakeConnection]:
     """
     Yield a snowflake connection once per session.
     """

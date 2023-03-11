@@ -19,7 +19,7 @@ def test_binding_qmark(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchall() == [(1, "Jenny", True)]
 
 
-def test_connect_auto_create(_fake_snow: None):
+def test_connect_auto_create(_fakesnow: None):
 
     with snowflake.connector.connect(database="db1", schema="schema1"):
         # creates db2 and schema1
@@ -30,7 +30,7 @@ def test_connect_auto_create(_fake_snow: None):
         pass
 
 
-def test_connect_without_database(_fake_snow_no_auto_create: None):
+def test_connect_without_database(_fakesnow_no_auto_create: None):
     with snowflake.connector.connect() as conn, conn.cursor() as cur:
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
@@ -78,7 +78,7 @@ def test_connect_without_database(_fake_snow_no_auto_create: None):
         )
 
 
-def test_connect_without_schema(_fake_snow_no_auto_create: None):
+def test_connect_without_schema(_fakesnow_no_auto_create: None):
 
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
         conn.execute_string("CREATE database marts; USE database marts;")
@@ -104,7 +104,7 @@ def test_connect_without_schema(_fake_snow_no_auto_create: None):
         )
 
 
-def test_connect_different_sessions_use_database(_fake_snow_no_auto_create: None):
+def test_connect_different_sessions_use_database(_fakesnow_no_auto_create: None):
     # connect without default database and schema
     with snowflake.connector.connect() as conn1, conn1.cursor() as cur:
         # use the table's fully qualified name
@@ -124,7 +124,7 @@ def test_connect_different_sessions_use_database(_fake_snow_no_auto_create: None
         assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
 
-def test_connect_with_non_existent_db_or_schema(_fake_snow_no_auto_create: None):
+def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
     # can connect with db that doesn't exist
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
 
@@ -395,7 +395,7 @@ def test_unquoted_identifiers_are_upper_cased(conn: snowflake.connector.Snowflak
         ]
 
 
-def test_use_invalid_schema(_fake_snow_no_auto_create: None):
+def test_use_invalid_schema(_fakesnow_no_auto_create: None):
 
     with snowflake.connector.connect() as conn:
         conn.execute_string("CREATE DATABASE db1; USE DATABASE db1;")
