@@ -15,6 +15,7 @@ from fakesnow.transforms import (
     set_schema,
     tag,
     upper_case_unquoted_identifiers,
+    values_columns,
 )
 
 
@@ -135,4 +136,17 @@ def test_upper_case_unquoted_identifiers() -> None:
     assert (
         sqlglot.parse_one("select name, name as fname from table1").transform(upper_case_unquoted_identifiers).sql()
         == "SELECT NAME, NAME AS FNAME FROM TABLE1"
+    )
+
+
+def test_values_columns() -> None:
+    assert (
+        sqlglot.parse_one("SELECT * FROM VALUES ('Amsterdam', 1)").transform(values_columns).sql()
+        == """SELECT * FROM (VALUES ('Amsterdam', 1)) AS _("column1", "column2")"""
+    )
+
+    # values without select aren't transformed
+    assert (
+        sqlglot.parse_one("INSERT INTO cities VALUES ('Amsterdam', 1)").transform(values_columns).sql()
+        == "INSERT INTO cities VALUES ('Amsterdam', 1)"
     )

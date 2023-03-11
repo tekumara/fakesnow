@@ -418,6 +418,23 @@ def test_use_invalid_schema(_fake_snow_no_auto_create: None):
         )
 
 
+def test_values(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("SELECT * FROM VALUES ('Amsterdam', 1), ('London', 2)")
+
+        assert cur.fetchall() == [
+            {"column1": "Amsterdam", "column2": 1},
+            {"column1": "London", "column2": 2},
+        ]
+
+        cur.execute("SELECT column2, column1 FROM VALUES ('Amsterdam', 1), ('London', 2)")
+
+        assert cur.fetchall() == [
+            {"column2": 1, "column1": "Amsterdam"},
+            {"column2": 2, "column1": "London"},
+        ]
+
+
 def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
