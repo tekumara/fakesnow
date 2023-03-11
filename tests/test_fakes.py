@@ -79,9 +79,11 @@ def test_connect_without_database(_fakesnow_no_auto_create: None):
 
 
 def test_connect_without_schema(_fakesnow_no_auto_create: None):
+    with snowflake.connector.connect() as conn:
+        conn.execute_string("CREATE database marts; USE database marts;")
 
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
-        conn.execute_string("CREATE database marts; USE database marts;")
+        assert not conn.schema
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("SELECT * FROM customers")
@@ -102,6 +104,9 @@ def test_connect_without_schema(_fakesnow_no_auto_create: None):
             "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
             in str(excinfo.value)
         )
+
+        conn.execute_string("CREATE SCHEMA schema1; USE SCHEMA schema1;")
+        assert conn.schema == "SCHEMA1"
 
 
 def test_connect_different_sessions_use_database(_fakesnow_no_auto_create: None):
@@ -408,6 +413,9 @@ def test_use_invalid_schema(_fakesnow_no_auto_create: None):
         #     "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed."
         #     in str(excinfo.value)
         # )
+
+        # invalid schema doesn't get set on the connection
+        assert not conn.schema
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("create table foobar (i int)")

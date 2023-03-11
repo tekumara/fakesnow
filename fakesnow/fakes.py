@@ -182,15 +182,12 @@ class FakeSnowflakeCursor:
                 msg = cast(str, e.args[0]).split("\n")[0]
                 raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
 
-        if cmd == "USE DATABASE" and (ident := transformed.find(exp.Literal)) and isinstance(ident.this, str):
-            assert (
-                match := re.search("schema = '(\\w+).(\\w+)'", ident.this)
-            ), f"Cannot extract db and schema from {ident.this}"
-
-            self._conn.database = cast(str, match[1])
+        if cmd == "USE DATABASE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+            self._conn.database = ident.this.upper()
             self._conn.database_set = True
 
-        if cmd == "USE SCHEMA":
+        if cmd == "USE SCHEMA" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+            self._conn.schema = ident.this.upper()
             self._conn.schema_set = True
 
         if cmd == "CREATE DATABASE":
