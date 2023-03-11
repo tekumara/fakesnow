@@ -43,6 +43,7 @@ def setup(_fake_snow_session: None) -> Iterator[None]:
 - [x] [get_result_batches()](https://docs.snowflake.com/en/user-guide/python-connector-api#get_result_batches)
 - [x] [write_pandas(..)](https://docs.snowflake.com/en/user-guide/python-connector-api#write_pandas)
 - [x] table comments
+- [x] [qmark binding](https://docs.snowflake.com/en/user-guide/python-connector-example#binding-data)
 - [ ] [access control](https://docs.snowflake.com/en/user-guide/security-access-control-overview)
 - [ ] standalone/out of process api/support for faking non-python connectors
 - [ ] [stored procedures](https://docs.snowflake.com/en/sql-reference/stored-procedures)

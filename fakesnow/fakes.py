@@ -172,7 +172,7 @@ class FakeSnowflakeCursor:
 
         if cmd != "COMMENT TABLE":
             try:
-                self._duck_conn.execute(sql)
+                self._duck_conn.execute(sql, params)
             except duckdb.BinderException as e:
                 msg = e.args[0]
                 raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from None
@@ -268,6 +268,7 @@ class FakeSnowflakeConnection:
         self.schema = schema and schema.upper()
         self.database_set = False
         self.schema_set = False
+        self._paramstyle = "pyformat"
 
         if (
             self.database

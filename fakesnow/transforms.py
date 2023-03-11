@@ -144,7 +144,7 @@ def indices_to_array(expression: exp.Expression) -> exp.Expression:
 
     Returns:
         exp.Expression: The transformed expression.
-    """
+    """  # noqa: E501
     if (
         isinstance(expression, exp.Bracket)
         and len(expression.expressions) == 1

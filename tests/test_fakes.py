@@ -6,6 +6,19 @@ import snowflake.connector.pandas_tools
 from pandas.testing import assert_frame_equal
 
 
+def test_binding_default_paramstyle(conn: snowflake.connector.SnowflakeConnection):
+    assert conn._paramstyle == "pyformat"
+
+
+def test_binding_qmark(conn: snowflake.connector.SnowflakeConnection):
+    conn._paramstyle = "qmark"
+    with conn.cursor() as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
+        cur.execute("insert into customers values (?, ?, ?)", (1, "Jenny", True))
+        cur.execute("select * from customers")
+        assert cur.fetchall() == [(1, "Jenny", True)]
+
+
 def test_connect_auto_create(_fake_snow: None):
 
     with snowflake.connector.connect(database="db1", schema="schema1"):
