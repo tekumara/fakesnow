@@ -9,35 +9,6 @@ MISSING_DATABASE = "missing_database"
 SUCCESS_NO_OP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
 
 
-def array_indices(expression: exp.Expression) -> exp.Expression:
-    """Convert to 1-based list indices.
-
-    Snowflake uses 0-based array indexing, whereas duckdb using 1-based list indexing.
-
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(array_indices).sql()
-        'SELECT myarray[1] FROM table1'
-    Args:
-        expression (exp.Expression): the expression that will be transformed.
-
-    Returns:
-        exp.Expression: The transformed expression.
-    """
-    if (
-        isinstance(expression, exp.Bracket)
-        and len(expression.expressions) == 1
-        and (index := expression.expressions[0])
-        and isinstance(index, exp.Literal)
-        and index.this
-        and not index.is_string
-    ):
-        new = expression.copy()
-        new.expressions[0] = exp.Literal(this=str(int(index.this) + 1), is_string=False)
-        return new
-    return expression
-
-
 def as_describe(expression: exp.Expression) -> exp.Expression:
     """Prepend describe to the expression.
 
@@ -154,6 +125,71 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
         new.args["table_comment"] = cexp.this
         return new
 
+    return expression
+
+
+def indices_to_array(expression: exp.Expression) -> exp.Expression:
+    """Convert to 1-based list indices.
+
+    Snowflake uses 0-based array indexing, whereas duckdb using 1-based list indexing.
+
+    See https://docs.snowflake.com/en/sql-reference/data-types-semistructured#accessing-elements-of-an-array-by-index-or-by-slice
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(indices_to_array).sql()
+        'SELECT myarray[1] FROM table1'
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+    if (
+        isinstance(expression, exp.Bracket)
+        and len(expression.expressions) == 1
+        and (index := expression.expressions[0])
+        and isinstance(index, exp.Literal)
+        and index.this
+        and not index.is_string
+    ):
+        new = expression.copy()
+        new.expressions[0] = exp.Literal(this=str(int(index.this) + 1), is_string=False)
+        return new
+    return expression
+
+
+def indices_to_object(expression: exp.Expression) -> exp.Expression:
+    """Convert object indices to JSON extraction.
+
+    Supports Snowflake object indices, see
+    https://docs.snowflake.com/en/sql-reference/data-types-semistructured#accessing-elements-of-an-object-by-key
+
+    Duckdb uses the -> operator, or the json_extract function, see
+    https://duckdb.org/docs/extensions/json#json-extraction-functions
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("select name['k'] from semi").transform(indices_to_object).sql()
+        'SELECT name -> '$.k' FROM semi'
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+    if (
+        isinstance(expression, exp.Bracket)
+        and len(expression.expressions) == 1
+        and (index := expression.expressions[0])
+        and isinstance(index, exp.Literal)
+        and index.this
+        and index.is_string
+        and (ident := expression.find(exp.Identifier))
+    ):
+        # use sql() to handle quoting
+        ident_sql = ident.sql()
+        return sqlglot.parse_one(f"{ident_sql} -> '$.{index.this}'", read="duckdb")
     return expression
 
 

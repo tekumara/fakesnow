@@ -2,11 +2,12 @@ import sqlglot
 
 from fakesnow.transforms import (
     SUCCESS_NO_OP,
-    array_indices,
     as_describe,
     create_database,
     drop_schema_cascade,
     extract_comment,
+    indices_to_array,
+    indices_to_object,
     join_information_schema_ext,
     parse_json,
     regex,
@@ -15,13 +16,6 @@ from fakesnow.transforms import (
     tag,
     upper_case_unquoted_identifiers,
 )
-
-
-def test_array_indicies() -> None:
-    assert (
-        sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(array_indices).sql()
-        == "SELECT myarray[1] FROM table1"
-    )
 
 
 def test_as_describe() -> None:
@@ -55,6 +49,20 @@ def test_extract_comment() -> None:
     e = sqlglot.parse_one("COMMENT ON TABLE table1 IS 'comment1'").transform(extract_comment)
     assert e.sql() == "COMMENT ON TABLE table1 IS 'comment1'"
     assert e.args["table_comment"] == "comment1"
+
+
+def test_indices_to_array() -> None:
+    assert (
+        sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(indices_to_array).sql()
+        == "SELECT myarray[1] FROM table1"
+    )
+
+
+def test_indices_to_object() -> None:
+    assert (
+        sqlglot.parse_one("SELECT name['k'] FROM semi").transform(indices_to_object).sql(dialect="duckdb")
+        == "SELECT name -> '$.k' FROM semi"
+    )
 
 
 def test_information_schema_ext() -> None:

@@ -322,15 +322,19 @@ def test_semi_structured_types(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create table semi (emails array, name object, notes variant)")
         cur.execute(
-            """insert into semi(emails, name, notes) SELECT [1, 2], parse_json('{"k1": "v2"}'), parse_json('["foo"]')"""
+            """insert into semi(emails, name, notes) SELECT [1, 2], parse_json('{"k": "v1"}'), parse_json('["foo"]')"""
         )
         cur.execute(
-            """insert into semi(emails, name, notes) VALUES ([3,4], parse_json('{"k2": "v2"}'), parse_json('["bar"]'))"""  # noqa: E501
+            """insert into semi(emails, name, notes) VALUES ([3,4], parse_json('{"k": "v2"}'), parse_json('["bar"]'))"""  # noqa: E501
         )
 
         cur.execute("select emails[0] from semi")
         # returned as strings, because the underlying type is JSON (duckdb) / VARIANT (snowflake)
         assert cur.fetchall() == [("1",), ("3",)]
+
+        cur.execute("select name['k'] from semi")
+        # returned as json strings, because the underlying type is JSON (duckdb) / VARIANT (snowflake)
+        assert cur.fetchall() == [('"v1"',), ('"v2"',)]
 
 
 def test_table_comments(conn: snowflake.connector.SnowflakeConnection):
