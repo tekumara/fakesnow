@@ -2,6 +2,7 @@ import sqlglot
 
 from fakesnow.transforms import (
     SUCCESS_NO_OP,
+    array_indices,
     as_describe,
     create_database,
     drop_schema_cascade,
@@ -14,6 +15,13 @@ from fakesnow.transforms import (
     tag,
     upper_case_unquoted_identifiers,
 )
+
+
+def test_array_indicies() -> None:
+    assert (
+        sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(array_indices).sql()
+        == "SELECT myarray[1] FROM table1"
+    )
 
 
 def test_as_describe() -> None:

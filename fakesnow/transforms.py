@@ -9,6 +9,35 @@ MISSING_DATABASE = "missing_database"
 SUCCESS_NO_OP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
 
 
+def array_indices(expression: exp.Expression) -> exp.Expression:
+    """Convert to 1-based list indices.
+
+    Snowflake uses 0-based array indexing, whereas duckdb using 1-based list indexing.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(array_indices).sql()
+        'SELECT myarray[1] FROM table1'
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+    if (
+        isinstance(expression, exp.Bracket)
+        and len(expression.expressions) == 1
+        and (index := expression.expressions[0])
+        and isinstance(index, exp.Literal)
+        and index.this
+        and not index.is_string
+    ):
+        new = expression.copy()
+        new.expressions[0] = exp.Literal(this=str(int(index.this) + 1), is_string=False)
+        return new
+    return expression
+
+
 def as_describe(expression: exp.Expression) -> exp.Expression:
     """Prepend describe to the expression.
 
@@ -111,19 +140,19 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
                 else:
                     other_props.append(p)
 
-            new_exp = expression.copy()
-            new_props: exp.Properties = new_exp.args["properties"]
+            new = expression.copy()
+            new_props: exp.Properties = new.args["properties"]
             new_props.args["expressions"] = other_props
-            new_exp.args["table_comment"] = comment
-            return new_exp
+            new.args["table_comment"] = comment
+            return new
     elif (
         isinstance(expression, exp.Comment)
         and (cexp := expression.args.get("expression"))
         and isinstance(cexp, exp.Literal)
     ):
-        new_exp = expression.copy()
-        new_exp.args["table_comment"] = cexp.this
-        return new_exp
+        new = expression.copy()
+        new.args["table_comment"] = cexp.this
+        return new
 
     return expression
 
@@ -182,9 +211,9 @@ def parse_json(expression: exp.Expression) -> exp.Expression:
         and isinstance(expression.this, str)
         and expression.this.upper() == "PARSE_JSON"
     ):
-        new_exp = expression.copy()
-        new_exp.args["this"] = "JSON"
-        return new_exp
+        new = expression.copy()
+        new.args["this"] = "JSON"
+        return new
 
     return expression
 
@@ -208,8 +237,8 @@ def regex(expression: exp.Expression) -> exp.Expression:
         and isinstance(expression.this, str)
         and "REGEXP_REPLACE" == expression.this.upper()
     ):
-        new_exp = expression.copy()
-        new_args = new_exp.expressions
+        new = expression.copy()
+        new_args = new.expressions
 
         if len(new_args) > 3:
             # see https://docs.snowflake.com/en/sql-reference/functions/regexp_replace
@@ -228,9 +257,9 @@ def regex(expression: exp.Expression) -> exp.Expression:
         # snowflake regex replacements are global
         new_args.append(exp.Literal(this="g", is_string=True))
 
-        new_exp.args["expressions"] = new_args
+        new.args["expressions"] = new_args
 
-        return new_exp
+        return new
 
     return expression
 
@@ -332,13 +361,13 @@ def semi_structured_types(expression: exp.Expression) -> exp.Expression:
 
     if isinstance(expression, exp.DataType):
         if expression.this in [exp.DataType.Type.OBJECT, exp.DataType.Type.VARIANT]:
-            new_exp = expression.copy()
-            new_exp.args["this"] = exp.DataType.Type.JSON
-            return new_exp
+            new = expression.copy()
+            new.args["this"] = exp.DataType.Type.JSON
+            return new
         elif expression.this == exp.DataType.Type.ARRAY:
-            new_exp = expression.copy()
-            new_exp.args["expressions"] = [exp.DataType(this=exp.DataType.Type.JSON)]
-            return new_exp
+            new = expression.copy()
+            new.args["expressions"] = [exp.DataType(this=exp.DataType.Type.JSON)]
+            return new
 
     return expression
 

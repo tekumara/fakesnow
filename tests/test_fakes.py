@@ -324,6 +324,13 @@ def test_semi_structured_types(conn: snowflake.connector.SnowflakeConnection):
         cur.execute(
             """insert into semi(emails, name, notes) SELECT [1, 2], parse_json('{"k1": "v2"}'), parse_json('["foo"]')"""
         )
+        cur.execute(
+            """insert into semi(emails, name, notes) VALUES ([3,4], parse_json('{"k2": "v2"}'), parse_json('["bar"]'))"""  # noqa: E501
+        )
+
+        cur.execute("select emails[0] from semi")
+        # returned as strings, because the underlying type is JSON (duckdb) / VARIANT (snowflake)
+        assert cur.fetchall() == [("1",), ("3",)]
 
 
 def test_table_comments(conn: snowflake.connector.SnowflakeConnection):

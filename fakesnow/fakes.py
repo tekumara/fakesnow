@@ -164,6 +164,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.regex)
             .transform(transforms.semi_structured_types)
             .transform(transforms.parse_json)
+            .transform(transforms.array_indices)
         )
 
         sql = transformed.sql(dialect="duckdb")

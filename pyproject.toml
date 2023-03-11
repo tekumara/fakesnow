@@ -16,6 +16,8 @@ dev = [
     "black~=22.12",
     "build~=0.10",
     "docformatter~=1.5",
+    # exclude 3.0.1 because of https://github.com/snowflakedb/snowflake-connector-python/issues/1464
+    "snowflake-connector-python!=3.0.1",
     # include the secure-local-storage extra for token caching
     "snowflake-connector-python[secure-local-storage]",
     "pandas",
