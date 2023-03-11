@@ -300,12 +300,6 @@ def test_regex(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchone() == ("123",)
 
 
-def test_object_type(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor() as cur:
-        cur.execute("create table table1 (name object)")
-        cur.execute("""insert into table1 (name) select parse_json('{"first":"foo", "last":"bar"}')""")
-
-
 def test_schema_create_and_use(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create schema jaffles")
@@ -322,6 +316,14 @@ def test_schema_drop(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("create table jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
         # dropping schema drops its contents
         cur.execute("drop schema jaffles")
+
+
+def test_semi_structured_types(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table semi (emails array, name object, notes variant)")
+        cur.execute(
+            """insert into semi(emails, name, notes) SELECT [1, 2], parse_json('{"k1": "v2"}'), parse_json('["foo"]')"""
+        )
 
 
 def test_table_comments(conn: snowflake.connector.SnowflakeConnection):

@@ -316,12 +316,12 @@ def tag(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def to_json_type(expression: exp.Expression) -> exp.Expression:
-    """Convert OBJECT type to JSON.
+def semi_structured_types(expression: exp.Expression) -> exp.Expression:
+    """Convert OBJECT, ARRAY, and VARIANT types to duckdb compatible types.
 
     Example:
         >>> import sqlglot
-        >>> sqlglot.parse_one("CREATE TABLE table1 (name object)").transform(to_json_type).sql()
+        >>> sqlglot.parse_one("CREATE TABLE table1 (name object)").transform(semi_structured_types).sql()
         "CREATE TABLE table1 (name JSON)"
     Args:
         expression (exp.Expression): the expression that will be transformed.
@@ -330,10 +330,15 @@ def to_json_type(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression.
     """
 
-    if isinstance(expression, exp.DataType) and expression.this == exp.DataType.Type.OBJECT:
-        new_exp = expression.copy()
-        new_exp.args["this"] = exp.DataType.Type.JSON
-        return new_exp
+    if isinstance(expression, exp.DataType):
+        if expression.this in [exp.DataType.Type.OBJECT, exp.DataType.Type.VARIANT]:
+            new_exp = expression.copy()
+            new_exp.args["this"] = exp.DataType.Type.JSON
+            return new_exp
+        elif expression.this == exp.DataType.Type.ARRAY:
+            new_exp = expression.copy()
+            new_exp.args["expressions"] = [exp.DataType(this=exp.DataType.Type.JSON)]
+            return new_exp
 
     return expression
 

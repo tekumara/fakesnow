@@ -16,6 +16,8 @@ dev = [
     "black~=22.12",
     "build~=0.10",
     "docformatter~=1.5",
+    # include the secure-local-storage extra for token caching
+    "snowflake-connector-python[secure-local-storage]",
     "pandas",
     "pre-commit~=3.0",
     "pytest~=7.2",

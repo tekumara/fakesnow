@@ -9,9 +9,9 @@ from fakesnow.transforms import (
     join_information_schema_ext,
     parse_json,
     regex,
+    semi_structured_types,
     set_schema,
     tag,
-    to_json_type,
     upper_case_unquoted_identifiers,
 )
 
@@ -72,15 +72,25 @@ def test_regex() -> None:
     )
 
 
-def test_tag() -> None:
-    assert sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'", read="snowflake").transform(tag) == SUCCESS_NO_OP
-
-
-def test_to_json_type() -> None:
+def test_semi_structured_types() -> None:
     assert (
-        sqlglot.parse_one("CREATE TABLE table1 (name object)").transform(to_json_type).sql()
+        sqlglot.parse_one("CREATE TABLE table1 (name object)").transform(semi_structured_types).sql()
         == "CREATE TABLE table1 (name JSON)"
     )
+
+    assert (
+        sqlglot.parse_one("CREATE TABLE table1 (name array)").transform(semi_structured_types).sql(dialect="duckdb")
+        == "CREATE TABLE table1 (name JSON[])"
+    )
+
+    assert (
+        sqlglot.parse_one("CREATE TABLE table1 (name variant)").transform(semi_structured_types).sql()
+        == "CREATE TABLE table1 (name JSON)"
+    )
+
+
+def test_tag() -> None:
+    assert sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'", read="snowflake").transform(tag) == SUCCESS_NO_OP
 
 
 def test_use() -> None:

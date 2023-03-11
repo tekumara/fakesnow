@@ -162,11 +162,11 @@ class FakeSnowflakeCursor:
             .transform(transforms.drop_schema_cascade)
             .transform(transforms.tag)
             .transform(transforms.regex)
-            .transform(transforms.to_json_type)
+            .transform(transforms.semi_structured_types)
             .transform(transforms.parse_json)
         )
 
-        sql = transformed.sql()
+        sql = transformed.sql(dialect="duckdb")
 
         if cmd != "COMMENT TABLE":
             try:
