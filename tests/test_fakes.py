@@ -1,3 +1,5 @@
+import datetime
+
 import pandas as pd
 import pytest
 import snowflake.connector
@@ -377,6 +379,18 @@ def test_tags_noop(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("CREATE TABLE table1 (id int)")
         cur.execute("ALTER TABLE table1 SET TAG foo='bar'")
         cur.execute("ALTER TABLE table1 MODIFY COLUMN name1 SET TAG foo='bar'")
+
+
+def test_timestamp(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_timestamp(0)")
+        assert cur.fetchall() == [(datetime.datetime(1970, 1, 1, 0, 0),)]
+
+
+def test_timestamp_to_date(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("SELECT to_date(to_timestamp(0))")
+        assert cur.fetchall() == [(datetime.date(1970, 1, 1),)]
 
 
 def test_unquoted_identifiers_are_upper_cased(conn: snowflake.connector.SnowflakeConnection):

@@ -14,6 +14,7 @@ from fakesnow.transforms import (
     semi_structured_types,
     set_schema,
     tag,
+    to_date,
     upper_case_unquoted_identifiers,
     values_columns,
 )
@@ -86,6 +87,13 @@ def test_regex() -> None:
     assert (
         sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D', '')").transform(regex).sql()
         == "SELECT REGEXP_REPLACE('abc123', '\\D', '', 'g')"
+    )
+
+
+def test_to_date() -> None:
+    assert (
+        sqlglot.parse_one("SELECT to_date(to_timestamp(0))").transform(to_date).sql()
+        == "SELECT CAST(TO_TIMESTAMP(0) AS DATE)"
     )
 
 

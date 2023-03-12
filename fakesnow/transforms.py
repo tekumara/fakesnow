@@ -381,6 +381,36 @@ def tag(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def to_date(expression: exp.Expression) -> exp.Expression:
+    """Convert to_date() to a cast.
+
+    See https://docs.snowflake.com/en/sql-reference/functions/to_date
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("SELECT to_date(to_timestamp(0))").transform(to_date).sql()
+        "SELECT CAST(TO_TIMESTAMP(0) AS DATE)"
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    if (
+        isinstance(expression, exp.Anonymous)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "TO_DATE"
+    ):
+        return exp.Cast(
+            this=expression.expressions[0],
+            to=exp.DataType(
+                this=exp.DataType.Type.DATE, nested=False, prefix=False
+            ),
+        )
+    return expression
+
+
 def semi_structured_types(expression: exp.Expression) -> exp.Expression:
     """Convert OBJECT, ARRAY, and VARIANT types to duckdb compatible types.
 

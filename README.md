@@ -51,6 +51,7 @@ def setup(_fakesnow_session: None) -> Iterator[None]:
 - [ ] [stored procedures](https://docs.snowflake.com/en/sql-reference/stored-procedures)
 
 Partial support
+- [x] date functions
 - [x] tags
 - [x] semi-structured data
 
