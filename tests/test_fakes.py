@@ -78,10 +78,9 @@ def test_connect_without_database(_fakesnow_no_auto_create: None):
         )
 
 
-def test_connect_without_schema(_fakesnow_no_auto_create: None):
-    with snowflake.connector.connect() as conn:
-        conn.execute_string("CREATE database marts; USE database marts;")
+def test_connect_without_schema(_fakesnow: None):
 
+    # database will be created but not schema
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
         assert not conn.schema
 
@@ -400,12 +399,10 @@ def test_unquoted_identifiers_are_upper_cased(conn: snowflake.connector.Snowflak
         ]
 
 
-def test_use_invalid_schema(_fakesnow_no_auto_create: None):
+def test_use_invalid_schema(_fakesnow: None):
 
-    with snowflake.connector.connect() as conn:
-        conn.execute_string("CREATE DATABASE db1; USE DATABASE db1;")
-
-    with conn.cursor() as cur:
+    # database will be created but not schema
+    with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
             cur.execute("use schema this_does_not_exist")
 

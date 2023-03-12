@@ -268,9 +268,10 @@ class FakeSnowflakeConnection:
         self.schema_set = False
         self._paramstyle = "pyformat"
 
+        # create database if needed
         if (
-            self.database
-            and create_database
+            create_database
+            and self.database
             and not duck_conn.execute(
                 f"""select * from information_schema.schemata
                 where catalog_name = '{self.database}'"""
@@ -279,10 +280,11 @@ class FakeSnowflakeConnection:
             duck_conn.execute(f"ATTACH DATABASE ':memory:' AS {self.database}")
             duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=self.database))
 
+        # create schema if needed
         if (
-            self.database
+            create_schema
+            and self.database
             and self.schema
-            and create_schema
             and not duck_conn.execute(
                 f"""select * from information_schema.schemata
                 where catalog_name = '{self.database}' and schema_name = '{self.schema}'"""
@@ -290,6 +292,7 @@ class FakeSnowflakeConnection:
         ):
             duck_conn.execute(f"CREATE SCHEMA {self.database}.{self.schema}")
 
+        # set database and schema if both exist
         if (
             self.database
             and self.schema
@@ -301,6 +304,7 @@ class FakeSnowflakeConnection:
             duck_conn.execute(f"SET schema='{self.database}.{self.schema}'")
             self.database_set = True
             self.schema_set = True
+        # set database if only that exists
         elif (
             self.database
             and duck_conn.execute(
