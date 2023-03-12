@@ -404,9 +404,7 @@ def to_date(expression: exp.Expression) -> exp.Expression:
     ):
         return exp.Cast(
             this=expression.expressions[0],
-            to=exp.DataType(
-                this=exp.DataType.Type.DATE, nested=False, prefix=False
-            ),
+            to=exp.DataType(this=exp.DataType.Type.DATE, nested=False, prefix=False),
         )
     return expression
 

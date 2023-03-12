@@ -15,3 +15,12 @@ def conn(_fakesnow: None) -> Iterator[snowflake.connector.SnowflakeConnection]:
     """
     with snowflake.connector.connect(database="db1", schema="schema1") as c:
         yield c
+
+
+@pytest.fixture
+def cur(conn: snowflake.connector.SnowflakeConnection) -> Iterator[snowflake.connector.cursor.SnowflakeCursor]:
+    """
+    Yield a snowflake cursor once per session.
+    """
+    with conn.cursor() as cur:
+        yield cur
