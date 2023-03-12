@@ -1,6 +1,10 @@
 # unless otherwise specified, hooks run on push only
 default_stages: [push]
 repos:
+  - repo: https://github.com/crate-ci/typos
+    rev: v1.13.23
+    hooks:
+      - id: typos
   # formatters and linters are available in the virtualenv so they can be run from the makefile & vscode
   - repo: local
     hooks:

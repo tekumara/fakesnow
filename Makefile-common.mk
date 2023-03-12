@@ -27,17 +27,12 @@ clean:
 ## create venv and install this package and hooks
 install: $(venv) node_modules $(if $(value CI),,install-hooks)
 
-## format all code
-format: $(venv)
-	$(venv)/bin/black .
-	$(venv)/bin/ruff .
-
 ## lint code and run static type check
 check: lint pyright
 
-## lint code
+## lint and format code
 lint: $(venv)
-	$(venv)/bin/ruff .
+	SKIP=pyright,test $(venv)/bin/pre-commit run --show-diff-on-failure --color=always --all-files --hook-stage push
 
 node_modules: package.json
 	npm install --no-save

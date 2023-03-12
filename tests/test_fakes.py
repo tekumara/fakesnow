@@ -298,7 +298,7 @@ def test_get_result_batches_dict(conn: snowflake.connector.SnowflakeConnection):
         assert sum(batch.rowcount for batch in batches) == 2
 
 
-def test_non_existant_table_throws_snowflake_exception(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_non_existent_table_throws_snowflake_exception(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
         cur.execute("select * from this_table_does_not_exist")
 
