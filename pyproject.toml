@@ -42,7 +42,7 @@ requires = ["setuptools~=67.6", "setuptools_scm[toml]~=7.1", "wheel~=0.40"]
 where = ["."]
 exclude = ["tests*"]
 
-# pyproject.toml
+# enable setuptools_scm to set the version based on git tags
 [tool.setuptools_scm]
 
 # use PyCharm default line length of 120
@@ -73,6 +73,12 @@ select = [
     "B",
     # isort
     "I",
+    # flake8-unused-arguments - disabled because our fakes don't use all arguments
+    # "ARG",
+    # flake8-self
+    "SLF",
+    # ruff-specific
+    "RUF",
 ]
 ignore = [
     # allow untyped self and cls args, and no return type from dunder methods
@@ -86,8 +92,8 @@ ignore = [
 ]
 # first-party imports for sorting
 src = ["."]
-
 fix = true
+show-fixes = true
 
 [tool.ruff.per-file-ignores]
 # test functions don't need return types
