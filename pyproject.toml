@@ -1,8 +1,11 @@
 [project]
 name = "fakesnow"
-description = "Mock SnowflakeDB locally"
+description = "Fake Snowflake Connector for Python. Run Snowflake DB locally."
 dynamic = ["version"]
 readme = "README.md"
+license = { file = "LICENSE" }
+classifiers = ["License :: OSI Approved :: MIT License"]
+keywords = ["snowflake", "snowflakedb", "fake", "local", "mock", "testing"]
 requires-python = ">=3.9"
 dependencies = [
     "duckdb~=0.7.0",
@@ -10,6 +13,9 @@ dependencies = [
     "snowflake-connector-python[pandas]",
     "sqlglot~=11.3.6",
 ]
+
+[project.urls]
+homepage = "https://github.com/tekumara/fakesnow"
 
 [project.optional-dependencies]
 dev = [
@@ -29,12 +35,15 @@ dev = [
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
 notebook = ["duckdb-engine", "ipykernel", "jupysql", "snowflake-sqlalchemy"]
 
+[build-system]
+requires = ["setuptools~=67.6", "setuptools_scm[toml]~=7.1", "wheel~=0.40"]
+
 [tool.setuptools.packages.find]
 where = ["."]
 exclude = ["tests*"]
 
-[build-system]
-requires = ["setuptools~=67.6", "setuptools_scm[toml]~=7.1", "wheel~=0.40"]
+# pyproject.toml
+[tool.setuptools_scm]
 
 # use PyCharm default line length of 120
 [tool.black]
