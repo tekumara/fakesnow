@@ -2,6 +2,12 @@
 
 Fake [Snowflake Connector for Python](https://docs.snowflake.com/en/user-guide/python-connector). Run Snowflake DB locally.
 
+## Install
+
+```
+pip install fakesnow
+```
+
 ## Usage
 
 ```python
@@ -51,6 +57,7 @@ def setup(_fakesnow_session: None) -> Iterator[None]:
 - [ ] [stored procedures](https://docs.snowflake.com/en/sql-reference/stored-procedures)
 
 Partial support
+
 - [x] date functions
 - [x] tags
 - [x] semi-structured data
