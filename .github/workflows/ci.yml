@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  release:
+    types: [published]
+jobs:
+  build:
+
+    runs-on: ubuntu-latest
+
+    steps:
+    - uses: actions/checkout@v3
+    - name: Set up Python 3.9
+      id: setup-python
+      uses: actions/setup-python@v4
+      with:
+        python-version: 3.9
+    - name: Cache virtualenv
+      id: cache-venv
+      uses: actions/cache@v3
+      with:
+        path: .venv
+        key: ${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-venv-${{ hashFiles('pyproject.toml') }}
+    - name: Cache pre-commit
+      id: cache-pre-commit
+      uses: actions/cache@v3
+      with:
+        path: ~/.cache/pre-commit
+        key: ${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-pre-commit-${{ hashFiles('.pre-commit-config.yaml') }}
+    - name: make install
+      if: steps.cache-venv.outputs.cache-hit != 'true'
+      run: make install
+    - name: make hooks
+      run: make hooks
+    - name: Build python distribution
+      run: make dist
+      if: github.event.action == 'published'
+    - name: Publish to pypi
+      if: github.event.action == 'published'
+      env:
+        TWINE_USERNAME: __token__
+        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
+      run: make publish

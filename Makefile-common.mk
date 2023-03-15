@@ -16,7 +16,7 @@ $(pip):
 	$(venv)/bin/python --version
 	$(pip) install pip~=22.3 wheel~=0.37
 
-$(venv): pyproject.toml $(pip)
+$(venv): $(if $(value CI),|,) pyproject.toml $(pip)
 	$(pip) install -e '.[dev, notebook]'
 	touch $(venv)
 
@@ -51,6 +51,10 @@ test: $(venv)
 dist: $(venv)
 	rm -rf build dist *.egg-info
 	$(venv)/bin/python -m build --sdist --wheel
+
+## publish to pypi
+publish: $(venv)
+	$(venv)/bin/twine upload dist/*
 
 ## run pre-commit git hooks on all files
 hooks: $(venv)
