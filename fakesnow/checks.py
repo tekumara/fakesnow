@@ -31,7 +31,6 @@ def is_unqualified_table_expression(expression: exp.Expression) -> tuple[bool, b
     assert node.parent, f"No parent for table expression {node.sql()}"
 
     if (parent_kind := node.parent.args.get("kind")) and isinstance(parent_kind, str):
-
         if parent_kind.upper() == "DATABASE":
             # "CREATE/DROP DATABASE"
             no_database = False
@@ -53,7 +52,6 @@ def is_unqualified_table_expression(expression: exp.Expression) -> tuple[bool, b
         and isinstance(parent_kind, exp.Var)
         and parent_kind.name
     ):
-
         if parent_kind.name.upper() == "DATABASE":
             # "USE DATABASE"
             no_database = False

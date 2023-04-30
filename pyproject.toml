@@ -11,7 +11,7 @@ dependencies = [
     "duckdb~=0.7.0",
     # include the pandas extra to get compatible version of pyarrow
     "snowflake-connector-python[pandas]",
-    "sqlglot~=11.3.6",
+    "sqlglot~=11.6.2",
 ]
 
 [project.urls]
@@ -19,16 +19,13 @@ homepage = "https://github.com/tekumara/fakesnow"
 
 [project.optional-dependencies]
 dev = [
-    "black~=22.12",
+    "black~=23.3",
     "build~=0.10",
-    # exclude 3.0.1 because of https://github.com/snowflakedb/snowflake-connector-python/issues/1464
-    "snowflake-connector-python!=3.0.1",
     # include the secure-local-storage extra for token caching
     "snowflake-connector-python[secure-local-storage]",
-    "pandas",
-    "pre-commit~=3.0",
-    "pytest~=7.2",
-    "ruff~=0.0.235",
+    "pre-commit~=3.2",
+    "pytest~=7.3",
+    "ruff~=0.0.263",
     "twine~=4.0",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html

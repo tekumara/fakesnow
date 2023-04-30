@@ -33,7 +33,6 @@ def test_connect_auto_create(_fakesnow: None):
 
 def test_connect_without_database(_fakesnow_no_auto_create: None):
     with snowflake.connector.connect() as conn, conn.cursor() as cur:
-
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("SELECT * FROM customers")
 
@@ -131,7 +130,6 @@ def test_connect_different_sessions_use_database(_fakesnow_no_auto_create: None)
 def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
     # can connect with db that doesn't exist
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
-
         # but no valid database set
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("create table foobar (i int)")
@@ -148,7 +146,6 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
 
     # can connect with schema that doesn't exist
     with snowflake.connector.connect(database="marts", schema="jaffles") as conn, conn.cursor() as cur:
-
         # but no valid schema set
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             cur.execute("create table foobar (i int)")
@@ -395,7 +392,6 @@ def test_unquoted_identifiers_are_upper_cased(conn: snowflake.connector.Snowflak
 
 
 def test_use_invalid_schema(_fakesnow: None):
-
     # database will be created but not schema
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:

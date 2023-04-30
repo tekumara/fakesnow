@@ -361,7 +361,7 @@ class DuckResultBatch(ResultBatch):
 
     def create_iter(
         self, **kwargs: dict[str, Any]
-    ) -> (Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]):
+    ) -> Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]:
         if self._use_dict_result:
             return iter(self._batch.to_pylist())
 
