@@ -245,9 +245,9 @@ class FakeSnowflakeCursor:
             return None
 
     def get_result_batches(self) -> list[ResultBatch] | None:
-        # chunk_size is multiple of 1024
+        # rows_per_batch is approximate
         # see https://github.com/duckdb/duckdb/issues/4755
-        reader = self._duck_conn.fetch_record_batch(chunk_size=1024)
+        reader = self._duck_conn.fetch_record_batch(rows_per_batch=1000)
 
         batches = []
         while True:
