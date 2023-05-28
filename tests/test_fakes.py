@@ -1,4 +1,5 @@
 import datetime
+import json
 
 import pandas as pd
 import pytest
@@ -330,6 +331,18 @@ def test_get_result_batches_dict(conn: snowflake.connector.SnowflakeConnection):
 def test_non_existent_table_throws_snowflake_exception(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
         cur.execute("select * from this_table_does_not_exist")
+
+
+def test_object_construct(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)")
+
+    # TODO: strip null within duckdb via python UDF
+    def strip_none_values(d: dict) -> dict:
+        return {k: v for k, v in d.items() if v}
+
+    result = cur.fetchone()
+    assert isinstance(result, tuple)
+    assert strip_none_values(json.loads(result[0])) == json.loads('{\n  "a": 1,\n  "b": "BBBB"\n}')
 
 
 def test_regex(cur: snowflake.connector.cursor.SnowflakeCursor):

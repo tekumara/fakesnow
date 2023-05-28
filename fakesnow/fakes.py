@@ -195,6 +195,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.indices_to_object)
             .transform(transforms.values_columns)
             .transform(transforms.to_date)
+            .transform(transforms.object_construct)
         )
 
         sql = transformed.sql(dialect="duckdb")

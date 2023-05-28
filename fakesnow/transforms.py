@@ -230,6 +230,26 @@ def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def object_construct(expression: exp.Expression) -> exp.Expression:
+    """Convert object_construct to return a json string
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)", read="snowflake").transform(object_construct).sql(dialect="duckdb")
+        "SELECT TO_JSON(OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null))"
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """  # noqa: E501
+
+    if isinstance(expression, exp.VarMap):
+        return exp.Anonymous(this="TO_JSON", expressions=[expression])
+
+    return expression
+
+
 def parse_json(expression: exp.Expression) -> exp.Expression:
     """Convert parse_json() to json().
 

@@ -9,6 +9,7 @@ from fakesnow.transforms import (
     indices_to_array,
     indices_to_object,
     join_information_schema_ext,
+    object_construct,
     parse_json,
     regex,
     semi_structured_types,
@@ -74,6 +75,15 @@ def test_information_schema_ext() -> None:
     )
 
 
+def test_object_construct() -> None:
+    assert (
+        sqlglot.parse_one("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)", read="snowflake")
+        .transform(object_construct)
+        .sql(dialect="duckdb")
+        == "SELECT TO_JSON(MAP(LIST_VALUE('a', 'b', 'c'), LIST_VALUE(1, 'BBBB', NULL)))"
+    )
+
+
 def test_parse_json() -> None:
     assert (
         sqlglot.parse_one("""insert into table1 (name) select parse_json('{"first":"foo", "last":"bar"}')""")
@@ -87,13 +97,6 @@ def test_regex() -> None:
     assert (
         sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D', '')").transform(regex).sql()
         == "SELECT REGEXP_REPLACE('abc123', '\\D', '', 'g')"
-    )
-
-
-def test_to_date() -> None:
-    assert (
-        sqlglot.parse_one("SELECT to_date(to_timestamp(0))").transform(to_date).sql()
-        == "SELECT CAST(DATE_TRUNC('day', TO_TIMESTAMP(0)) AS DATE)"
     )
 
 
@@ -116,6 +119,13 @@ def test_semi_structured_types() -> None:
 
 def test_tag() -> None:
     assert sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'", read="snowflake").transform(tag) == SUCCESS_NO_OP
+
+
+def test_to_date() -> None:
+    assert (
+        sqlglot.parse_one("SELECT to_date(to_timestamp(0))").transform(to_date).sql()
+        == "SELECT CAST(DATE_TRUNC('day', TO_TIMESTAMP(0)) AS DATE)"
+    )
 
 
 def test_use() -> None:
