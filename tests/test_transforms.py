@@ -93,7 +93,7 @@ def test_regex() -> None:
 def test_to_date() -> None:
     assert (
         sqlglot.parse_one("SELECT to_date(to_timestamp(0))").transform(to_date).sql()
-        == "SELECT CAST(TO_TIMESTAMP(0) AS DATE)"
+        == "SELECT CAST(DATE_TRUNC('day', TO_TIMESTAMP(0)) AS DATE)"
     )
 
 

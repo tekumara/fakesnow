@@ -399,8 +399,8 @@ def test_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_timestamp_to_date(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("SELECT to_date(to_timestamp(0))")
-    assert cur.fetchall() == [(datetime.date(1970, 1, 1),)]
+    cur.execute("SELECT to_date(to_timestamp(0)), to_date(cast(to_timestamp(0) as timestamp(9)))")
+    assert cur.fetchall() == [(datetime.date(1970, 1, 1), datetime.date(1970, 1, 1))]
 
 
 def test_unquoted_identifiers_are_upper_cased(conn: snowflake.connector.SnowflakeConnection):

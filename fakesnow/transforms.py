@@ -391,7 +391,7 @@ def to_date(expression: exp.Expression) -> exp.Expression:
     Example:
         >>> import sqlglot
         >>> sqlglot.parse_one("SELECT to_date(to_timestamp(0))").transform(to_date).sql()
-        "SELECT CAST(TO_TIMESTAMP(0) AS DATE)"
+        "SELECT CAST(DATE_TRUNC('day', TO_TIMESTAMP(0)) AS DATE)"
     Args:
         expression (exp.Expression): the expression that will be transformed.
 
@@ -405,7 +405,9 @@ def to_date(expression: exp.Expression) -> exp.Expression:
         and expression.this.upper() == "TO_DATE"
     ):
         return exp.Cast(
-            this=expression.expressions[0],
+            # add datetrunc to handle timestamp_ns (aka timestamp(9)) columns
+            # and avoid https://github.com/duckdb/duckdb/issues/7672
+            this=exp.DateTrunc(unit=exp.Literal(this="day", is_string=True), this=expression.expressions[0]),
             to=exp.DataType(this=exp.DataType.Type.DATE, nested=False, prefix=False),
         )
     return expression
