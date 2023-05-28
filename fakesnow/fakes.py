@@ -141,7 +141,7 @@ class FakeSnowflakeCursor:
     ) -> str:
         if isinstance(params, dict):
             # see https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-api
-            raise NotImplementedError("params dict not supported yet")
+            raise NotImplementedError("dict params not supported yet")
 
         if params and self._conn._paramstyle in ("pyformat", "format"):  # noqa: SLF001
             # duckdb uses question mark style params
@@ -236,6 +236,25 @@ class FakeSnowflakeCursor:
                 DO UPDATE SET comment = excluded.comment
                 """
             )
+
+        return self
+
+    def executemany(
+        self,
+        command: str,
+        seqparams: Sequence[Any] | dict[str, Any],
+        **kwargs: Any,
+    ) -> FakeSnowflakeCursor:
+        if isinstance(seqparams, dict):
+            # see https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-api
+            raise NotImplementedError("dict params not supported yet")
+
+        # TODO: support insert optimisations
+        # the snowflake connector will optimise inserts into a single query
+        # unless num_statements != 1 .. but for simplicity we execute each
+        # query one by one, which means the response differs
+        for p in seqparams:
+            self.execute(command, p)
 
         return self
 

@@ -215,6 +215,16 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     # fmt: on
 
 
+def test_executemany(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+
+    customers = [(1, "Jenny", "P"), (2, "Jasper", "M")]
+    cur.executemany("insert into customers (id, first_name, last_name) values (%s,%s,%s)", customers)
+
+    cur.execute("select id, first_name, last_name from customers")
+    assert cur.fetchall() == customers
+
+
 def test_execute_string(conn: snowflake.connector.SnowflakeConnection):
     [_, cur2] = conn.execute_string(
         """ create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar);
