@@ -106,7 +106,7 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
         if props := cast(exp.Properties, expression.args.get("properties")):
             other_props = []
             for p in props.expressions:
-                if isinstance(p, exp.SchemaCommentProperty) and (isinstance(p.this, (exp.Literal, exp.Var))):
+                if isinstance(p, exp.SchemaCommentProperty) and (isinstance(p.this, (exp.Literal, exp.Identifier))):
                     comment = p.this.this
                 else:
                     other_props.append(p)
@@ -218,9 +218,11 @@ def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
         return expression.join(
             "information_schema.tables_ext",
             on=(
-                "tables.table_catalog = tables_ext.ext_table_catalog",
-                "tables.table_schema = tables_ext.ext_table_schema",
-                "tables.table_name = tables_ext.ext_table_name",
+                """
+                tables.table_catalog = tables_ext.ext_table_catalog AND
+                tables.table_schema = tables_ext.ext_table_schema AND
+                tables.table_name = tables_ext.ext_table_name
+                """
             ),
             join_type="left",
         )
