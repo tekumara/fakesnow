@@ -106,7 +106,15 @@ class FakeSnowflakeCursor:
                 return ResultMetadata(
                     name=column_name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
                 )
-            elif column_type == "TIMESTAMP":
+            elif column_type == "BOOLEAN":
+                return ResultMetadata(
+                    name=column_name, type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True      # type: ignore # noqa: E501
+                )
+            elif column_type == "DATE":
+                return ResultMetadata(
+                    name=column_name, type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
+                )
+            elif column_type in ["TIMESTAMP", "TIMESTAMP_NS"]:
                 return ResultMetadata(
                     name=column_name, type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True             # type: ignore # noqa: E501
                 )
