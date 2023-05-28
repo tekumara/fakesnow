@@ -10,6 +10,11 @@ from pandas.testing import assert_frame_equal
 
 def test_binding_default_paramstyle(conn: snowflake.connector.SnowflakeConnection):
     assert conn._paramstyle == "pyformat"  # noqa: SLF001
+    with conn.cursor() as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
+        cur.execute("insert into customers values (%s, %s, %s)", (1, "Jenny", True))
+        cur.execute("select * from customers")
+        assert cur.fetchall() == [(1, "Jenny", True)]
 
 
 def test_binding_qmark(conn: snowflake.connector.SnowflakeConnection):

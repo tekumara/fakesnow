@@ -134,6 +134,21 @@ class FakeSnowflakeCursor:
 
         return meta
 
+    def _rewrite_params(
+        self,
+        command: str,
+        params: Sequence[Any] | dict[Any, Any] | None = None,
+    ) -> str:
+        if isinstance(params, dict):
+            # see https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-api
+            raise NotImplementedError("params dict not supported yet")
+
+        if params and self._conn._paramstyle in ("pyformat", "format"):  # noqa: SLF001
+            # duckdb uses question mark style params
+            return command.replace("%s", "?")
+
+        return command
+
     def execute(
         self,
         command: str | exp.Expression,
@@ -143,7 +158,11 @@ class FakeSnowflakeCursor:
     ) -> FakeSnowflakeCursor:
         self._arrow_table = None
 
-        expression = command if isinstance(command, exp.Expression) else parse_one(command, read="snowflake")
+        if isinstance(command, exp.Expression):
+            expression = command
+        else:
+            expression = parse_one(self._rewrite_params(command, params), read="snowflake")
+
         cmd = expr.key_command(expression)
 
         no_database, no_schema = checks.is_unqualified_table_expression(expression)
