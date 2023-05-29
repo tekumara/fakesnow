@@ -491,3 +491,21 @@ def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("select id, first_name, last_name from customers")
 
         assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+
+
+def test_write_pandas_partial_columns(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+
+        df = pd.DataFrame.from_records(
+            [
+                {"ID": 1, "FIRST_NAME": "Jenny"},
+                {"ID": 2, "FIRST_NAME": "Jasper"},
+            ]
+        )
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "customers")
+
+        cur.execute("select id, first_name, last_name from customers")
+
+        # columns not in dataframe will receive their default value
+        assert cur.fetchall() == [(1, "Jenny", None), (2, "Jasper", None)]

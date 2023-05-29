@@ -394,10 +394,11 @@ class FakeSnowflakeConnection:
         ]
         return cursors if return_cursors else []
 
-    def insert_df(
+    def _insert_df(
         self, df: pd.DataFrame, table_name: str, database: str | None = None, schema: str | None = None
     ) -> int:
-        self._duck_conn.execute(f"INSERT INTO {table_name} SELECT * FROM df")
+        cols = ",".join(df.columns.to_list())
+        self._duck_conn.execute(f"INSERT INTO {table_name}({cols}) SELECT * FROM df")
         return self._duck_conn.fetchall()[0][0]
 
 
@@ -463,7 +464,7 @@ def write_pandas(
     table_type: Literal["", "temp", "temporary", "transient"] = "",
     **kwargs: Any,
 ) -> WritePandasResult:
-    count = conn.insert_df(df, table_name, database, schema)
+    count = conn._insert_df(df, table_name, database, schema)  # noqa: SLF001
 
     # mocks https://docs.snowflake.com/en/sql-reference/sql/copy-into-table.html#output
     mock_copy_results = [("fakesnow/file0.txt", "LOADED", count, count, 1, 0, None, None, None, None)]
