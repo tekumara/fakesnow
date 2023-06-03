@@ -11,7 +11,7 @@ dependencies = [
     "duckdb~=0.8.0",
     # include the pandas extra to get compatible version of pyarrow
     "snowflake-connector-python[pandas]",
-    "sqlglot~=14.1.1",
+    "sqlglot~=15.0.0",
 ]
 
 [project.urls]

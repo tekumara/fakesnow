@@ -236,7 +236,7 @@ def object_construct(expression: exp.Expression) -> exp.Expression:
     Example:
         >>> import sqlglot
         >>> sqlglot.parse_one("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)", read="snowflake").transform(object_construct).sql(dialect="duckdb")
-        "SELECT TO_JSON(OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null))"
+        "SELECT TO_JSON({'a': 1, 'b': 'BBBB', 'c': NULL})"
     Args:
         expression (exp.Expression): the expression that will be transformed.
 
@@ -244,7 +244,7 @@ def object_construct(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression.
     """  # noqa: E501
 
-    if isinstance(expression, exp.VarMap):
+    if isinstance(expression, exp.Struct):
         return exp.Anonymous(this="TO_JSON", expressions=[expression])
 
     return expression

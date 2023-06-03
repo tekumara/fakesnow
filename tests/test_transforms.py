@@ -80,7 +80,7 @@ def test_object_construct() -> None:
         sqlglot.parse_one("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)", read="snowflake")
         .transform(object_construct)
         .sql(dialect="duckdb")
-        == "SELECT TO_JSON(MAP(LIST_VALUE('a', 'b', 'c'), LIST_VALUE(1, 'BBBB', NULL)))"
+        == "SELECT TO_JSON({'a': 1, 'b': 'BBBB', 'c': NULL})"
     )
 
 
