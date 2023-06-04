@@ -1,6 +1,6 @@
 # fakesnow ❄️
 
-Fake [Snowflake Connector for Python](https://docs.snowflake.com/en/user-guide/python-connector). Run Snowflake DB locally.
+Fake [Snowflake Connector for Python](https://docs.snowflake.com/en/user-guide/python-connector). Mock Snowflake DB locally.
 
 ## Install
 
@@ -61,6 +61,8 @@ Partial support
 - [x] date functions
 - [x] tags
 - [x] semi-structured data
+
+For more detail see [tests/test_fakes.py](tests/test_fakes.py)
 
 ## Contributing
 

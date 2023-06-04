@@ -58,6 +58,7 @@ class FakeSnowflakeCursor:
         self._conn = conn
         self._duck_conn = duck_conn
         self._use_dict_result = use_dict_result
+        self._last_sql = None
 
     def __enter__(self) -> Self:
         return self
@@ -79,75 +80,23 @@ class FakeSnowflakeCursor:
             list[ResultMetadata]: _description_
         """
 
-        # fmt: off
-        def as_result_metadata(column_name: str, column_type: str, _: str) -> ResultMetadata:
-            # see https://docs.snowflake.com/en/user-guide/python-connector-api.html#type-codes
-            # and https://arrow.apache.org/docs/python/api/datatypes.html#type-checking
-            # type ignore because of https://github.com/snowflakedb/snowflake-connector-python/issues/1423
-            if column_type == "INTEGER":
-                return ResultMetadata(
-                    name=column_name, type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True                    # type: ignore # noqa: E501
-                )
-            elif column_type.startswith("DECIMAL"):
-                match = re.search(r'\((\d+),(\d+)\)', column_type)
-                if match:
-                    precision = int(match[1])
-                    scale = int(match[2])
-                else:
-                    precision = scale = None
-                return ResultMetadata(
-                    name=column_name, type_code=0, display_size=None, internal_size=None, precision=precision, scale=scale, is_nullable=True # type: ignore # noqa: E501
-                )
-            elif column_type == "VARCHAR":
-                return ResultMetadata(
-                    name=column_name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True   # type: ignore # noqa: E501
-                )
-            elif column_type == "FLOAT":
-                return ResultMetadata(
-                    name=column_name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
-                )
-            elif column_type == "BOOLEAN":
-                return ResultMetadata(
-                    name=column_name, type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True      # type: ignore # noqa: E501
-                )
-            elif column_type == "DATE":
-                return ResultMetadata(
-                    name=column_name, type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
-                )
-            elif column_type in ["TIMESTAMP", "TIMESTAMP_NS"]:
-                return ResultMetadata(
-                    name=column_name, type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True             # type: ignore # noqa: E501
-                )
-            else:
-                # TODO handle more types
-                raise NotImplementedError(f"for column type {column_type}")
-
-        # fmt: on
-
         describe = transforms.as_describe(parse_one(command, read="snowflake"))
         self.execute(describe, *args, **kwargs)
+        return FakeSnowflakeCursor._describe_as_result_metadata(self._duck_conn.fetchall())  # noqa: SLF001
 
-        meta = [
-            as_result_metadata(column_name, column_type, null)
-            for (column_name, column_type, null, _, _, _) in self._duck_conn.fetchall()
-        ]
+    @property
+    def description(self) -> list[ResultMetadata]:
+        # use a cursor to avoid destroying an unfetched result on the main connection
+        with self._duck_conn.cursor() as cur:
+            assert self._conn.database, "Not implemented when database is None"
+            assert self._conn.schema, "Not implemented when database is None"
 
-        return meta
+            # match database and schema used on the main connection
+            cur.execute(f"SET SCHEMA = '{self._conn.database}.{self._conn.schema}'")
+            cur.execute(f"DESCRIBE {self._last_sql}")
+            meta = FakeSnowflakeCursor._describe_as_result_metadata(cur.fetchall())  # noqa: SLF001
 
-    def _rewrite_params(
-        self,
-        command: str,
-        params: Sequence[Any] | dict[Any, Any] | None = None,
-    ) -> str:
-        if isinstance(params, dict):
-            # see https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-api
-            raise NotImplementedError("dict params not supported yet")
-
-        if params and self._conn._paramstyle in ("pyformat", "format"):  # noqa: SLF001
-            # duckdb uses question mark style params
-            return command.replace("%s", "?")
-
-        return command
+        return meta  # type: ignore see https://github.com/duckdb/duckdb/issues/7816
 
     def execute(
         self,
@@ -202,6 +151,7 @@ class FakeSnowflakeCursor:
 
         if cmd != "COMMENT TABLE":
             try:
+                self._last_sql = sql
                 self._duck_conn.execute(sql, params)
             except duckdb.BinderException as e:
                 msg = e.args[0]
@@ -291,11 +241,79 @@ class FakeSnowflakeCursor:
         batches = []
         while True:
             try:
-                batches.append(DuckResultBatch(self._use_dict_result, reader.read_next_batch()))
+                batches.append(FakeResultBatch(self._use_dict_result, reader.read_next_batch()))
             except StopIteration:
                 break
 
         return batches
+
+    @staticmethod
+    def _describe_as_result_metadata(describe_results: list) -> list[ResultMetadata]:
+        # fmt: off
+        def as_result_metadata(column_name: str, column_type: str, _: str) -> ResultMetadata:
+            # see https://docs.snowflake.com/en/user-guide/python-connector-api.html#type-codes
+            # and https://arrow.apache.org/docs/python/api/datatypes.html#type-checking
+            # type ignore because of https://github.com/snowflakedb/snowflake-connector-python/issues/1423
+            if column_type == "INTEGER":
+                return ResultMetadata(
+                    name=column_name, type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True                    # type: ignore # noqa: E501
+                )
+            elif column_type.startswith("DECIMAL"):
+                match = re.search(r'\((\d+),(\d+)\)', column_type)
+                if match:
+                    precision = int(match[1])
+                    scale = int(match[2])
+                else:
+                    precision = scale = None
+                return ResultMetadata(
+                    name=column_name, type_code=0, display_size=None, internal_size=None, precision=precision, scale=scale, is_nullable=True # type: ignore # noqa: E501
+                )
+            elif column_type == "VARCHAR":
+                return ResultMetadata(
+                    name=column_name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True   # type: ignore # noqa: E501
+                )
+            elif column_type == "FLOAT":
+                return ResultMetadata(
+                    name=column_name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
+                )
+            elif column_type == "BOOLEAN":
+                return ResultMetadata(
+                    name=column_name, type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True      # type: ignore # noqa: E501
+                )
+            elif column_type == "DATE":
+                return ResultMetadata(
+                    name=column_name, type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
+                )
+            elif column_type in ["TIMESTAMP", "TIMESTAMP_NS"]:
+                return ResultMetadata(
+                    name=column_name, type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True             # type: ignore # noqa: E501
+                )
+            else:
+                # TODO handle more types
+                raise NotImplementedError(f"for column type {column_type}")
+
+        # fmt: on
+
+        meta = [
+            as_result_metadata(column_name, column_type, null)
+            for (column_name, column_type, null, _, _, _) in describe_results
+        ]
+        return meta
+
+    def _rewrite_params(
+        self,
+        command: str,
+        params: Sequence[Any] | dict[Any, Any] | None = None,
+    ) -> str:
+        if isinstance(params, dict):
+            # see https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-api
+            raise NotImplementedError("dict params not supported yet")
+
+        if params and self._conn._paramstyle in ("pyformat", "format"):  # noqa: SLF001
+            # duckdb uses question mark style params
+            return command.replace("%s", "?")
+
+        return command
 
 
 class FakeSnowflakeConnection:
@@ -402,7 +420,7 @@ class FakeSnowflakeConnection:
         return self._duck_conn.fetchall()[0][0]
 
 
-class DuckResultBatch(ResultBatch):
+class FakeResultBatch(ResultBatch):
     def __init__(self, use_dict_result: bool, batch: pyarrow.RecordBatch):
         self._use_dict_result = use_dict_result
         self._batch = batch

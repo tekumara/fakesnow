@@ -183,10 +183,8 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         )
         """
     )
-    metadata = cur.describe("select * from customers")
-
     # fmt: off
-    assert metadata == [
+    expected_metadata = [
         snowflake.connector.cursor.ResultMetadata(
             name="ID", type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True                  # type: ignore # noqa: E501
         ),
@@ -211,9 +209,13 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         snowflake.connector.cursor.ResultMetadata(
             name='INSERTIONDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True  # type: ignore # noqa: E501
         ),
-
     ]
     # fmt: on
+
+    assert cur.describe("select * from customers") == expected_metadata
+
+    cur.execute("select * from customers")
+    assert cur.description == expected_metadata
 
 
 def test_executemany(cur: snowflake.connector.cursor.SnowflakeCursor):
