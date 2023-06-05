@@ -20,10 +20,17 @@ with fakesnow.patch():
     print(conn.cursor().execute("SELECT 'Hello fake world!'").fetchone())
 ```
 
-Standard imports (eg: `snowflake.connector.connect`) are patched. To patch additional imports, eg:
+The following imports are automatically patched:
+
+- `import snowflake.connector.connect`
+- `import  snowflake.connector.pandas_tools.write_pandas`
+
+To patch modules that use the `from .. import` syntax, manually specify them eg:
 
 ```python
-with fakesnow.patch("mymodule.connect"):
+# mymodule uses
+# from snowflake.connector.pandas_tools import write_pandas
+with fakesnow.patch("mymodule.write_pandas"):
     ...
 ```
 
@@ -42,6 +49,20 @@ def setup(_fakesnow_session: None) -> Iterator[None]:
     # the standard imports are now patched
     ...
     yield
+```
+
+Or with manual patch targets:
+
+```python
+from typing import Iterator
+
+import fakesnow
+import pytest
+
+@pytest.fixture(scope="session", autouse=True)
+def _fakesnow_session() -> Iterator[None]:
+    with fakesnow.patch("mymodule.write_pandas"):
+        yield
 ```
 
 ## Implementation coverage

@@ -511,3 +511,18 @@ def test_write_pandas_partial_columns(conn: snowflake.connector.SnowflakeConnect
 
         # columns not in dataframe will receive their default value
         assert cur.fetchall() == [(1, "Jenny", None), (2, "Jasper", None)]
+
+
+def test_write_pandas_dict_column_as_varchar(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table example (id str, vc varchar, o object)")
+
+        df = pd.DataFrame(
+            [("abc", {"kind": "vc", "count": 1}, {"kind": "obj", "amount": 2})], columns=["ID", "VC", "O"]
+        )
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE")
+
+        cur.execute("select * from example")
+
+        # returned values are valid json strings, with keys in alphabetical order
+        assert cur.fetchall() == [("abc", '{"count":1,"kind":"vc"}', '{"amount":2,"kind":"obj"}')]

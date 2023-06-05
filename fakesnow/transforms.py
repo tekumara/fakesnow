@@ -233,6 +233,8 @@ def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
 def object_construct(expression: exp.Expression) -> exp.Expression:
     """Convert object_construct to return a json string
 
+    Because internally snowflake stores OBJECT types as a json string.
+
     Example:
         >>> import sqlglot
         >>> sqlglot.parse_one("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)", read="snowflake").transform(object_construct).sql(dialect="duckdb")

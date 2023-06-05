@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 from string import Template
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Literal, Optional, Sequence, Type, Union, cast
+from typing import Any, Iterable, Iterator, Literal, Optional, Sequence, Type, Union, cast
 
 import duckdb
+import pandas as pd
 import pyarrow
 import pyarrow.lib
 import pyarrow.types
@@ -20,9 +23,6 @@ from typing_extensions import Self
 import fakesnow.checks as checks
 import fakesnow.expr as expr
 import fakesnow.transforms as transforms
-
-if TYPE_CHECKING:
-    import pandas as pd
 
 SCHEMA_UNSET = "schema_unset"
 
@@ -269,6 +269,7 @@ class FakeSnowflakeCursor:
                     name=column_name, type_code=0, display_size=None, internal_size=None, precision=precision, scale=scale, is_nullable=True # type: ignore # noqa: E501
                 )
             elif column_type == "VARCHAR":
+                # TODO: fetch internal_size from varchar size
                 return ResultMetadata(
                     name=column_name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True   # type: ignore # noqa: E501
                 )
@@ -415,8 +416,12 @@ class FakeSnowflakeConnection:
     def _insert_df(
         self, df: pd.DataFrame, table_name: str, database: str | None = None, schema: str | None = None
     ) -> int:
-        cols = ",".join(df.columns.to_list())
-        self._duck_conn.execute(f"INSERT INTO {table_name}({cols}) SELECT * FROM df")
+        # dicts in dataframes are written as parquet structs, and snowflake loads parquet structs as json strings
+        # whereas duckdb loads them as a struct, so we convert them to json here
+        cols = [f"TO_JSON({c})" if isinstance(df[c][0], dict) else c for c in df.columns]
+        cols = ",".join(cols)
+
+        self._duck_conn.execute(f"INSERT INTO {table_name}({','.join(df.columns.to_list())}) SELECT {cols} FROM df")
         return self._duck_conn.fetchall()[0][0]
 
 
@@ -482,7 +487,15 @@ def write_pandas(
     table_type: Literal["", "temp", "temporary", "transient"] = "",
     **kwargs: Any,
 ) -> WritePandasResult:
-    count = conn._insert_df(df, table_name, database, schema)  # noqa: SLF001
+    # write out to parquet and read back in, so that columns with dict values are written as structs, and
+    # their keys are sorted alphanumerically like snowflake
+    # TODO: a more performant way of ordering the dict keys, or maybe don't order
+    with tempfile.TemporaryDirectory() as tmp_folder:
+        tmp_path = os.path.join(tmp_folder, "file0.txt")
+        df.to_parquet(tmp_path, compression=compression, **kwargs)
+        df_converted = pd.read_parquet(tmp_path)
+
+    count = conn._insert_df(df_converted, table_name, database, schema)  # noqa: SLF001
 
     # mocks https://docs.snowflake.com/en/sql-reference/sql/copy-into-table.html#output
     mock_copy_results = [("fakesnow/file0.txt", "LOADED", count, count, 1, 0, None, None, None, None)]
