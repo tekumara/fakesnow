@@ -1,6 +1,6 @@
 # fakesnow ❄️
 
-Fake [Snowflake Connector for Python](https://docs.snowflake.com/en/user-guide/python-connector). Mock Snowflake DB locally.
+Fake [Snowflake Connector for Python](https://docs.snowflake.com/en/user-guide/python-connector). Run and mock Snowflake DB locally.
 
 ## Install
 
@@ -25,11 +25,15 @@ The following imports are automatically patched:
 - `import snowflake.connector.connect`
 - `import  snowflake.connector.pandas_tools.write_pandas`
 
-To patch modules that use the `from .. import` syntax, manually specify them eg:
+To patch modules that use the `from ... import` syntax, manually specify them, eg: if _mymodule.py_ has the import:
 
 ```python
-# mymodule uses
-# from snowflake.connector.pandas_tools import write_pandas
+from snowflake.connector.pandas_tools import write_pandas
+```
+
+Then patch it using:
+
+```python
 with fakesnow.patch("mymodule.write_pandas"):
     ...
 ```
@@ -51,7 +55,7 @@ def setup(_fakesnow_session: None) -> Iterator[None]:
     yield
 ```
 
-Or with manual patch targets:
+Or with `from ... import` patch targets:
 
 ```python
 from typing import Iterator
