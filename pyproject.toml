@@ -1,7 +1,7 @@
 [project]
 name = "fakesnow"
 description = "Fake Snowflake Connector for Python. Run Snowflake DB locally."
-dynamic = ["version"]
+version = "0.0.2"
 readme = "README.md"
 license = { file = "LICENSE" }
 classifiers = ["License :: OSI Approved :: MIT License"]
@@ -32,14 +32,11 @@ dev = [
 notebook = ["duckdb-engine", "ipykernel", "jupysql", "snowflake-sqlalchemy"]
 
 [build-system]
-requires = ["setuptools~=67.6", "setuptools_scm[toml]~=7.1", "wheel~=0.40"]
+requires = ["setuptools~=67.6", "wheel~=0.40"]
 
 [tool.setuptools.packages.find]
 where = ["."]
 exclude = ["tests*"]
-
-# enable setuptools_scm to set the version based on git tags
-[tool.setuptools_scm]
 
 # use PyCharm default line length of 120
 [tool.black]
