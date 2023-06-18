@@ -35,12 +35,3 @@ jobs:
       run: make install
     - name: make hooks
       run: make hooks
-    - name: Build python distribution
-      run: make dist
-      if: github.event.action == 'published'
-    - name: Publish to pypi
-      if: github.event.action == 'published'
-      env:
-        TWINE_USERNAME: __token__
-        TWINE_PASSWORD: ${{ secrets.PYPI_PASSWORD }}
-      run: make publish
