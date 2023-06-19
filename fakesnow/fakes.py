@@ -1,8 +1,6 @@
 from __future__ import annotations
 
-import os
 import re
-import tempfile
 from string import Template
 from types import TracebackType
 from typing import Any, Iterable, Iterator, Literal, Optional, Sequence, Type, Union, cast
@@ -487,15 +485,7 @@ def write_pandas(
     table_type: Literal["", "temp", "temporary", "transient"] = "",
     **kwargs: Any,
 ) -> WritePandasResult:
-    # write out to parquet and read back in, so that columns with dict values are written as structs, and
-    # their keys are sorted alphanumerically like snowflake
-    # TODO: a more performant way of ordering the dict keys, or maybe don't order
-    with tempfile.TemporaryDirectory() as tmp_folder:
-        tmp_path = os.path.join(tmp_folder, "file0.txt")
-        df.to_parquet(tmp_path, compression=compression, **kwargs)
-        df_converted = pd.read_parquet(tmp_path)
-
-    count = conn._insert_df(df_converted, table_name, database, schema)  # noqa: SLF001
+    count = conn._insert_df(df, table_name, database, schema)  # noqa: SLF001
 
     # mocks https://docs.snowflake.com/en/sql-reference/sql/copy-into-table.html#output
     mock_copy_results = [("fakesnow/file0.txt", "LOADED", count, count, 1, 0, None, None, None, None)]
