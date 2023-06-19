@@ -1,0 +1,3 @@
+[files]
+# ignore CHANGELOG because it contains commit SHAs
+extend-exclude = ["CHANGELOG.md"]
