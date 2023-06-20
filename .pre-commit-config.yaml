@@ -5,6 +5,8 @@ repos:
     rev: v1.13.23
     hooks:
       - id: typos
+        # needed because .typos.toml is ignored see https://github.com/crate-ci/typos/issues/347
+        exclude: CHANGELOG.md
   # formatters and linters are available in the virtualenv so they can be run from the makefile & vscode
   - repo: local
     hooks:
