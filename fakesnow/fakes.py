@@ -57,6 +57,7 @@ class FakeSnowflakeCursor:
         self._duck_conn = duck_conn
         self._use_dict_result = use_dict_result
         self._last_sql = None
+        self._last_params = None
 
     def __enter__(self) -> Self:
         return self
@@ -91,7 +92,7 @@ class FakeSnowflakeCursor:
 
             # match database and schema used on the main connection
             cur.execute(f"SET SCHEMA = '{self._conn.database}.{self._conn.schema}'")
-            cur.execute(f"DESCRIBE {self._last_sql}")
+            cur.execute(f"DESCRIBE {self._last_sql}", self._last_params)
             meta = FakeSnowflakeCursor._describe_as_result_metadata(cur.fetchall())  # noqa: SLF001
 
         return meta  # type: ignore see https://github.com/duckdb/duckdb/issues/7816
@@ -150,6 +151,7 @@ class FakeSnowflakeCursor:
         if cmd != "COMMENT TABLE":
             try:
                 self._last_sql = sql
+                self._last_params = params
                 self._duck_conn.execute(sql, params)
             except duckdb.BinderException as e:
                 msg = e.args[0]

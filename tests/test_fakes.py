@@ -218,6 +218,50 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.description == expected_metadata
 
 
+def test_describe_with_params(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute(
+        """
+        create table customers (
+            ID int, CNAME varchar, AMOUNT decimal(10,2), PCT real, ACTIVE boolean,
+            UPDATE_AT timestamp, UPDATE_AT_NTZ timestamp_ntz(9), INSERTIONDATE DATE
+        )
+        """
+    )
+    # fmt: off
+    expected_metadata = [
+        snowflake.connector.cursor.ResultMetadata(
+            name="ID", type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True                  # type: ignore # noqa: E501
+        ),
+        snowflake.connector.cursor.ResultMetadata(
+            name="CNAME", type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True,     # type: ignore # noqa: E501
+        ),
+        snowflake.connector.cursor.ResultMetadata(
+            name="AMOUNT", type_code=0, display_size=None, internal_size=None, precision=10, scale=2, is_nullable=True,             # type: ignore # noqa: E501
+        ),
+        snowflake.connector.cursor.ResultMetadata(
+            name="PCT", type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True,           # type: ignore # noqa: E501
+        ),
+        snowflake.connector.cursor.ResultMetadata(
+            name="ACTIVE", type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True,       # type: ignore # noqa: E501
+        ),
+        snowflake.connector.cursor.ResultMetadata(
+            name='UPDATE_AT', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True            # type: ignore # noqa: E501
+        ),
+        snowflake.connector.cursor.ResultMetadata(
+            name='UPDATE_AT_NTZ', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True        # type: ignore # noqa: E501
+        ),
+        snowflake.connector.cursor.ResultMetadata(
+            name='INSERTIONDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True  # type: ignore # noqa: E501
+        ),
+    ]
+    # fmt: on
+
+    assert cur.describe("select * from customers where id = ?", (1,)) == expected_metadata
+
+    cur.execute("select * from customers where id = ?", (1,))
+    assert cur.description == expected_metadata
+
+
 def test_executemany(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
