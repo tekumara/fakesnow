@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.2.0](https://github.com/tekumara/fakesnow/compare/v0.1.0...v0.2.0) (2023-06-24)
+
+
+### Features
+
+* support commit and rollback on connection ([c5520b0](https://github.com/tekumara/fakesnow/commit/c5520b08cf6df4fd0511cbe471292d121af7a469)), closes [#6](https://github.com/tekumara/fakesnow/issues/6)
+
+
+### Bug Fixes
+
+* describe to work with parameterized SQL queries ([#7](https://github.com/tekumara/fakesnow/issues/7)) ([1adaad0](https://github.com/tekumara/fakesnow/commit/1adaad01782801a364e17233dc0591990379f58b))
+* No module named 'pandas' when using pdm ([f60d45d](https://github.com/tekumara/fakesnow/commit/f60d45d4526d7d2b0da57a904596389242e62f98)), closes [#5](https://github.com/tekumara/fakesnow/issues/5)
+
 ## [0.1.0](https://github.com/tekumara/fakesnow/compare/0.0.2...v0.1.0) (2023-06-20)
 
 
