@@ -9,8 +9,8 @@ keywords = ["snowflake", "snowflakedb", "fake", "local", "mock", "testing"]
 requires-python = ">=3.9"
 dependencies = [
     "duckdb~=0.8.0",
-    # include the pandas extra to get compatible version of pyarrow
-    "snowflake-connector-python[pandas]",
+    "pyarrow",
+    "snowflake-connector-python",
     "sqlglot~=15.0.0",
 ]
 
@@ -21,8 +21,8 @@ homepage = "https://github.com/tekumara/fakesnow"
 dev = [
     "black~=23.3",
     "build~=0.10",
-    # include the secure-local-storage extra for token caching
-    "snowflake-connector-python[secure-local-storage]",
+    # include compatible version of pandas, and secure-local-storage for token caching
+    "snowflake-connector-python[pandas, secure-local-storage]",
     "pre-commit~=3.2",
     "pytest~=7.3",
     "ruff~=0.0.263",

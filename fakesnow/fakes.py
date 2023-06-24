@@ -3,13 +3,14 @@ from __future__ import annotations
 import re
 from string import Template
 from types import TracebackType
-from typing import Any, Iterable, Iterator, Literal, Optional, Sequence, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Iterable, Iterator, Literal, Optional, Sequence, Type, Union, cast
 
 import duckdb
-import pandas as pd
+
+if TYPE_CHECKING:
+    import pandas as pd
+    import pyarrow.lib
 import pyarrow
-import pyarrow.lib
-import pyarrow.types
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
