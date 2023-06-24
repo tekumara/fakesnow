@@ -396,6 +396,9 @@ class FakeSnowflakeConnection:
     ) -> bool:
         return False
 
+    def commit(self) -> None:
+        self.cursor().execute("COMMIT")
+
     def cursor(self, cursor_class: Type[SnowflakeCursor] = SnowflakeCursor) -> FakeSnowflakeCursor:
         return FakeSnowflakeCursor(conn=self, duck_conn=self._duck_conn, use_dict_result=cursor_class == DictCursor)
 
@@ -413,6 +416,9 @@ class FakeSnowflakeConnection:
             if e
         ]
         return cursors if return_cursors else []
+
+    def rollback(self) -> None:
+        self.cursor().execute("ROLLBACK")
 
     def _insert_df(
         self, df: pd.DataFrame, table_name: str, database: str | None = None, schema: str | None = None

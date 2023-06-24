@@ -462,6 +462,23 @@ def test_timestamp_to_date(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(datetime.date(1970, 1, 1), datetime.date(1970, 1, 1))]
 
 
+def test_transactions(conn: snowflake.connector.SnowflakeConnection):
+    conn.execute_string(
+        """CREATE TABLE table1 (i int);
+            BEGIN TRANSACTION;
+            INSERT INTO table1 (i) VALUES (1);"""
+    )
+    conn.rollback()
+    conn.execute_string(
+        """BEGIN TRANSACTION;
+            INSERT INTO table1 (i) VALUES (2);"""
+    )
+    conn.commit()
+    with conn.cursor() as cur:
+        cur.execute("SELECT * FROM table1")
+        assert cur.fetchall() == [(2,)]
+
+
 def test_unquoted_identifiers_are_upper_cased(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("create table customers (id int, first_name varchar, last_name varchar)")
