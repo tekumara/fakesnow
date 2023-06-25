@@ -14,7 +14,6 @@ from fakesnow.transforms import (
     regex,
     semi_structured_types,
     set_schema,
-    set_timezone,
     tag,
     to_date,
     upper_case_unquoted_identifiers,
@@ -83,10 +82,6 @@ def test_object_construct() -> None:
         .sql(dialect="duckdb")
         == "SELECT TO_JSON({'a': 1, 'b': 'BBBB', 'c': NULL})"
     )
-
-
-def test_set_timezone() -> None:
-    assert sqlglot.parse_one("ALTER SESSION SET TIMEZONE='UTC'").transform(set_timezone).sql() == "SET TIMEZONE='UTC'"
 
 
 def test_parse_json() -> None:
