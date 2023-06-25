@@ -146,6 +146,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.to_date)
             .transform(transforms.object_construct)
             .transform(transforms.timestamp_ntz_ns)
+            .transform(transforms.float_to_double)
         )
 
         sql = transformed.sql(dialect="duckdb")
@@ -275,7 +276,7 @@ class FakeSnowflakeCursor:
                 return ResultMetadata(
                     name=column_name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True   # type: ignore # noqa: E501
                 )
-            elif column_type == "FLOAT":
+            elif column_type == "DOUBLE":
                 return ResultMetadata(
                     name=column_name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
                 )

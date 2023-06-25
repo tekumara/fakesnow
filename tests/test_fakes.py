@@ -341,6 +341,14 @@ def test_fetch_pandas_all(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert_frame_equal(cur.fetch_pandas_all(), expected_df, check_dtype=False)
 
 
+def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table example (f float, f4 float4, f8 float8, d double, r real)")
+    cur.execute("insert into example values (1.23, 1.23, 1.23, 1.23, 1.23)")
+    cur.execute("select * from example")
+    # 32 bit floats will return 1.2300000190734863 rather than 1.23
+    assert cur.fetchall() == [(1.23, 1.23, 1.23, 1.23, 1.23)]
+
+
 def test_get_result_batches(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
     cur.execute("insert into customers values (1, 'Jenny', 'P')")

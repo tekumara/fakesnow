@@ -6,6 +6,7 @@ from fakesnow.transforms import (
     create_database,
     drop_schema_cascade,
     extract_comment,
+    float_to_double,
     indices_to_array,
     indices_to_object,
     join_information_schema_ext,
@@ -53,6 +54,15 @@ def test_extract_comment() -> None:
     e = sqlglot.parse_one("COMMENT ON TABLE table1 IS 'comment1'").transform(extract_comment)
     assert e.sql() == "COMMENT ON TABLE table1 IS 'comment1'"
     assert e.args["table_comment"] == "comment1"
+
+
+def test_float_to_double() -> None:
+    assert (
+        sqlglot.parse_one("create table example (f float, f4 float4, f8 float8, d double, r real)")
+        .transform(float_to_double)
+        .sql()
+        == "CREATE TABLE example (f DOUBLE, f4 DOUBLE, f8 DOUBLE, d DOUBLE, r DOUBLE)"
+    )
 
 
 def test_indices_to_array() -> None:

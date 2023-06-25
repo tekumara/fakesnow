@@ -128,6 +128,21 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def float_to_double(expression: exp.Expression) -> exp.Expression:
+    """Convert float to double for 64 bit precision.
+
+    Snowflake floats are all 64 bit (ie: double)
+    see https://docs.snowflake.com/en/sql-reference/data-types-numeric#float-float4-float8
+    """
+
+    if isinstance(expression, exp.DataType) and expression.this == exp.DataType.Type.FLOAT:
+        new = expression.copy()
+        new.args["this"] = exp.DataType.Type.DOUBLE
+        return new
+
+    return expression
+
+
 def indices_to_array(expression: exp.Expression) -> exp.Expression:
     """Convert to 1-based list indices.
 
