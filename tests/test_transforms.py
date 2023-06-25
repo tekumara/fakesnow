@@ -15,6 +15,7 @@ from fakesnow.transforms import (
     semi_structured_types,
     set_schema,
     tag,
+    timestamp_ntz_ns,
     to_date,
     upper_case_unquoted_identifiers,
     values_columns,
@@ -119,6 +120,15 @@ def test_semi_structured_types() -> None:
 
 def test_tag() -> None:
     assert sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'", read="snowflake").transform(tag) == SUCCESS_NO_OP
+
+
+def test_timestamp_ntz_ns() -> None:
+    assert (
+        sqlglot.parse_one("CREATE TABLE table1(ts TIMESTAMP_NTZ(9))", read="snowflake")
+        .transform(timestamp_ntz_ns)
+        .sql(dialect="duckdb")
+        == "CREATE TABLE table1 (ts TIMESTAMP)"
+    )
 
 
 def test_to_date() -> None:

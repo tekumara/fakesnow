@@ -435,6 +435,25 @@ def to_date(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def timestamp_ntz_ns(expression: exp.Expression) -> exp.Expression:
+    """Convert timestamp_ntz(9) to timestamp_ntz.
+
+    To compensate for https://github.com/duckdb/duckdb/issues/7980
+    """
+
+    if (
+        isinstance(expression, exp.DataType)
+        and expression.this == exp.DataType.Type.TIMESTAMP
+        and exp.DataTypeSize(this=exp.Literal(this="9", is_string=False)) in expression.expressions
+    ):
+        new = expression.copy()
+        del new.args["expressions"]
+        return new
+
+    return expression
+
+
+# sqlglot.parse_one("create table example(date TIMESTAMP_NTZ(9));", read="snowflake")
 def semi_structured_types(expression: exp.Expression) -> exp.Expression:
     """Convert OBJECT, ARRAY, and VARIANT types to duckdb compatible types.
 

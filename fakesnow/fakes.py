@@ -145,6 +145,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.values_columns)
             .transform(transforms.to_date)
             .transform(transforms.object_construct)
+            .transform(transforms.timestamp_ntz_ns)
         )
 
         sql = transformed.sql(dialect="duckdb")
@@ -382,6 +383,9 @@ class FakeSnowflakeConnection:
         ):
             duck_conn.execute(f"SET schema='{self.database}.main'")
             self.database_set = True
+
+        # use UTC instead of local time zone for consistent testing
+        duck_conn.execute("SET TimeZone = 'UTC'")
 
         self._duck_conn = duck_conn
 

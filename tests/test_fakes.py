@@ -3,6 +3,7 @@ import json
 
 import pandas as pd
 import pytest
+import pytz
 import snowflake.connector
 import snowflake.connector.cursor
 import snowflake.connector.pandas_tools
@@ -460,6 +461,21 @@ def test_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
 def test_timestamp_to_date(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("SELECT to_date(to_timestamp(0)), to_date(cast(to_timestamp(0) as timestamp(9)))")
     assert cur.fetchall() == [(datetime.date(1970, 1, 1), datetime.date(1970, 1, 1))]
+
+
+def test_write_pandas_timestamp_ntz(conn: snowflake.connector.SnowflakeConnection):
+    # compensate for https://github.com/duckdb/duckdb/issues/7980
+    with conn.cursor() as cur:
+        cur.execute("create table example (UPDATE_AT_NTZ timestamp_ntz(9))")
+        # cur.execute("create table example (UPDATE_AT_NTZ timestamp)")
+
+        now_utc = datetime.datetime.now(pytz.utc)
+        df = pd.DataFrame([(now_utc,)], columns=["UPDATE_AT_NTZ"])
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE")
+
+        cur.execute("select * from example")
+
+        assert cur.fetchall() == [(now_utc.replace(tzinfo=None),)]
 
 
 def test_transactions(conn: snowflake.connector.SnowflakeConnection):
