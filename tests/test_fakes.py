@@ -321,12 +321,8 @@ def test_fetchone_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
         cur.execute("select id, first_name, last_name from customers")
 
-        assert cur.fetchone() == [
-            {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
-        ]
-        assert cur.fetchone() == [
-            {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
-        ]
+        assert cur.fetchone() == {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"}
+        assert cur.fetchone() == {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"}
         assert not cur.fetchone()
 
 

@@ -231,7 +231,7 @@ class FakeSnowflakeCursor:
         self._arrow_table_fetch_one_index += 1
 
         try:
-            return self._arrow_table.take([self._arrow_table_fetch_one_index]).to_pylist()
+            return self._arrow_table.take([self._arrow_table_fetch_one_index]).to_pylist()[0]
         except pyarrow.lib.ArrowIndexError:
             return None
 
