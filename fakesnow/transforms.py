@@ -373,6 +373,32 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
     return expression
 
 
+def set_timezone(expression: exp.Expression) -> exp.Expression:
+    """Set timezone
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("ALTER SESSION SET TIMEZONE='UTC').transform(set_timezone).sql()
+        "SET TIMEZONE='UTC'"
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+    if (
+        isinstance(expression, exp.Command)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "ALTER"
+        and isinstance(expression.expression, str)
+        and (set_index := expression.expression.upper().find("SET")) != -1
+        and "TIMEZONE" in expression.expression.upper()
+    ):
+        return exp.Command(this="SET", expression=exp.Literal.string(expression.expression[set_index + 3 :]))
+
+    return expression
+
+
 def tag(expression: exp.Expression) -> exp.Expression:
     """Handle tags. Transfer tags into upserts of the tag table.
 
