@@ -124,6 +124,19 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
         new = expression.copy()
         new.args["table_comment"] = cexp.this
         return new
+    elif (
+        isinstance(expression, exp.AlterTable)
+        and (sexp := expression.find(exp.Set))
+        and not sexp.args["tag"]
+        and (eq := sexp.find(exp.EQ))
+        and (id := eq.find(exp.Identifier))
+        and isinstance(id.this, str)
+        and id.this.upper() == "COMMENT"
+        and (lit := eq.find(exp.Literal))
+    ):
+        new = expression.copy()
+        new.args["table_comment"] = lit.this
+        return new
 
     return expression
 

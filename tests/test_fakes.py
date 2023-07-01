@@ -449,6 +449,8 @@ def test_table_comments(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert read_comment() == "pepperoni"
     cur.execute("COMMENT IF EXISTS ON TABLE schema1.ingredients IS 'mushrooms'")
     assert read_comment() == "mushrooms"
+    cur.execute("ALTER TABLE ingredients SET comment = 'pineapple'")
+    assert read_comment() == "pineapple"
 
 
 def test_tags_noop(cur: snowflake.connector.cursor.SnowflakeCursor):

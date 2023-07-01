@@ -55,6 +55,10 @@ def test_extract_comment() -> None:
     assert e.sql() == "COMMENT ON TABLE table1 IS 'comment1'"
     assert e.args["table_comment"] == "comment1"
 
+    e = sqlglot.parse_one("ALTER TABLE table1 SET COMMENT = 'comment1'", read="snowflake").transform(extract_comment)
+    assert e.sql() == "ALTER TABLE table1 SET COMMENT = 'comment1'"
+    assert e.args["table_comment"] == "comment1"
+
 
 def test_float_to_double() -> None:
     assert (

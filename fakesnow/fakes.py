@@ -151,7 +151,7 @@ class FakeSnowflakeCursor:
 
         sql = transformed.sql(dialect="duckdb")
 
-        if cmd != "COMMENT TABLE":
+        if cmd not in ("COMMENT TABLE", "ALTERTABLE"):
             try:
                 self._last_sql = sql
                 self._last_params = params
