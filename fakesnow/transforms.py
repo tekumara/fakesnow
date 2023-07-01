@@ -406,7 +406,7 @@ def tag(expression: exp.Expression) -> exp.Expression:
 
     if isinstance(expression, exp.AlterTable) and (actions := expression.args.get("actions")):
         for a in actions:
-            if isinstance(a, exp.SetTag):
+            if isinstance(a, exp.Set) and a.args["tag"]:
                 return SUCCESS_NO_OP
     elif (
         isinstance(expression, exp.Command)
