@@ -1,7 +1,8 @@
 import sqlglot
+from sqlglot import exp
 
 from fakesnow.transforms import (
-    SUCCESS_NO_OP,
+    SUCCESS_NOP,
     as_describe,
     create_database,
     drop_schema_cascade,
@@ -43,21 +44,23 @@ def test_drop_schema_cascade() -> None:
 
 
 def test_extract_comment() -> None:
+    table1 = exp.Table(this=exp.Identifier(this="table1", quoted=False))
+
     e = sqlglot.parse_one("create table table1(id int) comment = 'foo bar'").transform(extract_comment)
     assert e.sql() == "CREATE TABLE table1 (id INT)"
-    assert e.args["table_comment"] == "foo bar"
+    assert e.args["table_comment"] == (table1, "foo bar")
 
     e = sqlglot.parse_one("create table table1(id int) comment = foobar").transform(extract_comment)
     assert e.sql() == "CREATE TABLE table1 (id INT)"
-    assert e.args["table_comment"] == "foobar"
+    assert e.args["table_comment"] == (table1, "foobar")
 
     e = sqlglot.parse_one("COMMENT ON TABLE table1 IS 'comment1'").transform(extract_comment)
-    assert e.sql() == "COMMENT ON TABLE table1 IS 'comment1'"
-    assert e.args["table_comment"] == "comment1"
+    assert e.sql() == "SELECT 'Statement executed successfully.'"
+    assert e.args["table_comment"] == (table1, "comment1")
 
     e = sqlglot.parse_one("ALTER TABLE table1 SET COMMENT = 'comment1'", read="snowflake").transform(extract_comment)
-    assert e.sql() == "ALTER TABLE table1 SET COMMENT = 'comment1'"
-    assert e.args["table_comment"] == "comment1"
+    assert e.sql() == "SELECT 'Statement executed successfully.'"
+    assert e.args["table_comment"] == (table1, "comment1")
 
 
 def test_float_to_double() -> None:
@@ -133,7 +136,7 @@ def test_semi_structured_types() -> None:
 
 
 def test_tag() -> None:
-    assert sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'", read="snowflake").transform(tag) == SUCCESS_NO_OP
+    assert sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'", read="snowflake").transform(tag) == SUCCESS_NOP
 
 
 def test_timestamp_ntz_ns() -> None:

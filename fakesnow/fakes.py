@@ -151,18 +151,17 @@ class FakeSnowflakeCursor:
 
         sql = transformed.sql(dialect="duckdb")
 
-        if cmd not in ("COMMENT TABLE", "ALTERTABLE"):
-            try:
-                self._last_sql = sql
-                self._last_params = params
-                self._duck_conn.execute(sql, params)
-            except duckdb.BinderException as e:
-                msg = e.args[0]
-                raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from None
-            except duckdb.CatalogException as e:
-                # minimal processing to make it look like a snowflake exception, message content may differ
-                msg = cast(str, e.args[0]).split("\n")[0]
-                raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
+        try:
+            self._last_sql = sql
+            self._last_params = params
+            self._duck_conn.execute(sql, params)
+        except duckdb.BinderException as e:
+            msg = e.args[0]
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from None
+        except duckdb.CatalogException as e:
+            # minimal processing to make it look like a snowflake exception, message content may differ
+            msg = cast(str, e.args[0]).split("\n")[0]
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
 
         if cmd == "USE DATABASE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             self._conn.database = ident.this.upper()
@@ -178,14 +177,14 @@ class FakeSnowflakeCursor:
             self._duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=catalog))
 
         if table_comment := transformed.args.get("table_comment"):
-            # store table comment, if any
-            assert (table := transformed.find(exp.Table)), "Cannot find table"
+            # record table comment
+            table, comment = table_comment
             catalog = table.catalog or self._conn.database
             schema = table.db or self._conn.schema
             self._duck_conn.execute(
                 f"""
                 INSERT INTO information_schema.tables_ext
-                values ('{catalog}', '{schema}', '{table.name}', '{table_comment}')
+                values ('{catalog}', '{schema}', '{table.name}', '{comment}')
                 ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name)
                 DO UPDATE SET comment = excluded.comment
                 """

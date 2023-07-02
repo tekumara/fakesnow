@@ -6,7 +6,7 @@ import sqlglot
 from sqlglot import exp
 
 MISSING_DATABASE = "missing_database"
-SUCCESS_NO_OP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
+SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
 
 
 def as_describe(expression: exp.Expression) -> exp.Expression:
@@ -87,13 +87,8 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
     """Extract table comment, removing it from the Expression.
 
     duckdb doesn't support comments. So we remove them from the expression and store them in the table_comment arg.
+    We also replace the transform the expression to NOP if the statement can't be executed by duckdb.
 
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("CREATE TABLE table1 (id int) COMMENT = 'comment1'").transform(extract_comment).sql()
-        'CREATE TABLE table1 (id int)'
-        >>> sqlglot.parse_one("COMMENT ON TABLE table1 IS 'comment1'").transform(extract_comment).arg('table_comment')
-        'comment1'
     Args:
         expression (exp.Expression): the expression that will be transformed.
 
@@ -101,7 +96,7 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression, with any comment stored in the new 'table_comment' arg.
     """
 
-    if isinstance(expression, exp.Create):
+    if isinstance(expression, exp.Create) and (table := expression.find(exp.Table)):
         comment = None
         if props := cast(exp.Properties, expression.args.get("properties")):
             other_props = []
@@ -114,15 +109,16 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
             new = expression.copy()
             new_props: exp.Properties = new.args["properties"]
             new_props.args["expressions"] = other_props
-            new.args["table_comment"] = comment
+            new.args["table_comment"] = (table, comment)
             return new
     elif (
         isinstance(expression, exp.Comment)
         and (cexp := expression.args.get("expression"))
         and isinstance(cexp, exp.Literal)
+        and (table := expression.find(exp.Table))
     ):
-        new = expression.copy()
-        new.args["table_comment"] = cexp.this
+        new = SUCCESS_NOP.copy()
+        new.args["table_comment"] = (table, cexp.this)
         return new
     elif (
         isinstance(expression, exp.AlterTable)
@@ -133,9 +129,10 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
         and isinstance(id.this, str)
         and id.this.upper() == "COMMENT"
         and (lit := eq.find(exp.Literal))
+        and (table := expression.find(exp.Table))
     ):
-        new = expression.copy()
-        new.args["table_comment"] = lit.this
+        new = SUCCESS_NOP.copy()
+        new.args["table_comment"] = (table, lit.this)
         return new
 
     return expression
@@ -404,7 +401,7 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
 def tag(expression: exp.Expression) -> exp.Expression:
     """Handle tags. Transfer tags into upserts of the tag table.
 
-    duckdb doesn't support tags. In lieu of a full implementation, for now we make it the SUCCESS_NO_OP.
+    duckdb doesn't support tags. In lieu of a full implementation, for now we make it a NOP.
 
     Example:
         >>> import sqlglot
@@ -420,7 +417,7 @@ def tag(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, exp.AlterTable) and (actions := expression.args.get("actions")):
         for a in actions:
             if isinstance(a, exp.Set) and a.args["tag"]:
-                return SUCCESS_NO_OP
+                return SUCCESS_NOP
     elif (
         isinstance(expression, exp.Command)
         and (cexp := expression.args.get("expression"))
@@ -428,7 +425,7 @@ def tag(expression: exp.Expression) -> exp.Expression:
         and "SET TAG" in cexp.upper()
     ):
         # alter table modify column set tag
-        return SUCCESS_NO_OP
+        return SUCCESS_NOP
 
     return expression
 

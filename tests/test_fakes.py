@@ -10,6 +10,12 @@ import snowflake.connector.pandas_tools
 from pandas.testing import assert_frame_equal
 
 
+def test_alter_table(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table table1 (id int)")
+    cur.execute("alter table table1 add column name varchar(20)")
+    cur.execute("select name from table1")
+
+
 def test_binding_default_paramstyle(conn: snowflake.connector.SnowflakeConnection):
     assert conn._paramstyle == "pyformat"  # noqa: SLF001
     with conn.cursor() as cur:
