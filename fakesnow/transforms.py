@@ -218,6 +218,33 @@ def indices_to_object(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def integer_precision(expression: exp.Expression) -> exp.Expression:
+    """Snowflake integers are 38 digits.
+
+    See https://docs.snowflake.com/en/sql-reference/data-types-numeric
+    """
+
+    decimal_38_0 = exp.DataType(
+        this=exp.DataType.Type.DECIMAL,
+        expressions=[
+            exp.DataTypeSize(this=exp.Literal(this="38", is_string=False)),
+            exp.DataTypeSize(this=exp.Literal(this="0", is_string=False)),
+        ],
+        nested=False,
+        prefix=False,
+    )
+
+    if (
+        isinstance(expression, exp.DataType)
+        and (expression.this == exp.DataType.Type.DECIMAL and not expression.expressions)
+        or expression.this
+        in (exp.DataType.Type.BIGINT, exp.DataType.Type.INT, exp.DataType.Type.SMALLINT, exp.DataType.Type.TINYINT)
+    ):
+        return decimal_38_0
+
+    return expression
+
+
 def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
     """Join to information_schema_ext to access additional metadata columns (eg: comment).
 

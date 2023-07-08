@@ -385,6 +385,38 @@ def test_get_result_batches_dict(conn: snowflake.connector.SnowflakeConnection):
         assert sum(batch.rowcount for batch in batches) == 2
 
 
+def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/data-types-numeric
+    cur.execute(
+        """
+        create table example (
+            ENUMBER20 NUMBER(2,0), ENUMBER NUMBER, EDECIMAL DECIMAL, ENUMERIC NUMERIC,
+            EINT INT, EINTEGER INTEGER, EBIGINT BIGINT, ESMALLINT SMALLINT, ETINYINT TINYINT, EBYTEINT BYTEINT
+        )
+        """
+    )
+
+    cur.execute(
+        """
+        select column_name,numeric_precision,numeric_precision_radix,numeric_scale
+        from information_schema.columns where table_name = 'EXAMPLE' order by ordinal_position
+        """
+    )
+
+    assert cur.fetchall() == [
+        ("ENUMBER20", 2, 10, 0),
+        ("ENUMBER", 38, 10, 0),
+        ("EDECIMAL", 38, 10, 0),
+        ("ENUMERIC", 38, 10, 0),
+        ("EINT", 38, 10, 0),
+        ("EINTEGER", 38, 10, 0),
+        ("EBIGINT", 38, 10, 0),
+        ("ESMALLINT", 38, 10, 0),
+        ("ETINYINT", 38, 10, 0),
+        ("EBYTEINT", 38, 10, 0),
+    ]
+
+
 def test_non_existent_table_throws_snowflake_exception(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
         cur.execute("select * from this_table_does_not_exist")

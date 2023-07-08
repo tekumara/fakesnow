@@ -147,6 +147,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.object_construct)
             .transform(transforms.timestamp_ntz_ns)
             .transform(transforms.float_to_double)
+            .transform(transforms.integer_precision)
         )
 
         sql = transformed.sql(dialect="duckdb")

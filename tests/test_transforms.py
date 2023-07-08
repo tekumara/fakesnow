@@ -10,6 +10,7 @@ from fakesnow.transforms import (
     float_to_double,
     indices_to_array,
     indices_to_object,
+    integer_precision,
     join_information_schema_ext,
     object_construct,
     parse_json,
@@ -90,6 +91,23 @@ def test_information_schema_ext() -> None:
     assert (
         sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(join_information_schema_ext).sql()
         == "SELECT * FROM INFORMATION_SCHEMA.TABLES LEFT JOIN information_schema.tables_ext ON tables.table_catalog = tables_ext.ext_table_catalog AND tables.table_schema = tables_ext.ext_table_schema AND tables.table_name = tables_ext.ext_table_name"  # noqa: e501
+    )
+
+
+def test_integer_precision() -> None:
+    assert (
+        sqlglot.parse_one(
+            """
+                create table example (
+                    ENUMBER NUMBER, ENUMBER20 NUMBER(2,0), EDECIMAL DECIMAL, ENUMERIC NUMERIC,
+                    EINT INT, EINTEGER INTEGER, EBIGINT BIGINT, ESMALLINT SMALLINT, ETINYINT TINYINT, EBYTEINT BYTEINT
+                )
+            """,
+            read="snowflake",
+        )
+        .transform(integer_precision)
+        .sql(dialect="duckdb")
+        == "CREATE TABLE example (ENUMBER DECIMAL(38, 0), ENUMBER20 DECIMAL(2, 0), EDECIMAL DECIMAL(38, 0), ENUMERIC DECIMAL(38, 0), EINT DECIMAL(38, 0), EINTEGER DECIMAL(38, 0), EBIGINT DECIMAL(38, 0), ESMALLINT DECIMAL(38, 0), ETINYINT DECIMAL(38, 0), EBYTEINT DECIMAL(38, 0))"  # noqa: E501
     )
 
 
