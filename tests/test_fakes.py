@@ -344,7 +344,8 @@ def test_fetch_pandas_all(cur: snowflake.connector.cursor.SnowflakeCursor):
             {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
         ]
     )
-    assert_frame_equal(cur.fetch_pandas_all(), expected_df, check_dtype=False)
+    # integers have dtype int64
+    assert_frame_equal(cur.fetch_pandas_all(), expected_df)
 
 
 def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -390,7 +391,7 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     cur.execute(
         """
         create table example (
-            XNUMBER20 NUMBER(2,0), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
+            XNUMBER82 NUMBER(8,2), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
             XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT
         )
         """
@@ -404,7 +405,7 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     )
 
     assert cur.fetchall() == [
-        ("XNUMBER20", 2, 10, 0),
+        ("XNUMBER82", 8, 10, 2),
         ("XNUMBER", 38, 10, 0),
         ("XDECIMAL", 38, 10, 0),
         ("XNUMERIC", 38, 10, 0),

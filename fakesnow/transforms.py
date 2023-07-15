@@ -148,7 +148,7 @@ def extract_text_length(expression: exp.Expression) -> exp.Expression:
         expression (exp.Expression): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The original expression, with any comment stored in the new 'table_comment' arg.
+        exp.Expression: The original expression, with any text lengths stored in the new 'text_lengths' arg.
     """
 
     if isinstance(expression, (exp.Create, exp.AlterTable)):
@@ -295,28 +295,21 @@ def information_schema_tables_ext(expression: exp.Expression) -> exp.Expression:
 
 
 def integer_precision(expression: exp.Expression) -> exp.Expression:
-    """Snowflake integers are 38 digits.
+    """Convert integers to bigint.
 
-    See https://docs.snowflake.com/en/sql-reference/data-types-numeric
+    So dataframes will return them with a dtype of int64.
     """
-
-    decimal_38_0 = exp.DataType(
-        this=exp.DataType.Type.DECIMAL,
-        expressions=[
-            exp.DataTypeSize(this=exp.Literal(this="38", is_string=False)),
-            exp.DataTypeSize(this=exp.Literal(this="0", is_string=False)),
-        ],
-        nested=False,
-        prefix=False,
-    )
 
     if (
         isinstance(expression, exp.DataType)
         and (expression.this == exp.DataType.Type.DECIMAL and not expression.expressions)
-        or expression.this
-        in (exp.DataType.Type.BIGINT, exp.DataType.Type.INT, exp.DataType.Type.SMALLINT, exp.DataType.Type.TINYINT)
+        or expression.this in (exp.DataType.Type.INT, exp.DataType.Type.SMALLINT, exp.DataType.Type.TINYINT)
     ):
-        return decimal_38_0
+        return exp.DataType(
+            this=exp.DataType.Type.BIGINT,
+            nested=False,
+            prefix=False,
+        )
 
     return expression
 

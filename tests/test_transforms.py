@@ -67,7 +67,7 @@ def test_extract_comment() -> None:
 
 
 def test_extract_text_length() -> None:
-    sql = "CREATE TABLE table1 (t1 VARCHAR, t2 VARCHAR(10), t3 TEXT(20), d1 DECIMAL(38, 0))"
+    sql = "CREATE TABLE table1 (t1 VARCHAR, t2 VARCHAR(10), t3 TEXT(20), i1 BIGINT)"
     e = sqlglot.parse_one(sql).transform(extract_text_length)
     assert e.sql() == sql
     assert e.args["text_lengths"] == [("t1", 16777216), ("t2", 10), ("t3", 20)]
@@ -101,15 +101,15 @@ def test_integer_precision() -> None:
         sqlglot.parse_one(
             """
                 create table example (
-                    ENUMBER NUMBER, ENUMBER20 NUMBER(2,0), EDECIMAL DECIMAL, ENUMERIC NUMERIC,
-                    EINT INT, EINTEGER INTEGER, EBIGINT BIGINT, ESMALLINT SMALLINT, ETINYINT TINYINT, EBYTEINT BYTEINT
+                    XNUMBER82 NUMBER(8, 2), XNUMBER NUMBER,  XDECIMAL DECIMAL, XNUMERIC NUMERIC,
+                    XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT
                 )
             """,
             read="snowflake",
         )
         .transform(integer_precision)
         .sql(dialect="duckdb")
-        == "CREATE TABLE example (ENUMBER DECIMAL(38, 0), ENUMBER20 DECIMAL(2, 0), EDECIMAL DECIMAL(38, 0), ENUMERIC DECIMAL(38, 0), EINT DECIMAL(38, 0), EINTEGER DECIMAL(38, 0), EBIGINT DECIMAL(38, 0), ESMALLINT DECIMAL(38, 0), ETINYINT DECIMAL(38, 0), EBYTEINT DECIMAL(38, 0))"  # noqa: E501
+        == "CREATE TABLE example (XNUMBER82 DECIMAL(8, 2), XNUMBER BIGINT, XDECIMAL BIGINT, XNUMERIC BIGINT, XINT BIGINT, XINTEGER BIGINT, XBIGINT BIGINT, XSMALLINT BIGINT, XTINYINT BIGINT, XBYTEINT BIGINT)"  # noqa: E501
     )
 
 

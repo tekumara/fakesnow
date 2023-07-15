@@ -50,14 +50,17 @@ create table ${catalog}.information_schema.columns_ext (
 )
 """
 )
-# only include fields applicable to snowflake (as mentioned by describe table information_schema.columns)
 
+# only include fields applicable to snowflake (as mentioned by describe table information_schema.columns)
+# snowflake integers are 38 digits, base 10, See https://docs.snowflake.com/en/sql-reference/data-types-numeric
 SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW = Template(
     """
 create view ${catalog}.information_schema.columns_snowflake AS
 select table_catalog, table_schema, table_name, column_name, ordinal_position, column_default, is_nullable, data_type,
 ext_character_maximum_length as character_maximum_length, ext_character_octet_length as character_octet_length,
-numeric_precision, numeric_precision_radix, numeric_scale,
+case when data_type='BIGINT' then 38 else numeric_precision end as numeric_precision,
+case when data_type='BIGINT' then 10 else numeric_precision_radix end as numeric_precision_radix,
+numeric_scale,
 collation_name, is_identity, identity_generation, identity_cycle
 from ${catalog}.information_schema.columns
 left join ${catalog}.information_schema.columns_ext ext
@@ -304,7 +307,7 @@ class FakeSnowflakeCursor:
             # see https://docs.snowflake.com/en/user-guide/python-connector-api.html#type-codes
             # and https://arrow.apache.org/docs/python/api/datatypes.html#type-checking
             # type ignore because of https://github.com/snowflakedb/snowflake-connector-python/issues/1423
-            if column_type == "INTEGER":
+            if column_type == "BIGINT":
                 return ResultMetadata(
                     name=column_name, type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True                    # type: ignore # noqa: E501
                 )
@@ -335,7 +338,7 @@ class FakeSnowflakeCursor:
                 return ResultMetadata(
                     name=column_name, type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
                 )
-            elif column_type in ["TIMESTAMP", "TIMESTAMP_NS"]:
+            elif column_type in {"TIMESTAMP", "TIMESTAMP_NS"}:
                 return ResultMetadata(
                     name=column_name, type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True             # type: ignore # noqa: E501
                 )
