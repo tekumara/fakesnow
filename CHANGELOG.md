@@ -1,5 +1,28 @@
 # Changelog
 
+## [0.3.0](https://github.com/tekumara/fakesnow/compare/v0.2.0...v0.3.0) (2023-07-15)
+
+
+### Features
+
+* info schema columns returns lengths for text types ([edb91e5](https://github.com/tekumara/fakesnow/commit/edb91e56adc8026b405c12582cfce2ccfe5fc10d)), closes [#11](https://github.com/tekumara/fakesnow/issues/11)
+* support ALTER TABLE .. SET COMMENT ([6470bae](https://github.com/tekumara/fakesnow/commit/6470baeafc492a451696fc828242ed4d6e88f667))
+* support setting the timezone ([228e884](https://github.com/tekumara/fakesnow/commit/228e884cd0d9ef864a1bbd6080bf762a4f9ca85c))
+* support timestamp_ntz(9) as a table column ([ef28927](https://github.com/tekumara/fakesnow/commit/ef2892746e958d2cd7320d55d75e1c14b927d2f8))
+* treat float as 64 bit ([cce50ba](https://github.com/tekumara/fakesnow/commit/cce50bac0ad818fe76db4dbe56422fe1d8e9eea0))
+
+
+### Bug Fixes
+
+* alter table .. add column ([612e1aa](https://github.com/tekumara/fakesnow/commit/612e1aa41668d7afdbe4e0961de4fbcc853a52d1))
+* fetchone() when using DictCursor ([e1e50f7](https://github.com/tekumara/fakesnow/commit/e1e50f701a2d17d042ee5207d8d71bff8df5a5fe))
+* match snowflake's integer precision ([49afda2](https://github.com/tekumara/fakesnow/commit/49afda20f93fd8f2f581225060eb1e53b528c9c8)), closes [#12](https://github.com/tekumara/fakesnow/issues/12)
+
+
+### Chores
+
+* bump sqlglot 16.8.1 ([8f30d1a](https://github.com/tekumara/fakesnow/commit/8f30d1a5e4c8d1e37b86e2a73c718cb9e11a4adb))
+
 ## [0.2.0](https://github.com/tekumara/fakesnow/compare/v0.1.0...v0.2.0) (2023-06-24)
 
 
