@@ -7,11 +7,13 @@ from fakesnow.transforms import (
     create_database,
     drop_schema_cascade,
     extract_comment,
+    extract_text_length,
     float_to_double,
     indices_to_array,
     indices_to_object,
+    information_schema_columns_snowflake,
+    information_schema_tables_ext,
     integer_precision,
-    join_information_schema_ext,
     object_construct,
     parse_json,
     regex,
@@ -35,7 +37,7 @@ def test_as_describe() -> None:
 def test_create_database() -> None:
     e = sqlglot.parse_one("create database foobar").transform(create_database)
     assert e.sql() == "ATTACH DATABASE ':memory:' AS foobar"
-    assert e.args["db_name"] == "foobar"
+    assert e.args["create_db_name"] == "foobar"
 
 
 def test_drop_schema_cascade() -> None:
@@ -64,6 +66,13 @@ def test_extract_comment() -> None:
     assert e.args["table_comment"] == (table1, "comment1")
 
 
+def test_extract_text_length() -> None:
+    sql = "CREATE TABLE table1 (t1 VARCHAR, t2 VARCHAR(10), t3 TEXT(20), d1 DECIMAL(38, 0))"
+    e = sqlglot.parse_one(sql).transform(extract_text_length)
+    assert e.sql() == sql
+    assert e.args["text_lengths"] == [("t1", 16777216), ("t2", 10), ("t3", 20)]
+
+
 def test_float_to_double() -> None:
     assert (
         sqlglot.parse_one("create table example (f float, f4 float4, f8 float8, d double, r real)")
@@ -87,13 +96,6 @@ def test_indices_to_object() -> None:
     )
 
 
-def test_information_schema_ext() -> None:
-    assert (
-        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(join_information_schema_ext).sql()
-        == "SELECT * FROM INFORMATION_SCHEMA.TABLES LEFT JOIN information_schema.tables_ext ON tables.table_catalog = tables_ext.ext_table_catalog AND tables.table_schema = tables_ext.ext_table_schema AND tables.table_name = tables_ext.ext_table_name"  # noqa: e501
-    )
-
-
 def test_integer_precision() -> None:
     assert (
         sqlglot.parse_one(
@@ -108,6 +110,22 @@ def test_integer_precision() -> None:
         .transform(integer_precision)
         .sql(dialect="duckdb")
         == "CREATE TABLE example (ENUMBER DECIMAL(38, 0), ENUMBER20 DECIMAL(2, 0), EDECIMAL DECIMAL(38, 0), ENUMERIC DECIMAL(38, 0), EINT DECIMAL(38, 0), EINTEGER DECIMAL(38, 0), EBIGINT DECIMAL(38, 0), ESMALLINT DECIMAL(38, 0), ETINYINT DECIMAL(38, 0), EBYTEINT DECIMAL(38, 0))"  # noqa: E501
+    )
+
+
+def test_information_schema_columns_snowflake() -> None:
+    assert (
+        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.COLUMNS")
+        .transform(information_schema_columns_snowflake)
+        .sql()
+        == "SELECT * FROM INFORMATION_SCHEMA.COLUMNS_SNOWFLAKE"
+    )
+
+
+def test_information_schema_tables_ext() -> None:
+    assert (
+        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(information_schema_tables_ext).sql()
+        == "SELECT * FROM INFORMATION_SCHEMA.TABLES LEFT JOIN information_schema.tables_ext ON tables.table_catalog = tables_ext.ext_table_catalog AND tables.table_schema = tables_ext.ext_table_schema AND tables.table_name = tables_ext.ext_table_name"  # noqa: e501
     )
 
 

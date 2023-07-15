@@ -390,8 +390,8 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     cur.execute(
         """
         create table example (
-            ENUMBER20 NUMBER(2,0), ENUMBER NUMBER, EDECIMAL DECIMAL, ENUMERIC NUMERIC,
-            EINT INT, EINTEGER INTEGER, EBIGINT BIGINT, ESMALLINT SMALLINT, ETINYINT TINYINT, EBYTEINT BYTEINT
+            XNUMBER20 NUMBER(2,0), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
+            XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT
         )
         """
     )
@@ -404,16 +404,40 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     )
 
     assert cur.fetchall() == [
-        ("ENUMBER20", 2, 10, 0),
-        ("ENUMBER", 38, 10, 0),
-        ("EDECIMAL", 38, 10, 0),
-        ("ENUMERIC", 38, 10, 0),
-        ("EINT", 38, 10, 0),
-        ("EINTEGER", 38, 10, 0),
-        ("EBIGINT", 38, 10, 0),
-        ("ESMALLINT", 38, 10, 0),
-        ("ETINYINT", 38, 10, 0),
-        ("EBYTEINT", 38, 10, 0),
+        ("XNUMBER20", 2, 10, 0),
+        ("XNUMBER", 38, 10, 0),
+        ("XDECIMAL", 38, 10, 0),
+        ("XNUMERIC", 38, 10, 0),
+        ("XINT", 38, 10, 0),
+        ("XINTEGER", 38, 10, 0),
+        ("XBIGINT", 38, 10, 0),
+        ("XSMALLINT", 38, 10, 0),
+        ("XTINYINT", 38, 10, 0),
+        ("XBYTEINT", 38, 10, 0),
+    ]
+
+
+def test_information_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/data-types-text
+    cur.execute(
+        """
+        create table example (
+            XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT
+        )
+        """
+    )
+
+    cur.execute(
+        """
+        select column_name,character_maximum_length,character_octet_length
+        from information_schema.columns where table_name = 'EXAMPLE' order by ordinal_position
+        """
+    )
+
+    assert cur.fetchall() == [
+        ("XVARCHAR20", 20, 80),
+        ("XVARCHAR", 16777216, 16777216),
+        ("XTEXT", 16777216, 16777216),
     ]
 
 

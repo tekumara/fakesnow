@@ -37,6 +37,34 @@ create table ${catalog}.information_schema.tables_ext (
 )
 """
 )
+SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_EXT = Template(
+    """
+create table ${catalog}.information_schema.columns_ext (
+    ext_table_catalog varchar,
+    ext_table_schema varchar,
+    ext_table_name varchar,
+    ext_column_name varchar,
+    ext_character_maximum_length integer,
+    ext_character_octet_length integer,
+    PRIMARY KEY(ext_table_catalog, ext_table_schema, ext_table_name, ext_column_name)
+)
+"""
+)
+# only include fields applicable to snowflake (as mentioned by describe table information_schema.columns)
+
+SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW = Template(
+    """
+create view ${catalog}.information_schema.columns_snowflake AS
+select table_catalog, table_schema, table_name, column_name, ordinal_position, column_default, is_nullable, data_type,
+ext_character_maximum_length as character_maximum_length, ext_character_octet_length as character_octet_length,
+numeric_precision, numeric_precision_radix, numeric_scale,
+collation_name, is_identity, identity_generation, identity_cycle
+from ${catalog}.information_schema.columns
+left join ${catalog}.information_schema.columns_ext ext
+on ext_table_catalog = table_catalog AND ext_table_schema = table_schema
+AND ext_table_name = table_name AND ext_column_name = column_name
+"""
+)
 
 
 class FakeSnowflakeCursor:
@@ -134,7 +162,8 @@ class FakeSnowflakeCursor:
             .transform(transforms.set_schema, current_database=self._conn.database)
             .transform(transforms.create_database)
             .transform(transforms.extract_comment)
-            .transform(transforms.join_information_schema_ext)
+            .transform(transforms.information_schema_columns_snowflake)
+            .transform(transforms.information_schema_tables_ext)
             .transform(transforms.drop_schema_cascade)
             .transform(transforms.tag)
             .transform(transforms.regex)
@@ -148,8 +177,8 @@ class FakeSnowflakeCursor:
             .transform(transforms.timestamp_ntz_ns)
             .transform(transforms.float_to_double)
             .transform(transforms.integer_precision)
+            .transform(transforms.extract_text_length)
         )
-
         sql = transformed.sql(dialect="duckdb")
 
         try:
@@ -172,10 +201,9 @@ class FakeSnowflakeCursor:
             self._conn.schema = ident.this.upper()
             self._conn.schema_set = True
 
-        if cmd == "CREATE DATABASE":
-            # make sure every database has the info schema extension table
-            catalog = transformed.args["db_name"] or self._conn.database
-            self._duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=catalog))
+        if create_db_name := transformed.args.get("create_db_name"):
+            # we created a new database, so create the info schema extensions
+            self._conn._create_info_schema_ext(create_db_name)  # noqa: SLF001
 
         if table_comment := transformed.args.get("table_comment"):
             # record table comment
@@ -184,10 +212,29 @@ class FakeSnowflakeCursor:
             schema = table.db or self._conn.schema
             self._duck_conn.execute(
                 f"""
-                INSERT INTO information_schema.tables_ext
+                INSERT INTO {catalog}.information_schema.tables_ext
                 values ('{catalog}', '{schema}', '{table.name}', '{comment}')
                 ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name)
                 DO UPDATE SET comment = excluded.comment
+                """
+            )
+
+        if (text_lengths := transformed.args.get("text_lengths")) and (table := transformed.find(exp.Table)):
+            # record text lengths
+            catalog = table.catalog or self._conn.database
+            schema = table.db or self._conn.schema
+            values = ", ".join(
+                f"('{catalog}', '{schema}', '{table.name}', '{col_name}', {size}, {min(size*4,16777216)})"
+                for (col_name, size) in text_lengths
+            )
+
+            self._duck_conn.execute(
+                f"""
+                INSERT INTO {catalog}.information_schema.columns_ext
+                values {values}
+                ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name, ext_column_name)
+                DO UPDATE SET ext_character_maximum_length = excluded.ext_character_maximum_length,
+                                ext_character_octet_length = excluded.ext_character_octet_length
                 """
             )
 
@@ -331,6 +378,7 @@ class FakeSnowflakeConnection:
         *args: Any,
         **kwargs: Any,
     ):
+        self._duck_conn = duck_conn
         # upper case database and schema like snowflake
         self.database = database and database.upper()
         self.schema = schema and schema.upper()
@@ -348,7 +396,7 @@ class FakeSnowflakeConnection:
             ).fetchone()
         ):
             duck_conn.execute(f"ATTACH DATABASE ':memory:' AS {self.database}")
-            duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=self.database))
+            self._create_info_schema_ext(self.database)
 
         # create schema if needed
         if (
@@ -387,8 +435,6 @@ class FakeSnowflakeConnection:
 
         # use UTC instead of local time zone for consistent testing
         duck_conn.execute("SET TimeZone = 'UTC'")
-
-        self._duck_conn = duck_conn
 
     def __enter__(self) -> Self:
         return self
@@ -435,6 +481,12 @@ class FakeSnowflakeConnection:
 
         self._duck_conn.execute(f"INSERT INTO {table_name}({','.join(df.columns.to_list())}) SELECT {cols} FROM df")
         return self._duck_conn.fetchall()[0][0]
+
+    def _create_info_schema_ext(self, catalog: str) -> None:
+        """Create the info schema extension tables/views used for storing snowflake metadata not captured by duckdb."""
+        self._duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=catalog))
+        self._duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_EXT.substitute(catalog=catalog))
+        self._duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW.substitute(catalog=catalog))
 
 
 class FakeResultBatch(ResultBatch):

@@ -38,7 +38,7 @@ def create_database(expression: exp.Expression) -> exp.Expression:
         expression (exp.Expression): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression, with the database name stored in the db_name arg.
+        exp.Expression: The transformed expression, with the database name stored in the create_db_name arg.
     """
 
     if isinstance(expression, exp.Create) and str(expression.args.get("kind")).upper() == "DATABASE":
@@ -47,7 +47,7 @@ def create_database(expression: exp.Expression) -> exp.Expression:
         return exp.Command(
             this="ATTACH",
             expression=exp.Literal(this=f"DATABASE ':memory:' AS {db_name}", is_string=True),
-            db_name=db_name,
+            create_db_name=db_name,
         )
 
     return expression
@@ -108,7 +108,7 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
 
             new = expression.copy()
             new_props: exp.Properties = new.args["properties"]
-            new_props.args["expressions"] = other_props
+            new_props.set("expressions", other_props)
             new.args["table_comment"] = (table, comment)
             return new
     elif (
@@ -138,6 +138,40 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def extract_text_length(expression: exp.Expression) -> exp.Expression:
+    """Extract length of text columns.
+
+    duckdb doesn't have fixed-sized text types. So we capture the size of text types and store that in the
+    character_maximum_length arg.
+
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The original expression, with any comment stored in the new 'table_comment' arg.
+    """
+
+    if isinstance(expression, (exp.Create, exp.AlterTable)):
+        text_lengths = []
+        for dt in expression.find_all(exp.DataType):
+            if dt.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT):
+                col_name = dt.parent and dt.parent.this and dt.parent.this.this
+                if dt_size := dt.find(exp.DataTypeSize):
+                    size = (
+                        isinstance(dt_size.this, exp.Literal)
+                        and isinstance(dt_size.this.this, str)
+                        and int(dt_size.this.this)
+                    )
+                else:
+                    size = 16777216
+                text_lengths.append((col_name, size))
+
+        if text_lengths:
+            expression.args["text_lengths"] = text_lengths
+
+    return expression
+
+
 def float_to_double(expression: exp.Expression) -> exp.Expression:
     """Convert float to double for 64 bit precision.
 
@@ -146,6 +180,7 @@ def float_to_double(expression: exp.Expression) -> exp.Expression:
     """
 
     if isinstance(expression, exp.DataType) and expression.this == exp.DataType.Type.FLOAT:
+        # TODO don't copy!
         new = expression.copy()
         new.args["this"] = exp.DataType.Type.DOUBLE
         return new
@@ -218,6 +253,47 @@ def indices_to_object(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def information_schema_columns_snowflake(expression: exp.Expression) -> exp.Expression:
+    """Redirect to the information_schema.columns_snowflake view which has metadata that matches snowflake.
+
+    Because duckdb doesn't store character_maximum_length or character_octet_length.
+    """
+
+    if (
+        isinstance(expression, exp.Select)
+        and (tbl_exp := expression.find(exp.Table))
+        and tbl_exp.name.upper() == "COLUMNS"
+        and tbl_exp.db.upper() == "INFORMATION_SCHEMA"
+    ):
+        tbl_exp.set("this", exp.Identifier(this="COLUMNS_SNOWFLAKE", quoted=False))
+
+    return expression
+
+
+def information_schema_tables_ext(expression: exp.Expression) -> exp.Expression:
+    """Join to information_schema.tables_ext to access additional metadata columns (eg: comment)."""
+
+    if (
+        isinstance(expression, exp.Select)
+        and (tbl_exp := expression.find(exp.Table))
+        and tbl_exp.name.upper() == "TABLES"
+        and tbl_exp.db.upper() == "INFORMATION_SCHEMA"
+    ):
+        return expression.join(
+            "information_schema.tables_ext",
+            on=(
+                """
+                tables.table_catalog = tables_ext.ext_table_catalog AND
+                tables.table_schema = tables_ext.ext_table_schema AND
+                tables.table_name = tables_ext.ext_table_name
+                """
+            ),
+            join_type="left",
+        )
+
+    return expression
+
+
 def integer_precision(expression: exp.Expression) -> exp.Expression:
     """Snowflake integers are 38 digits.
 
@@ -241,43 +317,6 @@ def integer_precision(expression: exp.Expression) -> exp.Expression:
         in (exp.DataType.Type.BIGINT, exp.DataType.Type.INT, exp.DataType.Type.SMALLINT, exp.DataType.Type.TINYINT)
     ):
         return decimal_38_0
-
-    return expression
-
-
-def join_information_schema_ext(expression: exp.Expression) -> exp.Expression:
-    """Join to information_schema_ext to access additional metadata columns (eg: comment).
-
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(join_information_schema_ext).sql()
-        'SELECT * FROM INFORMATION_SCHEMA.TABLES
-         LEFT JOIN information_schema.tables_ext ON tables.table_catalog = tables_ext.ext_table_catalog AND
-         tables.table_schema = tables_ext.ext_table_schema AND tables.table_name = tables_ext.ext_table_name'
-    Args:
-        expression (exp.Expression): the expression that will be transformed.
-
-    Returns:
-        exp.Expression: The transformed expression.
-    """
-
-    if (
-        isinstance(expression, exp.Select)
-        and (tbl_exp := expression.find(exp.Table))
-        and tbl_exp.name.upper() == "TABLES"
-        and tbl_exp.db.upper() == "INFORMATION_SCHEMA"
-    ):
-        return expression.join(
-            "information_schema.tables_ext",
-            on=(
-                """
-                tables.table_catalog = tables_ext.ext_table_catalog AND
-                tables.table_schema = tables_ext.ext_table_schema AND
-                tables.table_name = tables_ext.ext_table_name
-                """
-            ),
-            join_type="left",
-        )
 
     return expression
 
@@ -369,7 +408,7 @@ def regex(expression: exp.Expression) -> exp.Expression:
         # snowflake regex replacements are global
         new_args.append(exp.Literal(this="g", is_string=True))
 
-        new.args["expressions"] = new_args
+        new.set("expressions", new_args)
 
         return new
 
@@ -527,7 +566,7 @@ def semi_structured_types(expression: exp.Expression) -> exp.Expression:
             return new
         elif expression.this == exp.DataType.Type.ARRAY:
             new = expression.copy()
-            new.args["expressions"] = [exp.DataType(this=exp.DataType.Type.JSON)]
+            new.set("expressions", [exp.DataType(this=exp.DataType.Type.JSON)])
             return new
 
     return expression
@@ -552,7 +591,7 @@ def upper_case_unquoted_identifiers(expression: exp.Expression) -> exp.Expressio
 
     if isinstance(expression, exp.Identifier) and not expression.quoted and isinstance(expression.this, str):
         new = expression.copy()
-        new.args["this"] = expression.this.upper()
+        new.set("this", expression.this.upper())
         return new
 
     return expression
@@ -584,7 +623,7 @@ def values_columns(expression: exp.Expression) -> exp.Expression:
         new = expression.copy()
         num_columns = len(values.expressions)
         columns = [exp.Identifier(this=f"column{i + 1}", quoted=True) for i in range(num_columns)]
-        new.args["alias"] = exp.TableAlias(this=exp.Identifier(this="_", quoted=False), columns=columns)
+        new.set("alias", exp.TableAlias(this=exp.Identifier(this="_", quoted=False), columns=columns))
         return new
 
     return expression
