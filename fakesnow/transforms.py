@@ -188,22 +188,12 @@ def float_to_double(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def indices_to_array(expression: exp.Expression) -> exp.Expression:
-    """Convert to 1-based list indices.
+def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
+    """Convert array access to json extractions.
 
-    Snowflake uses 0-based array indexing, whereas duckdb using 1-based list indexing.
+    Because we treat Snowflake arrays as JSON[] in duckdb, convert array indices to JSON_EXTRACT.
 
     See https://docs.snowflake.com/en/sql-reference/data-types-semistructured#accessing-elements-of-an-array-by-index-or-by-slice
-
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(indices_to_array).sql()
-        'SELECT myarray[1] FROM table1'
-    Args:
-        expression (exp.Expression): the expression that will be transformed.
-
-    Returns:
-        exp.Expression: The transformed expression.
     """
     if (
         isinstance(expression, exp.Bracket)
@@ -213,9 +203,8 @@ def indices_to_array(expression: exp.Expression) -> exp.Expression:
         and index.this
         and not index.is_string
     ):
-        new = expression.copy()
-        new.expressions[0] = exp.Literal(this=str(int(index.this) + 1), is_string=False)
-        return new
+        return exp.JSONExtract(this=expression.this, expression=exp.Literal(this=f"$[{index.this}]", is_string=True))
+
     return expression
 
 

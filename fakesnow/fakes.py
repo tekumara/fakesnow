@@ -172,7 +172,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.regex)
             .transform(transforms.semi_structured_types)
             .transform(transforms.parse_json)
-            .transform(transforms.indices_to_array)
+            .transform(transforms.indices_to_json_extract)
             .transform(transforms.indices_to_object)
             .transform(transforms.values_columns)
             .transform(transforms.to_date)
@@ -187,6 +187,7 @@ class FakeSnowflakeCursor:
         try:
             self._last_sql = sql
             self._last_params = params
+            # print(f"{sql};")
             self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]

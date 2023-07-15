@@ -9,7 +9,7 @@ from fakesnow.transforms import (
     extract_comment,
     extract_text_length,
     float_to_double,
-    indices_to_array,
+    indices_to_json_extract,
     indices_to_object,
     information_schema_columns_snowflake,
     information_schema_tables_ext,
@@ -84,8 +84,8 @@ def test_float_to_double() -> None:
 
 def test_indices_to_array() -> None:
     assert (
-        sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(indices_to_array).sql()
-        == "SELECT myarray[1] FROM table1"
+        sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(indices_to_json_extract).sql()
+        == "SELECT JSON_EXTRACT(myarray, '$[0]') FROM table1"
     )
 
 
