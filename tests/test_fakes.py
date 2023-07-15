@@ -612,15 +612,17 @@ def test_values(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("SELECT * FROM VALUES ('Amsterdam', 1), ('London', 2)")
 
         assert cur.fetchall() == [
-            {"column1": "Amsterdam", "column2": 1},
-            {"column1": "London", "column2": 2},
+            {"COLUMN1": "Amsterdam", "COLUMN2": 1},
+            {"COLUMN1": "London", "COLUMN2": 2},
         ]
 
-        cur.execute("SELECT column2, column1 FROM VALUES ('Amsterdam', 1), ('London', 2)")
+        cur.execute(
+            "SELECT column2, column1, parse_json(column3) as pj FROM VALUES ('Amsterdam', 1, '[]'), ('London', 2, '{}')"
+        )
 
         assert cur.fetchall() == [
-            {"column2": 1, "column1": "Amsterdam"},
-            {"column2": 2, "column1": "London"},
+            {"COLUMN2": 1, "COLUMN1": "Amsterdam", "PJ": "[]"},
+            {"COLUMN2": 2, "COLUMN1": "London", "PJ": "{}"},
         ]
 
 

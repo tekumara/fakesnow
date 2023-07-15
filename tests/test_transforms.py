@@ -223,7 +223,7 @@ def test_upper_case_unquoted_identifiers() -> None:
 def test_values_columns() -> None:
     assert (
         sqlglot.parse_one("SELECT * FROM VALUES ('Amsterdam', 1)").transform(values_columns).sql()
-        == """SELECT * FROM (VALUES ('Amsterdam', 1)) AS _("column1", "column2")"""
+        == """SELECT * FROM (VALUES ('Amsterdam', 1)) AS _("COLUMN1", "COLUMN2")"""
     )
 
     # values without select aren't transformed

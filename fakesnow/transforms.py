@@ -595,16 +595,6 @@ def values_columns(expression: exp.Expression) -> exp.Expression:
 
     Snowflake uses column1, column2 .. for unnamed columns in VALUES. Whereas duckdb uses col0, col1 ..
     See https://docs.snowflake.com/en/sql-reference/constructs/values#examples
-
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("SELECT * FROM VALUES ('Amsterdam', 1)").transform(values_columns).sql()
-        'SELECT * FROM (VALUES ('Amsterdam', 1)) AS _("column1", "column2")'
-    Args:
-        expression (exp.Expression): the expression that will be transformed.
-
-    Returns:
-        exp.Expression: The transformed expression.
     """
 
     if (
@@ -613,10 +603,8 @@ def values_columns(expression: exp.Expression) -> exp.Expression:
         and expression.find_ancestor(exp.Select)
         and (values := expression.find(exp.Tuple))
     ):
-        new = expression.copy()
         num_columns = len(values.expressions)
-        columns = [exp.Identifier(this=f"column{i + 1}", quoted=True) for i in range(num_columns)]
-        new.set("alias", exp.TableAlias(this=exp.Identifier(this="_", quoted=False), columns=columns))
-        return new
+        columns = [exp.Identifier(this=f"COLUMN{i + 1}", quoted=True) for i in range(num_columns)]
+        expression.set("alias", exp.TableAlias(this=exp.Identifier(this="_", quoted=False), columns=columns))
 
     return expression
