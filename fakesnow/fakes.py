@@ -306,10 +306,9 @@ class FakeSnowflakeCursor:
         def as_result_metadata(column_name: str, column_type: str, _: str) -> ResultMetadata:
             # see https://docs.snowflake.com/en/user-guide/python-connector-api.html#type-codes
             # and https://arrow.apache.org/docs/python/api/datatypes.html#type-checking
-            # type ignore because of https://github.com/snowflakedb/snowflake-connector-python/issues/1423
             if column_type == "BIGINT":
                 return ResultMetadata(
-                    name=column_name, type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True                    # type: ignore # noqa: E501
+                    name=column_name, type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True               # noqa: E501
                 )
             elif column_type.startswith("DECIMAL"):
                 match = re.search(r'\((\d+),(\d+)\)', column_type)
@@ -319,28 +318,28 @@ class FakeSnowflakeCursor:
                 else:
                     precision = scale = None
                 return ResultMetadata(
-                    name=column_name, type_code=0, display_size=None, internal_size=None, precision=precision, scale=scale, is_nullable=True # type: ignore # noqa: E501
+                    name=column_name, type_code=0, display_size=None, internal_size=None, precision=precision, scale=scale, is_nullable=True    # noqa: E501
                 )
             elif column_type == "VARCHAR":
                 # TODO: fetch internal_size from varchar size
                 return ResultMetadata(
-                    name=column_name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True   # type: ignore # noqa: E501
+                    name=column_name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True      # noqa: E501
                 )
             elif column_type == "DOUBLE":
                 return ResultMetadata(
-                    name=column_name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
+                    name=column_name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True          # noqa: E501
                 )
             elif column_type == "BOOLEAN":
                 return ResultMetadata(
-                    name=column_name, type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True      # type: ignore # noqa: E501
+                    name=column_name, type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True         # noqa: E501
                 )
             elif column_type == "DATE":
                 return ResultMetadata(
-                    name=column_name, type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True       # type: ignore # noqa: E501
+                    name=column_name, type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True          # noqa: E501
                 )
             elif column_type in {"TIMESTAMP", "TIMESTAMP_NS"}:
                 return ResultMetadata(
-                    name=column_name, type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True             # type: ignore # noqa: E501
+                    name=column_name, type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True                # noqa: E501
                 )
             else:
                 # TODO handle more types
