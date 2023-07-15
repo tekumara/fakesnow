@@ -10,7 +10,6 @@ from fakesnow.transforms import (
     extract_text_length,
     float_to_double,
     indices_to_json_extract,
-    indices_to_object,
     information_schema_columns_snowflake,
     information_schema_tables_ext,
     integer_precision,
@@ -82,16 +81,14 @@ def test_float_to_double() -> None:
     )
 
 
-def test_indices_to_array() -> None:
+def test_indices_to_object() -> None:
     assert (
         sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(indices_to_json_extract).sql()
         == "SELECT JSON_EXTRACT(myarray, '$[0]') FROM table1"
     )
 
-
-def test_indices_to_object() -> None:
     assert (
-        sqlglot.parse_one("SELECT name['k'] FROM semi").transform(indices_to_object).sql(dialect="duckdb")
+        sqlglot.parse_one("SELECT name['k'] FROM semi").transform(indices_to_json_extract).sql(dialect="duckdb")
         == "SELECT name -> '$.k' FROM semi"
     )
 

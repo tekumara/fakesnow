@@ -189,43 +189,17 @@ def float_to_double(expression: exp.Expression) -> exp.Expression:
 
 
 def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
-    """Convert array access to json extractions.
+    """Convert indices on objects and arrays to json_extract.
 
-    Because we treat Snowflake arrays as JSON[] in duckdb, convert array indices to JSON_EXTRACT.
-
-    See https://docs.snowflake.com/en/sql-reference/data-types-semistructured#accessing-elements-of-an-array-by-index-or-by-slice
-    """
-    if (
-        isinstance(expression, exp.Bracket)
-        and len(expression.expressions) == 1
-        and (index := expression.expressions[0])
-        and isinstance(index, exp.Literal)
-        and index.this
-        and not index.is_string
-    ):
-        return exp.JSONExtract(this=expression.this, expression=exp.Literal(this=f"$[{index.this}]", is_string=True))
-
-    return expression
-
-
-def indices_to_object(expression: exp.Expression) -> exp.Expression:
-    """Convert object indices to JSON extraction.
-
-    Supports Snowflake object indices, see
+    Supports Snowflake array indices, see
+    https://docs.snowflake.com/en/sql-reference/data-types-semistructured#accessing-elements-of-an-array-by-index-or-by-slice
+    and object indices, see
     https://docs.snowflake.com/en/sql-reference/data-types-semistructured#accessing-elements-of-an-object-by-key
 
     Duckdb uses the -> operator, or the json_extract function, see
     https://duckdb.org/docs/extensions/json#json-extraction-functions
 
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("select name['k'] from semi").transform(indices_to_object).sql()
-        'SELECT name -> '$.k' FROM semi'
-    Args:
-        expression (exp.Expression): the expression that will be transformed.
-
-    Returns:
-        exp.Expression: The transformed expression.
+    This works for Snowflake arrays too because we convert them to JSON[] in duckdb.
     """
     if (
         isinstance(expression, exp.Bracket)
@@ -233,12 +207,14 @@ def indices_to_object(expression: exp.Expression) -> exp.Expression:
         and (index := expression.expressions[0])
         and isinstance(index, exp.Literal)
         and index.this
-        and index.is_string
-        and (ident := expression.find(exp.Identifier))
     ):
-        # use sql() to handle quoting
-        ident_sql = ident.sql()
-        return sqlglot.parse_one(f"{ident_sql} -> '$.{index.this}'", read="duckdb")
+        if index.is_string:
+            return exp.JSONExtract(this=expression.this, expression=exp.Literal(this=f"$.{index.this}", is_string=True))
+        else:
+            return exp.JSONExtract(
+                this=expression.this, expression=exp.Literal(this=f"$[{index.this}]", is_string=True)
+            )
+
     return expression
 
 

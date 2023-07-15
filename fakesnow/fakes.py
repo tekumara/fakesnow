@@ -173,7 +173,6 @@ class FakeSnowflakeCursor:
             .transform(transforms.semi_structured_types)
             .transform(transforms.parse_json)
             .transform(transforms.indices_to_json_extract)
-            .transform(transforms.indices_to_object)
             .transform(transforms.values_columns)
             .transform(transforms.to_date)
             .transform(transforms.object_construct)
