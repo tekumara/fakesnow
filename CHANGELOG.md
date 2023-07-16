@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.1](https://github.com/tekumara/fakesnow/compare/v0.4.0...v0.4.1) (2023-07-16)
+
+
+### Bug Fixes
+
+* remove stray debugging print ([0ecc853](https://github.com/tekumara/fakesnow/commit/0ecc853608afabcf33c4f17c8297a76683e423c1))
+
 ## [0.4.0](https://github.com/tekumara/fakesnow/compare/v0.3.0...v0.4.0) (2023-07-16)
 
 
