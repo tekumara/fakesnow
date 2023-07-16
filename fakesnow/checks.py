@@ -4,7 +4,7 @@ from sqlglot import exp
 
 
 def is_unqualified_table_expression(expression: exp.Expression) -> tuple[bool, bool]:
-    """Checks if the table expression is unqualified, eg: no a database or schema.
+    """Checks if the table expression is unqualified, eg: no database or schema.
 
     NB: sqlglot treats the identifier in "CREATE SCHEMA schema1" as a table expression.
 
