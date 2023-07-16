@@ -399,22 +399,22 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
 
     cur.execute(
         """
-        select column_name,numeric_precision,numeric_precision_radix,numeric_scale
+        select column_name,data_type,numeric_precision,numeric_precision_radix,numeric_scale
         from information_schema.columns where table_name = 'EXAMPLE' order by ordinal_position
         """
     )
 
     assert cur.fetchall() == [
-        ("XNUMBER82", 8, 10, 2),
-        ("XNUMBER", 38, 10, 0),
-        ("XDECIMAL", 38, 10, 0),
-        ("XNUMERIC", 38, 10, 0),
-        ("XINT", 38, 10, 0),
-        ("XINTEGER", 38, 10, 0),
-        ("XBIGINT", 38, 10, 0),
-        ("XSMALLINT", 38, 10, 0),
-        ("XTINYINT", 38, 10, 0),
-        ("XBYTEINT", 38, 10, 0),
+        ("XNUMBER82", "NUMBER", 8, 10, 2),
+        ("XNUMBER", "NUMBER", 38, 10, 0),
+        ("XDECIMAL", "NUMBER", 38, 10, 0),
+        ("XNUMERIC", "NUMBER", 38, 10, 0),
+        ("XINT", "NUMBER", 38, 10, 0),
+        ("XINTEGER", "NUMBER", 38, 10, 0),
+        ("XBIGINT", "NUMBER", 38, 10, 0),
+        ("XSMALLINT", "NUMBER", 38, 10, 0),
+        ("XTINYINT", "NUMBER", 38, 10, 0),
+        ("XBYTEINT", "NUMBER", 38, 10, 0),
     ]
 
 

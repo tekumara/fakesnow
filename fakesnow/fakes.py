@@ -56,7 +56,8 @@ create table ${catalog}.information_schema.columns_ext (
 SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW = Template(
     """
 create view ${catalog}.information_schema.columns_snowflake AS
-select table_catalog, table_schema, table_name, column_name, ordinal_position, column_default, is_nullable, data_type,
+select table_catalog, table_schema, table_name, column_name, ordinal_position, column_default, is_nullable,
+case when starts_with(data_type, 'DECIMAL') or data_type='BIGINT' then 'NUMBER' else data_type end as data_type,
 ext_character_maximum_length as character_maximum_length, ext_character_octet_length as character_octet_length,
 case when data_type='BIGINT' then 38 else numeric_precision end as numeric_precision,
 case when data_type='BIGINT' then 10 else numeric_precision_radix end as numeric_precision_radix,
