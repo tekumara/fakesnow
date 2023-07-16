@@ -430,15 +430,15 @@ def test_information_schema_columns_text(cur: snowflake.connector.cursor.Snowfla
 
     cur.execute(
         """
-        select column_name,character_maximum_length,character_octet_length
+        select column_name,data_type,character_maximum_length,character_octet_length
         from information_schema.columns where table_name = 'EXAMPLE' order by ordinal_position
         """
     )
 
     assert cur.fetchall() == [
-        ("XVARCHAR20", 20, 80),
-        ("XVARCHAR", 16777216, 16777216),
-        ("XTEXT", 16777216, 16777216),
+        ("XVARCHAR20", "TEXT", 20, 80),
+        ("XVARCHAR", "TEXT", 16777216, 16777216),
+        ("XTEXT", "TEXT", 16777216, 16777216),
     ]
 
 
