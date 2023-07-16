@@ -46,6 +46,7 @@ class FakeSnowflakeCursor:
         self._use_dict_result = use_dict_result
         self._last_sql = None
         self._last_params = None
+        self._sqlstate = None
 
     def __enter__(self) -> Self:
         return self
@@ -92,6 +93,20 @@ class FakeSnowflakeCursor:
         *args: Any,
         **kwargs: Any,
     ) -> FakeSnowflakeCursor:
+        try:
+            self._sqlstate = None
+            return self._execute(command, params, *args, **kwargs)
+        except snowflake.connector.errors.ProgrammingError as e:
+            self._sqlstate = e.sqlstate
+            raise e
+
+    def _execute(
+        self,
+        command: str | exp.Expression,
+        params: Sequence[Any] | dict[Any, Any] | None = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> FakeSnowflakeCursor:
         self._arrow_table = None
 
         if isinstance(command, exp.Expression):
@@ -108,13 +123,13 @@ class FakeSnowflakeCursor:
                 msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
                 errno=90105,
                 sqlstate="22000",
-            ) from None
+            )
         elif no_schema and not self._conn.schema_set:
             raise snowflake.connector.errors.ProgrammingError(
                 msg=f"Cannot perform {cmd}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
                 errno=90106,
                 sqlstate="22000",
-            ) from None
+            )
 
         transformed = (
             expression.transform(transforms.upper_case_unquoted_identifiers)
@@ -246,6 +261,10 @@ class FakeSnowflakeCursor:
     def rowcount(self) -> int | None:
         # TODO: return number of rows updated/inserted (using returning)
         return None
+
+    @property
+    def sqlstate(self) -> str | None:
+        return self._sqlstate
 
     @staticmethod
     def _describe_as_result_metadata(describe_results: list) -> list[ResultMetadata]:

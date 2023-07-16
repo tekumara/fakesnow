@@ -75,12 +75,13 @@ def _fakesnow_session() -> Iterator[None]:
 
 ## Implementation coverage
 
-- [x] multiple databases
-- [x] cursors
+- [x] cursors and standard SQL
 - [x] [get_result_batches()](https://docs.snowflake.com/en/user-guide/python-connector-api#get_result_batches)
-- [x] [write_pandas(..)](https://docs.snowflake.com/en/user-guide/python-connector-api#write_pandas)
-- [x] table comments
+- [x] information schema
+- [x] multiple databases
 - [x] [qmark binding](https://docs.snowflake.com/en/user-guide/python-connector-example#binding-data)
+- [x] table comments
+- [x] [write_pandas(..)](https://docs.snowflake.com/en/user-guide/python-connector-api#write_pandas)
 - [ ] [access control](https://docs.snowflake.com/en/user-guide/security-access-control-overview)
 - [ ] standalone/out of process api/support for faking non-python connectors
 - [ ] [stored procedures](https://docs.snowflake.com/en/sql-reference/stored-procedures)
@@ -88,8 +89,9 @@ def _fakesnow_session() -> Iterator[None]:
 Partial support
 
 - [x] date functions
-- [x] tags
+- [x] regex functions
 - [x] semi-structured data
+- [x] tags
 
 For more detail see [tests/test_fakes.py](tests/test_fakes.py)
 

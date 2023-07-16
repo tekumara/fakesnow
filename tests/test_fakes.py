@@ -522,6 +522,17 @@ def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [('"foo"',), (None,)]
 
 
+def test_sqlstate(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select 'hello world'")
+    # sqlstate is None on success
+    assert cur.sqlstate is None
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
+        cur.execute("select * from this_table_does_not_exist")
+
+    assert cur.sqlstate == "42S02"
+
+
 def test_table_comments(cur: snowflake.connector.cursor.SnowflakeCursor):
     def read_comment() -> str:
         cur.execute(
