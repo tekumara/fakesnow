@@ -15,7 +15,8 @@ from fakesnow.transforms import (
     integer_precision,
     object_construct,
     parse_json,
-    regex,
+    regex_replace,
+    regex_substr,
     semi_structured_types,
     set_schema,
     tag,
@@ -144,10 +145,17 @@ def test_parse_json() -> None:
     )
 
 
-def test_regex() -> None:
+def test_regex_replace() -> None:
     assert (
-        sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D', '')").transform(regex).sql()
+        sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D', '')").transform(regex_replace).sql()
         == "SELECT REGEXP_REPLACE('abc123', '\\D', '', 'g')"
+    )
+
+
+def test_regex_substr() -> None:
+    assert (
+        sqlglot.parse_one("SELECT regexp_substr(string1, 'the\\\\W+\\\\w+')").transform(regex_substr).sql()
+        == "SELECT REGEXP_EXTRACT_ALL(string1[1 : ], 'the\\W+\\w+', 0, '')[1]"
     )
 
 

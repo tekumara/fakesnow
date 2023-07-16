@@ -464,6 +464,20 @@ def test_regex(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchone() == ("123",)
 
 
+def test_regex_substr(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/functions/regexp_substr
+    string1 = "It was the best of times, it was the worst of times."
+
+    cur.execute(f"select regexp_substr('{string1}', 'the\\\\W+\\\\w+')")
+    assert cur.fetchone() == ("the best",)
+
+    cur.execute(f"select regexp_substr('{string1}', 'the\\\\W+\\\\w+', 1, 2)")
+    assert cur.fetchone() == ("the worst",)
+
+    cur.execute(f"select regexp_substr('{string1}', 'the\\\\W+(\\\\w+)', 1, 2, 'e', 1)")
+    assert cur.fetchone() == ("worst",)
+
+
 def test_schema_create_and_use(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create schema jaffles")
     cur.execute("create table jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
