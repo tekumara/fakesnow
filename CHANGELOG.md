@@ -1,5 +1,27 @@
 # Changelog
 
+## [0.4.0](https://github.com/tekumara/fakesnow/compare/v0.3.0...v0.4.0) (2023-07-16)
+
+
+### Features
+
+* support indices on variants ([8269552](https://github.com/tekumara/fakesnow/commit/826955239516927abf01d48c486ba8359ddb630a))
+* support regexp_substr ([98abc33](https://github.com/tekumara/fakesnow/commit/98abc33a13ed7f8a60d746811089aa558ae4a243))
+* very basic rowcount support ([d1116d8](https://github.com/tekumara/fakesnow/commit/d1116d8d96e2f06ff5379ce2d67380866bd40a35))
+
+
+### Bug Fixes
+
+* dataframe integer columns are int64 ([13d36df](https://github.com/tekumara/fakesnow/commit/13d36dfc81ac197590d2ece276348e6abf0bd7df))
+* info schema now returns NUMBER for numeric types ([b108110](https://github.com/tekumara/fakesnow/commit/b108110b0a1e96842c7e99d37ea72fc495ac5630))
+* info schema now returns TEXT for text types ([3ea4f5f](https://github.com/tekumara/fakesnow/commit/3ea4f5fc9aa04790048ac504b1fe04e9830aeba0))
+* support parse_json on values columns ([d5198b8](https://github.com/tekumara/fakesnow/commit/d5198b828aa081add7a50ec8bfdab42bca17312b))
+
+
+### Chores
+
+* remove unneeded type ignore ([5214ff9](https://github.com/tekumara/fakesnow/commit/5214ff94a8c7f5c572c29e72196c3d5029ac3b1d))
+
 ## [0.3.0](https://github.com/tekumara/fakesnow/compare/v0.2.0...v0.3.0) (2023-07-15)
 
 
