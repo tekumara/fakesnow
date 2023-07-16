@@ -478,6 +478,13 @@ def test_regex_substr(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchone() == ("worst",)
 
 
+def test_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example(id int)")
+    cur.execute("insert into example SELECT * FROM (VALUES (1), (2), (3));")
+    # TODO: rows inserted ie: 3
+    assert cur.rowcount is None
+
+
 def test_schema_create_and_use(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create schema jaffles")
     cur.execute("create table jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")

@@ -242,6 +242,11 @@ class FakeSnowflakeCursor:
 
         return batches
 
+    @property
+    def rowcount(self) -> int | None:
+        # TODO: return number of rows updated/inserted (using returning)
+        return None
+
     @staticmethod
     def _describe_as_result_metadata(describe_results: list) -> list[ResultMetadata]:
         # fmt: off

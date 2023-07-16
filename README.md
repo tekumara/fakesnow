@@ -27,7 +27,7 @@ with fakesnow.patch():
 The following imports are automatically patched:
 
 - `import snowflake.connector.connect`
-- `import  snowflake.connector.pandas_tools.write_pandas`
+- `import snowflake.connector.pandas_tools.write_pandas`
 
 To patch modules that use the `from ... import` syntax, manually specify them, eg: if _mymodule.py_ has the import:
 
