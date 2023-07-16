@@ -144,7 +144,7 @@ class FakeSnowflakeCursor:
         try:
             self._last_sql = sql
             self._last_params = params
-            print(f"{sql};")
+            # print(f"{sql};")
             self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]
