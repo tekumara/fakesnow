@@ -263,6 +263,10 @@ class FakeSnowflakeCursor:
         return None
 
     @property
+    def sfqid(self) -> str | None:
+        return "fakesnow"
+
+    @property
     def sqlstate(self) -> str | None:
         return self._sqlstate
 

@@ -533,6 +533,10 @@ def test_sqlstate(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.sqlstate == "42S02"
 
 
+def test_sfqid(cur: snowflake.connector.cursor.SnowflakeCursor):
+    assert cur.sfqid == "fakesnow"
+
+
 def test_table_comments(cur: snowflake.connector.cursor.SnowflakeCursor):
     def read_comment() -> str:
         cur.execute(
