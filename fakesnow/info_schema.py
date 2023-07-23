@@ -38,6 +38,7 @@ select table_catalog, table_schema, table_name, column_name, ordinal_position, c
 case when starts_with(data_type, 'DECIMAL') or data_type='BIGINT' then 'NUMBER'
      when data_type='VARCHAR' then 'TEXT'
      when data_type='DOUBLE' then 'FLOAT'
+     when data_type='BLOB' then 'BINARY'
      else data_type end as data_type,
 ext_character_maximum_length as character_maximum_length, ext_character_octet_length as character_octet_length,
 case when data_type='BIGINT' then 38

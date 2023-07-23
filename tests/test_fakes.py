@@ -192,7 +192,8 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
             XNUMBER82 NUMBER(8,2), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
             XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT,
             XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT,
-            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE
+            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE,
+            XBINARY BINARY
         )
         """
     )
@@ -217,7 +218,8 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         ResultMetadata(name='XTEXT', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP_NTZ9', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
-        ResultMetadata(name='XDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True)
+        ResultMetadata(name='XDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XBINARY', type_code=11, display_size=None, internal_size=8388608, precision=None, scale=None, is_nullable=True)
     ]
     # fmt: on
 
@@ -382,12 +384,12 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     ]
 
 
-def test_information_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_information_schema_columns_text_and_binary(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-text
     cur.execute(
         """
         create table example (
-            XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT
+            XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT, XBINARY BINARY
         )
         """
     )
@@ -403,6 +405,7 @@ def test_information_schema_columns_text(cur: snowflake.connector.cursor.Snowfla
         ("XVARCHAR20", "TEXT", 20, 80),
         ("XVARCHAR", "TEXT", 16777216, 16777216),
         ("XTEXT", "TEXT", 16777216, 16777216),
+        ("XBINARY", "BINARY", None, None),
     ]
 
 
