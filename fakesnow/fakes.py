@@ -77,7 +77,7 @@ class FakeSnowflakeCursor:
         # use a cursor to avoid destroying an unfetched result on the main connection
         with self._duck_conn.cursor() as cur:
             assert self._conn.database, "Not implemented when database is None"
-            assert self._conn.schema, "Not implemented when database is None"
+            assert self._conn.schema, "Not implemented when schema is None"
 
             # match database and schema used on the main connection
             cur.execute(f"SET SCHEMA = '{self._conn.database}.{self._conn.schema}'")

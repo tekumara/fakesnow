@@ -1,3 +1,5 @@
+# ruff: noqa: E501
+
 import datetime
 import json
 
@@ -8,6 +10,7 @@ import snowflake.connector
 import snowflake.connector.cursor
 import snowflake.connector.pandas_tools
 from pandas.testing import assert_frame_equal
+from snowflake.connector.cursor import ResultMetadata
 
 
 def test_alter_table(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -62,7 +65,7 @@ def test_connect_without_database(_fakesnow_no_auto_create: None):
             cur.execute("SELECT * FROM jaffles.customers")
 
         assert (
-            "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+            "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
             in str(excinfo.value)
         )
 
@@ -70,7 +73,7 @@ def test_connect_without_database(_fakesnow_no_auto_create: None):
             cur.execute("create schema jaffles")
 
         assert (
-            "090105 (22000): Cannot perform CREATE SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+            "090105 (22000): Cannot perform CREATE SCHEMA. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
             in str(excinfo.value)
         )
 
@@ -86,7 +89,7 @@ def test_connect_without_database(_fakesnow_no_auto_create: None):
             cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
         assert (
-            "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+            "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
             in str(excinfo.value)
         )
 
@@ -112,7 +115,7 @@ def test_connect_without_schema(_fakesnow: None):
             cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
         assert (
-            "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
+            "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
             in str(excinfo.value)
         )
 
@@ -148,7 +151,7 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
             cur.execute("create table foobar (i int)")
 
         assert (
-            "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."  # noqa: E501
+            "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
             in str(excinfo.value)
         )
 
@@ -164,7 +167,7 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
             cur.execute("create table foobar (i int)")
 
         assert (
-            "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
+            "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
             in str(excinfo.value)
         )
 
@@ -184,88 +187,47 @@ def test_current_database_schema(conn: snowflake.connector.SnowflakeConnection):
 def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute(
         """
-        create table customers (
-            ID int, CNAME varchar, AMOUNT decimal(10,2), PCT real, ACTIVE boolean,
-            UPDATE_AT timestamp, UPDATE_AT_NTZ timestamp_ntz(9), INSERTIONDATE DATE
+        create or replace table example (
+            XBOOLEAN BOOLEAN, XDOUBLE DOUBLE, XFLOAT FLOAT,
+            XNUMBER82 NUMBER(8,2), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
+            XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT,
+            XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT,
+            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE
         )
         """
     )
     # fmt: off
     expected_metadata = [
-        snowflake.connector.cursor.ResultMetadata(
-            name="ID", type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True                  # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name="CNAME", type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True,     # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name="AMOUNT", type_code=0, display_size=None, internal_size=None, precision=10, scale=2, is_nullable=True,             # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name="PCT", type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True,           # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name="ACTIVE", type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True,       # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name='UPDATE_AT', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True            # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name='UPDATE_AT_NTZ', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True        # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name='INSERTIONDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True  # type: ignore # noqa: E501
-        ),
+        ResultMetadata(name='XBOOLEAN', type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XDOUBLE', type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XFLOAT', type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XNUMBER82', type_code=0, display_size=None, internal_size=None, precision=8, scale=2, is_nullable=True),
+        ResultMetadata(name='XNUMBER', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(name='XDECIMAL', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(name='XNUMERIC', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(name='XINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(name='XINTEGER', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(name='XBIGINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(name='XSMALLINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(name='XTINYINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(name='XBYTEINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        # TODO: store actual size
+        ResultMetadata(name='XVARCHAR20', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XVARCHAR', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XTEXT', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XTIMESTAMP', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
+        ResultMetadata(name='XTIMESTAMP_NTZ9', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
+        ResultMetadata(name='XDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True)
     ]
     # fmt: on
 
-    assert cur.describe("select * from customers") == expected_metadata
-
-    cur.execute("select * from customers")
+    assert cur.describe("select * from example") == expected_metadata
+    cur.execute("select * from example")
     assert cur.description == expected_metadata
 
-
-def test_describe_with_params(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute(
-        """
-        create table customers (
-            ID int, CNAME varchar, AMOUNT decimal(10,2), PCT real, ACTIVE boolean,
-            UPDATE_AT timestamp, UPDATE_AT_NTZ timestamp_ntz(9), INSERTIONDATE DATE
-        )
-        """
-    )
-    # fmt: off
-    expected_metadata = [
-        snowflake.connector.cursor.ResultMetadata(
-            name="ID", type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True                  # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name="CNAME", type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True,     # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name="AMOUNT", type_code=0, display_size=None, internal_size=None, precision=10, scale=2, is_nullable=True,             # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name="PCT", type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True,           # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name="ACTIVE", type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True,       # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name='UPDATE_AT', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True            # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name='UPDATE_AT_NTZ', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True        # type: ignore # noqa: E501
-        ),
-        snowflake.connector.cursor.ResultMetadata(
-            name='INSERTIONDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True  # type: ignore # noqa: E501
-        ),
-    ]
-    # fmt: on
-
-    assert cur.describe("select * from customers where id = ?", (1,)) == expected_metadata
-
-    cur.execute("select * from customers where id = ?", (1,))
+    # test with params
+    assert cur.describe("select * from example where XNUMBER = ?", (1,)) == expected_metadata
+    cur.execute("select * from example where XNUMBER = ?", (1,))
     assert cur.description == expected_metadata
 
 
@@ -419,6 +381,7 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
         ("XBYTEINT", "NUMBER", 38, 10, 0),
     ]
 
+
 def test_information_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-text
     cur.execute(
@@ -508,7 +471,7 @@ def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
         """insert into semis(emails, name, notes) SELECT [1, 2], parse_json('{"k": "v1"}'), parse_json('["foo"]')"""
     )
     cur.execute(
-        """insert into semis(emails, name, notes) VALUES ([3,4], parse_json('{"k": "v2"}'), parse_json('{"b": "ar"}'))"""  # noqa: E501
+        """insert into semis(emails, name, notes) VALUES ([3,4], parse_json('{"k": "v2"}'), parse_json('{"b": "ar"}'))"""
     )
 
     # results are returned as strings, because the underlying type is JSON (duckdb) / VARIANT (snowflake)
@@ -642,7 +605,7 @@ def test_use_invalid_schema(_fakesnow: None):
             cur.execute("create table foobar (i int)")
 
         assert (
-            "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."  # noqa: E501
+            "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
             in str(excinfo.value)
         )
 
