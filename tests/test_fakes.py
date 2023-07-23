@@ -390,8 +390,8 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     # see https://docs.snowflake.com/en/sql-reference/data-types-numeric
     cur.execute(
         """
-        create table example (
-            XNUMBER82 NUMBER(8,2), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
+        create or replace table example (
+            XDOUBLE DOUBLE, XFLOAT FLOAT, XNUMBER82 NUMBER(8,2), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
             XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT
         )
         """
@@ -405,6 +405,8 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     )
 
     assert cur.fetchall() == [
+        ("XDOUBLE", "FLOAT", None, None, None),
+        ("XFLOAT", "FLOAT", None, None, None),
         ("XNUMBER82", "NUMBER", 8, 10, 2),
         ("XNUMBER", "NUMBER", 38, 10, 0),
         ("XDECIMAL", "NUMBER", 38, 10, 0),
@@ -416,7 +418,6 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
         ("XTINYINT", "NUMBER", 38, 10, 0),
         ("XBYTEINT", "NUMBER", 38, 10, 0),
     ]
-
 
 def test_information_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-text

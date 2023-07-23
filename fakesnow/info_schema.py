@@ -37,11 +37,16 @@ create view ${catalog}.information_schema.columns_snowflake AS
 select table_catalog, table_schema, table_name, column_name, ordinal_position, column_default, is_nullable,
 case when starts_with(data_type, 'DECIMAL') or data_type='BIGINT' then 'NUMBER'
      when data_type='VARCHAR' then 'TEXT'
+     when data_type='DOUBLE' then 'FLOAT'
      else data_type end as data_type,
 ext_character_maximum_length as character_maximum_length, ext_character_octet_length as character_octet_length,
-case when data_type='BIGINT' then 38 else numeric_precision end as numeric_precision,
-case when data_type='BIGINT' then 10 else numeric_precision_radix end as numeric_precision_radix,
-numeric_scale,
+case when data_type='BIGINT' then 38
+     when data_type='DOUBLE' then NULL
+    else numeric_precision end as numeric_precision,
+case when data_type='BIGINT' then 10
+    when data_type='DOUBLE' then NULL
+    else numeric_precision_radix end as numeric_precision_radix,
+case when data_type='DOUBLE' then NULL else numeric_scale end as numeric_scale,
 collation_name, is_identity, identity_generation, identity_cycle
 from ${catalog}.information_schema.columns
 left join ${catalog}.information_schema.columns_ext ext

@@ -181,10 +181,7 @@ def float_to_double(expression: exp.Expression) -> exp.Expression:
     """
 
     if isinstance(expression, exp.DataType) and expression.this == exp.DataType.Type.FLOAT:
-        # TODO don't copy!
-        new = expression.copy()
-        new.args["this"] = exp.DataType.Type.DOUBLE
-        return new
+        expression.args["this"] = exp.DataType.Type.DOUBLE
 
     return expression
 
