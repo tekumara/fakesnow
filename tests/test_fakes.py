@@ -356,7 +356,7 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     cur.execute(
         """
         create or replace table example (
-            XDOUBLE DOUBLE, XFLOAT FLOAT, XNUMBER82 NUMBER(8,2), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
+            XBOOLEAN BOOLEAN, XDOUBLE DOUBLE, XFLOAT FLOAT, XNUMBER82 NUMBER(8,2), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
             XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT
         )
         """
@@ -370,6 +370,7 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     )
 
     assert cur.fetchall() == [
+        ("XBOOLEAN", "BOOLEAN", None, None, None),
         ("XDOUBLE", "FLOAT", None, None, None),
         ("XFLOAT", "FLOAT", None, None, None),
         ("XNUMBER82", "NUMBER", 8, 10, 2),
