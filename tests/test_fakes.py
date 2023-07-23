@@ -192,7 +192,7 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
             XNUMBER82 NUMBER(8,2), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
             XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT,
             XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT,
-            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE,
+            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE, XTIME TIME,
             XBINARY BINARY
         )
         """
@@ -219,6 +219,7 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         ResultMetadata(name='XTIMESTAMP', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP_NTZ9', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XTIME', type_code=12, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XBINARY', type_code=11, display_size=None, internal_size=8388608, precision=None, scale=None, is_nullable=True)
     ]
     # fmt: on
@@ -384,12 +385,39 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     ]
 
 
-def test_information_schema_columns_text_and_binary(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_information_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/data-types-datetime
+    cur.execute(
+        """
+        create or replace table example (
+            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE, XTIME TIME,
+            XBINARY BINARY
+        )
+        """
+    )
+
+    cur.execute(
+        """
+        select column_name,data_type
+        from information_schema.columns where table_name = 'EXAMPLE' order by ordinal_position
+        """
+    )
+
+    assert cur.fetchall() == [
+        ("XTIMESTAMP", "TIMESTAMP_NTZ"),
+        ("XTIMESTAMP_NTZ9", "TIMESTAMP_NTZ"),
+        ("XDATE", "DATE"),
+        ("XTIME", "TIME"),
+        ("XBINARY", "BINARY"),
+    ]
+
+
+def test_information_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-text
     cur.execute(
         """
-        create table example (
-            XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT, XBINARY BINARY
+        create or replace table example (
+            XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT
         )
         """
     )
@@ -405,7 +433,6 @@ def test_information_schema_columns_text_and_binary(cur: snowflake.connector.cur
         ("XVARCHAR20", "TEXT", 20, 80),
         ("XVARCHAR", "TEXT", 16777216, 16777216),
         ("XTEXT", "TEXT", 16777216, 16777216),
-        ("XBINARY", "BINARY", None, None),
     ]
 
 
