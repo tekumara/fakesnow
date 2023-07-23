@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.5.0](https://github.com/tekumara/fakesnow/compare/v0.4.1...v0.5.0) (2023-07-23)
+
+
+### Features
+
+* cursor sqlstate ([04aa92e](https://github.com/tekumara/fakesnow/commit/04aa92e2e828c50471bd5bb8bb1c97c64110d227))
+* sqlid ([18985e9](https://github.com/tekumara/fakesnow/commit/18985e90441c9ab7d99acbd0778e8b001d339073))
+* support BINARY type in description and info schema ([32d5952](https://github.com/tekumara/fakesnow/commit/32d5952fb5fb2078d7822592ea0a7a896f457847))
+* support TIME in description & TIMESTAMP in info schema ([7014d8d](https://github.com/tekumara/fakesnow/commit/7014d8dbe8f5c424a74bb62f8fd5a1d46edd2347))
+
+
+### Bug Fixes
+
+* info schema now returns FLOAT types correctly ([55d84c1](https://github.com/tekumara/fakesnow/commit/55d84c1023622b200980a673a7ec9524114e0fe1))
+
+
+### Chores
+
+* add test coverage for BOOLEAN in info schema ([9c4f254](https://github.com/tekumara/fakesnow/commit/9c4f2540a005252a6ad0c1cfd37c0a29176ea7b9))
+
 ## [0.4.1](https://github.com/tekumara/fakesnow/compare/v0.4.0...v0.4.1) (2023-07-16)
 
 
