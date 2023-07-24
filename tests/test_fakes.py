@@ -234,6 +234,20 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.description == expected_metadata
 
 
+def test_describe_info_schema(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # tests we can handle the column types returned from the info schema, which are created by duckdb
+    # and so don't go through our transforms
+    cur.execute("select column_name, ordinal_position from information_schema.columns")
+    # fmt: off
+    expected_metadata = [
+        ResultMetadata(name='column_name', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='ordinal_position', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)
+    ]
+    # fmt: on
+
+    assert cur.description == expected_metadata
+
+
 def test_executemany(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 

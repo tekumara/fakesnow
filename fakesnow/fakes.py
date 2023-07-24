@@ -276,7 +276,7 @@ class FakeSnowflakeCursor:
         def as_result_metadata(column_name: str, column_type: str, _: str) -> ResultMetadata:
             # see https://docs.snowflake.com/en/user-guide/python-connector-api.html#type-codes
             # and https://arrow.apache.org/docs/python/api/datatypes.html#type-checking
-            if column_type == "BIGINT":
+            if column_type in {"BIGINT", "INTEGER"}:
                 return ResultMetadata(
                     name=column_name, type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True               # noqa: E501
                 )
