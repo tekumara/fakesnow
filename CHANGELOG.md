@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.5.1](https://github.com/tekumara/fakesnow/compare/v0.5.0...v0.5.1) (2023-07-24)
+
+
+### Bug Fixes
+
+* describe on INTEGER column type in info schema ([652525d](https://github.com/tekumara/fakesnow/commit/652525d6e46fca6624754bb31a6d88c1ae52c6d5)), closes [#16](https://github.com/tekumara/fakesnow/issues/16)
+
 ## [0.5.0](https://github.com/tekumara/fakesnow/compare/v0.4.1...v0.5.0) (2023-07-23)
 
 
