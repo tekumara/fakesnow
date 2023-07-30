@@ -235,7 +235,7 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_describe_info_schema(cur: snowflake.connector.cursor.SnowflakeCursor):
-    # tests we can handle the column types returned from the info schema, which are created by duckdb
+    # test we can handle the column types returned from the info schema, which are created by duckdb
     # and so don't go through our transforms
     cur.execute("select column_name, ordinal_position from information_schema.columns")
     # fmt: off

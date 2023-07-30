@@ -30,8 +30,9 @@ def patch(
       - snowflake.connector.pandas_tools.write_pandas
 
     Args:
-        extra_targets (Sequence[types.ModuleType], optional): Extra targets to patch. Defaults to [].
-        auto_create_database
+        extra_targets (str | Sequence[str], optional): Extra targets to patch. Defaults to [].
+        create_database_on_connect (bool, optional): Create database if provided in connection. Defaults to True.
+        create_schema_on_connect (bool, optional): Create schema if provided in connection. Defaults to True.
 
         Allows extra targets beyond the standard snowflake.connector targets to be patched. Needed because we cannot
         patch definitions, only usages, see https://docs.python.org/3/library/unittest.mock.html#where-to-patch
@@ -65,10 +66,8 @@ def patch(
     for im in std_targets + list([extra_targets] if isinstance(extra_targets, str) else extra_targets):
         module_name = ".".join(im.split(".")[:-1])
         fn_name = im.split(".")[-1]
-        module = sys.modules.get(module_name)
-        if not module:
-            # module may not be loaded yet, try to import it
-            module = importlib.import_module(module_name)
+        # get module or try to import it if not loaded yet
+        module = sys.modules.get(module_name) or importlib.import_module(module_name)
         fn = module.__dict__.get(fn_name)
         assert fn, f"No module var {im}"
 
