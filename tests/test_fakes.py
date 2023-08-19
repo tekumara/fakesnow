@@ -193,7 +193,7 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
             XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT,
             XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT,
             XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE, XTIME TIME,
-            XBINARY BINARY
+            XBINARY BINARY, XARRAY ARRAY, XOBJECT OBJECT
         )
         """
     )
@@ -220,7 +220,9 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         ResultMetadata(name='XTIMESTAMP_NTZ9', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XTIME', type_code=12, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
-        ResultMetadata(name='XBINARY', type_code=11, display_size=None, internal_size=8388608, precision=None, scale=None, is_nullable=True)
+        ResultMetadata(name='XBINARY', type_code=11, display_size=None, internal_size=8388608, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XARRAY', type_code=10, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XOBJECT', type_code=9, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
     ]
     # fmt: on
 
@@ -406,7 +408,7 @@ def test_information_schema_columns_other(cur: snowflake.connector.cursor.Snowfl
         """
         create or replace table example (
             XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE, XTIME TIME,
-            XBINARY BINARY
+            XBINARY BINARY, XARRAY ARRAY, XOBJECT OBJECT
         )
         """
     )
@@ -424,6 +426,8 @@ def test_information_schema_columns_other(cur: snowflake.connector.cursor.Snowfl
         ("XDATE", "DATE"),
         ("XTIME", "TIME"),
         ("XBINARY", "BINARY"),
+        ("XARRAY", "ARRAY"),
+        ("XOBJECT", "OBJECT"),
     ]
 
 

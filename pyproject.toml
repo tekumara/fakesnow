@@ -25,7 +25,7 @@ dev = [
     "snowflake-connector-python[pandas, secure-local-storage]",
     "pre-commit~=3.2",
     "pytest~=7.3",
-    "ruff~=0.0.263",
+    "ruff~=0.0.285",
     "twine~=4.0",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html

@@ -70,7 +70,7 @@ class FakeSnowflakeCursor:
 
         describe = transforms.as_describe(parse_one(command, read="snowflake"))
         self.execute(describe, *args, **kwargs)
-        return FakeSnowflakeCursor._describe_as_result_metadata(self._duck_conn.fetchall())  # noqa: SLF001
+        return FakeSnowflakeCursor._describe_as_result_metadata(self._duck_conn.fetchall())
 
     @property
     def description(self) -> list[ResultMetadata]:
@@ -82,7 +82,7 @@ class FakeSnowflakeCursor:
             # match database and schema used on the main connection
             cur.execute(f"SET SCHEMA = '{self._conn.database}.{self._conn.schema}'")
             cur.execute(f"DESCRIBE {self._last_sql}", self._last_params)
-            meta = FakeSnowflakeCursor._describe_as_result_metadata(cur.fetchall())  # noqa: SLF001
+            meta = FakeSnowflakeCursor._describe_as_result_metadata(cur.fetchall())
 
         return meta  # type: ignore see https://github.com/duckdb/duckdb/issues/7816
 
@@ -318,6 +318,14 @@ class FakeSnowflakeCursor:
             elif column_type == "TIME":
                 return ResultMetadata(
                     name=column_name, type_code=12, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True               # noqa: E501
+                )
+            elif column_type == "JSON[]":
+                return ResultMetadata(
+                    name=column_name, type_code=10, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True               # noqa: E501
+                )
+            elif column_type == "JSON":
+                return ResultMetadata(
+                    name=column_name, type_code=9, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True               # noqa: E501
                 )
             else:
                 # TODO handle more types
