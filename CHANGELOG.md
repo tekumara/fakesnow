@@ -2,6 +2,20 @@
 
 # Changelog
 
+## [0.6.0](https://github.com/tekumara/fakesnow/compare/v0.5.1...v0.6.0) (2023-08-19)
+
+
+### Features
+
+* dictionary params ([01ce713](https://github.com/tekumara/fakesnow/commit/01ce7135a69c40d539e5430387f6323ca03f5041))
+* support describe and info schema for ARRAY and OBJECT ([0826d1c](https://github.com/tekumara/fakesnow/commit/0826d1c988969b3116ad1172d99705518b368182))
+* to_decimal, to_number, to_numeric ([8c19a8b](https://github.com/tekumara/fakesnow/commit/8c19a8bda8d9a4f1380c8b593af5c5af4d7fd280))
+
+
+### Chores
+
+* better doc strings ([53f798e](https://github.com/tekumara/fakesnow/commit/53f798ee2f2db68b0acdfb4e8d8130611bd4956a))
+
 ## [0.5.1](https://github.com/tekumara/fakesnow/compare/v0.5.0...v0.5.1) (2023-07-24)
 
 
