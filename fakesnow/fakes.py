@@ -10,6 +10,7 @@ if TYPE_CHECKING:
     import pandas as pd
     import pyarrow.lib
 import pyarrow
+import snowflake.connector.converter
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
@@ -47,6 +48,7 @@ class FakeSnowflakeCursor:
         self._last_sql = None
         self._last_params = None
         self._sqlstate = None
+        self._converter = snowflake.connector.converter.SnowflakeConverter()
 
     def __enter__(self) -> Self:
         return self
@@ -68,7 +70,7 @@ class FakeSnowflakeCursor:
             list[ResultMetadata]: _description_
         """
 
-        describe = transforms.as_describe(parse_one(command, read="snowflake"))
+        describe = f"DESCRIBE {command}"
         self.execute(describe, *args, **kwargs)
         return FakeSnowflakeCursor._describe_as_result_metadata(self._duck_conn.fetchall())
 
@@ -88,7 +90,7 @@ class FakeSnowflakeCursor:
 
     def execute(
         self,
-        command: str | exp.Expression,
+        command: str,
         params: Sequence[Any] | dict[Any, Any] | None = None,
         *args: Any,
         **kwargs: Any,
@@ -102,17 +104,15 @@ class FakeSnowflakeCursor:
 
     def _execute(
         self,
-        command: str | exp.Expression,
+        command: str,
         params: Sequence[Any] | dict[Any, Any] | None = None,
         *args: Any,
         **kwargs: Any,
     ) -> FakeSnowflakeCursor:
         self._arrow_table = None
 
-        if isinstance(command, exp.Expression):
-            expression = command
-        else:
-            expression = parse_one(self._rewrite_params(command, params), read="snowflake")
+        command, params = self._rewrite_with_params(command, params)
+        expression = parse_one(command, read="snowflake")
 
         cmd = expr.key_command(expression)
 
@@ -339,20 +339,25 @@ class FakeSnowflakeCursor:
         ]
         return meta
 
-    def _rewrite_params(
+    def _rewrite_with_params(
         self,
         command: str,
         params: Sequence[Any] | dict[Any, Any] | None = None,
-    ) -> str:
-        if isinstance(params, dict):
-            # see https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-api
-            raise NotImplementedError("dict params not supported yet")
-
+    ) -> tuple[str, Sequence[Any] | dict[Any, Any] | None]:
         if params and self._conn._paramstyle in ("pyformat", "format"):  # noqa: SLF001
-            # duckdb uses question mark style params
-            return command.replace("%s", "?")
+            # handle client-side in the same manner as the snowflake python connector
 
-        return command
+            def convert(param: Any) -> Any:  # noqa: ANN401
+                return self._converter.quote(self._converter.escape(self._converter.to_snowflake(param)))
+
+            if isinstance(params, dict):
+                params = {k: convert(v) for k, v in params.items()}
+            else:
+                params = tuple(convert(v) for v in params)
+
+            return command % params, None
+
+        return command, params
 
 
 class FakeSnowflakeConnection:

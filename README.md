@@ -79,7 +79,7 @@ def _fakesnow_session() -> Iterator[None]:
 - [x] [get_result_batches()](https://docs.snowflake.com/en/user-guide/python-connector-api#get_result_batches)
 - [x] information schema
 - [x] multiple databases
-- [x] [qmark binding](https://docs.snowflake.com/en/user-guide/python-connector-example#binding-data)
+- [x] [parameter binding](https://docs.snowflake.com/en/user-guide/python-connector-example#binding-data)
 - [x] table comments
 - [x] [write_pandas(..)](https://docs.snowflake.com/en/user-guide/python-connector-api#write_pandas)
 - [ ] [access control](https://docs.snowflake.com/en/user-guide/security-access-control-overview)

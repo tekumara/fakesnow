@@ -3,7 +3,6 @@ from sqlglot import exp
 
 from fakesnow.transforms import (
     SUCCESS_NOP,
-    as_describe,
     create_database,
     drop_schema_cascade,
     extract_comment,
@@ -25,13 +24,6 @@ from fakesnow.transforms import (
     upper_case_unquoted_identifiers,
     values_columns,
 )
-
-
-def test_as_describe() -> None:
-    assert (
-        sqlglot.parse_one("SELECT name FROM CUSTOMERS").transform(as_describe).sql()
-        == "DESCRIBE SELECT name FROM CUSTOMERS"
-    )
 
 
 def test_create_database() -> None:

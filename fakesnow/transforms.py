@@ -10,23 +10,6 @@ MISSING_DATABASE = "missing_database"
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
 
 
-def as_describe(expression: exp.Expression) -> exp.Expression:
-    """Prepend describe to the expression.
-
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("SELECT name FROM CUSTOMERS").transform(as_describe).sql()
-        'describe SELECT name FROM CUSTOMERS'
-    Args:
-        expression (exp.Expression): the expression that will be transformed.
-
-    Returns:
-        exp.Expression: The transformed expression.
-    """
-
-    return exp.Describe(this=expression)
-
-
 # TODO: move this into a Dialect as a transpilation
 def create_database(expression: exp.Expression) -> exp.Expression:
     """Transform create database to attach database.

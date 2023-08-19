@@ -28,6 +28,17 @@ def test_binding_default_paramstyle(conn: snowflake.connector.SnowflakeConnectio
         assert cur.fetchall() == [(1, "Jenny", True)]
 
 
+def test_binding_default_paramstyle_dict(conn: snowflake.connector.SnowflakeConnection):
+    assert conn._paramstyle == "pyformat"  # noqa: SLF001
+    with conn.cursor() as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
+        cur.execute(
+            "insert into customers values (%(id)s, %(name)s, %(active)s)", {"id": 1, "name": "Jenny", "active": True}
+        )
+        cur.execute("select * from customers")
+        assert cur.fetchall() == [(1, "Jenny", True)]
+
+
 def test_binding_qmark(conn: snowflake.connector.SnowflakeConnection):
     conn._paramstyle = "qmark"  # noqa: SLF001
     with conn.cursor() as cur:
@@ -231,8 +242,8 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.description == expected_metadata
 
     # test with params
-    assert cur.describe("select * from example where XNUMBER = ?", (1,)) == expected_metadata
-    cur.execute("select * from example where XNUMBER = ?", (1,))
+    assert cur.describe("select * from example where XNUMBER = %s", (1,)) == expected_metadata
+    cur.execute("select * from example where XNUMBER = %s", (1,))
     assert cur.description == expected_metadata
 
 
