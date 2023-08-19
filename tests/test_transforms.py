@@ -21,6 +21,7 @@ from fakesnow.transforms import (
     tag,
     timestamp_ntz_ns,
     to_date,
+    to_decimal,
     upper_case_unquoted_identifiers,
     values_columns,
 )
@@ -185,6 +186,13 @@ def test_to_date() -> None:
     assert (
         sqlglot.parse_one("SELECT to_date(to_timestamp(0))").transform(to_date).sql()
         == "SELECT CAST(DATE_TRUNC('day', TO_TIMESTAMP(0)) AS DATE)"
+    )
+
+
+def test_to_decimal() -> None:
+    assert (
+        sqlglot.parse_one("SELECT to_decimal('1.245',10,2)").transform(to_decimal).sql()
+        == "SELECT CAST('1.245' AS DECIMAL(10, 2))"
     )
 
 

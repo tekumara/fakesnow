@@ -2,6 +2,7 @@
 
 import datetime
 import json
+from decimal import Decimal
 
 import pandas as pd
 import pytest
@@ -593,6 +594,18 @@ def test_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
 def test_timestamp_to_date(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("SELECT to_date(to_timestamp(0)), to_date(cast(to_timestamp(0) as timestamp(9)))")
     assert cur.fetchall() == [(datetime.date(1970, 1, 1), datetime.date(1970, 1, 1))]
+
+
+def test_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/functions/to_decimal#examples
+    cur.execute("create or replace table number_conv(expr varchar);")
+    cur.execute("insert into number_conv values ('12.3456'), ('98.76546');")
+    cur.execute("select expr, to_decimal(expr),  to_number(expr, 10, 1), to_numeric(expr, 10, 8) from number_conv;")
+
+    assert cur.fetchall() == [
+        ("12.3456", 12, Decimal("12.3"), Decimal("12.34560000")),
+        ("98.76546", 99, Decimal("98.8"), Decimal("98.76546000")),
+    ]
 
 
 def test_write_pandas_timestamp_ntz(conn: snowflake.connector.SnowflakeConnection):

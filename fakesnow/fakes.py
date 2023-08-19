@@ -148,6 +148,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.regex_substr)
             .transform(transforms.values_columns)
             .transform(transforms.to_date)
+            .transform(transforms.to_decimal)
             .transform(transforms.object_construct)
             .transform(transforms.timestamp_ntz_ns)
             .transform(transforms.float_to_double)
