@@ -51,7 +51,7 @@ def test_binding_qmark(conn: snowflake.connector.SnowflakeConnection):
 
 def test_connect_auto_create(_fakesnow: None):
     with snowflake.connector.connect(database="db1", schema="schema1"):
-        # creates db2 and schema1
+        # creates db1 and schema1
         pass
 
     with snowflake.connector.connect(database="db1", schema="schema1"):
@@ -248,7 +248,7 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.description == expected_metadata
 
 
-def test_describe_info_schema(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_describe_info_schema_columns(cur: snowflake.connector.cursor.SnowflakeCursor):
     # test we can handle the column types returned from the info schema, which are created by duckdb
     # and so don't go through our transforms
     cur.execute("select column_name, ordinal_position from information_schema.columns")
@@ -465,6 +465,26 @@ def test_information_schema_columns_text(cur: snowflake.connector.cursor.Snowfla
         ("XVARCHAR", "TEXT", 16777216, 16777216),
         ("XTEXT", "TEXT", 16777216, 16777216),
     ]
+
+
+def test_information_schema_databases(conn: snowflake.connector.SnowflakeConnection):
+    # see https://docs.snowflake.com/en/sql-reference/info-schema/databases
+
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("select * from information_schema.databases")
+
+        assert cur.fetchall() == [
+            {
+                "database_name": "DB1",
+                "database_owner": "SYSADMIN",
+                "is_transient": "NO",
+                "comment": None,
+                "created": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+                "last_altered": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+                "retention_time": 1,
+                "type": "STANDARD",
+            },
+        ]
 
 
 def test_non_existent_table_throws_snowflake_exception(cur: snowflake.connector.cursor.SnowflakeCursor):

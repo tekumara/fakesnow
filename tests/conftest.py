@@ -24,3 +24,6 @@ def cur(conn: snowflake.connector.SnowflakeConnection) -> Iterator[snowflake.con
     """
     with conn.cursor() as cur:
         yield cur
+
+
+# TODO: add dcur for DictCursor

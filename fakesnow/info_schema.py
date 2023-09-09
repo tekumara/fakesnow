@@ -59,12 +59,31 @@ AND ext_table_name = table_name AND ext_column_name = column_name
 """
 )
 
+# replicates https://docs.snowflake.com/sql-reference/info-schema/databases
+SQL_CREATE_INFORMATION_SCHEMA_DATABASES_VIEW = Template(
+    """
+create view ${catalog}.information_schema.databases AS
+select
+    catalog_name as database_name,
+    'SYSADMIN' as database_owner,
+    'NO' as is_transient,
+    null as comment,
+    to_timestamp(0)::timestamptz as created,
+    to_timestamp(0)::timestamptz as last_altered,
+    1 as retention_time,
+    'STANDARD' as type
+from information_schema.schemata
+where catalog_name not in ('memory', 'system', 'temp') and schema_name = 'information_schema'
+"""
+)
+
 
 def creation_sql(catalog: str) -> str:
     return f"""
         {SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_EXT.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW.substitute(catalog=catalog)};
+        {SQL_CREATE_INFORMATION_SCHEMA_DATABASES_VIEW.substitute(catalog=catalog)};
     """
 
 

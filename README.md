@@ -95,6 +95,10 @@ Partial support
 
 For more detail see [tests/test_fakes.py](tests/test_fakes.py)
 
+## Caveats
+
+- VARCHAR field sizes are not enforced unlike Snowflake which will error with "User character length limit (xxx) exceeded by string" when you try to insert a string longer than the column limit.
+
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) to get started and develop in this repo.
