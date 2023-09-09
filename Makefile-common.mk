@@ -14,11 +14,15 @@ $(pip):
 # create venv using system python even when another venv is active
 	PATH=$${PATH#$${VIRTUAL_ENV}/bin:} python3 -m venv --clear $(venv)
 	$(venv)/bin/python --version
-	$(pip) install pip~=23.1 wheel~=0.37
+	$(pip) install pip~=23.1 wheel~=0.40
 
 $(venv): $(if $(value CI),|,) pyproject.toml $(pip)
 	$(pip) install -e '.[dev, notebook]'
 	touch $(venv)
+
+node_modules: package.json
+	npm install --no-save
+	touch node_modules
 
 # delete the venv
 clean:
@@ -27,21 +31,17 @@ clean:
 ## create venv and install this package and hooks
 install: $(venv) node_modules $(if $(value CI),,install-hooks)
 
-## lint code and run static type check
-check: lint pyright
+## lint, format and type check
+check: export SKIP=test
+check: hooks
 
-## lint and format code
-lint: $(venv)
-	SKIP=pyright,test $(venv)/bin/pre-commit run --show-diff-on-failure --color=always --all-files --hook-stage push
-
-node_modules: package.json
-	npm install --no-save
-	touch node_modules
+## lint and format
+lint: export SKIP=pyright,test
+lint: hooks
 
 ## pyright
 pyright: node_modules $(venv)
-# activate venv so pyright can find dependencies
-	PATH="$(venv)/bin:$$PATH" node_modules/.bin/pyright
+	node_modules/.bin/pyright
 
 ## run tests
 test: $(venv)
@@ -57,10 +57,11 @@ publish: $(venv)
 	$(venv)/bin/twine upload dist/*
 
 ## run pre-commit git hooks on all files
-hooks: $(venv)
+hooks: node_modules $(venv)
 	$(venv)/bin/pre-commit run --show-diff-on-failure --color=always --all-files --hook-stage push
 
 install-hooks: .git/hooks/pre-commit .git/hooks/pre-push
+	$(venv)/bin/pre-commit install-hooks
 
 .git/hooks/pre-commit: $(venv)
 	$(venv)/bin/pre-commit install -t pre-commit

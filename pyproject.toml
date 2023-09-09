@@ -32,7 +32,7 @@ dev = [
 notebook = ["duckdb-engine", "ipykernel", "jupysql", "snowflake-sqlalchemy"]
 
 [build-system]
-requires = ["setuptools~=67.6", "wheel~=0.40"]
+requires = ["setuptools~=67.7", "wheel~=0.40"]
 
 [tool.setuptools.packages.find]
 where = ["."]
@@ -42,11 +42,14 @@ exclude = ["tests*"]
 [tool.black]
 line-length = 120
 
-[tool.docformatter]
-pre-summary-newline = true
-recursive = true
-wrap-descriptions = 120
-wrap-summaries = 120
+[tool.pyright]
+venvPath = "."
+venv = ".venv"
+exclude = ["**/node_modules", "**/__pycache__", "**/.*", "build"]
+strictListInference = true
+strictDictionaryInference = true
+strictParameterNoneValue = true
+reportTypedDictNotRequiredAccess = false
 
 [tool.ruff]
 line-length = 120
@@ -80,8 +83,6 @@ ignore = [
     "ANN204",
     # allow == True because pandas dataframes overload equality
     "E712",
-    # only relevant for python >= 3.10
-    "B905",
 ]
 # first-party imports for sorting
 src = ["."]
@@ -89,6 +90,8 @@ fix = true
 show-fixes = true
 
 [tool.ruff.per-file-ignores]
+# imports in __init__.py don't need to be used in __init__.py
+"__init__.py" = ["F401"]
 # test functions don't need return types
 "tests/*" = ["ANN201", "ANN202"]
 

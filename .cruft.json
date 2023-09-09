@@ -1,6 +1,6 @@
 {
   "template": "git@github.com:tekumara/python-typed-template.git",
-  "commit": "fb1f525b150988747a30641a6949818483c1b61b",
+  "commit": "1d4f950c1307cd233a7087b49327fcf0f9a1c35f",
   "checkout": null,
   "context": {
     "cookiecutter": {

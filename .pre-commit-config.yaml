@@ -2,7 +2,7 @@
 default_stages: [push]
 repos:
   - repo: https://github.com/crate-ci/typos
-    rev: v1.13.23
+    rev: v1.14.9
     hooks:
       - id: typos
         # needed because .typos.toml is ignored see https://github.com/crate-ci/typos/issues/347
@@ -10,28 +10,24 @@ repos:
   # formatters and linters are available in the virtualenv so they can be run from the makefile & vscode
   - repo: local
     hooks:
-    hooks:
+      - id: ruff
+        name: ruff
+        entry: .venv/bin/ruff
+        language: system
+        types: [python]
+      - id: pyright
+        name: pyright
+        entry: node_modules/.bin/pyright
+        # run on all files to catch type errors that affect unchanged files
+        pass_filenames: false
+        language: system
+        types: [python]
       - id: black
         name: black
         entry: .venv/bin/black
         language: system
         types: [python]
         require_serial: true
-      - id: ruff
-        name: ruff
-        entry: .venv/bin/ruff
-        language: system
-        types: [python]
-  # these hooks require the project's virtualenv
-  - repo: local
-    hooks:
-      - id: pyright
-        name: pyright
-        entry: make pyright
-        # run on all files
-        pass_filenames: false
-        language: system
-        types: [python]
       - id: test
         name: test
         entry: make test
