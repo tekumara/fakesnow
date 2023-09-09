@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.7.0](https://github.com/tekumara/fakesnow/compare/v0.6.0...v0.7.0) (2023-09-09)
+
+
+### Features
+
+* add information_schema.databases ([6953d00](https://github.com/tekumara/fakesnow/commit/6953d0033c489a48374ef7add2510444a1739ad2)), closes [#22](https://github.com/tekumara/fakesnow/issues/22)
+
 ## [0.6.0](https://github.com/tekumara/fakesnow/compare/v0.5.1...v0.6.0) (2023-08-19)
 
 
