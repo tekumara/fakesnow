@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from typing import cast
 
-import snowflake.connector
 import sqlglot
 from sqlglot import exp
 
@@ -140,7 +139,7 @@ def extract_text_length(expression: exp.Expression) -> exp.Expression:
         for dt in expression.find_all(exp.DataType):
             if dt.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT):
                 col_name = dt.parent and dt.parent.this and dt.parent.this.this
-                if dt_size := dt.find(exp.DataTypeSize):
+                if dt_size := dt.find(exp.DataTypeParam):
                     size = (
                         isinstance(dt_size.this, exp.Literal)
                         and isinstance(dt_size.this.this, str)
@@ -311,14 +310,8 @@ def parse_json(expression: exp.Expression) -> exp.Expression:
 def regex_replace(expression: exp.Expression) -> exp.Expression:
     """Transform regex_replace expressions from snowflake to duckdb."""
 
-    if (
-        isinstance(expression, exp.Anonymous)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == "REGEXP_REPLACE"
-    ):
-        expressions = expression.expressions
-
-        if len(expressions) > 3:
+    if isinstance(expression, exp.RegexpReplace) and isinstance(expression.expression, exp.Literal):
+        if len(expression.args) > 3:
             # see https://docs.snowflake.com/en/sql-reference/functions/regexp_replace
             raise NotImplementedError(
                 "REGEXP_REPLACE with additional parameters (eg: <position>, <occurrence>, <parameters>) not supported"
@@ -326,64 +319,56 @@ def regex_replace(expression: exp.Expression) -> exp.Expression:
 
         # pattern: snowflake requires escaping backslashes in single-quoted string constants, but duckdb doesn't
         # see https://docs.snowflake.com/en/sql-reference/functions-regexp#label-regexp-escape-character-caveats
-        expressions[1].args["this"] = expressions[1].this.replace("\\\\", "\\")
+        expression.args["expression"] = exp.Literal(
+            this=expression.expression.this.replace("\\\\", "\\"), is_string=True
+        )
 
-        if len(expressions) == 2:
+        if not expression.args.get("replacement"):
             # if no replacement string, the snowflake default is ''
-            expressions.append(exp.Literal(this="", is_string=True))
+            expression.args["replacement"] = exp.Literal(this="", is_string=True)
 
         # snowflake regex replacements are global
-        expressions.append(exp.Literal(this="g", is_string=True))
+        expression.args["modifiers"] = exp.Literal(this="g", is_string=True)
 
     return expression
 
 
 def regex_substr(expression: exp.Expression) -> exp.Expression:
-    """Transform regex_substr expressions from snowflake to duckdb."""
+    """Transform regex_substr expressions from snowflake to duckdb.
 
-    if (
-        isinstance(expression, exp.Anonymous)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == "REGEXP_SUBSTR"
-    ):
-        expressions = expression.expressions
+    See https://docs.snowflake.com/en/sql-reference/functions/regexp_substr
+    """
 
-        if len(expressions) < 2:
-            raise snowflake.connector.errors.ProgrammingError(
-                msg=f"SQL compilation error:\nnot enough arguments for function [{expression.sql()}], expected 2, got {len(expressions)}",  # noqa: E501
-                errno=938,
-                sqlstate="22023",
-            )
-
-        subject = expressions[0]
+    if isinstance(expression, exp.RegexpExtract):
+        subject = expression.this
 
         # pattern: snowflake requires escaping backslashes in single-quoted string constants, but duckdb doesn't
         # see https://docs.snowflake.com/en/sql-reference/functions-regexp#label-regexp-escape-character-caveats
-        pattern = expressions[1]
+        pattern = expression.expression
         pattern.args["this"] = pattern.this.replace("\\\\", "\\")
 
         # number of characters from the beginning of the string where the function starts searching for matches
         try:
-            position = expressions[2]
-        except IndexError:
+            position = expression.args["position"]
+        except KeyError:
             position = exp.Literal(this="1", is_string=False)
 
         # which occurrence of the pattern to match
         try:
-            occurrence = expressions[3]
-        except IndexError:
+            occurrence = expression.args["occurrence"]
+        except KeyError:
             occurrence = exp.Literal(this="1", is_string=False)
 
         try:
-            regex_parameters_value = str(expressions[4].this)
+            regex_parameters_value = str(expression.args["parameters"].this)
             # 'e' parameter doesn't make sense for duckdb
             regex_parameters = exp.Literal(this=regex_parameters_value.replace("e", ""), is_string=True)
-        except IndexError:
+        except KeyError:
             regex_parameters = exp.Literal(is_string=True)
 
         try:
-            group_num = expressions[5]
-        except IndexError:
+            group_num = expression.args["group"]
+        except KeyError:
             if isinstance(regex_parameters.this, str) and "e" in regex_parameters.this:
                 group_num = exp.Literal(this="1", is_string=False)
             else:
@@ -555,7 +540,7 @@ def timestamp_ntz_ns(expression: exp.Expression) -> exp.Expression:
     if (
         isinstance(expression, exp.DataType)
         and expression.this == exp.DataType.Type.TIMESTAMP
-        and exp.DataTypeSize(this=exp.Literal(this="9", is_string=False)) in expression.expressions
+        and exp.DataTypeParam(this=exp.Literal(this="9", is_string=False)) in expression.expressions
     ):
         new = expression.copy()
         del new.args["expressions"]

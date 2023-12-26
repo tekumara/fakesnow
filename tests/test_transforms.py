@@ -133,7 +133,7 @@ def test_parse_json() -> None:
     assert (
         sqlglot.parse_one("""insert into table1 (name) select parse_json('{"first":"foo", "last":"bar"}')""")
         .transform(parse_json)
-        .sql()
+        .sql(dialect="duckdb")
         == """INSERT INTO table1 (name) SELECT JSON('{"first":"foo", "last":"bar"}')"""
     )
 
@@ -147,7 +147,9 @@ def test_regex_replace() -> None:
 
 def test_regex_substr() -> None:
     assert (
-        sqlglot.parse_one("SELECT regexp_substr(string1, 'the\\\\W+\\\\w+')").transform(regex_substr).sql()
+        sqlglot.parse_one("SELECT regexp_substr(string1, 'the\\\\W+\\\\w+')", read="snowflake")
+        .transform(regex_substr)
+        .sql()
         == "SELECT REGEXP_EXTRACT_ALL(string1[1 : ], 'the\\W+\\w+', 0, '')[1]"
     )
 

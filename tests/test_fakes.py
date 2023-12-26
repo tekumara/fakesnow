@@ -608,6 +608,7 @@ def test_tags_noop(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 def test_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("SELECT to_timestamp(0)")
+    # NB: duckdb~=0.9 returns a datetime with utc timezone
     assert cur.fetchall() == [(datetime.datetime(1970, 1, 1, 0, 0),)]
 
 
