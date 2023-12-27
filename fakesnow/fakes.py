@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Iterable, Iterator, Sequence
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Iterable, Iterator, Literal, Optional, Sequence, Type, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
 
 import duckdb
 
@@ -55,9 +56,9 @@ class FakeSnowflakeCursor:
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]] = ...,
-        exc_value: Optional[BaseException] = ...,
-        traceback: Optional[TracebackType] = ...,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> bool:
         return False
 
@@ -250,11 +251,11 @@ class FakeSnowflakeCursor:
         reader = self._duck_conn.fetch_record_batch(rows_per_batch=1000)
 
         batches = []
-        while True:
-            try:
+        try:
+            while True:
                 batches.append(FakeResultBatch(self._use_dict_result, reader.read_next_batch()))
-            except StopIteration:
-                break
+        except StopIteration:
+            pass
 
         return batches
 
@@ -365,8 +366,8 @@ class FakeSnowflakeConnection:
     def __init__(
         self,
         duck_conn: DuckDBPyConnection,
-        database: Optional[str] = None,
-        schema: Optional[str] = None,
+        database: str | None = None,
+        schema: str | None = None,
         create_database: bool = True,
         create_schema: bool = True,
         *args: Any,
@@ -435,16 +436,16 @@ class FakeSnowflakeConnection:
 
     def __exit__(
         self,
-        exc_type: Optional[Type[BaseException]] = ...,
-        exc_value: Optional[BaseException] = ...,
-        traceback: Optional[TracebackType] = ...,
+        exc_type: type[BaseException] | None,
+        exc_value: BaseException | None,
+        traceback: TracebackType | None,
     ) -> bool:
         return False
 
     def commit(self) -> None:
         self.cursor().execute("COMMIT")
 
-    def cursor(self, cursor_class: Type[SnowflakeCursor] = SnowflakeCursor) -> FakeSnowflakeCursor:
+    def cursor(self, cursor_class: type[SnowflakeCursor] = SnowflakeCursor) -> FakeSnowflakeCursor:
         return FakeSnowflakeCursor(conn=self, duck_conn=self._duck_conn, use_dict_result=cursor_class == DictCursor)
 
     def execute_string(
@@ -452,7 +453,7 @@ class FakeSnowflakeConnection:
         sql_text: str,
         remove_comments: bool = False,
         return_cursors: bool = True,
-        cursor_class: Type[SnowflakeCursor] = SnowflakeCursor,
+        cursor_class: type[SnowflakeCursor] = SnowflakeCursor,
         **kwargs: dict[str, Any],
     ) -> Iterable[FakeSnowflakeCursor]:
         cursors = [

@@ -1,6 +1,5 @@
 {
-    "name": "fakesnow",
     "devDependencies": {
-        "pyright": "1.1.308"
+        "pyright": "1.1.330"
     }
 }

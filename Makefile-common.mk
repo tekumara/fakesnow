@@ -1,7 +1,7 @@
 MAKEFLAGS += --warn-undefined-variables
 SHELL = /bin/bash -o pipefail
 .DEFAULT_GOAL := help
-.PHONY: help clean install format check lint pyright test dist hooks install-hooks
+.PHONY: help clean install format check pyright test dist hooks install-hooks
 
 ## display help message
 help:
@@ -10,11 +10,11 @@ help:
 venv ?= .venv
 pip := $(venv)/bin/pip
 
-$(pip):
+$(pip): $(if $(value CI),|,) .python-version
 # create venv using system python even when another venv is active
 	PATH=$${PATH#$${VIRTUAL_ENV}/bin:} python3 -m venv --clear $(venv)
 	$(venv)/bin/python --version
-	$(pip) install pip~=23.1 wheel~=0.40
+	$(pip) install pip~=23.3 wheel~=0.40
 
 $(venv): $(if $(value CI),|,) pyproject.toml $(pip)
 	$(pip) install -e '.[dev, notebook]'
@@ -31,15 +31,15 @@ clean:
 ## create venv and install this package and hooks
 install: $(venv) node_modules $(if $(value CI),,install-hooks)
 
-## lint, format and type check
+## format, lint and type check
 check: export SKIP=test
 check: hooks
 
-## lint and format
-lint: export SKIP=pyright,test
-lint: hooks
+## format and lint
+format: export SKIP=pyright,test
+format: hooks
 
-## pyright
+## pyright type check
 pyright: node_modules $(venv)
 	node_modules/.bin/pyright
 
@@ -58,13 +58,9 @@ publish: $(venv)
 
 ## run pre-commit git hooks on all files
 hooks: node_modules $(venv)
-	$(venv)/bin/pre-commit run --show-diff-on-failure --color=always --all-files --hook-stage push
+	$(venv)/bin/pre-commit run --color=always --all-files --hook-stage push
 
-install-hooks: .git/hooks/pre-commit .git/hooks/pre-push
-	$(venv)/bin/pre-commit install-hooks
-
-.git/hooks/pre-commit: $(venv)
-	$(venv)/bin/pre-commit install -t pre-commit
+install-hooks: .git/hooks/pre-push
 
 .git/hooks/pre-push: $(venv)
-	$(venv)/bin/pre-commit install -t pre-push
+	$(venv)/bin/pre-commit install --install-hooks -t pre-push

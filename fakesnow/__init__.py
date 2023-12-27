@@ -4,11 +4,8 @@ import contextlib
 import importlib
 import sys
 import unittest.mock as mock
+from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
-from typing import (
-    Iterator,
-    Sequence,
-)
 
 import duckdb
 import snowflake.connector
