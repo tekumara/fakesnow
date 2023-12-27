@@ -531,6 +531,20 @@ def to_decimal(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def to_timestamp(expression: exp.Expression) -> exp.Expression:
+    """Convert to_timestamp(seconds) to timestamp without timezone (ie: TIMESTAMP_NTZ).
+
+    See https://docs.snowflake.com/en/sql-reference/functions/to_timestamp
+    """
+
+    if isinstance(expression, exp.UnixToTime):
+        return exp.Cast(
+            this=expression,
+            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
+        )
+    return expression
+
+
 def timestamp_ntz_ns(expression: exp.Expression) -> exp.Expression:
     """Convert timestamp_ntz(9) to timestamp_ntz.
 

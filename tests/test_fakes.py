@@ -606,10 +606,13 @@ def test_tags_noop(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("ALTER TABLE table1 MODIFY COLUMN name1 SET TAG foo='bar'")
 
 
-def test_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_to_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # snowflake returns naive timestamps (ie: no timezone)
     cur.execute("SELECT to_timestamp(0)")
-    # NB: duckdb~=0.9 returns a datetime with utc timezone
     assert cur.fetchall() == [(datetime.datetime(1970, 1, 1, 0, 0),)]
+
+    cur.execute("SELECT to_timestamp('2013-04-05 01:02:03')")
+    assert cur.fetchall() == [(datetime.datetime(2013, 4, 5, 1, 2, 3),)]
 
 
 def test_timestamp_to_date(cur: snowflake.connector.cursor.SnowflakeCursor):
