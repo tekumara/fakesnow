@@ -2,6 +2,19 @@
 
 # Changelog
 
+## [0.7.1](https://github.com/tekumara/fakesnow/compare/v0.7.0...v0.7.1) (2023-12-27)
+
+
+### Bug Fixes
+
+* No module named 'pandas.core.arrays.arrow.dtype' ([6ed1d2a](https://github.com/tekumara/fakesnow/commit/6ed1d2aad7ff193f2fe24168f303b9f22de3842e))
+
+
+### Chores
+
+* bump sqlglot 19.5.1 ([9177a7f](https://github.com/tekumara/fakesnow/commit/9177a7f1f2a20c87da204bb5278cc5a909022ec6))
+* cruft update ([bf6f7e1](https://github.com/tekumara/fakesnow/commit/bf6f7e12ed3816efe1e0b1280fd5356a735956f3))
+
 ## [0.7.0](https://github.com/tekumara/fakesnow/compare/v0.6.0...v0.7.0) (2023-09-09)
 
 
