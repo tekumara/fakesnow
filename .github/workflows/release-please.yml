@@ -23,7 +23,6 @@ jobs:
           private_key: ${{ secrets.APP_PRIVATE_KEY }}
       - uses: google-github-actions/release-please-action@v4
         with:
-          release-type: python
           # use app token so that PRs and releases created by release-please trigger
           # additional workflows. They'll also be authored by the app.
           # see https://github.com/google-github-actions/release-please-action#github-credentials
