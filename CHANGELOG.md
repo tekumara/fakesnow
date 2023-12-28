@@ -2,6 +2,17 @@
 
 # Changelog
 
+## [1.0.0](https://github.com/tekumara/fakesnow/compare/v0.7.1...v1.0.0) (2023-12-28)
+
+
+### ⚠ BREAKING CHANGES
+
+* support arrays
+
+### Features
+
+* support arrays ([f12ddf4](https://github.com/tekumara/fakesnow/commit/f12ddf44aafba051c831c284c190a36210342922)), closes [#19](https://github.com/tekumara/fakesnow/issues/19) [#20](https://github.com/tekumara/fakesnow/issues/20) [#21](https://github.com/tekumara/fakesnow/issues/21)
+
 ## [0.7.1](https://github.com/tekumara/fakesnow/compare/v0.7.0...v0.7.1) (2023-12-27)
 
 
