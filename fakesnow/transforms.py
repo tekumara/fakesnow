@@ -578,15 +578,14 @@ def semi_structured_types(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression.
     """
 
-    if isinstance(expression, exp.DataType):
-        if expression.this in [exp.DataType.Type.OBJECT, exp.DataType.Type.VARIANT]:
-            new = expression.copy()
-            new.args["this"] = exp.DataType.Type.JSON
-            return new
-        elif expression.this == exp.DataType.Type.ARRAY:
-            new = expression.copy()
-            new.set("expressions", [exp.DataType(this=exp.DataType.Type.JSON)])
-            return new
+    if isinstance(expression, exp.DataType) and expression.this in [
+        exp.DataType.Type.ARRAY,
+        exp.DataType.Type.OBJECT,
+        exp.DataType.Type.VARIANT,
+    ]:
+        new = expression.copy()
+        new.args["this"] = exp.DataType.Type.JSON
+        return new
 
     return expression
 

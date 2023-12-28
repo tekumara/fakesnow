@@ -163,7 +163,7 @@ def test_semi_structured_types() -> None:
 
     assert (
         sqlglot.parse_one("CREATE TABLE table1 (name array)").transform(semi_structured_types).sql(dialect="duckdb")
-        == "CREATE TABLE table1 (name JSON[])"
+        == "CREATE TABLE table1 (name JSON)"
     )
 
     assert (

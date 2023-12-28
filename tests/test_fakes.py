@@ -2,6 +2,7 @@
 
 import datetime
 import json
+from collections.abc import Sequence
 from decimal import Decimal
 
 import pandas as pd
@@ -205,7 +206,7 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
             XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT,
             XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT,
             XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE, XTIME TIME,
-            XBINARY BINARY, XARRAY ARRAY, XOBJECT OBJECT
+            XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT */ XVARIANT VARIANT
         )
         """
     )
@@ -233,8 +234,10 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         ResultMetadata(name='XDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XTIME', type_code=12, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XBINARY', type_code=11, display_size=None, internal_size=8388608, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='XARRAY', type_code=10, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='XOBJECT', type_code=9, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        # TODO: handle ARRAY and OBJECT see https://github.com/tekumara/fakesnow/issues/26
+        # ResultMetadata(name='XARRAY', type_code=10, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        # ResultMetadata(name='XOBJECT', type_code=9, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XVARIANT', type_code=5, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
     ]
     # fmt: on
 
@@ -246,6 +249,19 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.describe("select * from example where XNUMBER = %s", (1,)) == expected_metadata
     cur.execute("select * from example where XNUMBER = %s", (1,))
     assert cur.description == expected_metadata
+
+    # test semi-structured ops return variant ie: type_code=5
+    # fmt: off
+    assert (
+        cur.describe("SELECT ['A', 'B'][0] as array_index, OBJECT_CONSTRUCT('k','v1')['k'] as object_key, ARRAY_CONSTRUCT('foo')::VARIANT[0] as variant_key")
+        == [
+            # NB: snowflake returns internal_size = 16777216 for all columns
+            ResultMetadata(name="ARRAY_INDEX", type_code=5, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+            ResultMetadata(name="OBJECT_KEY", type_code=5, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+            ResultMetadata(name="VARIANT_KEY", type_code=5, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True)
+        ]
+    )
+    # fmt: on
 
 
 def test_describe_info_schema_columns(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -420,7 +436,7 @@ def test_information_schema_columns_other(cur: snowflake.connector.cursor.Snowfl
         """
         create or replace table example (
             XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE, XTIME TIME,
-            XBINARY BINARY, XARRAY ARRAY, XOBJECT OBJECT
+            XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT */ XVARIANT VARIANT
         )
         """
     )
@@ -438,8 +454,10 @@ def test_information_schema_columns_other(cur: snowflake.connector.cursor.Snowfl
         ("XDATE", "DATE"),
         ("XTIME", "TIME"),
         ("XBINARY", "BINARY"),
-        ("XARRAY", "ARRAY"),
-        ("XOBJECT", "OBJECT"),
+        # TODO: support these types https://github.com/tekumara/fakesnow/issues/27
+        # ("XARRAY", "ARRAY"),
+        # ("XOBJECT", "OBJECT"),
+        ("XVARIANT", "VARIANT"),
     ]
 
 
@@ -547,18 +565,25 @@ def test_schema_drop(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("create table semis (emails array, name object, notes variant)")
+    def indent(rows: Sequence[tuple]) -> list[tuple]:
+        # indent duckdb json strings to match snowflake json strings
+        return [(json.dumps(json.loads(r[0]), indent=2), *r[1:]) for r in rows]
+
+    cur.execute("create or replace table semis (emails array, name object, notes variant)")
     cur.execute(
-        """insert into semis(emails, name, notes) SELECT [1, 2], parse_json('{"k": "v1"}'), parse_json('["foo"]')"""
+        """insert into semis(emails, name, notes) SELECT ['A', 'B'], OBJECT_CONSTRUCT('k','v1'), ARRAY_CONSTRUCT('foo')::VARIANT"""
     )
     cur.execute(
-        """insert into semis(emails, name, notes) VALUES ([3,4], parse_json('{"k": "v2"}'), parse_json('{"b": "ar"}'))"""
+        """insert into semis(emails, name, notes) SELECT ['C','D'], parse_json('{"k": "v2"}'), parse_json('{"b": "ar"}')"""
     )
 
     # results are returned as strings, because the underlying type is JSON (duckdb) / VARIANT (snowflake)
 
+    cur.execute("select emails from semis")
+    assert indent(cur.fetchall()) == [('[\n  "A",\n  "B"\n]',), ('[\n  "C",\n  "D"\n]',)]  # type: ignore
+
     cur.execute("select emails[0] from semis")
-    assert cur.fetchall() == [("1",), ("3",)]
+    assert cur.fetchall() == [('"A"',), ('"C"',)]
 
     cur.execute("select name['k'] from semis")
     assert cur.fetchall() == [('"v1"',), ('"v2"',)]
@@ -728,12 +753,12 @@ def test_values(conn: snowflake.connector.SnowflakeConnection):
 
 def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
-        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar, ORDERS array)")
 
         df = pd.DataFrame.from_records(
             [
-                {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
-                {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
+                {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P", "ORDERS": ["A", "B"]},
+                {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M", "ORDERS": ["C", "D"]},
             ]
         )
         snowflake.connector.pandas_tools.write_pandas(conn, df, "customers")
