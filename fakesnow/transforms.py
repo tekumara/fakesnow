@@ -355,9 +355,13 @@ def regex_substr(expression: exp.Expression) -> exp.Expression:
 
         # which occurrence of the pattern to match
         try:
-            occurrence = expression.args["occurrence"]
+            occurrence = int(expression.args["occurrence"].this)
         except KeyError:
-            occurrence = exp.Literal(this="1", is_string=False)
+            occurrence = 1
+
+        # the duckdb dialect increments bracket (ie: index) expressions by 1 because duckdb is 1-indexed,
+        # so we need to compensate by subtracting 1
+        occurrence = exp.Literal(this=str(occurrence - 1), is_string=False)
 
         try:
             regex_parameters_value = str(expression.args["parameters"].this)
