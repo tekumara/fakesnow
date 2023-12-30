@@ -432,7 +432,7 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
             name = f"{expression.this.name}.main"
         else:
             # SCHEMA
-            if db := expression.this.args.get("db"):
+            if db := expression.this.args.get("db"):  # noqa: SIM108
                 db_name = db.name
             else:
                 # isn't qualified with a database

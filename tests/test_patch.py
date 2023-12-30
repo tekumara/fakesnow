@@ -39,7 +39,7 @@ def test_patch_other_unloaded_module() -> None:
 def test_cannot_patch_twice(_fakesnow_no_auto_create: None) -> None:
     # _fakesnow is the first patch
 
-    with pytest.raises(AssertionError) as excinfo:
+    with pytest.raises(AssertionError) as excinfo:  # noqa: SIM117
         # second patch will fail
         with fakesnow.patch():
             pass
