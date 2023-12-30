@@ -50,6 +50,10 @@ def test_binding_qmark(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchall() == [(1, "Jenny", True)]
 
 
+def test_close(cur: snowflake.connector.cursor.SnowflakeCursor):
+    assert cur.close() is True
+
+
 def test_connect_auto_create(_fakesnow: None):
     with snowflake.connector.connect(database="db1", schema="schema1"):
         # creates db1 and schema1
@@ -657,21 +661,6 @@ def test_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
-def test_write_pandas_timestamp_ntz(conn: snowflake.connector.SnowflakeConnection):
-    # compensate for https://github.com/duckdb/duckdb/issues/7980
-    with conn.cursor() as cur:
-        cur.execute("create table example (UPDATE_AT_NTZ timestamp_ntz(9))")
-        # cur.execute("create table example (UPDATE_AT_NTZ timestamp)")
-
-        now_utc = datetime.datetime.now(pytz.utc)
-        df = pd.DataFrame([(now_utc,)], columns=["UPDATE_AT_NTZ"])
-        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE")
-
-        cur.execute("select * from example")
-
-        assert cur.fetchall() == [(now_utc.replace(tzinfo=None),)]
-
-
 def test_transactions(conn: snowflake.connector.SnowflakeConnection):
     conn.execute_string(
         """CREATE TABLE table1 (i int);
@@ -687,6 +676,13 @@ def test_transactions(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM table1")
         assert cur.fetchall() == [(2,)]
+
+    # check behaviour mimics snowflake sqlalchemy usage
+    # ie: rollback without transaction is a success
+    with conn.cursor() as cur:
+        cur.execute("ROLLBACK")
+        assert cur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+        assert cur.fetchall() == [("Statement executed successfully.",)]
 
 
 def test_unquoted_identifiers_are_upper_cased(conn: snowflake.connector.SnowflakeConnection):
@@ -766,6 +762,21 @@ def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("select id, first_name, last_name from customers")
 
         assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+
+
+def test_write_pandas_timestamp_ntz(conn: snowflake.connector.SnowflakeConnection):
+    # compensate for https://github.com/duckdb/duckdb/issues/7980
+    with conn.cursor() as cur:
+        cur.execute("create table example (UPDATE_AT_NTZ timestamp_ntz(9))")
+        # cur.execute("create table example (UPDATE_AT_NTZ timestamp)")
+
+        now_utc = datetime.datetime.now(pytz.utc)
+        df = pd.DataFrame([(now_utc,)], columns=["UPDATE_AT_NTZ"])
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE")
+
+        cur.execute("select * from example")
+
+        assert cur.fetchall() == [(now_utc.replace(tzinfo=None),)]
 
 
 def test_write_pandas_partial_columns(conn: snowflake.connector.SnowflakeConnection):

@@ -26,6 +26,7 @@ import fakesnow.info_schema as info_schema
 import fakesnow.transforms as transforms
 
 SCHEMA_UNSET = "schema_unset"
+SUCCESS_SQL = "SELECT 'Statement executed successfully.' as status"
 
 
 class FakeSnowflakeCursor:
@@ -61,6 +62,11 @@ class FakeSnowflakeCursor:
         traceback: TracebackType | None,
     ) -> bool:
         return False
+
+    def close(self) -> bool:
+        self._last_sql = None
+        self._last_params = None
+        return True
 
     def describe(self, command: str, *args: Any, **kwargs: Any) -> list[ResultMetadata]:
         """Return the schema of the result without executing the query.
@@ -171,6 +177,13 @@ class FakeSnowflakeCursor:
             # minimal processing to make it look like a snowflake exception, message content may differ
             msg = cast(str, e.args[0]).split("\n")[0]
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
+        except duckdb.TransactionException as e:
+            # snowflake doesn't error when rolling back outside a tx
+            if "cannot rollback - no transaction is active" in str(e):
+                self._duck_conn.execute(SUCCESS_SQL)
+                self._last_sql = SUCCESS_SQL
+            else:
+                raise e
 
         if cmd == "USE DATABASE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             self._conn.database = ident.this.upper()

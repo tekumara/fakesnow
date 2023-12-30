@@ -1,6 +1,6 @@
-from string import Template
-
 """Info schema extension tables/views used for storing snowflake metadata not captured by duckdb."""
+
+from string import Template
 
 # use ext prefix in columns to disambiguate when joining with information_schema.tables
 SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT = Template(
