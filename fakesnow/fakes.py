@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from collections.abc import Iterable, Iterator, Sequence
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, Literal, Optional, Union, cast
+from typing import TYPE_CHECKING, Any, Literal, Optional, cast
 
 import duckdb
 
@@ -50,6 +50,7 @@ class FakeSnowflakeCursor:
         self._last_sql = None
         self._last_params = None
         self._sqlstate = None
+        self._arraysize = 1
         self._converter = snowflake.connector.converter.SnowflakeConverter()
 
     def __enter__(self) -> Self:
@@ -62,6 +63,14 @@ class FakeSnowflakeCursor:
         traceback: TracebackType | None,
     ) -> bool:
         return False
+
+    @property
+    def arraysize(self) -> int:
+        return self._arraysize
+
+    @arraysize.setter
+    def arraysize(self, value: int) -> None:
+        self._arraysize = value
 
     def close(self) -> bool:
         self._last_sql = None
@@ -245,19 +254,22 @@ class FakeSnowflakeCursor:
         return self._duck_conn.fetch_df()
 
     def fetchone(self) -> dict | tuple | None:
+        result = self.fetchmany(1)
+        return result[0] if result else None
+
+    def fetchmany(self, size: int | None = None) -> list[tuple] | list[dict]:
+        # https://peps.python.org/pep-0249/#fetchmany
+        size = size or self._arraysize
         if not self._use_dict_result:
-            return cast(Union[tuple, None], self._duck_conn.fetchone())
+            return cast(list[tuple], self._duck_conn.fetchmany(size))
 
         if not self._arrow_table:
             self._arrow_table = self._duck_conn.fetch_arrow_table()
-            self._arrow_table_fetch_one_index = -1
+            self._arrow_table_fetch_index = -size
 
-        self._arrow_table_fetch_one_index += 1
+        self._arrow_table_fetch_index += size
 
-        try:
-            return self._arrow_table.take([self._arrow_table_fetch_one_index]).to_pylist()[0]
-        except pyarrow.lib.ArrowIndexError:
-            return None
+        return self._arrow_table.slice(offset=self._arrow_table_fetch_index, length=size).to_pylist()
 
     def get_result_batches(self) -> list[ResultBatch] | None:
         # rows_per_batch is approximate

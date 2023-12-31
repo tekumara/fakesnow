@@ -300,20 +300,16 @@ def test_execute_string(conn: snowflake.connector.SnowflakeConnection):
     assert [(1,)] == cur2.fetchall()
 
 
-def test_fetchall(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
-    cur.execute("insert into customers values (1, 'Jenny', 'P')")
-    cur.execute("insert into customers values (2, 'Jasper', 'M')")
-    cur.execute("select id, first_name, last_name from customers")
-
-    assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
-
-
-def test_fetchall_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
+        cur.execute("select id, first_name, last_name from customers")
+
+        assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("select id, first_name, last_name from customers")
 
         assert cur.fetchall() == [
@@ -322,27 +318,47 @@ def test_fetchall_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
         ]
 
 
-def test_fetchone(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
-    cur.execute("insert into customers values (1, 'Jenny', 'P')")
-    cur.execute("insert into customers values (2, 'Jasper', 'M')")
-    cur.execute("select id, first_name, last_name from customers")
-
-    assert cur.fetchone() == (1, "Jenny", "P")
-    assert cur.fetchone() == (2, "Jasper", "M")
-    assert not cur.fetchone()
-
-
-def test_fetchone_dict_cursor(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+def test_fetchone(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
         cur.execute("select id, first_name, last_name from customers")
 
+        assert cur.fetchone() == (1, "Jenny", "P")
+        assert cur.fetchone() == (2, "Jasper", "M")
+        assert cur.fetchone() is None
+
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("select id, first_name, last_name from customers")
+
         assert cur.fetchone() == {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"}
         assert cur.fetchone() == {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"}
-        assert not cur.fetchone()
+        assert cur.fetchone() is None
+
+
+def test_fetchmany(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        cur.execute("insert into customers values (1, 'Jenny', 'P')")
+        cur.execute("insert into customers values (2, 'Jasper', 'M')")
+        cur.execute("insert into customers values (3, 'Jeremy', 'K')")
+        cur.execute("select id, first_name, last_name from customers")
+
+        assert cur.fetchmany(2) == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+        assert cur.fetchmany(2) == [(3, "Jeremy", "K")]
+        assert cur.fetchmany(2) == []
+
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("select id, first_name, last_name from customers")
+        assert cur.fetchmany(2) == [
+            {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
+            {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
+        ]
+        assert cur.fetchmany(2) == [
+            {"ID": 3, "FIRST_NAME": "Jeremy", "LAST_NAME": "K"},
+        ]
+        assert cur.fetchmany(2) == []
 
 
 def test_fetch_pandas_all(cur: snowflake.connector.cursor.SnowflakeCursor):
