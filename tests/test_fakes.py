@@ -386,10 +386,12 @@ def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
             union
             select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
         ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
+        order by id
         """
+        # duckdb lateral join order is non-deterministic so order by id
+        # within an id the order of fruits should match the json array
     )
-    # TODO: match sort order
-    assert sorted(cur.fetchall()) == [(1, '"banana"'), (2, '"coconut"'), (2, '"durian"')]  # type: ignore
+    assert cur.fetchall() == [(1, '"banana"'), (2, '"coconut"'), (2, '"durian"')]
 
 
 def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):

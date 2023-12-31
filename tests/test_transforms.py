@@ -84,7 +84,7 @@ def test_flatten() -> None:
         ).transform(flatten)
         # needed to transform flat.value:fruit to flat.value -> '$.fruit'
         .transform(indices_to_json_extract).sql(dialect="duckdb")
-        == """SELECT t.id, flat.value -> '$.fruit' FROM (SELECT 1, JSON('[{"fruit":"banana"}]') UNION SELECT 2, JSON('[{"fruit":"coconut"}, {"fruit":"durian"}]')) AS t(id, fruits), LATERAL UNNEST(CAST(t.fruits AS JSON[])) AS flat(VALUE)"""  # noqa: E501
+        == """SELECT t.id, flat.value -> '$.fruit' FROM (SELECT 1, JSON('[{"fruit":"banana"}]') UNION SELECT 2, JSON('[{"fruit":"coconut"}, {"fruit":"durian"}]')) AS t(id, fruits), LATERAL UNNEST(LIST_REVERSE(CAST(t.fruits AS JSON[]))) AS flat(VALUE)"""  # noqa: E501
     )
 
 
