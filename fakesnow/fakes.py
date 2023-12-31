@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 import re
+import sys
 from collections.abc import Iterable, Iterator, Sequence
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal, Optional, cast
@@ -177,7 +179,8 @@ class FakeSnowflakeCursor:
         try:
             self._last_sql = sql
             self._last_params = params
-            # print(f"{sql};")
+            if os.environ.get("FAKESNOW_DEBUG"):
+                print(f"{sql};", file=sys.stderr)
             self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]
