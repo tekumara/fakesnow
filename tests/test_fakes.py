@@ -377,12 +377,33 @@ def test_fetch_pandas_all(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert_frame_equal(cur.fetch_pandas_all(), expected_df)
 
 
+def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute(
+        """
+        select t.id, flat.value:fruit from
+        (
+            select 1, parse_json('[{"fruit":"banana"}]')
+            union
+            select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
+        ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
+        """
+    )
+    # TODO: match sort order
+    assert sorted(cur.fetchall()) == [(1, '"banana"'), (2, '"coconut"'), (2, '"durian"')]  # type: ignore
+
+
 def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table example (f float, f4 float4, f8 float8, d double, r real)")
     cur.execute("insert into example values (1.23, 1.23, 1.23, 1.23, 1.23)")
     cur.execute("select * from example")
     # 32 bit floats will return 1.2300000190734863 rather than 1.23
     assert cur.fetchall() == [(1.23, 1.23, 1.23, 1.23, 1.23)]
+
+
+def test_get_path_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("""select parse_json('{"fruit":"banana"}'):fruit::varchar""")
+    # converting json to varchar returns unquoted string
+    assert cur.fetchall() == [("banana",)]
 
 
 def test_get_result_batches(cur: snowflake.connector.cursor.SnowflakeCursor):

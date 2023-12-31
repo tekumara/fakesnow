@@ -155,6 +155,42 @@ def extract_text_length(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def flatten(expression: exp.Expression) -> exp.Expression:
+    """Flatten an array.
+
+    See https://docs.snowflake.com/en/sql-reference/functions/flatten
+
+    TODO: return index and same order as snowflake.
+    TODO: support objects.
+    """
+    if (
+        isinstance(expression, exp.Lateral)
+        and isinstance(expression.this, exp.Explode)
+        and (alias := expression.args.get("alias"))
+        # always true; when no explicit alias provided this will be _flattened
+        and isinstance(alias, exp.TableAlias)
+    ):
+        explode_expression = expression.this.this.expression
+
+        return exp.Lateral(
+            this=exp.Unnest(
+                expressions=[
+                    exp.Cast(
+                        this=explode_expression,
+                        to=exp.DataType(
+                            this=exp.DataType.Type.ARRAY,
+                            expressions=[exp.DataType(this=exp.DataType.Type.JSON, nested=False, prefix=False)],
+                            nested=True,
+                        ),
+                    )
+                ]
+            ),
+            alias=exp.TableAlias(this=alias.this, columns=[exp.Identifier(this="VALUE", quoted=False)]),
+        )
+
+    return expression
+
+
 def float_to_double(expression: exp.Expression) -> exp.Expression:
     """Convert float to double for 64 bit precision.
 
@@ -176,10 +212,10 @@ def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
     and object indices, see
     https://docs.snowflake.com/en/sql-reference/data-types-semistructured#accessing-elements-of-an-object-by-key
 
-    Duckdb uses the -> operator, or the json_extract function, see
+    Duckdb uses the -> operator, aka the json_extract function, see
     https://duckdb.org/docs/extensions/json#json-extraction-functions
 
-    This works for Snowflake arrays too because we convert them to JSON[] in duckdb.
+    This works for Snowflake arrays too because we convert them to JSON in duckdb.
     """
     if (
         isinstance(expression, exp.Bracket)
@@ -255,6 +291,20 @@ def integer_precision(expression: exp.Expression) -> exp.Expression:
             nested=False,
             prefix=False,
         )
+
+    return expression
+
+
+def json_extract_as_varchar(expression: exp.Expression) -> exp.Expression:
+    """Return raw unquoted string when casting json extraction to varchar.
+
+    This must run after indices_to_json_extract.
+
+    Duckdb uses the ->> operator, aka the json_extract_string function, see
+    https://duckdb.org/docs/extensions/json#json-extraction-functions
+    """
+    if isinstance(expression, exp.Cast) and (extract := expression.this) and isinstance(extract, exp.JSONExtract):
+        return exp.JSONExtractScalar(this=extract.this, expression=extract.expression)
 
     return expression
 

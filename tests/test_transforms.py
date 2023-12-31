@@ -7,11 +7,13 @@ from fakesnow.transforms import (
     drop_schema_cascade,
     extract_comment,
     extract_text_length,
+    flatten,
     float_to_double,
     indices_to_json_extract,
     information_schema_columns_snowflake,
     information_schema_tables_ext,
     integer_precision,
+    json_extract_as_varchar,
     object_construct,
     parse_json,
     regex_replace,
@@ -67,6 +69,25 @@ def test_extract_text_length() -> None:
     assert e.args["text_lengths"] == [("t1", 16777216), ("t2", 10), ("t3", 20)]
 
 
+def test_flatten() -> None:
+    assert (
+        sqlglot.parse_one(
+            """
+            select t.id, flat.value:fruit from
+            (
+                select 1, parse_json('[{"fruit":"banana"}]')
+                union
+                select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
+            ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
+            """,
+            read="snowflake",
+        ).transform(flatten)
+        # needed to transform flat.value:fruit to flat.value -> '$.fruit'
+        .transform(indices_to_json_extract).sql(dialect="duckdb")
+        == """SELECT t.id, flat.value -> '$.fruit' FROM (SELECT 1, JSON('[{"fruit":"banana"}]') UNION SELECT 2, JSON('[{"fruit":"coconut"}, {"fruit":"durian"}]')) AS t(id, fruits), LATERAL UNNEST(CAST(t.fruits AS JSON[])) AS flat(VALUE)"""  # noqa: E501
+    )
+
+
 def test_float_to_double() -> None:
     assert (
         sqlglot.parse_one("create table example (f float, f4 float4, f8 float8, d double, r real)")
@@ -118,6 +139,18 @@ def test_information_schema_tables_ext() -> None:
     assert (
         sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(information_schema_tables_ext).sql()
         == "SELECT * FROM INFORMATION_SCHEMA.TABLES LEFT JOIN information_schema.tables_ext ON tables.table_catalog = tables_ext.ext_table_catalog AND tables.table_schema = tables_ext.ext_table_schema AND tables.table_name = tables_ext.ext_table_name"  # noqa: E501
+    )
+
+
+def test_json_extract_as_varchar() -> None:
+    assert (
+        sqlglot.parse_one(
+            """select parse_json('{"fruit":"banana"}'):fruit::varchar""",
+            read="snowflake",
+        )
+        # needed first
+        .transform(indices_to_json_extract).transform(json_extract_as_varchar).sql(dialect="duckdb")
+        == """SELECT JSON('{"fruit":"banana"}') ->> '$.fruit'"""
     )
 
 
