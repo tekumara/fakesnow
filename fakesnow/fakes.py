@@ -30,6 +30,7 @@ import fakesnow.transforms as transforms
 
 SCHEMA_UNSET = "schema_unset"
 SUCCESS_SQL = "SELECT 'Statement executed successfully.' as status"
+DATABASE_CREATED_SQL = Template("SELECT 'Database ${db} successfully created.' as status")
 TABLE_CREATED_SQL = Template("SELECT 'Table ${table} successfully created.' as status")
 INSERTED_SQL = Template("SELECT ${count} as 'number of rows inserted'")
 
@@ -228,6 +229,9 @@ class FakeSnowflakeCursor:
         if create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions
             self._duck_conn.execute(info_schema.creation_sql(create_db_name))
+            table_created_sql = DATABASE_CREATED_SQL.substitute(db=create_db_name)
+            self._duck_conn.execute(table_created_sql)
+            self._last_sql = table_created_sql
 
         if table_comment := cast(tuple[exp.Table, str], transformed.args.get("table_comment")):
             # record table comment
