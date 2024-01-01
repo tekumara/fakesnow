@@ -32,6 +32,7 @@ SCHEMA_UNSET = "schema_unset"
 SUCCESS_SQL = "SELECT 'Statement executed successfully.' as status"
 DATABASE_CREATED_SQL = Template("SELECT 'Database ${name} successfully created.' as status")
 TABLE_CREATED_SQL = Template("SELECT 'Table ${name} successfully created.' as status")
+DROPPED_SQL = Template("SELECT '${name} successfully dropped.' as status")
 SCHEMA_CREATED_SQL = Template("SELECT 'Schema ${name} successfully created.' as status")
 INSERTED_SQL = Template("SELECT ${count} as 'number of rows inserted'")
 
@@ -215,9 +216,10 @@ class FakeSnowflakeCursor:
             self._conn.schema = ident.this.upper()
             self._conn.schema_set = True
 
-        if cmd == "CREATE TABLE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
-            name = ident.this if ident.quoted else ident.this.upper()
-            created_sql = TABLE_CREATED_SQL.substitute(name=name)
+        if create_db_name := transformed.args.get("create_db_name"):
+            # we created a new database, so create the info schema extensions
+            self._duck_conn.execute(info_schema.creation_sql(create_db_name))
+            created_sql = DATABASE_CREATED_SQL.substitute(name=create_db_name)
             self._duck_conn.execute(created_sql)
             self._last_sql = created_sql
 
@@ -227,18 +229,23 @@ class FakeSnowflakeCursor:
             self._duck_conn.execute(created_sql)
             self._last_sql = created_sql
 
+        if cmd == "CREATE TABLE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+            name = ident.this if ident.quoted else ident.this.upper()
+            created_sql = TABLE_CREATED_SQL.substitute(name=name)
+            self._duck_conn.execute(created_sql)
+            self._last_sql = created_sql
+
+        if cmd.startswith("DROP") and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+            name = ident.this if ident.quoted else ident.this.upper()
+            dropped_sql = DROPPED_SQL.substitute(name=name)
+            self._duck_conn.execute(dropped_sql)
+            self._last_sql = dropped_sql
+
         if cmd == "INSERT":
             (count,) = self._duck_conn.fetchall()[0]
             inserted_sql = INSERTED_SQL.substitute(count=count)
             self._duck_conn.execute(inserted_sql)
             self._last_sql = inserted_sql
-
-        if create_db_name := transformed.args.get("create_db_name"):
-            # we created a new database, so create the info schema extensions
-            self._duck_conn.execute(info_schema.creation_sql(create_db_name))
-            created_sql = DATABASE_CREATED_SQL.substitute(name=create_db_name)
-            self._duck_conn.execute(created_sql)
-            self._last_sql = created_sql
 
         if table_comment := cast(tuple[exp.Table, str], transformed.args.get("table_comment")):
             # record table comment

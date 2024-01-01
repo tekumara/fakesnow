@@ -289,22 +289,32 @@ def test_description_create_database(dcur: snowflake.connector.cursor.DictCursor
     dcur.execute("create database example")
     assert dcur.fetchall() == [{"status": "Database EXAMPLE successfully created."}]
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    # TODO: support drop database
+    # dcur.execute("drop database example")
+    # assert dcur.fetchall() == [{"status": "EXAMPLE successfully dropped."}]
+    # assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
-def test_description_create_schema(dcur: snowflake.connector.cursor.DictCursor):
+def test_description_create_drop_schema(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create schema example")
     assert dcur.fetchall() == [{"status": "Schema EXAMPLE successfully created."}]
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    dcur.execute("drop schema example")
+    assert dcur.fetchall() == [{"status": "EXAMPLE successfully dropped."}]
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
-def test_description_create_table(dcur: snowflake.connector.cursor.DictCursor):
-    dcur.execute("create or replace table example (X int)")
+def test_description_create_drop_table(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create table example (X int)")
     assert dcur.fetchall() == [{"status": "Table EXAMPLE successfully created."}]
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    dcur.execute("drop table example")
+    assert dcur.fetchall() == [{"status": "EXAMPLE successfully dropped."}]
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
 def test_description_insert(dcur: snowflake.connector.cursor.DictCursor):
-    dcur.execute("create or replace table example (X int)")
+    dcur.execute("create table example (X int)")
     dcur.execute("insert into example values (1), (2)")
     assert dcur.fetchall() == [{"number of rows inserted": 2}]
     # TODO: Snowflake is actually precision=19, is_nullable=False
