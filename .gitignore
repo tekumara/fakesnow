@@ -15,7 +15,5 @@ typings/
 pip-wheel-metadata/
 node_modules/
 .venv/
-.env
-
 duckdb
-notebooks/
+notebooks/.ipynb_checkpoints
