@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from typing import cast
 
 import pytest
 import snowflake.connector
@@ -26,4 +27,10 @@ def cur(conn: snowflake.connector.SnowflakeConnection) -> Iterator[snowflake.con
         yield cur
 
 
-# TODO: add dcur for DictCursor
+@pytest.fixture
+def dcur(conn: snowflake.connector.SnowflakeConnection) -> Iterator[snowflake.connector.cursor.DictCursor]:
+    """
+    Yield a snowflake cursor once per session.
+    """
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        yield cast(snowflake.connector.cursor.DictCursor, cur)

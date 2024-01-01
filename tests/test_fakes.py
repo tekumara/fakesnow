@@ -192,11 +192,20 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
         assert conn.schema == "JAFFLES"
 
 
-def test_create_table_result(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("create or replace table example (X int)")
-    assert cur.fetchall() == [("Table EXAMPLE successfully created.",)]
+def test_create_table_result(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create or replace table example (X int)")
+    assert dcur.fetchall() == [{"status": "Table EXAMPLE successfully created."}]
     # description is expected by sql alchemy
-    assert cur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+
+
+def test_insert_result(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create or replace table example (X int)")
+    dcur.execute("insert into example values (1), (2)")
+    assert dcur.fetchall() == [{"number of rows inserted": 2}]
+    # description is expected by sql alchemy
+    # TODO: Snowflake is actually precision=19, is_nullable=False
+    assert dcur.description == [ResultMetadata(name='number of rows inserted', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)]  # fmt: skip
 
 
 def test_current_database_schema(conn: snowflake.connector.SnowflakeConnection):

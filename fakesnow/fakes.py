@@ -31,6 +31,7 @@ import fakesnow.transforms as transforms
 SCHEMA_UNSET = "schema_unset"
 SUCCESS_SQL = "SELECT 'Statement executed successfully.' as status"
 TABLE_CREATED_SQL = Template("SELECT 'Table ${table} successfully created.' as status")
+INSERTED_SQL = Template("SELECT ${count} as 'number of rows inserted'")
 
 
 class FakeSnowflakeCursor:
@@ -98,8 +99,9 @@ class FakeSnowflakeCursor:
     def description(self) -> list[ResultMetadata]:
         # use a cursor to avoid destroying an unfetched result on the main connection
         with self._duck_conn.cursor() as cur:
-            assert self._conn.database, "Not implemented when database is None"
-            assert self._conn.schema, "Not implemented when schema is None"
+            # TODO: allow sql alchemy connection with no database or schema
+            assert self._conn.database, ".description not implemented when database is None"
+            assert self._conn.schema, ".description not implemented when schema is None"
 
             # match database and schema used on the main connection
             cur.execute(f"SET SCHEMA = '{self._conn.database}.{self._conn.schema}'")
@@ -214,6 +216,12 @@ class FakeSnowflakeCursor:
             table_created_sql = TABLE_CREATED_SQL.substitute(table=table_name)
             self._duck_conn.execute(table_created_sql)
             self._last_sql = table_created_sql  # for description
+
+        if cmd == "INSERT":
+            (count,) = self._duck_conn.fetchall()[0]
+            inserted_sql = INSERTED_SQL.substitute(count=count)
+            self._duck_conn.execute(inserted_sql)
+            self._last_sql = inserted_sql  # for description
 
         if create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions
