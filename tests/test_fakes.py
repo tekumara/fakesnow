@@ -291,6 +291,12 @@ def test_description_create_database(dcur: snowflake.connector.cursor.DictCursor
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
+def test_description_create_schema(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create schema example")
+    assert dcur.fetchall() == [{"status": "Schema EXAMPLE successfully created."}]
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+
+
 def test_description_create_table(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create or replace table example (X int)")
     assert dcur.fetchall() == [{"status": "Table EXAMPLE successfully created."}]
