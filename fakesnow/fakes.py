@@ -4,6 +4,7 @@ import os
 import re
 import sys
 from collections.abc import Iterable, Iterator, Sequence
+from string import Template
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal, Optional, cast
 
@@ -29,6 +30,7 @@ import fakesnow.transforms as transforms
 
 SCHEMA_UNSET = "schema_unset"
 SUCCESS_SQL = "SELECT 'Statement executed successfully.' as status"
+TABLE_CREATED_SQL = Template("SELECT 'Table ${table} successfully created.' as status")
 
 
 class FakeSnowflakeCursor:
@@ -195,7 +197,7 @@ class FakeSnowflakeCursor:
             # snowflake doesn't error when rolling back outside a tx
             if "cannot rollback - no transaction is active" in str(e):
                 self._duck_conn.execute(SUCCESS_SQL)
-                self._last_sql = SUCCESS_SQL
+                self._last_sql = SUCCESS_SQL  # for description
             else:
                 raise e
 
@@ -206,6 +208,12 @@ class FakeSnowflakeCursor:
         if cmd == "USE SCHEMA" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             self._conn.schema = ident.this.upper()
             self._conn.schema_set = True
+
+        if cmd == "CREATE TABLE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+            table_name = ident.this if ident.quoted else ident.this.upper()
+            table_created_sql = TABLE_CREATED_SQL.substitute(table=table_name)
+            self._duck_conn.execute(table_created_sql)
+            self._last_sql = table_created_sql  # for description
 
         if create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions

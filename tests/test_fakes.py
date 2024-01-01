@@ -192,6 +192,13 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
         assert conn.schema == "JAFFLES"
 
 
+def test_create_table_result(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table example (X int)")
+    assert cur.fetchall() == [("Table EXAMPLE successfully created.",)]
+    # description is expected by sql alchemy
+    assert cur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+
+
 def test_current_database_schema(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("select current_database(), current_schema()")
