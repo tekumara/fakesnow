@@ -732,9 +732,13 @@ def test_transactions(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("SELECT * FROM table1")
         assert cur.fetchall() == [(2,)]
 
-    # check behaviour mimics snowflake sqlalchemy usage
-    # ie: rollback without transaction is a success
+    # check rollback and commit without transaction is a success (to mimic snowflake)
+    # also check description can be retrieved, needed for ipython-sql/jupysql which runs description implicitly
     with conn.cursor() as cur:
+        cur.execute("COMMIT")
+        assert cur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+        assert cur.fetchall() == [("Statement executed successfully.",)]
+
         cur.execute("ROLLBACK")
         assert cur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
         assert cur.fetchall() == [("Statement executed successfully.",)]

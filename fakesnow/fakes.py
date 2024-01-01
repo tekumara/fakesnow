@@ -196,10 +196,12 @@ class FakeSnowflakeCursor:
             msg = cast(str, e.args[0]).split("\n")[0]
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
         except duckdb.TransactionException as e:
-            # snowflake doesn't error when rolling back outside a tx
-            if "cannot rollback - no transaction is active" in str(e):
+            if "cannot rollback - no transaction is active" in str(
+                e
+            ) or "cannot commit - no transaction is active" in str(e):
+                # snowflake doesn't error on rollback or commit outside a tx
                 self._duck_conn.execute(SUCCESS_SQL)
-                self._last_sql = SUCCESS_SQL  # for description
+                self._last_sql = SUCCESS_SQL
             else:
                 raise e
 
@@ -215,13 +217,13 @@ class FakeSnowflakeCursor:
             table_name = ident.this if ident.quoted else ident.this.upper()
             table_created_sql = TABLE_CREATED_SQL.substitute(table=table_name)
             self._duck_conn.execute(table_created_sql)
-            self._last_sql = table_created_sql  # for description
+            self._last_sql = table_created_sql
 
         if cmd == "INSERT":
             (count,) = self._duck_conn.fetchall()[0]
             inserted_sql = INSERTED_SQL.substitute(count=count)
             self._duck_conn.execute(inserted_sql)
-            self._last_sql = inserted_sql  # for description
+            self._last_sql = inserted_sql
 
         if create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions
