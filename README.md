@@ -14,6 +14,24 @@ pip install fakesnow
 
 ## Usage
 
+Run script.py with fakesnow:
+
+```shell
+fakesnow script.py
+```
+
+Or pytest
+
+```shell
+fakesnow -m pytest
+```
+
+`fakesnow` executes `fakesnow.patch` before running the script or module.
+
+### fakesnow.patch
+
+eg:
+
 ```python
 import fakesnow
 import snowflake.connector
@@ -41,6 +59,8 @@ Then patch it using:
 with fakesnow.patch("mymodule.write_pandas"):
     ...
 ```
+
+### pytest fixtures
 
 pytest [fixtures](fakesnow/fixtures.py) are provided for testing. Example _conftest.py_:
 

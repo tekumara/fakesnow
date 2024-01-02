@@ -17,6 +17,9 @@ dependencies = [
 [project.urls]
 homepage = "https://github.com/tekumara/fakesnow"
 
+[project.scripts]
+fakesnow = "fakesnow.cli:main"
+
 [project.optional-dependencies]
 dev = [
     "black~=23.9",
