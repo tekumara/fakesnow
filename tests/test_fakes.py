@@ -614,6 +614,39 @@ def test_object_construct(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert strip_none_values(json.loads(result[0])) == json.loads('{\n  "a": 1,\n  "b": "BBBB"\n}')
 
 
+def test_percentile_cont(conn: snowflake.connector.SnowflakeConnection):
+    *_, cur = conn.execute_string(
+        """
+        create or replace table aggr(k int, v decimal(10,2));
+        insert into aggr (k, v) values
+            (0,  0),
+            (0, 10),
+            (0, 20),
+            (0, 30),
+            (0, 40),
+            (1, 10),
+            (1, 20),
+            (2, 10),
+            (2, 20),
+            (2, 25),
+            (2, 30),
+            (3, 60),
+            (4, NULL);
+        select k, percentile_cont(0.25) within group (order by v)
+            from aggr
+            group by k
+            order by k;
+        """
+    )
+    assert cur.fetchall() == [
+        (0, Decimal("10.00000")),
+        (1, Decimal("12.50000")),
+        (2, Decimal("17.50000")),
+        (3, Decimal("60.00000")),
+        (4, None),
+    ]
+
+
 def test_regex(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select regexp_replace('abc123', '\\\\D', '')")
     assert cur.fetchone() == ("123",)
