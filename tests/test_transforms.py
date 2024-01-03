@@ -18,6 +18,7 @@ from fakesnow.transforms import (
     parse_json,
     regex_replace,
     regex_substr,
+    sample,
     semi_structured_types,
     set_schema,
     tag,
@@ -185,6 +186,15 @@ def test_regex_substr() -> None:
         .transform(regex_substr)
         .sql(dialect="duckdb")
         == "SELECT REGEXP_EXTRACT_ALL(string1[1 : ], 'the\\W+\\w+', 0, '')[1]"
+    )
+
+
+def test_sample() -> None:
+    assert (
+        sqlglot.parse_one("SELECT * FROM example USING SAMPLE (50) SEED (420)", read="snowflake")
+        .transform(sample)
+        .sql(dialect="duckdb")
+        == "SELECT * FROM example USING SAMPLE BERNOULLI (50 PERCENT) REPEATABLE (420)"
     )
 
 

@@ -320,6 +320,22 @@ def json_extract_as_varchar(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def sample(expression: exp.Expression) -> exp.Expression:
+    if isinstance(expression, exp.TableSample):
+        if not expression.args.get("method"):
+            # set snowflake default (bernoulli) rather than use the duckdb default (system)
+            # because bernoulli works better at small row sizes like we have in tests
+            expression.set("method", exp.Var(this="BERNOULLI"))
+
+        if (size := expression.args.get("size")) and isinstance(size, exp.Literal):
+            # snowflake implicit sample size is percent, whereas duckdb sample size is rows
+            # so convert to percent explicitly
+            size.pop()
+            expression.set("percent", size)
+
+    return expression
+
+
 def object_construct(expression: exp.Expression) -> exp.Expression:
     """Convert object_construct to return a json string
 

@@ -182,6 +182,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.float_to_double)
             .transform(transforms.integer_precision)
             .transform(transforms.extract_text_length)
+            .transform(transforms.sample)
         )
         sql = transformed.sql(dialect="duckdb")
 

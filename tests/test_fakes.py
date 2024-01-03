@@ -640,6 +640,14 @@ def test_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.rowcount is None
 
 
+def test_sample(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example(id int)")
+    cur.execute("insert into example SELECT * FROM (VALUES (1), (2), (3), (4));")
+    cur.execute("SELECT * FROM example USING SAMPLE (50) SEED (420)")
+    # sampling small sizes isn't exact
+    assert cur.fetchall() == [(1,), (2,), (3,)]
+
+
 def test_schema_create_and_use(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create schema jaffles")
     cur.execute("create table jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
