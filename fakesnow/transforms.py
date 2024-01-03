@@ -305,13 +305,17 @@ def integer_precision(expression: exp.Expression) -> exp.Expression:
 def json_extract_as_varchar(expression: exp.Expression) -> exp.Expression:
     """Return raw unquoted string when casting json extraction to varchar.
 
-    This must run after indices_to_json_extract.
-
     Duckdb uses the ->> operator, aka the json_extract_string function, see
     https://duckdb.org/docs/extensions/json#json-extraction-functions
     """
-    if isinstance(expression, exp.Cast) and (extract := expression.this) and isinstance(extract, exp.JSONExtract):
-        return exp.JSONExtractScalar(this=extract.this, expression=extract.expression)
+    if (
+        isinstance(expression, exp.Cast)
+        and (gp := expression.this)
+        and isinstance(gp, exp.GetPath)
+        and (path := gp.expression)
+        and isinstance(path, exp.Literal)
+    ):
+        return exp.JSONExtractScalar(this=gp.this, expression=exp.Literal(this=f"$.{path.this}", is_string=True))
 
     return expression
 

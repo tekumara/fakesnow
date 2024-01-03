@@ -285,7 +285,7 @@ def test_describe_info_schema_columns(cur: snowflake.connector.cursor.SnowflakeC
 ## descriptions are needed for ipython-sql/jupysql which describes every statement
 
 
-def test_description_create_database(dcur: snowflake.connector.cursor.DictCursor):
+def test_description_create_drop_database(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create database example")
     assert dcur.fetchall() == [{"status": "Database EXAMPLE successfully created."}]
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
@@ -442,8 +442,18 @@ def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_get_path_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("""select parse_json('{"fruit":"banana"}'):fruit::varchar""")
     # converting json to varchar returns unquoted string
+    cur.execute("""select parse_json('{"fruit":"banana"}'):fruit::varchar""")
+    assert cur.fetchall() == [("banana",)]
+
+    # nested json
+    cur.execute("""select get_path(parse_json('{"food":{"fruit":"banana"}}'), 'food.fruit')::varchar""")
+    assert cur.fetchall() == [("banana",)]
+
+    cur.execute("""select parse_json('{"food":{"fruit":"banana"}}'):food.fruit::varchar""")
+    assert cur.fetchall() == [("banana",)]
+
+    cur.execute("""select parse_json('{"food":{"fruit":"banana"}}'):food:fruit::varchar""")
     assert cur.fetchall() == [("banana",)]
 
 

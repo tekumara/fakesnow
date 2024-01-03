@@ -81,9 +81,9 @@ def test_flatten() -> None:
             ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
             """,
             read="snowflake",
-        ).transform(flatten)
-        # needed to transform flat.value:fruit to flat.value -> '$.fruit'
-        .transform(indices_to_json_extract).sql(dialect="duckdb")
+        )
+        .transform(flatten)
+        .sql(dialect="duckdb")
         == """SELECT t.id, flat.value -> '$.fruit' FROM (SELECT 1, JSON('[{"fruit":"banana"}]') UNION SELECT 2, JSON('[{"fruit":"coconut"}, {"fruit":"durian"}]')) AS t(id, fruits), LATERAL UNNEST(LIST_REVERSE(CAST(t.fruits AS JSON[]))) AS flat(VALUE)"""  # noqa: E501
     )
 
@@ -148,8 +148,8 @@ def test_json_extract_as_varchar() -> None:
             """select parse_json('{"fruit":"banana"}'):fruit::varchar""",
             read="snowflake",
         )
-        # needed first
-        .transform(indices_to_json_extract).transform(json_extract_as_varchar).sql(dialect="duckdb")
+        .transform(json_extract_as_varchar)
+        .sql(dialect="duckdb")
         == """SELECT JSON('{"fruit":"banana"}') ->> '$.fruit'"""
     )
 

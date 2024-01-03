@@ -20,7 +20,7 @@ Run script.py with fakesnow:
 fakesnow script.py
 ```
 
-Or pytest
+Or a module, eg: pytest
 
 ```shell
 fakesnow -m pytest
@@ -30,7 +30,7 @@ fakesnow -m pytest
 
 ### fakesnow.patch
 
-eg:
+To use fakesnow within your code:
 
 ```python
 import fakesnow
