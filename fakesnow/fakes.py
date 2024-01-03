@@ -187,11 +187,14 @@ class FakeSnowflakeCursor:
         )
         sql = transformed.sql(dialect="duckdb")
 
+        if os.environ.get("FAKESNOW_DEBUG") == "snowflake":
+            print(f"{command};", file=sys.stderr)
+        elif os.environ.get("FAKESNOW_DEBUG"):
+            print(f"{sql};", file=sys.stderr)
+
         try:
             self._last_sql = sql
             self._last_params = params
-            if os.environ.get("FAKESNOW_DEBUG"):
-                print(f"{sql};", file=sys.stderr)
             self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]
