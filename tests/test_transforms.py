@@ -26,6 +26,7 @@ from fakesnow.transforms import (
     to_date,
     to_decimal,
     to_timestamp,
+    to_timestamp_ntz,
     upper_case_unquoted_identifiers,
     values_columns,
 )
@@ -247,6 +248,12 @@ def test_to_timestamp() -> None:
         sqlglot.parse_one("SELECT to_timestamp(0)", read="snowflake").transform(to_timestamp).sql(dialect="duckdb")
         == "SELECT CAST(TO_TIMESTAMP(0) AS TIMESTAMP)"
     )
+
+
+def test_to_timestamp_ntz() -> None:
+    assert sqlglot.parse_one("SELECT to_timestamp_ntz('2013-04-05 01:02:03')", read="snowflake").transform(
+        to_timestamp_ntz
+    ) == sqlglot.parse_one("SELECT to_timestamp('2013-04-05 01:02:03')", read="snowflake")
 
 
 def test_use() -> None:

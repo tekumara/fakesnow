@@ -772,6 +772,9 @@ def test_to_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("SELECT to_timestamp('2013-04-05 01:02:03')")
     assert cur.fetchall() == [(datetime.datetime(2013, 4, 5, 1, 2, 3),)]
 
+    cur.execute("SELECT to_timestamp_ntz('2013-04-05 01:02:03')")
+    assert cur.fetchall() == [(datetime.datetime(2013, 4, 5, 1, 2, 3),)]
+
 
 def test_timestamp_to_date(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("SELECT to_date(to_timestamp(0)), to_date(cast(to_timestamp(0) as timestamp(9)))")
