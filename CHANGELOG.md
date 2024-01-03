@@ -2,6 +2,36 @@
 
 # Changelog
 
+## [0.8.1](https://github.com/tekumara/fakesnow/compare/v0.8.0...v0.8.1) (2024-01-03)
+
+
+### Features
+
+* add fakesnow cli ([13b28df](https://github.com/tekumara/fakesnow/commit/13b28df9239b24607c701270f42f98b26df6dd36))
+* FAKESNOW_DEBUG=1 prints sql commands ([e9919b7](https://github.com/tekumara/fakesnow/commit/e9919b765e75f10deb950af569cc696b45c0675c))
+* support fetchmany ([382a9bf](https://github.com/tekumara/fakesnow/commit/382a9bfa7ca461808494cc47520f841abdb3bc53))
+* support FLATTEN ([0b6267f](https://github.com/tekumara/fakesnow/commit/0b6267fbe33006052b3baf4f7e353f2529d1b6fd))
+
+
+### Bug Fixes
+
+* description for CREATE DATABASE ([6015ac8](https://github.com/tekumara/fakesnow/commit/6015ac81099662aca38e791aa90e10cfb3801ba9))
+* description for CREATE SCHEMA ([f9b1a4d](https://github.com/tekumara/fakesnow/commit/f9b1a4d69a24c2ddc3006405ced8f831359eb94f))
+* description for CREATE TABLE ([8e8374a](https://github.com/tekumara/fakesnow/commit/8e8374acf0a869e4a0914a7d8a7df3de120ee06d))
+* description for DROP statements ([a3da822](https://github.com/tekumara/fakesnow/commit/a3da822f05fc7c824ddb448a71f0ce620d4d1ff4))
+* description for INSERT ([ef93ad3](https://github.com/tekumara/fakesnow/commit/ef93ad3e8506a0e4436a462498f29e327ae0c8b6))
+* flatten order matches array ([fc3d24f](https://github.com/tekumara/fakesnow/commit/fc3d24fe4a3ef5f988b519cd91f6acc258c466ef))
+* handle commit without transaction ([d939b43](https://github.com/tekumara/fakesnow/commit/d939b435840361535f4fac84cd27d1c6f287e91d))
+* handle rollback outside transaction ([af0d7ab](https://github.com/tekumara/fakesnow/commit/af0d7ab0b702731a793f85ba8e2fd82c3a456491))
+* notebook no active connection ([d60f5db](https://github.com/tekumara/fakesnow/commit/d60f5db7f4dee8f484f572c4786fdd98c194ec4f))
+
+
+### Chores
+
+* add notebooks used for development ([3055fd4](https://github.com/tekumara/fakesnow/commit/3055fd4a8f6010fcca20c9af8f4941e496119016))
+* bump sqlglot 20.4.0 ([2b216f9](https://github.com/tekumara/fakesnow/commit/2b216f9c2b0eaf0c160eab3a10936e04b35768b1))
+* bump sqlglot 20.5.0 ([6963493](https://github.com/tekumara/fakesnow/commit/69634939dba25f5cce922a7eecc91ccbf22324f3))
+
 ## [0.8.0](https://github.com/tekumara/fakesnow/compare/v0.7.1...v0.8.0) (2023-12-28)
 
 
