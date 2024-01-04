@@ -220,6 +220,22 @@ def float_to_double(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def identifier(expression: exp.Expression) -> exp.Expression:
+    """Convert identifier function to an identifier.
+
+    See https://docs.snowflake.com/en/sql-reference/identifier-literal
+    """
+
+    if (
+        isinstance(expression, exp.Anonymous)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "IDENTIFIER"
+    ):
+        expression = exp.Identifier(this=expression.expressions[0].this, quoted=False)
+
+    return expression
+
+
 def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
     """Convert indices on objects and arrays to json_extract.
 

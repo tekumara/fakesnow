@@ -10,6 +10,7 @@ from fakesnow.transforms import (
     extract_text_length,
     flatten,
     float_to_double,
+    identifier,
     indices_to_json_extract,
     information_schema_columns_snowflake,
     information_schema_tables_ext,
@@ -106,6 +107,12 @@ def test_float_to_double() -> None:
         .transform(float_to_double)
         .sql()
         == "CREATE TABLE example (f DOUBLE, f4 DOUBLE, f8 DOUBLE, d DOUBLE, r DOUBLE)"
+    )
+
+
+def test_identifier() -> None:
+    assert (
+        sqlglot.parse_one("select * from identifier('example')").transform(identifier).sql() == "SELECT * FROM example"
     )
 
 

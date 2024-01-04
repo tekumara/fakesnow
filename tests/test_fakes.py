@@ -314,7 +314,7 @@ def test_description_create_drop_schema(dcur: snowflake.connector.cursor.DictCur
 
 
 def test_description_create_drop_table(dcur: snowflake.connector.cursor.DictCursor):
-    dcur.execute("create table example (X int)")
+    dcur.execute("create table example (x int)")
     assert dcur.fetchall() == [{"status": "Table EXAMPLE successfully created."}]
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
     dcur.execute("drop table example")
@@ -323,7 +323,7 @@ def test_description_create_drop_table(dcur: snowflake.connector.cursor.DictCurs
 
 
 def test_description_insert(dcur: snowflake.connector.cursor.DictCursor):
-    dcur.execute("create table example (X int)")
+    dcur.execute("create table example (x int)")
     dcur.execute("insert into example values (1), (2)")
     assert dcur.fetchall() == [{"number of rows inserted": 2}]
     # TODO: Snowflake is actually precision=19, is_nullable=False
@@ -497,21 +497,27 @@ def test_get_result_batches(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert sum(batch.rowcount for batch in batches) == 2
 
 
-def test_get_result_batches_dict(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
-        cur.execute("insert into customers values (1, 'Jenny', 'P')")
-        cur.execute("insert into customers values (2, 'Jasper', 'M')")
-        cur.execute("select id, first_name, last_name from customers")
-        batches = cur.get_result_batches()
-        assert batches
+def test_get_result_batches_dict(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+    dcur.execute("insert into customers values (1, 'Jenny', 'P')")
+    dcur.execute("insert into customers values (2, 'Jasper', 'M')")
+    dcur.execute("select id, first_name, last_name from customers")
+    batches = dcur.get_result_batches()
+    assert batches
 
-        rows = [row for batch in batches for row in batch]
-        assert rows == [
-            {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
-            {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
-        ]
-        assert sum(batch.rowcount for batch in batches) == 2
+    rows = [row for batch in batches for row in batch]
+    assert rows == [
+        {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
+        {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
+    ]
+    assert sum(batch.rowcount for batch in batches) == 2
+
+
+def test_identifier(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table example (x int)")
+    cur.execute("insert into example values(1)")
+    cur.execute("select * from identifier('example')")
+    assert cur.fetchall() == [(1,)]
 
 
 def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.SnowflakeCursor):
