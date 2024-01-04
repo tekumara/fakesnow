@@ -186,8 +186,12 @@ class FakeSnowflakeCursor:
             .transform(transforms.extract_text_length)
             .transform(transforms.sample)
             .transform(transforms.array_size)
+            .transform(transforms.random)
         )
         sql = transformed.sql(dialect="duckdb")
+
+        if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
+            sql = f"SELECT setseed({seed}); {sql}"
 
         if os.environ.get("FAKESNOW_DEBUG") == "snowflake":
             print(f"{command};", file=sys.stderr)

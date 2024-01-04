@@ -354,6 +354,36 @@ def json_extract_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def random(expression: exp.Expression) -> exp.Expression:
+    """Convert random() and random(seed).
+
+    Snowflake random() is an signed 64 bit integer.
+    Duckdb random() is a double between 0 and 1 and uses setseed() to set the seed.
+    """
+    if isinstance(expression, exp.Select) and (rand := expression.find(exp.Rand)):
+        # shift result to between min and max signed 64bit integer
+        new_rand = exp.Cast(
+            this=exp.Paren(
+                this=exp.Mul(
+                    this=exp.Paren(this=exp.Sub(this=exp.Rand(), expression=exp.Literal(this=0.5, is_string=False))),
+                    expression=exp.Literal(this=9223372036854775807, is_string=False),
+                )
+            ),
+            to=exp.DataType(this=exp.DataType.Type.BIGINT, nested=False, prefix=False),
+        )
+
+        rand.replace(new_rand)
+
+        # convert seed to double between 0 and 1 by dividing by max INTEGER (int32)
+        # (not max BIGINT (int64) because we don't have enough floating point precision to distinguish seeds)
+        # then attach to SELECT as the seed arg
+        # (we can't attach it to exp.Rand because it will be rendered in the sql)
+        if rand.this and isinstance(rand.this, exp.Literal):
+            expression.args["seed"] = f"{rand.this}/2147483647-0.5"
+
+    return expression
+
+
 def sample(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, exp.TableSample) and not expression.args.get("method"):
         # set snowflake default (bernoulli) rather than use the duckdb default (system)

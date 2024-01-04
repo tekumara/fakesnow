@@ -693,6 +693,19 @@ def test_regex_substr(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchone() == ("worst",)
 
 
+def test_random(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select random(420)")
+    assert cur.fetchall() == [(-2595895151578578944,)]
+    cur.execute("select random(420)")
+    assert cur.fetchall() == [(-2595895151578578944,)]
+    cur.execute("select random(419)")
+    assert cur.fetchall() == [(4590143504000221184,)]
+    assert (
+        cur.execute("select random()").fetchall()  # pyright: ignore[reportOptionalMemberAccess]
+        != cur.execute("select random()").fetchall()  # pyright: ignore[reportOptionalMemberAccess]
+    )
+
+
 def test_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table example(id int)")
     cur.execute("insert into example SELECT * FROM (VALUES (1), (2), (3));")

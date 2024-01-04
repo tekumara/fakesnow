@@ -18,6 +18,7 @@ from fakesnow.transforms import (
     json_extract_cast_as_varchar,
     object_construct,
     parse_json,
+    random,
     regex_replace,
     regex_substr,
     sample,
@@ -202,6 +203,13 @@ def test_parse_json() -> None:
         .sql(dialect="duckdb")
         == """INSERT INTO table1 (name) SELECT JSON('{"first":"foo", "last":"bar"}')"""
     )
+
+
+def test_random() -> None:
+    e = sqlglot.parse_one("select random(420)").transform(random)
+
+    assert e.sql(dialect="duckdb") == """SELECT CAST(((RANDOM() - 0.5) * 9223372036854775807) AS BIGINT)"""
+    assert e.args["seed"] == "420/2147483647-0.5"
 
 
 def test_regex_replace() -> None:
