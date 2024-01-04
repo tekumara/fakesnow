@@ -572,7 +572,7 @@ class FakeResultBatch(ResultBatch):
         return self._batch.num_rows
 
     def to_pandas(self) -> pd.DataFrame:
-        raise NotImplementedError()
+        return self._batch.to_pandas()
 
     def to_arrow(self) -> pyarrow.Table:
         raise NotImplementedError()

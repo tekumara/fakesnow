@@ -512,6 +512,16 @@ def test_get_result_batches_dict(dcur: snowflake.connector.cursor.DictCursor):
     ]
     assert sum(batch.rowcount for batch in batches) == 2
 
+    assert_frame_equal(
+        batches[0].to_pandas(),
+        pd.DataFrame.from_records(
+            [
+                {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
+                {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
+            ]
+        ),
+    )
+
 
 def test_identifier(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table example (x int)")
