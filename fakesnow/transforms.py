@@ -9,6 +9,15 @@ MISSING_DATABASE = "missing_database"
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
 
 
+def array_size(expression: exp.Expression) -> exp.Expression:
+    if isinstance(expression, exp.ArraySize):
+        # case is used to convert 0 to null, because null is returned by duckdb when no case matches
+        jal = exp.Anonymous(this="json_array_length", expressions=[expression.this])
+        return exp.Case(ifs=[exp.If(this=jal, true=jal)])
+
+    return expression
+
+
 # TODO: move this into a Dialect as a transpilation
 def create_database(expression: exp.Expression) -> exp.Expression:
     """Transform create database to attach database.

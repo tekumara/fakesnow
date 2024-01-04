@@ -3,6 +3,7 @@ from sqlglot import exp
 
 from fakesnow.transforms import (
     SUCCESS_NOP,
+    array_size,
     create_database,
     drop_schema_cascade,
     extract_comment,
@@ -31,6 +32,13 @@ from fakesnow.transforms import (
     upper_case_unquoted_identifiers,
     values_columns,
 )
+
+
+def test_array_size() -> None:
+    assert (
+        sqlglot.parse_one("""select array_size(parse_json('["a","b"]'))""").transform(array_size).sql(dialect="duckdb")
+        == """SELECT CASE WHEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) THEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) END"""
+    )
 
 
 def test_create_database() -> None:
