@@ -302,10 +302,33 @@ def integer_precision(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def json_extract_as_varchar(expression: exp.Expression) -> exp.Expression:
+def json_extract_cased_as_varchar(expression: exp.Expression) -> exp.Expression:
+    """Convert json to varchar inside get_path.
+
+    Snowflake case conversion (upper/lower) turns variant into varchar. This
+    mimics that behaviour within get_path.
+
+    Returns a raw string using the Duckdb ->> operator, aka the json_extract_string function, see
+    https://duckdb.org/docs/extensions/json#json-extraction-functions
+    """
+    if (
+        isinstance(expression, (exp.Upper, exp.Lower))
+        and (gp := expression.this)
+        and isinstance(gp, exp.GetPath)
+        and (path := gp.expression)
+        and isinstance(path, exp.Literal)
+    ):
+        expression.set(
+            "this", exp.JSONExtractScalar(this=gp.this, expression=exp.Literal(this=f"$.{path.this}", is_string=True))
+        )
+
+    return expression
+
+
+def json_extract_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
     """Return raw unquoted string when casting json extraction to varchar.
 
-    Duckdb uses the ->> operator, aka the json_extract_string function, see
+    Returns a raw string using the Duckdb ->> operator, aka the json_extract_string function, see
     https://duckdb.org/docs/extensions/json#json-extraction-functions
     """
     if (

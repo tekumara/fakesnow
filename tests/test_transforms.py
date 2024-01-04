@@ -13,7 +13,8 @@ from fakesnow.transforms import (
     information_schema_columns_snowflake,
     information_schema_tables_ext,
     integer_precision,
-    json_extract_as_varchar,
+    json_extract_cased_as_varchar,
+    json_extract_cast_as_varchar,
     object_construct,
     parse_json,
     regex_replace,
@@ -144,13 +145,34 @@ def test_information_schema_tables_ext() -> None:
     )
 
 
-def test_json_extract_as_varchar() -> None:
+def test_json_extract_cased_as_varchar() -> None:
+    assert (
+        sqlglot.parse_one(
+            """select upper(parse_json('{"fruit":"banana"}'):fruit)""",
+            read="snowflake",
+        )
+        .transform(json_extract_cased_as_varchar)
+        .sql(dialect="duckdb")
+        == """SELECT UPPER(JSON('{"fruit":"banana"}') ->> '$.fruit')"""
+    )
+    assert (
+        sqlglot.parse_one(
+            """select lower(parse_json('{"fruit":"banana"}'):fruit)""",
+            read="snowflake",
+        )
+        .transform(json_extract_cased_as_varchar)
+        .sql(dialect="duckdb")
+        == """SELECT LOWER(JSON('{"fruit":"banana"}') ->> '$.fruit')"""
+    )
+
+
+def test_json_extract_cast_as_varchar() -> None:
     assert (
         sqlglot.parse_one(
             """select parse_json('{"fruit":"banana"}'):fruit::varchar""",
             read="snowflake",
         )
-        .transform(json_extract_as_varchar)
+        .transform(json_extract_cast_as_varchar)
         .sql(dialect="duckdb")
         == """SELECT JSON('{"fruit":"banana"}') ->> '$.fruit'"""
     )

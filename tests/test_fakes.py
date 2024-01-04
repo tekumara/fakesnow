@@ -442,6 +442,9 @@ def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_get_path_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("""select parse_json('{"fruit":"banana"}'):fruit""")
+    assert cur.fetchall() == [('"banana"',)]
+
     # converting json to varchar returns unquoted string
     cur.execute("""select parse_json('{"fruit":"banana"}'):fruit::varchar""")
     assert cur.fetchall() == [("banana",)]
@@ -455,6 +458,21 @@ def test_get_path_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
 
     cur.execute("""select parse_json('{"food":{"fruit":"banana"}}'):food:fruit::varchar""")
     assert cur.fetchall() == [("banana",)]
+
+    # json number is varchar
+    cur.execute("""select parse_json('{"count":42}'):count""")
+    assert cur.fetchall() == [("42",)]
+
+    # lower/upper converts to varchar (ie: no quotes) ¯\_(ツ)_/¯
+    cur.execute("""select upper(parse_json('{"fruit":"banana"}'):fruit)""")
+    assert cur.fetchall() == [("BANANA",)]
+
+    cur.execute("""select lower(parse_json('{"fruit":"banana"}'):fruit)""")
+    assert cur.fetchall() == [("banana",)]
+
+    # lower/upper converts json number to varchar too
+    cur.execute("""select upper(parse_json('{"count":"42"}'):count)""")
+    assert cur.fetchall() == [("42",)]
 
 
 def test_get_result_batches(cur: snowflake.connector.cursor.SnowflakeCursor):
