@@ -694,7 +694,7 @@ def test_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor):
 def test_sample(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table example(id int)")
     cur.execute("insert into example SELECT * FROM (VALUES (1), (2), (3), (4));")
-    cur.execute("SELECT * FROM example USING SAMPLE (50) SEED (420)")
+    cur.execute("SELECT * FROM example SAMPLE (50) SEED (420)")
     # sampling small sizes isn't exact
     assert cur.fetchall() == [(1,), (2,), (3,)]
 

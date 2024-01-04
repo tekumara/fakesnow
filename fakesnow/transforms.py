@@ -308,6 +308,8 @@ def json_extract_cased_as_varchar(expression: exp.Expression) -> exp.Expression:
     Snowflake case conversion (upper/lower) turns variant into varchar. This
     mimics that behaviour within get_path.
 
+    TODO: a generic version that works on any variant, not just getpath
+
     Returns a raw string using the Duckdb ->> operator, aka the json_extract_string function, see
     https://duckdb.org/docs/extensions/json#json-extraction-functions
     """
@@ -344,17 +346,10 @@ def json_extract_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
 
 
 def sample(expression: exp.Expression) -> exp.Expression:
-    if isinstance(expression, exp.TableSample):
-        if not expression.args.get("method"):
-            # set snowflake default (bernoulli) rather than use the duckdb default (system)
-            # because bernoulli works better at small row sizes like we have in tests
-            expression.set("method", exp.Var(this="BERNOULLI"))
-
-        if (size := expression.args.get("size")) and isinstance(size, exp.Literal):
-            # snowflake implicit sample size is percent, whereas duckdb sample size is rows
-            # so convert to percent explicitly
-            size.pop()
-            expression.set("percent", size)
+    if isinstance(expression, exp.TableSample) and not expression.args.get("method"):
+        # set snowflake default (bernoulli) rather than use the duckdb default (system)
+        # because bernoulli works better at small row sizes like we have in tests
+        expression.set("method", exp.Var(this="BERNOULLI"))
 
     return expression
 
