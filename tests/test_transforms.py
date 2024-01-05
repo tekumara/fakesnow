@@ -196,10 +196,13 @@ def test_json_extract_cast_as_varchar() -> None:
 
 def test_object_construct() -> None:
     assert (
-        sqlglot.parse_one("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)", read="snowflake")
+        sqlglot.parse_one(
+            "SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB','c',null,'d',PARSE_JSON('NULL'), null, 'foo')",
+            read="snowflake",
+        )
         .transform(object_construct)
         .sql(dialect="duckdb")
-        == "SELECT TO_JSON({'a': 1, 'b': 'BBBB', 'c': NULL})"
+        == "SELECT TO_JSON({'a': 1, 'b': 'BBBB', 'd': JSON('NULL')})"
     )
 
 

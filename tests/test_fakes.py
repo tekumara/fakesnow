@@ -756,7 +756,7 @@ def test_schema_drop(cur: snowflake.connector.cursor.SnowflakeCursor):
 def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     def indent(rows: Sequence[tuple]) -> list[tuple]:
         # indent duckdb json strings to match snowflake json strings
-        return [(json.dumps(json.loads(r[0]), indent=2), *r[1:]) for r in rows]
+        return [(*[json.dumps(json.loads(c), indent=2) for c in r],) for r in rows]
 
     cur.execute("create or replace table semis (emails array, name object, notes variant)")
     cur.execute(
@@ -779,6 +779,17 @@ def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
 
     cur.execute("select notes[0] from semis")
     assert cur.fetchall() == [('"foo"',), (None,)]
+
+    cur.execute(
+        """
+            SELECT OBJECT_CONSTRUCT('key_1', 'one', 'key_2', NULL) AS WITHOUT_KEEP_NULL,
+                   OBJECT_CONSTRUCT_KEEP_NULL('key_1', 'one', 'key_2', NULL) AS KEEP_NULL_1,
+                   OBJECT_CONSTRUCT_KEEP_NULL('key_1', 'one', NULL, 'two') AS KEEP_NULL_2
+        """
+    )
+    assert indent(cur.fetchall()) == [  # type: ignore
+        ('{\n  "key_1": "one"\n}', '{\n  "key_1": "one",\n  "key_2": null\n}', '{\n  "key_1": "one"\n}')
+    ]
 
 
 def test_sqlstate(cur: snowflake.connector.cursor.SnowflakeCursor):
