@@ -2,6 +2,26 @@
 
 # Changelog
 
+## [0.8.2](https://github.com/tekumara/fakesnow/compare/v0.8.1...v0.8.2) (2024-01-05)
+
+
+### Features
+
+* FAKESNOW_DEBUG=snowflake prints original snowflake sql statement ([42db788](https://github.com/tekumara/fakesnow/commit/42db788e55acca0889d91ead2c4383da8f31ee73))
+* support ARRAY_SIZE ([c35d14b](https://github.com/tekumara/fakesnow/commit/c35d14b792ea7c6467bd1b7d820db0b043430550))
+* support GET_PATH on nested json ([7430067](https://github.com/tekumara/fakesnow/commit/743006707feaf14a8dcb872c36851de89e53a235))
+* support IDENTIFIER ([a40ac61](https://github.com/tekumara/fakesnow/commit/a40ac612dffeb899ad0c57efc85eca8365df16d5))
+* support OBJECT_CONSTRUCT_KEEP_NULL ([47168fb](https://github.com/tekumara/fakesnow/commit/47168fb1e2684a9f0c885d216fac076226bfea52))
+* support RANDOM ([93c2a07](https://github.com/tekumara/fakesnow/commit/93c2a077f39b44f2de2935926b005636b098ce50))
+* support ResultBatch.to_pandas() ([4bfbf45](https://github.com/tekumara/fakesnow/commit/4bfbf45580752b21edd672f255844113270e295a))
+* support SAMPLE ([437343f](https://github.com/tekumara/fakesnow/commit/437343f211905b135df7f76990b4804756fcd8d5))
+* support TO_TIMESTAMP_NTZ ([e351fee](https://github.com/tekumara/fakesnow/commit/e351feeebfaeea715d2b16a8b01643e39f28c4ba))
+
+
+### Bug Fixes
+
+* upper/lower converts extracted json to varchar ([44cd871](https://github.com/tekumara/fakesnow/commit/44cd8713815e0b8d365e54765d081f7c131bd40a))
+
 ## [0.8.1](https://github.com/tekumara/fakesnow/compare/v0.8.0...v0.8.1) (2024-01-03)
 
 
