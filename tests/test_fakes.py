@@ -1,4 +1,5 @@
 # ruff: noqa: E501
+# pyright: reportOptionalMemberAccess=false
 
 import datetime
 import json
@@ -119,6 +120,10 @@ def test_connect_without_database(_fakesnow_no_auto_create: None):
             in str(excinfo.value)
         )
 
+        # test description works without database
+        assert cur.execute("SELECT 1").fetchall() == [(1,)]
+        assert cur.description
+
 
 def test_connect_without_schema(_fakesnow: None):
     # database will be created but not schema
@@ -144,6 +149,10 @@ def test_connect_without_schema(_fakesnow: None):
             "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
             in str(excinfo.value)
         )
+
+        # test description works without schema
+        assert cur.execute("SELECT 1").fetchall() == [(1,)]
+        assert cur.description
 
         conn.execute_string("CREATE SCHEMA schema1; USE SCHEMA schema1;")
         assert conn.schema == "SCHEMA1"
@@ -292,8 +301,6 @@ def test_describe_info_schema_columns(cur: snowflake.connector.cursor.SnowflakeC
 
 
 ## descriptions are needed for ipython-sql/jupysql which describes every statement
-
-
 def test_description_create_drop_database(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create database example")
     assert dcur.fetchall() == [{"status": "Database EXAMPLE successfully created."}]
@@ -308,8 +315,9 @@ def test_description_create_drop_schema(dcur: snowflake.connector.cursor.DictCur
     dcur.execute("create schema example")
     assert dcur.fetchall() == [{"status": "Schema EXAMPLE successfully created."}]
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
-    dcur.execute("drop schema example")
-    assert dcur.fetchall() == [{"status": "EXAMPLE successfully dropped."}]
+    # drop current schema
+    dcur.execute("drop schema schema1")
+    assert dcur.fetchall() == [{"status": "SCHEMA1 successfully dropped."}]
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
@@ -716,10 +724,7 @@ def test_random(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(-2595895151578578944,)]
     cur.execute("select random(419)")
     assert cur.fetchall() == [(4590143504000221184,)]
-    assert (
-        cur.execute("select random()").fetchall()  # pyright: ignore[reportOptionalMemberAccess]
-        != cur.execute("select random()").fetchall()  # pyright: ignore[reportOptionalMemberAccess]
-    )
+    assert cur.execute("select random()").fetchall() != cur.execute("select random()").fetchall()
 
 
 def test_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor):

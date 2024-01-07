@@ -102,12 +102,11 @@ class FakeSnowflakeCursor:
     def description(self) -> list[ResultMetadata]:
         # use a cursor to avoid destroying an unfetched result on the main connection
         with self._duck_conn.cursor() as cur:
-            # TODO: allow sql alchemy connection with no database or schema
-            assert self._conn.database, ".description not implemented when database is None"
-            assert self._conn.schema, ".description not implemented when schema is None"
+            database = self._conn.database or "memory"
+            schema = self._conn.schema or "main"
 
             # match database and schema used on the main connection
-            cur.execute(f"SET SCHEMA = '{self._conn.database}.{self._conn.schema}'")
+            cur.execute(f"SET SCHEMA = '{database}.{schema}'")
             cur.execute(f"DESCRIBE {self._last_sql}", self._last_params)
             meta = FakeSnowflakeCursor._describe_as_result_metadata(cur.fetchall())
 
@@ -252,6 +251,14 @@ class FakeSnowflakeCursor:
             dropped_sql = DROPPED_SQL.substitute(name=name)
             self._duck_conn.execute(dropped_sql)
             self._last_sql = dropped_sql
+
+            # if dropping the current database/schema then reset conn metadata
+            if cmd == "DROP DATABASE" and name == self._conn.database:
+                self._conn.database = None
+                self._conn.schema = None
+
+            elif cmd == "DROP SCHEMA" and name == self._conn.schema:
+                self._conn.schema = None
 
         if cmd == "INSERT":
             (count,) = self._duck_conn.fetchall()[0]
