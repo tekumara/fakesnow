@@ -399,6 +399,10 @@ class FakeSnowflakeCursor:
                 return ResultMetadata(
                     name=column_name, type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True                # noqa: E501
                 )
+            elif column_type == "TIMESTAMP WITH TIME ZONE":
+                return ResultMetadata(
+                    name=column_name, type_code=7, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True                # noqa: E501
+                )
             elif column_type == "BLOB":
                 return ResultMetadata(
                     name=column_name, type_code=11, display_size=None, internal_size=8388608, precision=None, scale=None, is_nullable=True      # noqa: E501
