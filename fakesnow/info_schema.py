@@ -1,4 +1,5 @@
 """Info schema extension tables/views used for storing snowflake metadata not captured by duckdb."""
+from __future__ import annotations
 
 from string import Template
 

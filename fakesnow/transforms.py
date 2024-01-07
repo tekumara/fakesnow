@@ -592,6 +592,36 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
     return expression
 
 
+SQL_SHOW_SCHEMAS = """
+select
+    to_timestamp(0)::timestamptz as created_on,
+    schema_name as name,
+    NULL as kind,
+    catalog_name as database_name,
+    NULL as schema_name
+from information_schema.schemata
+where catalog_name not in ('memory', 'system', 'temp') and schema_name not in ('main', 'pg_catalog')
+"""
+
+
+def show_schemas(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
+    """Transform SHOW SCHEMAS to a query against the information_schema.schemata table.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-schemas
+    """
+    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "SCHEMAS":
+        if (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+            database = ident.this
+        else:
+            database = current_database
+
+        return sqlglot.parse_one(
+            f"{SQL_SHOW_SCHEMAS} and catalog_name = '{database}'" if database else SQL_SHOW_SCHEMAS, read="snowflake"
+        )
+
+    return expression
+
+
 def tag(expression: exp.Expression) -> exp.Expression:
     """Handle tags. Transfer tags into upserts of the tag table.
 

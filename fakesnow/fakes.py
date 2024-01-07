@@ -187,6 +187,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.array_size)
             .transform(transforms.random)
             .transform(transforms.identifier)
+            .transform(lambda e: transforms.show_schemas(e, self._conn.database))
         )
         sql = transformed.sql(dialect="duckdb")
 
