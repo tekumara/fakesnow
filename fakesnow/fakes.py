@@ -26,6 +26,7 @@ from typing_extensions import Self
 import fakesnow.checks as checks
 import fakesnow.expr as expr
 import fakesnow.info_schema as info_schema
+import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 
 SCHEMA_UNSET = "schema_unset"
@@ -481,6 +482,7 @@ class FakeSnowflakeConnection:
         ):
             duck_conn.execute(f"ATTACH DATABASE ':memory:' AS {self.database}")
             duck_conn.execute(info_schema.creation_sql(self.database))
+            duck_conn.execute(macros.creation_sql(self.database))
 
         # create schema if needed
         if (

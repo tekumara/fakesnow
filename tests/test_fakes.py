@@ -339,6 +339,11 @@ def test_description_insert(dcur: snowflake.connector.cursor.DictCursor):
     assert dcur.description == [ResultMetadata(name='number of rows inserted', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)]  # fmt: skip
 
 
+def test_equal_null(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select equal_null(NULL, NULL), equal_null(1, 1), equal_null(1, 2), equal_null(1, NULL)")
+    assert cur.fetchall() == [(True, True, False, False)]
+
+
 def test_executemany(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
 
