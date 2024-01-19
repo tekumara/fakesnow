@@ -820,7 +820,16 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
     ]
     assert dcur.fetchall() == objects
     dcur.execute("show terse objects in database")
-    assert dcur.fetchall() == objects
+    assert dcur.fetchall() == [
+        *objects,
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "name": "databases",
+            "kind": "VIEW",
+            "database_name": "DB1",
+            "schema_name": "information_schema",
+        },
+    ]
 
 
 def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):

@@ -266,7 +266,7 @@ def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def information_schema_columns_snowflake(expression: exp.Expression) -> exp.Expression:
+def information_schema_fs_columns_snowflake(expression: exp.Expression) -> exp.Expression:
     """Redirect to the information_schema.columns_snowflake view which has metadata that matches snowflake.
 
     Because duckdb doesn't store character_maximum_length or character_octet_length.
@@ -278,13 +278,13 @@ def information_schema_columns_snowflake(expression: exp.Expression) -> exp.Expr
         and tbl_exp.name.upper() == "COLUMNS"
         and tbl_exp.db.upper() == "INFORMATION_SCHEMA"
     ):
-        tbl_exp.set("this", exp.Identifier(this="COLUMNS_SNOWFLAKE", quoted=False))
+        tbl_exp.set("this", exp.Identifier(this="_FS_COLUMNS_SNOWFLAKE", quoted=False))
 
     return expression
 
 
-def information_schema_tables_ext(expression: exp.Expression) -> exp.Expression:
-    """Join to information_schema.tables_ext to access additional metadata columns (eg: comment)."""
+def information_schema_fs_tables_ext(expression: exp.Expression) -> exp.Expression:
+    """Join to information_schema._fs_tables_ext to access additional metadata columns (eg: comment)."""
 
     if (
         isinstance(expression, exp.Select)
@@ -293,12 +293,12 @@ def information_schema_tables_ext(expression: exp.Expression) -> exp.Expression:
         and tbl_exp.db.upper() == "INFORMATION_SCHEMA"
     ):
         return expression.join(
-            "information_schema.tables_ext",
+            "information_schema._fs_tables_ext",
             on=(
                 """
-                tables.table_catalog = tables_ext.ext_table_catalog AND
-                tables.table_schema = tables_ext.ext_table_schema AND
-                tables.table_name = tables_ext.ext_table_name
+                tables.table_catalog = _fs_tables_ext.ext_table_catalog AND
+                tables.table_schema = _fs_tables_ext.ext_table_schema AND
+                tables.table_name = _fs_tables_ext.ext_table_name
                 """
             ),
             join_type="left",
@@ -625,15 +625,17 @@ def show_objects(expression: exp.Expression, current_database: str | None = None
         else:
             raise ValueError(f"Invalid {scope_kind=} {table=}")
 
-        # snowflake shows information schema too, but hide it for now because it has our internal tables
-        schema = f"table_schema = '{schema}'" if schema else "table_schema != 'information_schema'"
-        limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
-        # no database will show everything in the "account"
+        # without a database will show everything in the "account"
         table_catalog = (
             f"table_catalog = '{database}'" if database else "table_catalog not in ('memory', 'system', 'temp')"
         )
+        schema = f" and table_schema = '{schema}'" if schema else ""
+        limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
+        exclude_fakesnow_tables = " and not (table_schema == 'information_schema' and table_name like '_fs_%%')"
 
-        return sqlglot.parse_one(f"{SQL_SHOW_OBJECTS} where {table_catalog} and {schema}{limit}", read="snowflake")
+        return sqlglot.parse_one(
+            f"{SQL_SHOW_OBJECTS} where {table_catalog}{schema}{exclude_fakesnow_tables}{limit}", read="snowflake"
+        )
 
     return expression
 
