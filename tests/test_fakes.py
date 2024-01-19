@@ -798,6 +798,31 @@ def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
+def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("create table example(x int)")
+    dcur.execute("create view view1 as select * from example")
+    dcur.execute("show terse objects in db1.schema1")
+    objects = [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "name": "EXAMPLE",
+            "kind": "TABLE",
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+        },
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "name": "VIEW1",
+            "kind": "VIEW",
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+        },
+    ]
+    assert dcur.fetchall() == objects
+    dcur.execute("show terse objects in database")
+    assert dcur.fetchall() == objects
+
+
 def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show terse schemas in database db1 limit 100")
     assert dcur.fetchall() == [

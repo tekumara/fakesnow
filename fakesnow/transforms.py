@@ -592,6 +592,52 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
     return expression
 
 
+SQL_SHOW_OBJECTS = """
+select
+    to_timestamp(0)::timestamptz as created_on,
+    table_name as name,
+    case when table_type='BASE TABLE' then 'TABLE' else table_type end as kind,
+    table_catalog as database_name,
+    table_schema as schema_name
+from information_schema.tables
+"""
+
+
+def show_objects(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
+    """Transform SHOW OBJECTS to a query against the information_schema.tables table.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-objects
+    """
+    if (
+        isinstance(expression, exp.Show)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "OBJECTS"
+        and (scope_kind := expression.args.get("scope_kind"))
+    ):
+        table = expression.find(exp.Table)
+
+        if scope_kind == "DATABASE":
+            database = (table and table.name) or current_database
+            schema = None
+        elif scope_kind == "SCHEMA" and table:
+            database = table.db or current_database
+            schema = table.name
+        else:
+            raise ValueError(f"Invalid {scope_kind=} {table=}")
+
+        # snowflake shows information schema too, but hide it for now because it has our internal tables
+        schema = f"table_schema = '{schema}'" if schema else "table_schema != 'information_schema'"
+        limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
+        # no database will show everything in the "account"
+        table_catalog = (
+            f"table_catalog = '{database}'" if database else "table_catalog not in ('memory', 'system', 'temp')"
+        )
+
+        return sqlglot.parse_one(f"{SQL_SHOW_OBJECTS} where {table_catalog} and {schema}{limit}", read="snowflake")
+
+    return expression
+
+
 SQL_SHOW_SCHEMAS = """
 select
     to_timestamp(0)::timestamptz as created_on,
