@@ -269,15 +269,15 @@ def test_semi_structured_types() -> None:
 def test_show_objects() -> None:
     assert (
         sqlglot.parse_one("show terse objects in database db1 limit 10", read="snowflake").transform(show_objects).sql()
-        == "SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS created_on, table_name AS name, CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS kind, table_catalog AS database_name, table_schema AS schema_name FROM information_schema.tables WHERE table_catalog = 'db1' AND NOT (table_schema = 'information_schema' AND table_name LIKE '_fs_%%') LIMIT 10"  # noqa: E501
+        == "SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS created_on, table_name AS name, CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS kind, table_catalog AS database_name, table_schema AS schema_name FROM information_schema.tables WHERE NOT (table_schema = 'information_schema' AND table_name LIKE '_fs_%%') AND table_catalog = 'db1' LIMIT 10"  # noqa: E501
     )
     assert (
         sqlglot.parse_one("show terse objects in db1.schema1", read="snowflake").transform(show_objects).sql()
-        == "SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS created_on, table_name AS name, CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS kind, table_catalog AS database_name, table_schema AS schema_name FROM information_schema.tables WHERE table_catalog = 'db1' AND table_schema = 'schema1' AND NOT (table_schema = 'information_schema' AND table_name LIKE '_fs_%%')"  # noqa: E501
+        == "SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS created_on, table_name AS name, CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS kind, table_catalog AS database_name, table_schema AS schema_name FROM information_schema.tables WHERE NOT (table_schema = 'information_schema' AND table_name LIKE '_fs_%%') AND table_catalog = 'db1' AND table_schema = 'schema1'"  # noqa: E501
     )
     assert (
         sqlglot.parse_one("show terse objects in database", read="snowflake").transform(show_objects).sql()
-        == "SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS created_on, table_name AS name, CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS kind, table_catalog AS database_name, table_schema AS schema_name FROM information_schema.tables WHERE NOT table_catalog IN ('memory', 'system', 'temp') AND NOT (table_schema = 'information_schema' AND table_name LIKE '_fs_%%')"  # noqa: E501
+        == "SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS created_on, table_name AS name, CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS kind, table_catalog AS database_name, table_schema AS schema_name FROM information_schema.tables WHERE NOT (table_schema = 'information_schema' AND table_name LIKE '_fs_%%')"  # noqa: E501
     )
 
 

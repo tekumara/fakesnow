@@ -625,16 +625,14 @@ def show_objects(expression: exp.Expression, current_database: str | None = None
         else:
             raise ValueError(f"Invalid {scope_kind=} {table=}")
 
+        exclude_fakesnow_tables = "not (table_schema == 'information_schema' and table_name like '_fs_%%')"
         # without a database will show everything in the "account"
-        table_catalog = (
-            f"table_catalog = '{database}'" if database else "table_catalog not in ('memory', 'system', 'temp')"
-        )
+        table_catalog = f" and table_catalog = '{database}'" if database else ""
         schema = f" and table_schema = '{schema}'" if schema else ""
         limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
-        exclude_fakesnow_tables = " and not (table_schema == 'information_schema' and table_name like '_fs_%%')"
 
         return sqlglot.parse_one(
-            f"{SQL_SHOW_OBJECTS} where {table_catalog}{schema}{exclude_fakesnow_tables}{limit}", read="snowflake"
+            f"{SQL_SHOW_OBJECTS} where {exclude_fakesnow_tables}{table_catalog}{schema}{limit}", read="snowflake"
         )
 
     return expression
