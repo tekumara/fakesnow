@@ -196,10 +196,10 @@ class FakeSnowflakeCursor:
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
             sql = f"SELECT setseed({seed}); {sql}"
 
-        if os.environ.get("FAKESNOW_DEBUG") == "snowflake":
-            print(f"{command};", file=sys.stderr)
-        elif os.environ.get("FAKESNOW_DEBUG"):
-            print(f"{sql};", file=sys.stderr)
+        if fs_debug := os.environ.get("FAKESNOW_DEBUG"):
+            sql = command if fs_debug == "snowflake" else sql
+            debug = f"{sql};{params=}" if params else f"{sql};"
+            print(debug, file=sys.stderr)
 
         try:
             self._last_sql = sql

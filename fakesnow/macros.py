@@ -1,4 +1,3 @@
-from duckdb import DuckDBPyConnection
 from string import Template
 
 EQUAL_NULL = Template(
