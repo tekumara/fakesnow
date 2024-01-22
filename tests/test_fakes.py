@@ -1,6 +1,7 @@
+from __future__ import annotations
+
 # ruff: noqa: E501
 # pyright: reportOptionalMemberAccess=false
-
 import datetime
 import json
 from collections.abc import Sequence
@@ -765,27 +766,23 @@ def test_schema_drop(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
-    def indent(rows: Sequence[tuple]) -> list[tuple]:
-        # indent duckdb json strings to match snowflake json strings
-        return [(*[json.dumps(json.loads(c), indent=2) for c in r],) for r in rows]
-
-    cur.execute("create or replace table semis (emails array, name object, notes variant)")
+    cur.execute("create or replace table semis (emails array, names object, notes variant)")
     cur.execute(
-        """insert into semis(emails, name, notes) SELECT ['A', 'B'], OBJECT_CONSTRUCT('k','v1'), ARRAY_CONSTRUCT('foo')::VARIANT"""
+        """insert into semis(emails, names, notes) SELECT ['A', 'B'], OBJECT_CONSTRUCT('k','v1'), ARRAY_CONSTRUCT('foo')::VARIANT"""
     )
     cur.execute(
-        """insert into semis(emails, name, notes) SELECT ['C','D'], parse_json('{"k": "v2"}'), parse_json('{"b": "ar"}')"""
+        """insert into semis(emails, names, notes) SELECT ['C','D'], parse_json('{"k": "v2"}'), parse_json('{"b": "ar"}')"""
     )
 
     # results are returned as strings, because the underlying type is JSON (duckdb) / VARIANT (snowflake)
 
     cur.execute("select emails from semis")
-    assert indent(cur.fetchall()) == [('[\n  "A",\n  "B"\n]',), ('[\n  "C",\n  "D"\n]',)]  # type: ignore
+    assert indent(cur.fetchall()) == [('[\n  "A",\n  "B"\n]',), ('[\n  "C",\n  "D"\n]',)]
 
     cur.execute("select emails[0] from semis")
     assert cur.fetchall() == [('"A"',), ('"C"',)]
 
-    cur.execute("select name['k'] from semis")
+    cur.execute("select names['k'] from semis")
     assert cur.fetchall() == [('"v1"',), ('"v2"',)]
 
     cur.execute("select notes[0] from semis")
@@ -798,7 +795,7 @@ def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
                    OBJECT_CONSTRUCT_KEEP_NULL('key_1', 'one', NULL, 'two') AS KEEP_NULL_2
         """
     )
-    assert indent(cur.fetchall()) == [  # type: ignore
+    assert indent(cur.fetchall()) == [
         ('{\n  "key_1": "one"\n}', '{\n  "key_1": "one",\n  "key_2": null\n}', '{\n  "key_1": "one"\n}')
     ]
 
@@ -1015,7 +1012,7 @@ def test_values(conn: snowflake.connector.SnowflakeConnection):
         ]
 
 
-def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):
+def test_write_pandas_array(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar, ORDERS array)")
 
@@ -1025,11 +1022,14 @@ def test_write_pandas(conn: snowflake.connector.SnowflakeConnection):
                 {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M", "ORDERS": ["C", "D"]},
             ]
         )
-        snowflake.connector.pandas_tools.write_pandas(conn, df, "customers")
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS")
 
-        cur.execute("select id, first_name, last_name from customers")
+        cur.execute("select * from customers")
 
-        assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+        assert indent(cur.fetchall()) == [
+            (1, "Jenny", "P", '[\n  "A",\n  "B"\n]'),
+            (2, "Jasper", "M", '[\n  "C",\n  "D"\n]'),
+        ]
 
 
 def test_write_pandas_timestamp_ntz(conn: snowflake.connector.SnowflakeConnection):
@@ -1057,7 +1057,7 @@ def test_write_pandas_partial_columns(conn: snowflake.connector.SnowflakeConnect
                 {"ID": 2, "FIRST_NAME": "Jasper"},
             ]
         )
-        snowflake.connector.pandas_tools.write_pandas(conn, df, "customers")
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS")
 
         cur.execute("select id, first_name, last_name from customers")
 
@@ -1065,17 +1065,53 @@ def test_write_pandas_partial_columns(conn: snowflake.connector.SnowflakeConnect
         assert cur.fetchall() == [(1, "Jenny", None), (2, "Jasper", None)]
 
 
-def test_write_pandas_dict_column_as_varchar(conn: snowflake.connector.SnowflakeConnection):
+def test_write_pandas_dict_as_varchar(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
-        cur.execute("create table example (id str, vc varchar, o object)")
+        cur.execute("create or replace table example (vc varchar, o object)")
 
-        df = pd.DataFrame(
-            [("abc", {"kind": "vc", "count": 1}, {"kind": "obj", "amount": 2})], columns=["ID", "VC", "O"]
-        )
+        df = pd.DataFrame([({"kind": "vc", "count": 1}, {"kind": "obj", "amount": 2})], columns=["VC", "O"])
         snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE")
 
         cur.execute("select * from example")
 
         # returned values are valid json strings
-        # TODO: order object keys alphabetically like snowflake does
-        assert cur.fetchall() == [("abc", '{"kind":"vc","count":1}', '{"kind":"obj","amount":2}')]
+        # NB: snowflake orders object keys alphabetically, we don't
+        r = cur.fetchall()
+        assert [(sort_keys(r[0][0], indent=None), sort_keys(r[0][1], indent=2))] == [
+            ('{"count":1,"kind":"vc"}', '{\n  "amount": 2,\n  "kind": "obj"\n}')
+        ]
+
+
+def test_write_pandas_dict_different_keys(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create or replace table customers (notes variant)")
+
+        df = pd.DataFrame.from_records(
+            [
+                # rows have dicts with unique keys and values
+                {"NOTES": {"k": "v1"}},
+                # test single and double quoting
+                {"NOTES": {"k2": ["v'2", 'v"3']}},
+            ]
+        )
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS")
+
+        cur.execute("select * from customers")
+
+        assert indent(cur.fetchall()) == [('{\n  "k": "v1"\n}',), ('{\n  "k2": [\n    "v\'2",\n    "v\\"3"\n  ]\n}',)]
+
+
+def indent(rows: Sequence[tuple] | Sequence[dict]) -> list[tuple]:
+    # indent duckdb json strings to match snowflake json strings
+    return [
+        (*[json.dumps(json.loads(c), indent=2) if (isinstance(c, str) and c.startswith(("[", "{"))) else c for c in r],)
+        for r in rows
+    ]
+
+
+def sort_keys(sdict: str, indent: int | None = 2) -> str:
+    return json.dumps(
+        json.loads(sdict, object_pairs_hook=lambda x: dict(sorted(x))),
+        indent=indent,
+        separators=None if indent else (",", ":"),
+    )
