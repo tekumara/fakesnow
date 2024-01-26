@@ -1,3 +1,5 @@
+from pathlib import Path
+
 import sqlglot
 from sqlglot import exp
 
@@ -49,6 +51,16 @@ def test_create_database() -> None:
     e = sqlglot.parse_one("create database foobar").transform(create_database)
     assert e.sql() == "ATTACH DATABASE ':memory:' AS foobar"
     assert e.args["create_db_name"] == "foobar"
+
+    assert (
+        sqlglot.parse_one("create database foobar").transform(create_database, db_path=Path("/tmp")).sql()
+        == "ATTACH DATABASE '/tmp/foobar.db' AS foobar"
+    )
+
+    assert (
+        sqlglot.parse_one("create database foobar").transform(create_database, db_path=Path(".databases/")).sql()
+        == "ATTACH DATABASE '.databases/foobar.db' AS foobar"
+    )
 
 
 def test_drop_schema_cascade() -> None:

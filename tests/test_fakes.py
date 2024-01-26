@@ -4,6 +4,7 @@ from __future__ import annotations
 # pyright: reportOptionalMemberAccess=false
 import datetime
 import json
+import tempfile
 from collections.abc import Sequence
 from decimal import Decimal
 
@@ -15,6 +16,8 @@ import snowflake.connector.cursor
 import snowflake.connector.pandas_tools
 from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
+
+import fakesnow
 
 
 def test_alter_table(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -73,6 +76,42 @@ def test_connect_auto_create(_fakesnow: None):
     with snowflake.connector.connect(database="db1", schema="schema1"):
         # connects again and reuses db1 and schema1
         pass
+
+
+def test_connect_different_sessions_use_database(_fakesnow_no_auto_create: None):
+    # connect without default database and schema
+    with snowflake.connector.connect() as conn1, conn1.cursor() as cur:
+        # use the table's fully qualified name
+        cur.execute("create database marts")
+        cur.execute("create schema marts.jaffles")
+        cur.execute("create table marts.jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+        cur.execute("insert into marts.jaffles.customers values (1, 'Jenny', 'P')")
+
+        # use database and schema
+        cur.execute("use database marts")
+        cur.execute("use schema jaffles")
+        cur.execute("insert into customers values (2, 'Jasper', 'M')")
+
+    # in a separate connection, connect using the database and schema from above
+    with snowflake.connector.connect(database="marts", schema="jaffles") as conn2, conn2.cursor() as cur:
+        cur.execute("select id, first_name, last_name from customers")
+        assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+
+
+def test_connect_reuse_db():
+    with tempfile.TemporaryDirectory(prefix="fakesnow-test") as db_path:
+        with fakesnow.patch(db_path=db_path), snowflake.connector.connect(
+            database="db1", schema="schema1"
+        ) as conn, conn.cursor() as cur:
+            # creates db1.schema1.example
+            cur.execute("create table example (x int)")
+            cur.execute("insert into example values (420)")
+
+        # reconnect
+        with fakesnow.patch(db_path=db_path), snowflake.connector.connect(
+            database="db1", schema="schema1"
+        ) as conn, conn.cursor() as cur:
+            assert cur.execute("select * from example").fetchall() == [(420,)]
 
 
 def test_connect_without_database(_fakesnow_no_auto_create: None):
@@ -157,26 +196,6 @@ def test_connect_without_schema(_fakesnow: None):
 
         conn.execute_string("CREATE SCHEMA schema1; USE SCHEMA schema1;")
         assert conn.schema == "SCHEMA1"
-
-
-def test_connect_different_sessions_use_database(_fakesnow_no_auto_create: None):
-    # connect without default database and schema
-    with snowflake.connector.connect() as conn1, conn1.cursor() as cur:
-        # use the table's fully qualified name
-        cur.execute("create database marts")
-        cur.execute("create schema marts.jaffles")
-        cur.execute("create table marts.jaffles.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
-        cur.execute("insert into marts.jaffles.customers values (1, 'Jenny', 'P')")
-
-        # use database and schema
-        cur.execute("use database marts")
-        cur.execute("use schema jaffles")
-        cur.execute("insert into customers values (2, 'Jasper', 'M')")
-
-    # in a separate connection, connect using the database and schema from above
-    with snowflake.connector.connect(database="marts", schema="jaffles") as conn2, conn2.cursor() as cur:
-        cur.execute("select id, first_name, last_name from customers")
-        assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
 
 def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
@@ -545,7 +564,7 @@ def test_identifier(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1,)]
 
 
-def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_info_schema_columns_numeric(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-numeric
     cur.execute(
         """
@@ -580,7 +599,7 @@ def test_information_schema_columns_numeric(cur: snowflake.connector.cursor.Snow
     ]
 
 
-def test_information_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_info_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-datetime
     cur.execute(
         """
@@ -611,7 +630,7 @@ def test_information_schema_columns_other(cur: snowflake.connector.cursor.Snowfl
     ]
 
 
-def test_information_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_info_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-text
     cur.execute(
         """
@@ -635,15 +654,26 @@ def test_information_schema_columns_text(cur: snowflake.connector.cursor.Snowfla
     ]
 
 
-def test_information_schema_databases(conn: snowflake.connector.SnowflakeConnection):
+def test_info_schema_databases(conn: snowflake.connector.SnowflakeConnection):
     # see https://docs.snowflake.com/en/sql-reference/info-schema/databases
 
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("create database db2")
         cur.execute("select * from information_schema.databases")
 
         assert cur.fetchall() == [
             {
                 "database_name": "DB1",
+                "database_owner": "SYSADMIN",
+                "is_transient": "NO",
+                "comment": None,
+                "created": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+                "last_altered": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+                "retention_time": 1,
+                "type": "STANDARD",
+            },
+            {
+                "database_name": "DB2",
                 "database_owner": "SYSADMIN",
                 "is_transient": "NO",
                 "comment": None,

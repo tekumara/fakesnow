@@ -2,7 +2,7 @@ from string import Template
 
 EQUAL_NULL = Template(
     """
-CREATE MACRO ${catalog}.equal_null(a, b) AS a IS NOT DISTINCT FROM b;
+CREATE MACRO IF NOT EXISTS ${catalog}.equal_null(a, b) AS a IS NOT DISTINCT FROM b;
 """
 )
 

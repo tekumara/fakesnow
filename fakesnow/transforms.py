@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import cast
 
 import sqlglot
@@ -19,7 +20,7 @@ def array_size(expression: exp.Expression) -> exp.Expression:
 
 
 # TODO: move this into a Dialect as a transpilation
-def create_database(expression: exp.Expression) -> exp.Expression:
+def create_database(expression: exp.Expression, db_path: Path | None = None) -> exp.Expression:
     """Transform create database to attach database.
 
     Example:
@@ -36,9 +37,11 @@ def create_database(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, exp.Create) and str(expression.args.get("kind")).upper() == "DATABASE":
         assert (ident := expression.find(exp.Identifier)), f"No identifier in {expression.sql}"
         db_name = ident.this
+        db_file = f"{db_path/db_name}.db" if db_path else ":memory:"
+
         return exp.Command(
             this="ATTACH",
-            expression=exp.Literal(this=f"DATABASE ':memory:' AS {db_name}", is_string=True),
+            expression=exp.Literal(this=f"DATABASE '{db_file}' AS {db_name}", is_string=True),
             create_db_name=db_name,
         )
 

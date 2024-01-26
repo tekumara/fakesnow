@@ -6,7 +6,7 @@ from string import Template
 # use ext prefix in columns to disambiguate when joining with information_schema.tables
 SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT = Template(
     """
-create table ${catalog}.information_schema._fs_tables_ext (
+create table if not exists ${catalog}.information_schema._fs_tables_ext (
     ext_table_catalog varchar,
     ext_table_schema varchar,
     ext_table_name varchar,
@@ -18,7 +18,7 @@ create table ${catalog}.information_schema._fs_tables_ext (
 
 SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_EXT = Template(
     """
-create table ${catalog}.information_schema._fs_columns_ext (
+create table if not exists ${catalog}.information_schema._fs_columns_ext (
     ext_table_catalog varchar,
     ext_table_schema varchar,
     ext_table_name varchar,
@@ -34,7 +34,7 @@ create table ${catalog}.information_schema._fs_columns_ext (
 # snowflake integers are 38 digits, base 10, See https://docs.snowflake.com/en/sql-reference/data-types-numeric
 SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW = Template(
     """
-create view ${catalog}.information_schema._fs_columns_snowflake AS
+create view if not exists ${catalog}.information_schema._fs_columns_snowflake AS
 select table_catalog, table_schema, table_name, column_name, ordinal_position, column_default, is_nullable,
 case when starts_with(data_type, 'DECIMAL') or data_type='BIGINT' then 'NUMBER'
      when data_type='VARCHAR' then 'TEXT'
@@ -62,7 +62,7 @@ AND ext_table_name = table_name AND ext_column_name = column_name
 # replicates https://docs.snowflake.com/sql-reference/info-schema/databases
 SQL_CREATE_INFORMATION_SCHEMA_DATABASES_VIEW = Template(
     """
-create view ${catalog}.information_schema.databases AS
+create view if not exists ${catalog}.information_schema.databases AS
 select
     catalog_name as database_name,
     'SYSADMIN' as database_owner,

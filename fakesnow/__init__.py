@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import contextlib
 import importlib
+import os
 import sys
 import unittest.mock as mock
 from collections.abc import Iterator, Sequence
@@ -19,6 +20,7 @@ def patch(
     extra_targets: str | Sequence[str] = [],
     create_database_on_connect: bool = True,
     create_schema_on_connect: bool = True,
+    db_path: str | os.PathLike | None = None,
 ) -> Iterator[None]:
     """Patch snowflake targets with fakes.
 
@@ -28,11 +30,14 @@ def patch(
 
     Args:
         extra_targets (str | Sequence[str], optional): Extra targets to patch. Defaults to [].
-        create_database_on_connect (bool, optional): Create database if provided in connection. Defaults to True.
-        create_schema_on_connect (bool, optional): Create schema if provided in connection. Defaults to True.
 
         Allows extra targets beyond the standard snowflake.connector targets to be patched. Needed because we cannot
         patch definitions, only usages, see https://docs.python.org/3/library/unittest.mock.html#where-to-patch
+
+        create_database_on_connect (bool, optional): Create database if provided in connection. Defaults to True.
+        create_schema_on_connect (bool, optional): Create schema if provided in connection. Defaults to True.
+        db_path (str | os.PathLike | None, optional): _description_. Use existing database files from this path
+            or create them here if they don't already exist. If None databases are in-memory. Defaults to None.
 
     Yields:
         Iterator[None]: None.
@@ -51,6 +56,7 @@ def patch(
             duck_conn.cursor(),
             create_database=create_database_on_connect,
             create_schema=create_schema_on_connect,
+            db_path=db_path,
             **kwargs,
         ),
         snowflake.connector.pandas_tools.write_pandas: fakes.write_pandas,

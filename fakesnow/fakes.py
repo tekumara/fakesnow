@@ -5,6 +5,7 @@ import os
 import re
 import sys
 from collections.abc import Iterable, Iterator, Sequence
+from pathlib import Path
 from string import Template
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal, Optional, cast
@@ -160,7 +161,7 @@ class FakeSnowflakeCursor:
         transformed = (
             expression.transform(transforms.upper_case_unquoted_identifiers)
             .transform(transforms.set_schema, current_database=self._conn.database)
-            .transform(transforms.create_database)
+            .transform(transforms.create_database, db_path=self._conn.db_path)
             .transform(transforms.extract_comment)
             .transform(transforms.information_schema_fs_columns_snowflake)
             .transform(transforms.information_schema_fs_tables_ext)
@@ -461,15 +462,18 @@ class FakeSnowflakeConnection:
         schema: str | None = None,
         create_database: bool = True,
         create_schema: bool = True,
+        db_path: str | os.PathLike | None = None,
         *args: Any,
         **kwargs: Any,
     ):
         self._duck_conn = duck_conn
-        # upper case database and schema like snowflake
+        # upper case database and schema like snowflake unquoted identifiers
+        # NB: catalog names are not case-sensitive in duckdb but stored as cased in information_schema.schemata
         self.database = database and database.upper()
         self.schema = schema and schema.upper()
         self.database_set = False
         self.schema_set = False
+        self.db_path = db_path
         self._paramstyle = "pyformat"
 
         # create database if needed
@@ -481,7 +485,8 @@ class FakeSnowflakeConnection:
                 where catalog_name = '{self.database}'"""
             ).fetchone()
         ):
-            duck_conn.execute(f"ATTACH DATABASE ':memory:' AS {self.database}")
+            db_file = f"{Path(db_path)/self.database}.db" if db_path else ":memory:"
+            duck_conn.execute(f"ATTACH DATABASE '{db_file}' AS {self.database}")
             duck_conn.execute(info_schema.creation_sql(self.database))
             duck_conn.execute(macros.creation_sql(self.database))
 

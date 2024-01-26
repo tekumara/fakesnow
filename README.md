@@ -60,6 +60,13 @@ with fakesnow.patch("mymodule.write_pandas"):
     ...
 ```
 
+By default databases are in-memory. To persist databases between processes, specify a databases path:
+
+```python
+with fakesnow.patch(db_path="databases/"):
+    ...
+```
+
 ### pytest fixtures
 
 pytest [fixtures](fakesnow/fixtures.py) are provided for testing. Example _conftest.py_:
