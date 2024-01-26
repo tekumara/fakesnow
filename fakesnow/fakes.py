@@ -199,9 +199,8 @@ class FakeSnowflakeCursor:
             sql = f"SELECT setseed({seed}); {sql}"
 
         if fs_debug := os.environ.get("FAKESNOW_DEBUG"):
-            sql = command if fs_debug == "snowflake" else sql
-            debug = f"{sql};{params=}" if params else f"{sql};"
-            print(debug, file=sys.stderr)
+            debug = command if fs_debug == "snowflake" else sql
+            print(f"{debug};{params=}" if params else f"{debug};", file=sys.stderr)
 
         try:
             self._last_sql = sql
