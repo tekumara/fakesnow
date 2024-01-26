@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from string import Template
 from typing import cast
 
 import sqlglot
@@ -43,6 +44,60 @@ def create_database(expression: exp.Expression, db_path: Path | None = None) -> 
             this="ATTACH",
             expression=exp.Literal(this=f"DATABASE '{db_file}' AS {db_name}", is_string=True),
             create_db_name=db_name,
+        )
+
+    return expression
+
+
+SQL_DESCRIBE_TABLE = Template(
+    """
+SELECT
+    column_name AS name,
+    CASE WHEN data_type = 'NUMBER' THEN 'NUMBER(' || numeric_precision || ',' || numeric_scale || ')'
+         WHEN data_type = 'TEXT' THEN 'VARCHAR(' || coalesce(character_maximum_length,16777216)  || ')'
+         WHEN data_type = 'TIMESTAMP_NTZ' THEN 'TIMESTAMP_NTZ(9)'
+         WHEN data_type = 'TIMESTAMP_TZ' THEN 'TIMESTAMP_TZ(9)'
+         WHEN data_type = 'TIME' THEN 'TIME(9)'
+         WHEN data_type = 'BINARY' THEN 'BINARY(8388608)'
+        ELSE data_type END AS type,
+    'COLUMN' AS kind,
+    CASE WHEN is_nullable = 'YES' THEN 'Y' ELSE 'N' END AS "null?",
+    column_default AS default,
+    'N' AS "primary key",
+    'N' AS "unique key",
+    NULL AS check,
+    NULL AS expression,
+    NULL AS comment,
+    NULL AS "policy name",
+    NULL AS "privacy domain",
+FROM information_schema._fs_columns_snowflake
+WHERE table_catalog = '${catalog}' AND table_schema = '${schema}' AND table_name = '${table}'
+ORDER BY ordinal_position
+"""
+)
+
+
+def describe_table(
+    expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
+) -> exp.Expression:
+    """Redirect to the information_schema._fs_describe_table to match snowflake.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/desc-table
+    """
+
+    if (
+        isinstance(expression, exp.Describe)
+        and (kind := expression.args.get("kind"))
+        and isinstance(kind, str)
+        and kind.upper() == "TABLE"
+        and (table := expression.find(exp.Table))
+    ):
+        catalog = table.catalog or current_database
+        schema = table.db or current_schema
+
+        return sqlglot.parse_one(
+            SQL_DESCRIBE_TABLE.substitute(catalog=catalog, schema=schema, table=table.name),
+            read="duckdb",
         )
 
     return expression
@@ -269,7 +324,7 @@ def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
 
 
 def information_schema_fs_columns_snowflake(expression: exp.Expression) -> exp.Expression:
-    """Redirect to the information_schema.columns_snowflake view which has metadata that matches snowflake.
+    """Redirect to the information_schema._fs_columns_snowflake view which has metadata that matches snowflake.
 
     Because duckdb doesn't store character_maximum_length or character_octet_length.
     """
@@ -619,22 +674,22 @@ def show_objects(expression: exp.Expression, current_database: str | None = None
         table = expression.find(exp.Table)
 
         if scope_kind == "DATABASE":
-            database = (table and table.name) or current_database
+            catalog = (table and table.name) or current_database
             schema = None
         elif scope_kind == "SCHEMA" and table:
-            database = table.db or current_database
+            catalog = table.db or current_database
             schema = table.name
         else:
             raise ValueError(f"Invalid {scope_kind=} {table=}")
 
         exclude_fakesnow_tables = "not (table_schema == 'information_schema' and table_name like '_fs_%%')"
         # without a database will show everything in the "account"
-        table_catalog = f" and table_catalog = '{database}'" if database else ""
+        table_catalog = f" and table_catalog = '{catalog}'" if catalog else ""
         schema = f" and table_schema = '{schema}'" if schema else ""
         limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
 
         return sqlglot.parse_one(
-            f"{SQL_SHOW_OBJECTS} where {exclude_fakesnow_tables}{table_catalog}{schema}{limit}", read="snowflake"
+            f"{SQL_SHOW_OBJECTS} where {exclude_fakesnow_tables}{table_catalog}{schema}{limit}", read="duckdb"
         )
 
     return expression
@@ -664,7 +719,7 @@ def show_schemas(expression: exp.Expression, current_database: str | None = None
             database = current_database
 
         return sqlglot.parse_one(
-            f"{SQL_SHOW_SCHEMAS} and catalog_name = '{database}'" if database else SQL_SHOW_SCHEMAS, read="snowflake"
+            f"{SQL_SHOW_SCHEMAS} and catalog_name = '{database}'" if database else SQL_SHOW_SCHEMAS, read="duckdb"
         )
 
     return expression

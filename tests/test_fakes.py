@@ -307,6 +307,79 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     # fmt: on
 
 
+def test_describe_table(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute(
+        """
+        create or replace table example (
+            XBOOLEAN BOOLEAN, XDOUBLE DOUBLE, XFLOAT FLOAT,
+            XNUMBER82 NUMBER(8,2), XNUMBER NUMBER, XDECIMAL DECIMAL, XNUMERIC NUMERIC,
+            XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT,
+            XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT,
+            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XTIMESTAMP_TZ TIMESTAMP_TZ, XDATE DATE, XTIME TIME,
+            XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT */ XVARIANT VARIANT
+        )
+        """
+    )
+    # this table's columns shouldn't appear when describing the example table
+    dcur.execute("create table derived as select XVARCHAR20 from example")
+
+    common = {
+        "kind": "COLUMN",
+        "null?": "Y",
+        "default": None,
+        "primary key": "N",
+        "unique key": "N",
+        "check": None,
+        "expression": None,
+        "comment": None,
+        "policy name": None,
+        "privacy domain": None,
+    }
+    expected = [
+        {"name": "XBOOLEAN", "type": "BOOLEAN", **common},
+        {"name": "XDOUBLE", "type": "FLOAT", **common},
+        {"name": "XFLOAT", "type": "FLOAT", **common},
+        {"name": "XNUMBER82", "type": "NUMBER(8,2)", **common},
+        {"name": "XNUMBER", "type": "NUMBER(38,0)", **common},
+        {"name": "XDECIMAL", "type": "NUMBER(38,0)", **common},
+        {"name": "XNUMERIC", "type": "NUMBER(38,0)", **common},
+        {"name": "XINT", "type": "NUMBER(38,0)", **common},
+        {"name": "XINTEGER", "type": "NUMBER(38,0)", **common},
+        {"name": "XBIGINT", "type": "NUMBER(38,0)", **common},
+        {"name": "XSMALLINT", "type": "NUMBER(38,0)", **common},
+        {"name": "XTINYINT", "type": "NUMBER(38,0)", **common},
+        {"name": "XBYTEINT", "type": "NUMBER(38,0)", **common},
+        {"name": "XVARCHAR20", "type": "VARCHAR(20)", **common},
+        {"name": "XVARCHAR", "type": "VARCHAR(16777216)", **common},
+        {"name": "XTEXT", "type": "VARCHAR(16777216)", **common},
+        {"name": "XTIMESTAMP", "type": "TIMESTAMP_NTZ(9)", **common},
+        {"name": "XTIMESTAMP_NTZ9", "type": "TIMESTAMP_NTZ(9)", **common},
+        {"name": "XTIMESTAMP_TZ", "type": "TIMESTAMP_TZ(9)", **common},
+        {"name": "XDATE", "type": "DATE", **common},
+        {"name": "XTIME", "type": "TIME(9)", **common},
+        {"name": "XBINARY", "type": "BINARY(8388608)", **common},
+        {"name": "XVARIANT", "type": "VARIANT", **common},
+    ]
+
+    assert dcur.execute("describe table example").fetchall() == expected
+    assert dcur.execute("describe table schema1.example").fetchall() == expected
+    assert dcur.execute("describe table db1.schema1.example").fetchall() == expected
+    assert len(dcur.description) == 12
+
+    assert dcur.execute("describe table db1.schema1.derived").fetchall() == [
+        # TODO: preserve varchar size when derived - this should be VARCHAR(20)
+        {"name": "XVARCHAR20", "type": "VARCHAR(16777216)", **common},
+    ]
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("describe table this_does_not_exist")
+
+    # TODO: actual snowflake error is:
+    # 002003 (42S02): SQL compilation error:
+    # Table 'THIS_DOES_NOT_EXIST' does not exist or not authorized.
+    assert "002003 (42S02): Catalog Error: Table with name THIS_DOES_NOT_EXIST does not exist!" in str(excinfo.value)
+
+
 def test_describe_info_schema_columns(cur: snowflake.connector.cursor.SnowflakeCursor):
     # test we can handle the column types returned from the info schema, which are created by duckdb
     # and so don't go through our transforms
@@ -604,7 +677,7 @@ def test_info_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCurs
     cur.execute(
         """
         create or replace table example (
-            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XDATE DATE, XTIME TIME,
+            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XTIMESTAMP_TZ TIMESTAMP_TZ, XDATE DATE, XTIME TIME,
             XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT */ XVARIANT VARIANT
         )
         """
@@ -620,6 +693,7 @@ def test_info_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCurs
     assert cur.fetchall() == [
         ("XTIMESTAMP", "TIMESTAMP_NTZ"),
         ("XTIMESTAMP_NTZ9", "TIMESTAMP_NTZ"),
+        ("XTIMESTAMP_TZ", "TIMESTAMP_TZ"),
         ("XDATE", "DATE"),
         ("XTIME", "TIME"),
         ("XBINARY", "BINARY"),
@@ -769,6 +843,9 @@ def test_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("insert into example SELECT * FROM (VALUES (1), (2), (3));")
     # TODO: rows inserted ie: 3
     assert cur.rowcount is None
+    # TODO: selected rows
+    # cur.execute("SELECT * FROM example where id > 1")
+    # assert cur.rowcount == 2
 
 
 def test_sample(cur: snowflake.connector.cursor.SnowflakeCursor):

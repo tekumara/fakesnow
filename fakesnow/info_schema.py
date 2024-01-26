@@ -41,6 +41,7 @@ case when starts_with(data_type, 'DECIMAL') or data_type='BIGINT' then 'NUMBER'
      when data_type='DOUBLE' then 'FLOAT'
      when data_type='BLOB' then 'BINARY'
      when data_type='TIMESTAMP' then 'TIMESTAMP_NTZ'
+     when data_type='TIMESTAMP WITH TIME ZONE' then 'TIMESTAMP_TZ'
      when data_type='JSON' then 'VARIANT'
      else data_type end as data_type,
 ext_character_maximum_length as character_maximum_length, ext_character_octet_length as character_octet_length,

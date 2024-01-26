@@ -7,6 +7,7 @@ from fakesnow.transforms import (
     SUCCESS_NOP,
     array_size,
     create_database,
+    describe_table,
     drop_schema_cascade,
     extract_comment,
     extract_text_length,
@@ -61,6 +62,10 @@ def test_create_database() -> None:
         sqlglot.parse_one("create database foobar").transform(create_database, db_path=Path(".databases/")).sql()
         == "ATTACH DATABASE '.databases/foobar.db' AS foobar"
     )
+
+
+def test_describe_table() -> None:
+    assert "SELECT" in sqlglot.parse_one("describe table db1.schema1.table1").transform(describe_table).sql()
 
 
 def test_drop_schema_cascade() -> None:

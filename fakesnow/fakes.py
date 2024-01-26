@@ -266,9 +266,18 @@ class FakeSnowflakeCursor:
 
         if cmd == "INSERT":
             (count,) = self._duck_conn.fetchall()[0]
-            inserted_sql = INSERTED_SQL.substitute(count=count)
-            self._duck_conn.execute(inserted_sql)
-            self._last_sql = inserted_sql
+            describe_sql = INSERTED_SQL.substitute(count=count)
+            self._duck_conn.execute(describe_sql)
+            self._last_sql = describe_sql
+
+        if cmd == "DESCRIBE TABLE":
+            # DESCRIBE TABLE has already been run above to detect and error if the table exists
+            # We now rerun DESCRIBE TABLE but transformed with columns to match Snowflake
+            describe_sql = transformed.transform(
+                lambda e: transforms.describe_table(e, self._conn.database, self._conn.schema)
+            ).sql(dialect="duckdb")
+            self._duck_conn.execute(describe_sql)
+            self._last_sql = describe_sql
 
         if table_comment := cast(tuple[exp.Table, str], transformed.args.get("table_comment")):
             # record table comment
