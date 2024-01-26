@@ -109,7 +109,6 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
     elif (
         isinstance(expression, exp.Comment)
         and (cexp := expression.args.get("expression"))
-        and isinstance(cexp, exp.Literal)
         and (table := expression.find(exp.Table))
     ):
         new = SUCCESS_NOP.copy()

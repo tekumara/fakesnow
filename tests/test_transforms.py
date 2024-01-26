@@ -84,6 +84,10 @@ def test_extract_comment() -> None:
     assert e.sql() == "SELECT 'Statement executed successfully.'"
     assert e.args["table_comment"] == (table1, "comment1")
 
+    e = sqlglot.parse_one("COMMENT ON TABLE table1 IS $$comment2$$", read="snowflake").transform(extract_comment)
+    assert e.sql() == "SELECT 'Statement executed successfully.'"
+    assert e.args["table_comment"] == (table1, "comment2")
+
     e = sqlglot.parse_one("ALTER TABLE table1 SET COMMENT = 'comment1'", read="snowflake").transform(extract_comment)
     assert e.sql() == "SELECT 'Statement executed successfully.'"
     assert e.args["table_comment"] == (table1, "comment1")
