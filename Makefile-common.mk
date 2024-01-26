@@ -17,7 +17,7 @@ $(pip): $(if $(value CI),|,) .python-version
 	$(pip) install pip~=23.3 wheel~=0.40
 
 $(venv): $(if $(value CI),|,) pyproject.toml $(pip)
-	$(pip) install -e '.[dev, notebook]'
+	$(pip) install -e '.[dev$(if $(value CI),,,notebook)]'
 	touch $(venv)
 
 node_modules: package.json
