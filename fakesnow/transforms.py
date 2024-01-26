@@ -725,9 +725,7 @@ def to_date(expression: exp.Expression) -> exp.Expression:
         and expression.this.upper() == "TO_DATE"
     ):
         return exp.Cast(
-            # add datetrunc to handle timestamp_ns (aka timestamp(9)) columns
-            # and avoid https://github.com/duckdb/duckdb/issues/7672
-            this=exp.DateTrunc(unit=exp.Literal(this="day", is_string=True), this=expression.expressions[0]),
+            this=expression.expressions[0],
             to=exp.DataType(this=exp.DataType.Type.DATE, nested=False, prefix=False),
         )
     return expression
