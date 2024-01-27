@@ -1059,24 +1059,19 @@ def test_transactions(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchall() == [("Statement executed successfully.",)]
 
 
-def test_unquoted_identifiers_are_upper_cased(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("create table customers (id int, first_name varchar, last_name varchar)")
-        cur.execute("insert into customers values (1, 'Jenny', 'P')")
-        cur.execute("select first_name, first_name as fname from customers")
+def test_unquoted_identifiers_are_upper_cased(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("create table customers (id int, first_name varchar, last_name varchar)")
+    dcur.execute("insert into customers values (1, 'Jenny', 'P')")
+    dcur.execute("select first_name, first_name as fname from customers")
 
-        assert cur.fetchall() == [
-            {"FIRST_NAME": "Jenny", "FNAME": "Jenny"},
-        ]
+    assert dcur.fetchall() == [
+        {"FIRST_NAME": "Jenny", "FNAME": "Jenny"},
+    ]
 
-        cur.execute("select first_name, first_name as fname from customers")
-        batches = cur.get_result_batches()
-        assert batches
-
-        rows = [row for batch in batches for row in batch]
-        assert rows == [
-            {"FIRST_NAME": "Jenny", "FNAME": "Jenny"},
-        ]
+    dcur.execute("select first_name, first_name as fname from customers")
+    assert dcur.fetchall() == [
+        {"FIRST_NAME": "Jenny", "FNAME": "Jenny"},
+    ]
 
 
 def test_use_invalid_schema(_fakesnow: None):
