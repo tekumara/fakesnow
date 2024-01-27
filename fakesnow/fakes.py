@@ -194,6 +194,7 @@ class FakeSnowflakeCursor:
             .transform(lambda e: transforms.show_objects(e, self._conn.database))
         )
         sql = transformed.sql(dialect="duckdb")
+        result_sql = None
 
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
             sql = f"SELECT setseed({seed}); {sql}"
@@ -203,8 +204,6 @@ class FakeSnowflakeCursor:
             print(f"{debug};{params=}" if params else f"{debug};", file=sys.stderr)
 
         try:
-            self._last_sql = sql
-            self._last_params = params
             self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]
@@ -218,8 +217,7 @@ class FakeSnowflakeCursor:
                 e
             ) or "cannot commit - no transaction is active" in str(e):
                 # snowflake doesn't error on rollback or commit outside a tx
-                self._duck_conn.execute(SUCCESS_SQL)
-                self._last_sql = SUCCESS_SQL
+                result_sql = SUCCESS_SQL
             else:
                 raise e
 
@@ -227,34 +225,26 @@ class FakeSnowflakeCursor:
             self._conn.database = ident.this.upper()
             self._conn.database_set = True
 
-        if cmd == "USE SCHEMA" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+        elif cmd == "USE SCHEMA" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             self._conn.schema = ident.this.upper()
             self._conn.schema_set = True
 
-        if create_db_name := transformed.args.get("create_db_name"):
+        elif create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions
             self._duck_conn.execute(info_schema.creation_sql(create_db_name))
-            created_sql = DATABASE_CREATED_SQL.substitute(name=create_db_name)
-            self._duck_conn.execute(created_sql)
-            self._last_sql = created_sql
+            result_sql = DATABASE_CREATED_SQL.substitute(name=create_db_name)
 
-        if cmd == "CREATE SCHEMA" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+        elif cmd == "CREATE SCHEMA" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             name = ident.this if ident.quoted else ident.this.upper()
-            created_sql = SCHEMA_CREATED_SQL.substitute(name=name)
-            self._duck_conn.execute(created_sql)
-            self._last_sql = created_sql
+            result_sql = SCHEMA_CREATED_SQL.substitute(name=name)
 
-        if cmd == "CREATE TABLE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+        elif cmd == "CREATE TABLE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             name = ident.this if ident.quoted else ident.this.upper()
-            created_sql = TABLE_CREATED_SQL.substitute(name=name)
-            self._duck_conn.execute(created_sql)
-            self._last_sql = created_sql
+            result_sql = TABLE_CREATED_SQL.substitute(name=name)
 
-        if cmd.startswith("DROP") and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+        elif cmd.startswith("DROP") and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             name = ident.this if ident.quoted else ident.this.upper()
-            dropped_sql = DROPPED_SQL.substitute(name=name)
-            self._duck_conn.execute(dropped_sql)
-            self._last_sql = dropped_sql
+            result_sql = DROPPED_SQL.substitute(name=name)
 
             # if dropping the current database/schema then reset conn metadata
             if cmd == "DROP DATABASE" and name == self._conn.database:
@@ -264,20 +254,16 @@ class FakeSnowflakeCursor:
             elif cmd == "DROP SCHEMA" and name == self._conn.schema:
                 self._conn.schema = None
 
-        if cmd == "INSERT":
+        elif cmd == "INSERT":
             (count,) = self._duck_conn.fetchall()[0]
-            describe_sql = INSERTED_SQL.substitute(count=count)
-            self._duck_conn.execute(describe_sql)
-            self._last_sql = describe_sql
+            result_sql = INSERTED_SQL.substitute(count=count)
 
-        if cmd == "DESCRIBE TABLE":
+        elif cmd == "DESCRIBE TABLE":
             # DESCRIBE TABLE has already been run above to detect and error if the table exists
             # We now rerun DESCRIBE TABLE but transformed with columns to match Snowflake
-            describe_sql = transformed.transform(
+            result_sql = transformed.transform(
                 lambda e: transforms.describe_table(e, self._conn.database, self._conn.schema)
             ).sql(dialect="duckdb")
-            self._duck_conn.execute(describe_sql)
-            self._last_sql = describe_sql
 
         if table_comment := cast(tuple[exp.Table, str], transformed.args.get("table_comment")):
             # record table comment
@@ -295,6 +281,12 @@ class FakeSnowflakeCursor:
             schema = table.db or self._conn.schema
             assert catalog and schema
             self._duck_conn.execute(info_schema.insert_text_lengths_sql(catalog, schema, table.name, text_lengths))
+
+        if result_sql:
+            self._duck_conn.execute(result_sql)
+
+        self._last_sql = result_sql or sql
+        self._last_params = params
 
         return self
 
