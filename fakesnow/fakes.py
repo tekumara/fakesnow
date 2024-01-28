@@ -32,12 +32,12 @@ import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 
 SCHEMA_UNSET = "schema_unset"
-SUCCESS_SQL = "SELECT 'Statement executed successfully.' as status"
-DATABASE_CREATED_SQL = Template("SELECT 'Database ${name} successfully created.' as status")
-TABLE_CREATED_SQL = Template("SELECT 'Table ${name} successfully created.' as status")
-DROPPED_SQL = Template("SELECT '${name} successfully dropped.' as status")
-SCHEMA_CREATED_SQL = Template("SELECT 'Schema ${name} successfully created.' as status")
-INSERTED_SQL = Template("SELECT ${count} as 'number of rows inserted'")
+SQL_SUCCESS = "SELECT 'Statement executed successfully.' as status"
+SQL_CREATED_DATABASE = Template("SELECT 'Database ${name} successfully created.' as status")
+SQL_CREATED_SCHEMA = Template("SELECT 'Schema ${name} successfully created.' as status")
+SQL_CREATED_TABLE = Template("SELECT 'Table ${name} successfully created.' as status")
+SQL_DROPPED = Template("SELECT '${name} successfully dropped.' as status")
+SQL_INSERTED_ROWS = Template("SELECT ${count} as 'number of rows inserted'")
 
 
 class FakeSnowflakeCursor:
@@ -217,7 +217,7 @@ class FakeSnowflakeCursor:
                 e
             ) or "cannot commit - no transaction is active" in str(e):
                 # snowflake doesn't error on rollback or commit outside a tx
-                result_sql = SUCCESS_SQL
+                result_sql = SQL_SUCCESS
             else:
                 raise e
 
@@ -232,19 +232,19 @@ class FakeSnowflakeCursor:
         elif create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions
             self._duck_conn.execute(info_schema.creation_sql(create_db_name))
-            result_sql = DATABASE_CREATED_SQL.substitute(name=create_db_name)
+            result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
         elif cmd == "CREATE SCHEMA" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             name = ident.this if ident.quoted else ident.this.upper()
-            result_sql = SCHEMA_CREATED_SQL.substitute(name=name)
+            result_sql = SQL_CREATED_SCHEMA.substitute(name=name)
 
         elif cmd == "CREATE TABLE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             name = ident.this if ident.quoted else ident.this.upper()
-            result_sql = TABLE_CREATED_SQL.substitute(name=name)
+            result_sql = SQL_CREATED_TABLE.substitute(name=name)
 
         elif cmd.startswith("DROP") and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             name = ident.this if ident.quoted else ident.this.upper()
-            result_sql = DROPPED_SQL.substitute(name=name)
+            result_sql = SQL_DROPPED.substitute(name=name)
 
             # if dropping the current database/schema then reset conn metadata
             if cmd == "DROP DATABASE" and name == self._conn.database:
@@ -256,7 +256,7 @@ class FakeSnowflakeCursor:
 
         elif cmd == "INSERT":
             (count,) = self._duck_conn.fetchall()[0]
-            result_sql = INSERTED_SQL.substitute(count=count)
+            result_sql = SQL_INSERTED_ROWS.substitute(count=count)
 
         elif cmd == "DESCRIBE TABLE":
             # DESCRIBE TABLE has already been run above to detect and error if the table exists
