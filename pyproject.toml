@@ -85,7 +85,9 @@ select = [
     # ruff-specific
     "RUF",
     # flake8-simplify
-    "SIM"
+    "SIM",
+    # flake8-builtins
+    "A"
 ]
 ignore = [
     # allow untyped self and cls args, and no return type from dunder methods

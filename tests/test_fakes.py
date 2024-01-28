@@ -452,17 +452,22 @@ def test_execute_string(conn: snowflake.connector.SnowflakeConnection):
         """ create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar);
             select count(*) customers """
     )
-    assert [(1,)] == cur2.fetchall()
+    assert cur2.fetchall() == [(1,)]
 
 
 def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
+        # no result set
+        with pytest.raises(TypeError) as _:
+            cur.fetchall()
+
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
         cur.execute("select id, first_name, last_name from customers")
 
         assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
+        assert cur.fetchall() == []
 
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("select id, first_name, last_name from customers")
@@ -471,6 +476,7 @@ def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
             {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
             {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
         ]
+        assert cur.fetchall() == []
 
 
 def test_fetchone(conn: snowflake.connector.SnowflakeConnection):
@@ -494,6 +500,10 @@ def test_fetchone(conn: snowflake.connector.SnowflakeConnection):
 
 def test_fetchmany(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
+        # no result set
+        with pytest.raises(TypeError) as _:
+            cur.fetchmany()
+
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
         cur.execute("insert into customers values (1, 'Jenny', 'P')")
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
@@ -517,6 +527,10 @@ def test_fetchmany(conn: snowflake.connector.SnowflakeConnection):
 
 
 def test_fetch_pandas_all(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # no result set
+    with pytest.raises(snowflake.connector.NotSupportedError) as _:
+        cur.fetch_pandas_all()
+
     cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
     cur.execute("insert into customers values (1, 'Jenny', 'P')")
     cur.execute("insert into customers values (2, 'Jasper', 'M')")
@@ -529,6 +543,9 @@ def test_fetch_pandas_all(cur: snowflake.connector.cursor.SnowflakeCursor):
         ]
     )
     # integers have dtype int64
+    assert_frame_equal(cur.fetch_pandas_all(), expected_df)
+
+    # can refetch
     assert_frame_equal(cur.fetch_pandas_all(), expected_df)
 
 
@@ -592,6 +609,9 @@ def test_get_path_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_get_result_batches(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # no result set
+    assert cur.get_result_batches() is None
+
     cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
     cur.execute("insert into customers values (1, 'Jenny', 'P')")
     cur.execute("insert into customers values (2, 'Jasper', 'M')")
@@ -605,6 +625,9 @@ def test_get_result_batches(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_get_result_batches_dict(dcur: snowflake.connector.cursor.DictCursor):
+    # no result set
+    assert dcur.get_result_batches() is None
+
     dcur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
     dcur.execute("insert into customers values (1, 'Jenny', 'P')")
     dcur.execute("insert into customers values (2, 'Jasper', 'M')")
@@ -1032,8 +1055,10 @@ def test_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_transactions(conn: snowflake.connector.SnowflakeConnection):
+    # test behaviours required for sqlalchemy
+
     conn.execute_string(
-        """CREATE TABLE table1 (i int);
+        """CREATE OR REPLACE TABLE table1 (i int);
             BEGIN TRANSACTION;
             INSERT INTO table1 (i) VALUES (1);"""
     )
@@ -1042,9 +1067,19 @@ def test_transactions(conn: snowflake.connector.SnowflakeConnection):
         """BEGIN TRANSACTION;
             INSERT INTO table1 (i) VALUES (2);"""
     )
-    conn.commit()
+
+    # transactions are per session, cursors are just different result sets,
+    # so a new cursor will see the uncommitted values
     with conn.cursor() as cur:
         cur.execute("SELECT * FROM table1")
+        assert cur.fetchall() == [(2,)]
+
+    conn.commit()
+
+    with conn.cursor() as cur:
+        # interleaved commit() doesn't lose result set because its on a different cursor
+        cur.execute("select * from table1")
+        conn.commit()
         assert cur.fetchall() == [(2,)]
 
     # check rollback and commit without transaction is a success (to mimic snowflake)

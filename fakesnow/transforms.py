@@ -174,9 +174,9 @@ def extract_comment(expression: exp.Expression) -> exp.Expression:
         and (sexp := expression.find(exp.Set))
         and not sexp.args["tag"]
         and (eq := sexp.find(exp.EQ))
-        and (id := eq.find(exp.Identifier))
-        and isinstance(id.this, str)
-        and id.this.upper() == "COMMENT"
+        and (eid := eq.find(exp.Identifier))
+        and isinstance(eid.this, str)
+        and eid.this.upper() == "COMMENT"
         and (lit := eq.find(exp.Literal))
         and (table := expression.find(exp.Table))
     ):

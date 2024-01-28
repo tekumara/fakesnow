@@ -32,11 +32,11 @@ import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 
 SCHEMA_UNSET = "schema_unset"
-SQL_SUCCESS = "SELECT 'Statement executed successfully.' as status"
-SQL_CREATED_DATABASE = Template("SELECT 'Database ${name} successfully created.' as status")
-SQL_CREATED_SCHEMA = Template("SELECT 'Schema ${name} successfully created.' as status")
-SQL_CREATED_TABLE = Template("SELECT 'Table ${name} successfully created.' as status")
-SQL_DROPPED = Template("SELECT '${name} successfully dropped.' as status")
+SQL_SUCCESS = "SELECT 'Statement executed successfully.' as 'status'"
+SQL_CREATED_DATABASE = Template("SELECT 'Database ${name} successfully created.' as 'status'")
+SQL_CREATED_SCHEMA = Template("SELECT 'Schema ${name} successfully created.' as 'status'")
+SQL_CREATED_TABLE = Template("SELECT 'Table ${name} successfully created.' as 'status'")
+SQL_DROPPED = Template("SELECT '${name} successfully dropped.' as 'status'")
 SQL_INSERTED_ROWS = Template("SELECT ${count} as 'number of rows inserted'")
 
 
@@ -62,6 +62,8 @@ class FakeSnowflakeCursor:
         self._last_params = None
         self._sqlstate = None
         self._arraysize = 1
+        self._arrow_table = None
+        self._arrow_table_fetch_index = None
         self._converter = snowflake.connector.converter.SnowflakeConverter()
 
     def __enter__(self) -> Self:
@@ -72,8 +74,8 @@ class FakeSnowflakeCursor:
         exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: TracebackType | None,
-    ) -> bool:
-        return False
+    ) -> None:
+        pass
 
     @property
     def arraysize(self) -> int:
@@ -99,21 +101,16 @@ class FakeSnowflakeCursor:
 
         describe = f"DESCRIBE {command}"
         self.execute(describe, *args, **kwargs)
-        return FakeSnowflakeCursor._describe_as_result_metadata(self._duck_conn.fetchall())
+        return FakeSnowflakeCursor._describe_as_result_metadata(self.fetchall())
 
     @property
     def description(self) -> list[ResultMetadata]:
-        # use a cursor to avoid destroying an unfetched result on the main connection
-        with self._duck_conn.cursor() as cur:
-            database = self._conn.database or "memory"
-            schema = self._conn.schema or "main"
-
-            # match database and schema used on the main connection
-            cur.execute(f"SET SCHEMA = '{database}.{schema}'")
+        # use a separate cursor to avoid consuming the result set on this cursor
+        with self._conn.cursor() as cur:
             cur.execute(f"DESCRIBE {self._last_sql}", self._last_params)
             meta = FakeSnowflakeCursor._describe_as_result_metadata(cur.fetchall())
 
-        return meta  # type: ignore see https://github.com/duckdb/duckdb/issues/7816
+        return meta
 
     def execute(
         self,
@@ -285,6 +282,9 @@ class FakeSnowflakeCursor:
         if result_sql:
             self._duck_conn.execute(result_sql)
 
+        self._arrow_table = self._duck_conn.fetch_arrow_table()
+        self._arrow_table_fetch_index = None
+
         self._last_sql = result_sql or sql
         self._last_params = params
 
@@ -310,13 +310,16 @@ class FakeSnowflakeCursor:
         return self
 
     def fetchall(self) -> list[tuple] | list[dict]:
-        if self._use_dict_result:
-            return self._duck_conn.fetch_arrow_table().to_pylist()
-        else:
-            return self._duck_conn.fetchall()
+        if self._arrow_table is None:
+            # mimic snowflake python connector error type
+            raise TypeError("No open result set")
+        return self.fetchmany(self._arrow_table.num_rows)
 
     def fetch_pandas_all(self, **kwargs: dict[str, Any]) -> pd.DataFrame:
-        return self._duck_conn.fetch_df()
+        if self._arrow_table is None:
+            # mimic snowflake python connector error type
+            raise snowflake.connector.NotSupportedError("No open result set")
+        return self._arrow_table.to_pandas()
 
     def fetchone(self) -> dict | tuple | None:
         result = self.fetchmany(1)
@@ -325,30 +328,22 @@ class FakeSnowflakeCursor:
     def fetchmany(self, size: int | None = None) -> list[tuple] | list[dict]:
         # https://peps.python.org/pep-0249/#fetchmany
         size = size or self._arraysize
-        if not self._use_dict_result:
-            return cast(list[tuple], self._duck_conn.fetchmany(size))
 
-        if not self._arrow_table:
-            self._arrow_table = self._duck_conn.fetch_arrow_table()
-            self._arrow_table_fetch_index = -size
+        if self._arrow_table is None:
+            # mimic snowflake python connector error type
+            raise TypeError("No open result set")
+        if self._arrow_table_fetch_index is None:
+            self._arrow_table_fetch_index = 0
+        else:
+            self._arrow_table_fetch_index += size
 
-        self._arrow_table_fetch_index += size
-
-        return self._arrow_table.slice(offset=self._arrow_table_fetch_index, length=size).to_pylist()
+        tslice = self._arrow_table.slice(offset=self._arrow_table_fetch_index, length=size).to_pylist()
+        return tslice if self._use_dict_result else [tuple(d.values()) for d in tslice]
 
     def get_result_batches(self) -> list[ResultBatch] | None:
-        # rows_per_batch is approximate
-        # see https://github.com/duckdb/duckdb/issues/4755
-        reader = self._duck_conn.fetch_record_batch(rows_per_batch=1000)
-
-        batches = []
-        try:
-            while True:
-                batches.append(FakeResultBatch(self._use_dict_result, reader.read_next_batch()))
-        except StopIteration:
-            pass
-
-        return batches
+        if self._arrow_table is None:
+            return None
+        return [FakeResultBatch(self._use_dict_result, b) for b in self._arrow_table.to_batches(max_chunksize=1000)]
 
     @property
     def rowcount(self) -> int | None:
@@ -536,8 +531,8 @@ class FakeSnowflakeConnection:
         exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
         traceback: TracebackType | None,
-    ) -> bool:
-        return False
+    ) -> None:
+        pass
 
     def commit(self) -> None:
         self.cursor().execute("COMMIT")
