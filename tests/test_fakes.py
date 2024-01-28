@@ -432,6 +432,20 @@ def test_description_insert(dcur: snowflake.connector.cursor.DictCursor):
     assert dcur.description == [ResultMetadata(name='number of rows inserted', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)]  # fmt: skip
 
 
+def test_description_update(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create table example (x int)")
+    dcur.execute("insert into example values (1), (2), (3)")
+    dcur.execute("update example set x=420 where x > 1")
+    assert dcur.fetchall() == [{"number of rows updated": 2, "number of multi-joined rows updated": 0}]
+    # TODO: Snowflake is actually precision=19, is_nullable=False
+    # fmt: off
+    assert dcur.description == [
+        ResultMetadata(name='number of rows updated', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(name='number of multi-joined rows updated', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)
+    ]
+    # fmt: on
+
+
 def test_equal_null(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select equal_null(NULL, NULL), equal_null(1, 1), equal_null(1, 2), equal_null(1, NULL)")
     assert cur.fetchall() == [(True, True, False, False)]
@@ -868,6 +882,8 @@ def test_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.rowcount == 4
     cur.execute("select * from example where id > 1")
     assert cur.rowcount == 3
+    cur.execute("update example set id = 22 where id > 2")
+    assert cur.rowcount == 2
 
 
 def test_sample(cur: snowflake.connector.cursor.SnowflakeCursor):

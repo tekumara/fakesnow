@@ -38,6 +38,7 @@ SQL_CREATED_SCHEMA = Template("SELECT 'Schema ${name} successfully created.' as 
 SQL_CREATED_TABLE = Template("SELECT 'Table ${name} successfully created.' as 'status'")
 SQL_DROPPED = Template("SELECT '${name} successfully dropped.' as 'status'")
 SQL_INSERTED_ROWS = Template("SELECT ${count} as 'number of rows inserted'")
+SQL_UPDATED_ROWS = Template("SELECT ${count} as 'number of rows updated', 0 as 'number of multi-joined rows updated'")
 
 
 class FakeSnowflakeCursor:
@@ -221,7 +222,7 @@ class FakeSnowflakeCursor:
             else:
                 raise e
 
-        effective_count = None
+        affected_count = None
         if cmd == "USE DATABASE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             self._conn.database = ident.this.upper()
             self._conn.database_set = True
@@ -256,8 +257,12 @@ class FakeSnowflakeCursor:
                 self._conn.schema = None
 
         elif cmd == "INSERT":
-            (effective_count,) = self._duck_conn.fetchall()[0]
-            result_sql = SQL_INSERTED_ROWS.substitute(count=effective_count)
+            (affected_count,) = self._duck_conn.fetchall()[0]
+            result_sql = SQL_INSERTED_ROWS.substitute(count=affected_count)
+
+        elif cmd == "UPDATE":
+            (affected_count,) = self._duck_conn.fetchall()[0]
+            result_sql = SQL_UPDATED_ROWS.substitute(count=affected_count)
 
         elif cmd == "DESCRIBE TABLE":
             # DESCRIBE TABLE has already been run above to detect and error if the table exists
@@ -287,7 +292,7 @@ class FakeSnowflakeCursor:
             self._duck_conn.execute(result_sql)
 
         self._arrow_table = self._duck_conn.fetch_arrow_table()
-        self._rowcount = effective_count or self._arrow_table.num_rows
+        self._rowcount = affected_count or self._arrow_table.num_rows
 
         self._last_sql = result_sql or sql
         self._last_params = params
