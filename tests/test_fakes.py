@@ -117,7 +117,7 @@ def test_connect_reuse_db():
 def test_connect_without_database(_fakesnow_no_auto_create: None):
     with snowflake.connector.connect() as conn, conn.cursor() as cur:
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-            cur.execute("SELECT * FROM customers")
+            cur.execute("select * from customers")
 
         # actual snowflake error message is:
         #
@@ -129,7 +129,7 @@ def test_connect_without_database(_fakesnow_no_auto_create: None):
         # )
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-            cur.execute("SELECT * FROM jaffles.customers")
+            cur.execute("select * from jaffles.customers")
 
         assert (
             "090105 (22000): Cannot perform SELECT. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
@@ -171,7 +171,7 @@ def test_connect_without_schema(_fakesnow: None):
         assert not conn.schema
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-            cur.execute("SELECT * FROM customers")
+            cur.execute("select * from customers")
 
         # actual snowflake error message is:
         #
@@ -862,19 +862,18 @@ def test_random(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("create table example(id int)")
-    cur.execute("insert into example SELECT * FROM (VALUES (1), (2), (3));")
-    # TODO: rows inserted ie: 3
     assert cur.rowcount is None
-    # TODO: selected rows
-    # cur.execute("SELECT * FROM example where id > 1")
-    # assert cur.rowcount == 2
+    cur.execute("create or replace table example(id int)")
+    cur.execute("insert into example select * from (VALUES (1), (2), (3), (4));")
+    assert cur.rowcount == 4
+    cur.execute("select * from example where id > 1")
+    assert cur.rowcount == 3
 
 
 def test_sample(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table example(id int)")
-    cur.execute("insert into example SELECT * FROM (VALUES (1), (2), (3), (4));")
-    cur.execute("SELECT * FROM example SAMPLE (50) SEED (420)")
+    cur.execute("insert into example select * from (VALUES (1), (2), (3), (4));")
+    cur.execute("select * from example SAMPLE (50) SEED (420)")
     # sampling small sizes isn't exact
     assert cur.fetchall() == [(1,), (2,), (3,)]
 
@@ -1071,7 +1070,7 @@ def test_transactions(conn: snowflake.connector.SnowflakeConnection):
     # transactions are per session, cursors are just different result sets,
     # so a new cursor will see the uncommitted values
     with conn.cursor() as cur:
-        cur.execute("SELECT * FROM table1")
+        cur.execute("select * from table1")
         assert cur.fetchall() == [(2,)]
 
     conn.commit()
@@ -1134,7 +1133,7 @@ def test_use_invalid_schema(_fakesnow: None):
 
 def test_values(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("SELECT * FROM VALUES ('Amsterdam', 1), ('London', 2)")
+        cur.execute("select * from VALUES ('Amsterdam', 1), ('London', 2)")
 
         assert cur.fetchall() == [
             {"COLUMN1": "Amsterdam", "COLUMN2": 1},

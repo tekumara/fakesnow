@@ -64,6 +64,7 @@ class FakeSnowflakeCursor:
         self._arraysize = 1
         self._arrow_table = None
         self._arrow_table_fetch_index = None
+        self._rowcount = None
         self._converter = snowflake.connector.converter.SnowflakeConverter()
 
     def __enter__(self) -> Self:
@@ -134,6 +135,8 @@ class FakeSnowflakeCursor:
         **kwargs: Any,
     ) -> FakeSnowflakeCursor:
         self._arrow_table = None
+        self._arrow_table_fetch_index = None
+        self._rowcount = None
 
         command, params = self._rewrite_with_params(command, params)
         expression = parse_one(command, read="snowflake")
@@ -218,6 +221,7 @@ class FakeSnowflakeCursor:
             else:
                 raise e
 
+        effective_count = None
         if cmd == "USE DATABASE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             self._conn.database = ident.this.upper()
             self._conn.database_set = True
@@ -252,8 +256,8 @@ class FakeSnowflakeCursor:
                 self._conn.schema = None
 
         elif cmd == "INSERT":
-            (count,) = self._duck_conn.fetchall()[0]
-            result_sql = SQL_INSERTED_ROWS.substitute(count=count)
+            (effective_count,) = self._duck_conn.fetchall()[0]
+            result_sql = SQL_INSERTED_ROWS.substitute(count=effective_count)
 
         elif cmd == "DESCRIBE TABLE":
             # DESCRIBE TABLE has already been run above to detect and error if the table exists
@@ -283,7 +287,7 @@ class FakeSnowflakeCursor:
             self._duck_conn.execute(result_sql)
 
         self._arrow_table = self._duck_conn.fetch_arrow_table()
-        self._arrow_table_fetch_index = None
+        self._rowcount = effective_count or self._arrow_table.num_rows
 
         self._last_sql = result_sql or sql
         self._last_params = params
@@ -347,8 +351,7 @@ class FakeSnowflakeCursor:
 
     @property
     def rowcount(self) -> int | None:
-        # TODO: return number of rows updated/inserted (using returning)
-        return None
+        return self._rowcount
 
     @property
     def sfqid(self) -> str | None:
