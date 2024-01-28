@@ -364,7 +364,20 @@ def test_describe_table(dcur: snowflake.connector.cursor.DictCursor):
     assert dcur.execute("describe table example").fetchall() == expected
     assert dcur.execute("describe table schema1.example").fetchall() == expected
     assert dcur.execute("describe table db1.schema1.example").fetchall() == expected
-    assert len(dcur.description) == 12
+    assert [r.name for r in dcur.description] == [
+        "name",
+        "type",
+        "kind",
+        "null?",
+        "default",
+        "primary key",
+        "unique key",
+        "check",
+        "expression",
+        "comment",
+        "policy name",
+        "privacy domain",
+    ]
 
     assert dcur.execute("describe table db1.schema1.derived").fetchall() == [
         # TODO: preserve varchar size when derived - this should be VARCHAR(20)
@@ -977,6 +990,7 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "schema_name": "information_schema",
         },
     ]
+    assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
 
 
 def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -997,6 +1011,7 @@ def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "schema_name": None,
         },
     ]
+    assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
 
 
 def test_sqlstate(cur: snowflake.connector.cursor.SnowflakeCursor):

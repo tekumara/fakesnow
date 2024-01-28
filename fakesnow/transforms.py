@@ -52,22 +52,22 @@ def create_database(expression: exp.Expression, db_path: Path | None = None) -> 
 SQL_DESCRIBE_TABLE = Template(
     """
 SELECT
-    column_name AS name,
+    column_name AS "name",
     CASE WHEN data_type = 'NUMBER' THEN 'NUMBER(' || numeric_precision || ',' || numeric_scale || ')'
          WHEN data_type = 'TEXT' THEN 'VARCHAR(' || coalesce(character_maximum_length,16777216)  || ')'
          WHEN data_type = 'TIMESTAMP_NTZ' THEN 'TIMESTAMP_NTZ(9)'
          WHEN data_type = 'TIMESTAMP_TZ' THEN 'TIMESTAMP_TZ(9)'
          WHEN data_type = 'TIME' THEN 'TIME(9)'
          WHEN data_type = 'BINARY' THEN 'BINARY(8388608)'
-        ELSE data_type END AS type,
-    'COLUMN' AS kind,
+        ELSE data_type END AS "type",
+    'COLUMN' AS "kind",
     CASE WHEN is_nullable = 'YES' THEN 'Y' ELSE 'N' END AS "null?",
-    column_default AS default,
+    column_default AS "default",
     'N' AS "primary key",
     'N' AS "unique key",
-    NULL AS check,
-    NULL AS expression,
-    NULL AS comment,
+    NULL AS "check",
+    NULL AS "expression",
+    NULL AS "comment",
     NULL AS "policy name",
     NULL AS "privacy domain",
 FROM information_schema._fs_columns_snowflake
@@ -651,11 +651,11 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
 
 SQL_SHOW_OBJECTS = """
 select
-    to_timestamp(0)::timestamptz as created_on,
-    table_name as name,
-    case when table_type='BASE TABLE' then 'TABLE' else table_type end as kind,
-    table_catalog as database_name,
-    table_schema as schema_name
+    to_timestamp(0)::timestamptz as 'created_on',
+    table_name as 'name',
+    case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind',
+    table_catalog as 'database_name',
+    table_schema as 'schema_name'
 from information_schema.tables
 """
 
@@ -697,11 +697,11 @@ def show_objects(expression: exp.Expression, current_database: str | None = None
 
 SQL_SHOW_SCHEMAS = """
 select
-    to_timestamp(0)::timestamptz as created_on,
-    schema_name as name,
-    NULL as kind,
-    catalog_name as database_name,
-    NULL as schema_name
+    to_timestamp(0)::timestamptz as 'created_on',
+    schema_name as 'name',
+    NULL as 'kind',
+    catalog_name as 'database_name',
+    NULL as 'schema_name'
 from information_schema.schemata
 where catalog_name not in ('memory', 'system', 'temp') and schema_name not in ('main', 'pg_catalog')
 """
