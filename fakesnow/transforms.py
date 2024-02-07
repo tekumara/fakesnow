@@ -133,7 +133,37 @@ def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:
     return new
 
 
-def extract_comment(expression: exp.Expression) -> exp.Expression:
+def extract_comment_on_columns(expression: exp.Expression) -> exp.Expression:
+    """Extract column comments, removing it from the Expression.
+
+    duckdb doesn't support comments. So we remove them from the expression and store them in the column_comment arg.
+    We also replace the transform the expression to NOP if the statement can't be executed by duckdb.
+
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression, with any comment stored in the new 'table_comment' arg.
+    """
+
+    if isinstance(expression, exp.AlterTable) and (actions := expression.args.get("actions")):
+        new_actions: list[exp.Expression] = []
+        col_comments: list[tuple[str, str]] = []
+        for a in actions:
+            if isinstance(a, exp.AlterColumn) and (comment := a.args.get("comment")):
+                col_comments.append((a.name, comment.this))
+            else:
+                new_actions.append(a)
+        if not new_actions:
+            expression = SUCCESS_NOP.copy()
+        else:
+            expression.set("actions", new_actions)
+        expression.args["col_comments"] = col_comments
+
+    return expression
+
+
+def extract_comment_on_table(expression: exp.Expression) -> exp.Expression:
     """Extract table comment, removing it from the Expression.
 
     duckdb doesn't support comments. So we remove them from the expression and store them in the table_comment arg.

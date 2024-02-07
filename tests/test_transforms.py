@@ -9,7 +9,8 @@ from fakesnow.transforms import (
     create_database,
     describe_table,
     drop_schema_cascade,
-    extract_comment,
+    extract_comment_on_columns,
+    extract_comment_on_table,
     extract_text_length,
     flatten,
     float_to_double,
@@ -74,26 +75,45 @@ def test_drop_schema_cascade() -> None:
     )
 
 
-def test_extract_comment() -> None:
+def test_extract_comment_on_columns() -> None:
+    e = sqlglot.parse_one("ALTER TABLE ingredients ALTER amount COMMENT 'tablespoons'").transform(
+        extract_comment_on_columns
+    )
+    assert e.sql() == "SELECT 'Statement executed successfully.'"
+    assert e.args["col_comments"] == [("amount", "tablespoons")]
+
+    # TODO
+    # e = sqlglot.parse_one(
+    #     "ALTER TABLE ingredients ALTER name DROP DEFAULT ALTER amount COMMENT 'tablespoons'"
+    # ).transform(extract_comment_on_columns)
+    # assert e.sql() == "ALTER TABLE ingredients ALTER name DROP DEFAULT"
+    # assert e.args["col_comments"] == [("amount", "tablespoons")]
+
+
+def test_extract_comment_on_table() -> None:
     table1 = exp.Table(this=exp.Identifier(this="table1", quoted=False))
 
-    e = sqlglot.parse_one("create table table1(id int) comment = 'foo bar'").transform(extract_comment)
+    e = sqlglot.parse_one("create table table1(id int) comment = 'foo bar'").transform(extract_comment_on_table)
     assert e.sql() == "CREATE TABLE table1 (id INT)"
     assert e.args["table_comment"] == (table1, "foo bar")
 
-    e = sqlglot.parse_one("create table table1(id int) comment = foobar").transform(extract_comment)
+    e = sqlglot.parse_one("create table table1(id int) comment = foobar").transform(extract_comment_on_table)
     assert e.sql() == "CREATE TABLE table1 (id INT)"
     assert e.args["table_comment"] == (table1, "foobar")
 
-    e = sqlglot.parse_one("COMMENT ON TABLE table1 IS 'comment1'").transform(extract_comment)
+    e = sqlglot.parse_one("COMMENT ON TABLE table1 IS 'comment1'").transform(extract_comment_on_table)
     assert e.sql() == "SELECT 'Statement executed successfully.'"
     assert e.args["table_comment"] == (table1, "comment1")
 
-    e = sqlglot.parse_one("COMMENT ON TABLE table1 IS $$comment2$$", read="snowflake").transform(extract_comment)
+    e = sqlglot.parse_one("COMMENT ON TABLE table1 IS $$comment2$$", read="snowflake").transform(
+        extract_comment_on_table
+    )
     assert e.sql() == "SELECT 'Statement executed successfully.'"
     assert e.args["table_comment"] == (table1, "comment2")
 
-    e = sqlglot.parse_one("ALTER TABLE table1 SET COMMENT = 'comment1'", read="snowflake").transform(extract_comment)
+    e = sqlglot.parse_one("ALTER TABLE table1 SET COMMENT = 'comment1'", read="snowflake").transform(
+        extract_comment_on_table
+    )
     assert e.sql() == "SELECT 'Statement executed successfully.'"
     assert e.args["table_comment"] == (table1, "comment1")
 
