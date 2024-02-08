@@ -1014,6 +1014,25 @@ def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
 
 
+def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("create table example(x int)")
+    dcur.execute("create view view1 as select * from example")
+    dcur.execute("show terse tables")
+    objects = [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "name": "EXAMPLE",
+            "kind": "TABLE",
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+        },
+    ]
+    # assert dcur.fetchall() == objects
+    dcur.execute("show terse tables in db1.schema1")
+    assert dcur.fetchall() == objects
+    assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
+
+
 def test_sqlstate(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select 'hello world'")
     # sqlstate is None on success

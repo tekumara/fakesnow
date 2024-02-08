@@ -687,17 +687,18 @@ from information_schema.tables
 """
 
 
-def show_objects(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
-    """Transform SHOW OBJECTS to a query against the information_schema.tables table.
+def show_objects_tables(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
+    """Transform SHOW OBJECTS/TABLES to a query against the information_schema.tables table.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-objects
+        https://docs.snowflake.com/en/sql-reference/sql/show-tables
     """
     if (
         isinstance(expression, exp.Show)
         and isinstance(expression.this, str)
-        and expression.this.upper() == "OBJECTS"
-        and (scope_kind := expression.args.get("scope_kind"))
+        and expression.this.upper() in ["OBJECTS", "TABLES"]
     ):
+        scope_kind = expression.args.get("scope_kind")
         table = expression.find(exp.Table)
 
         if scope_kind == "DATABASE":
@@ -707,8 +708,11 @@ def show_objects(expression: exp.Expression, current_database: str | None = None
             catalog = table.db or current_database
             schema = table.name
         else:
-            raise ValueError(f"Invalid {scope_kind=} {table=}")
+            # all objects / tables
+            catalog = None
+            schema = None
 
+        tables_only = "table_type = 'BASE TABLE' and " if expression.this.upper() == "TABLES" else ""
         exclude_fakesnow_tables = "not (table_schema == 'information_schema' and table_name like '_fs_%%')"
         # without a database will show everything in the "account"
         table_catalog = f" and table_catalog = '{catalog}'" if catalog else ""
@@ -716,7 +720,8 @@ def show_objects(expression: exp.Expression, current_database: str | None = None
         limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
 
         return sqlglot.parse_one(
-            f"{SQL_SHOW_OBJECTS} where {exclude_fakesnow_tables}{table_catalog}{schema}{limit}", read="duckdb"
+            f"{SQL_SHOW_OBJECTS} where {tables_only}{exclude_fakesnow_tables}{table_catalog}{schema}{limit}",
+            read="duckdb",
         )
 
     return expression

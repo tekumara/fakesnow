@@ -193,7 +193,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.random)
             .transform(transforms.identifier)
             .transform(lambda e: transforms.show_schemas(e, self._conn.database))
-            .transform(lambda e: transforms.show_objects(e, self._conn.database))
+            .transform(lambda e: transforms.show_objects_tables(e, self._conn.database))
         )
         sql = transformed.sql(dialect="duckdb")
         result_sql = None
