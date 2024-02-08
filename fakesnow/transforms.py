@@ -415,12 +415,12 @@ def integer_precision(expression: exp.Expression) -> exp.Expression:
 
 
 def json_extract_cased_as_varchar(expression: exp.Expression) -> exp.Expression:
-    """Convert json to varchar inside get_path.
+    """Convert json to varchar inside JSONExtract.
 
     Snowflake case conversion (upper/lower) turns variant into varchar. This
     mimics that behaviour within get_path.
 
-    TODO: a generic version that works on any variant, not just getpath
+    TODO: a generic version that works on any variant, not just JSONExtract
 
     Returns a raw string using the Duckdb ->> operator, aka the json_extract_string function, see
     https://duckdb.org/docs/extensions/json#json-extraction-functions
@@ -428,13 +428,11 @@ def json_extract_cased_as_varchar(expression: exp.Expression) -> exp.Expression:
     if (
         isinstance(expression, (exp.Upper, exp.Lower))
         and (gp := expression.this)
-        and isinstance(gp, exp.GetPath)
+        and isinstance(gp, exp.JSONExtract)
         and (path := gp.expression)
-        and isinstance(path, exp.Literal)
+        and isinstance(path, exp.JSONPath)
     ):
-        expression.set(
-            "this", exp.JSONExtractScalar(this=gp.this, expression=exp.Literal(this=f"$.{path.this}", is_string=True))
-        )
+        expression.set("this", exp.JSONExtractScalar(this=gp.this, expression=path))
 
     return expression
 
@@ -447,13 +445,12 @@ def json_extract_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
     """
     if (
         isinstance(expression, exp.Cast)
-        and (gp := expression.this)
-        and isinstance(gp, exp.GetPath)
-        and (path := gp.expression)
-        and isinstance(path, exp.Literal)
+        and (je := expression.this)
+        and isinstance(je, exp.JSONExtract)
+        and (path := je.expression)
+        and isinstance(path, exp.JSONPath)
     ):
-        return exp.JSONExtractScalar(this=gp.this, expression=exp.Literal(this=f"$.{path.this}", is_string=True))
-
+        return exp.JSONExtractScalar(this=je.this, expression=path)
     return expression
 
 

@@ -37,7 +37,7 @@ def is_unqualified_table_expression(expression: exp.Expression) -> tuple[bool, b
             no_schema = False
         elif parent_kind.upper() == "SCHEMA":
             # "CREATE/DROP SCHEMA"
-            no_database = not node.args.get("db")
+            no_database = not node.args.get("catalog")
             no_schema = False
         elif parent_kind.upper() in {"TABLE", "VIEW"}:
             # "CREATE/DROP TABLE/VIEW"
