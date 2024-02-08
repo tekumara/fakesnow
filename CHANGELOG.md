@@ -2,6 +2,46 @@
 
 # Changelog
 
+## [0.9.0](https://github.com/tekumara/fakesnow/compare/v0.8.2...v0.9.0) (2024-02-08)
+
+
+### ⚠ BREAKING CHANGES
+
+* change to Apache License
+
+### Features
+
+* cursor.rowcount now returns count ([8a8264e](https://github.com/tekumara/fakesnow/commit/8a8264e22ea8c7208cd15458640d493c67d70969))
+* DESCRIBE TABLE ([7d0d3a7](https://github.com/tekumara/fakesnow/commit/7d0d3a7bde08a94d2a65e54b41092d60873fd1d3))
+* EQUAL_NULL ([f108a36](https://github.com/tekumara/fakesnow/commit/f108a361acbd9733b9fd182c12d41eb310179c2a))
+* extract column comments ([27ff048](https://github.com/tekumara/fakesnow/commit/27ff048d0f8aa1f8e77b7e5cab87466d355ac509))
+* include params in debug output ([7452756](https://github.com/tekumara/fakesnow/commit/7452756a2911a1298603192caa502f809229cce8))
+* SHOW OBJECTS ([84e16e8](https://github.com/tekumara/fakesnow/commit/84e16e86f699ae1d0a94d3130152f0fea4ebf82d))
+* SHOW SCHEMAS ([74cd1a7](https://github.com/tekumara/fakesnow/commit/74cd1a75193de1aa1df10d8ed0cd58bb3637a522))
+* SHOW TABLES ([56f6a0b](https://github.com/tekumara/fakesnow/commit/56f6a0baafbd6a1cd4a4ea448843b242121bef53)), closes [#38](https://github.com/tekumara/fakesnow/issues/38)
+* support description for TIMESTAMP WITH TIME ZONE ([40a3a1e](https://github.com/tekumara/fakesnow/commit/40a3a1ec27241adfcecd7cefa444243c86c13bf1))
+* support description without db/schema + dropping current schema ([3315d99](https://github.com/tekumara/fakesnow/commit/3315d99263a79df64acb8ab5bfe99cdf4ed43021))
+* support on-disk databases ([6043f3d](https://github.com/tekumara/fakesnow/commit/6043f3d61f4fcc79bbfc41538365b5ae5c4f003a))
+* UPDATE returns number of rows updated ([f1187b1](https://github.com/tekumara/fakesnow/commit/f1187b122c9578063d89ae5bd48e0797bcfbb585))
+
+
+### Bug Fixes
+
+* casing in description() ([db35a5d](https://github.com/tekumara/fakesnow/commit/db35a5de752984155740709b2846f8323ab09f69))
+* cli passes -m and -d to target ([83254d3](https://github.com/tekumara/fakesnow/commit/83254d30a2c5b3405c8d7a4c7167873ed20d6391))
+* COMMENT ON supports raw string ([50f0253](https://github.com/tekumara/fakesnow/commit/50f02535037a7cf3dc95accd687bbb47dd6a5145))
+* FAKESNOW_DEBUG=snowflake corrupting sql ([81d7e3c](https://github.com/tekumara/fakesnow/commit/81d7e3cfcf13ec2dbe9b4b9bef1c364f5e955e67))
+* SHOW OBJECTS shows information_schema objects ([6318881](https://github.com/tekumara/fakesnow/commit/63188813ad4bedf9b33457ccb7f06fabdf7b5cde))
+* store result set per results set ([69f00a6](https://github.com/tekumara/fakesnow/commit/69f00a60812bb6cf6da99de5df35da9500b6a214))
+* TO_DATE(VARCHAR) ([c5b5d7b](https://github.com/tekumara/fakesnow/commit/c5b5d7bf09c2f7aaa736c7447b1f05e666fb496a))
+* write_pandas supports dicts with different keys ([5962801](https://github.com/tekumara/fakesnow/commit/59628011bef6725f5cfc943f1ea37123f5711b34))
+
+
+### Chores
+
+* bump sqlglot 21.0.1 ([e7c6c6e](https://github.com/tekumara/fakesnow/commit/e7c6c6e2b8571b047a225810571661179c5a3ec7))
+* change to Apache License ([ce2e4a5](https://github.com/tekumara/fakesnow/commit/ce2e4a575b50c2170f0d110adce3b61431bf7b7e))
+
 ## [0.8.2](https://github.com/tekumara/fakesnow/compare/v0.8.1...v0.8.2) (2024-01-05)
 
 
