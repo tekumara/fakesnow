@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.1](https://github.com/tekumara/fakesnow/compare/v0.9.0...v0.9.1) (2024-02-09)
+
+
+### Features
+
+* describe deletes ([#41](https://github.com/tekumara/fakesnow/issues/41)) ([c9d41b9](https://github.com/tekumara/fakesnow/commit/c9d41b99bc144c0eae23a2ffcc49a03e97e4d3ca))
+
 ## [0.9.0](https://github.com/tekumara/fakesnow/compare/v0.8.2...v0.9.0) (2024-02-08)
 
 
