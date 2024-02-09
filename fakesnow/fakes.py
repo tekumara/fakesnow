@@ -39,6 +39,7 @@ SQL_CREATED_TABLE = Template("SELECT 'Table ${name} successfully created.' as 's
 SQL_DROPPED = Template("SELECT '${name} successfully dropped.' as 'status'")
 SQL_INSERTED_ROWS = Template("SELECT ${count} as 'number of rows inserted'")
 SQL_UPDATED_ROWS = Template("SELECT ${count} as 'number of rows updated', 0 as 'number of multi-joined rows updated'")
+SQL_DELETED_ROWS = Template("SELECT ${count} as 'number of rows deleted'")
 
 
 class FakeSnowflakeCursor:
@@ -264,6 +265,10 @@ class FakeSnowflakeCursor:
         elif cmd == "UPDATE":
             (affected_count,) = self._duck_conn.fetchall()[0]
             result_sql = SQL_UPDATED_ROWS.substitute(count=affected_count)
+
+        elif cmd == "DELETE":
+            (affected_count,) = self._duck_conn.fetchall()[0]
+            result_sql = SQL_DELETED_ROWS.substitute(count=affected_count)
 
         elif cmd == "DESCRIBE TABLE":
             # DESCRIBE TABLE has already been run above to detect and error if the table exists
