@@ -14,15 +14,15 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
           interval: 5
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Set up Python 3.9
         id: setup-python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5
         with:
           python-version: 3.9
       - name: Cache virtualenv
         id: cache-venv
-        uses: actions/cache@v3
+        uses: actions/cache@v4
         with:
           path: .venv
           # same as used in the ci workflow for reuse across workflows
