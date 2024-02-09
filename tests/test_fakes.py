@@ -458,6 +458,7 @@ def test_description_update(dcur: snowflake.connector.cursor.DictCursor):
     ]
     # fmt: on
 
+
 def test_description_delete(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create table example (x int)")
     dcur.execute("insert into example values (1), (2), (3)")
@@ -465,9 +466,16 @@ def test_description_delete(dcur: snowflake.connector.cursor.DictCursor):
     assert dcur.fetchall() == [{"number of rows deleted": 2}]
 
     assert dcur.description == [
-        ResultMetadata(name='number of rows deleted', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(
+            name="number of rows deleted",
+            type_code=0,
+            display_size=None,
+            internal_size=None,
+            precision=38,
+            scale=0,
+            is_nullable=True,
+        ),
     ]
-
 
 
 def test_equal_null(cur: snowflake.connector.cursor.SnowflakeCursor):

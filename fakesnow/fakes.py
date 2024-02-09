@@ -41,6 +41,7 @@ SQL_INSERTED_ROWS = Template("SELECT ${count} as 'number of rows inserted'")
 SQL_UPDATED_ROWS = Template("SELECT ${count} as 'number of rows updated', 0 as 'number of multi-joined rows updated'")
 SQL_DELETED_ROWS = Template("SELECT ${count} as 'number of rows deleted'")
 
+
 class FakeSnowflakeCursor:
     def __init__(
         self,
