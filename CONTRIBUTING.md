@@ -12,7 +12,7 @@
 
 - a virtualenv in _.venv/_
 - pyright in _node_modules/_
-- git hooks for formatting & linting on git push
+- git hooks for formatting & linting on git push (these also run in CI)
 
 `. .venv/bin/activate` activates the virtualenv.
 
@@ -29,4 +29,6 @@ PR titles use [conventional commit](https://www.conventionalcommits.org/en/v1.0.
 - `feat` adding an unimplemented feature
 - `fix` fixing an already implemented feature
 
-And breaking changes are indicated with an exclamation mark in the title.
+Breaking changes are indicated with an exclamation mark in the title.
+
+New features and bug fixes require a minimal test case that mimics the behaviour of Snowflake and passes if run against a real Snowflake instance.
