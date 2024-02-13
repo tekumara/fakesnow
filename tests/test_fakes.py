@@ -5,6 +5,7 @@ from __future__ import annotations
 import datetime
 import json
 import tempfile
+import typing
 from collections.abc import Sequence
 from decimal import Decimal
 
@@ -798,7 +799,10 @@ def test_info_schema_databases(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("create database db2")
         cur.execute("select * from information_schema.databases")
 
-        assert cur.fetchall() == [
+        databases = typing.cast(list[dict], cur.fetchall())
+        result = [d for d in databases if d["database_name"] != "_fs_global"]
+
+        assert result == [
             {
                 "database_name": "DB1",
                 "database_owner": "SYSADMIN",
