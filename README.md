@@ -119,6 +119,7 @@ Partial support
 - [x] regex functions
 - [x] semi-structured data
 - [x] tags
+- [x] user management (See [tests/test_users.py](tests/test_users.py))
 
 For more detail see [tests/test_fakes.py](tests/test_fakes.py)
 

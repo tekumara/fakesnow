@@ -599,7 +599,7 @@ def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
             union
             select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
         ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
-        order by id
+        order by 1, 2
         """
         # duckdb lateral join order is non-deterministic so order by id
         # within an id the order of fruits should match the json array
@@ -800,9 +800,8 @@ def test_info_schema_databases(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("select * from information_schema.databases")
 
         databases = typing.cast(list[dict], cur.fetchall())
-        result = [d for d in databases if d["database_name"] != "_fs_global"]
 
-        assert result == [
+        assert databases == [
             {
                 "database_name": "DB1",
                 "database_owner": "SYSADMIN",

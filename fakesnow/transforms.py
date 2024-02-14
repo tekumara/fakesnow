@@ -7,7 +7,7 @@ from typing import cast
 import sqlglot
 from sqlglot import exp
 
-from fakesnow.connection import USERS_TABLE_FQ_NAME
+from fakesnow.global_database import USERS_TABLE_FQ_NAME
 
 MISSING_DATABASE = "missing_database"
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
@@ -759,17 +759,6 @@ def show_schemas(expression: exp.Expression, current_database: str | None = None
     return expression
 
 
-def show_users(expression: exp.Expression) -> exp.Expression:
-    """Transform SHOW USERS to a query against the global database's information_schema._fs_users table.
-
-    https://docs.snowflake.com/en/sql-reference/sql/show-users
-    """
-    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "USERS":
-        return sqlglot.parse_one(f"SELECT * FROM {USERS_TABLE_FQ_NAME}", read="duckdb")
-
-    return expression
-
-
 def tag(expression: exp.Expression) -> exp.Expression:
     """Handle tags. Transfer tags into upserts of the tag table.
 
@@ -974,5 +963,34 @@ def values_columns(expression: exp.Expression) -> exp.Expression:
         num_columns = len(values.expressions)
         columns = [exp.Identifier(this=f"COLUMN{i + 1}", quoted=True) for i in range(num_columns)]
         expression.set("alias", exp.TableAlias(this=exp.Identifier(this="_", quoted=False), columns=columns))
+
+    return expression
+
+
+def show_users(expression: exp.Expression) -> exp.Expression:
+    """Transform SHOW USERS to a query against the global database's information_schema._fs_users table.
+
+    https://docs.snowflake.com/en/sql-reference/sql/show-users
+    """
+    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "USERS":
+        return sqlglot.parse_one(f"SELECT * FROM {USERS_TABLE_FQ_NAME}", read="duckdb")
+
+    return expression
+
+
+def create_user(expression: exp.Expression) -> exp.Expression:
+    """Transform CREATE USER to a query against the global database's information_schema._fs_users table.
+
+    https://docs.snowflake.com/en/sql-reference/sql/create-user
+    """
+    # XXX: this is a placeholder. We need to implement the full CREATE USER syntax, but
+    #      sqlglot doesnt yet support Create for snowflake.
+    if isinstance(expression, exp.Command) and expression.this == "CREATE":
+        sub_exp = expression.expression.strip()
+        if sub_exp.upper().startswith("USER"):
+            _, name, *ignored = sub_exp.split(" ")
+            if ignored:
+                raise NotImplementedError(f"`CREATE USER` with {ignored} not yet supported")
+            return sqlglot.parse_one(f"INSERT INTO {USERS_TABLE_FQ_NAME} (name) VALUES ('{name}')", read="duckdb")
 
     return expression

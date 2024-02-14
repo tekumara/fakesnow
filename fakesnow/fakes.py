@@ -5,17 +5,13 @@ import os
 import re
 import sys
 from collections.abc import Iterable, Iterator, Sequence
+from pathlib import Path
 from string import Template
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal, Optional, cast
 
 import duckdb
-
-from fakesnow.connection import init_connection
-
-if TYPE_CHECKING:
-    import pandas as pd
-    import pyarrow.lib
+import pandas as pd
 import pyarrow
 import snowflake.connector.converter
 import snowflake.connector.errors
@@ -26,10 +22,16 @@ from snowflake.connector.result_batch import ResultBatch
 from sqlglot import exp, parse_one
 from typing_extensions import Self
 
+if TYPE_CHECKING:
+    import pandas as pd
+    import pyarrow.lib
+
 import fakesnow.checks as checks
 import fakesnow.expr as expr
 import fakesnow.info_schema as info_schema
+import fakesnow.macros as macros
 import fakesnow.transforms as transforms
+from fakesnow.global_database import create_global_database
 
 SCHEMA_UNSET = "schema_unset"
 SQL_SUCCESS = "SELECT 'Statement executed successfully.' as 'status'"
@@ -196,6 +198,7 @@ class FakeSnowflakeCursor:
             .transform(lambda e: transforms.show_schemas(e, self._conn.database))
             .transform(lambda e: transforms.show_objects_tables(e, self._conn.database))
             .transform(transforms.show_users)
+            .transform(transforms.create_user)
         )
         sql = transformed.sql(dialect="duckdb")
         result_sql = None
@@ -464,6 +467,30 @@ class FakeSnowflakeCursor:
         return command, params
 
 
+class FakeResultBatch(ResultBatch):
+    def __init__(self, use_dict_result: bool, batch: pyarrow.RecordBatch):
+        self._use_dict_result = use_dict_result
+        self._batch = batch
+
+    def create_iter(
+        self, **kwargs: dict[str, Any]
+    ) -> Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]:
+        if self._use_dict_result:
+            return iter(self._batch.to_pylist())
+
+        return iter(tuple(d.values()) for d in self._batch.to_pylist())
+
+    @property
+    def rowcount(self) -> int:
+        return self._batch.num_rows
+
+    def to_pandas(self) -> pd.DataFrame:
+        return self._batch.to_pandas()
+
+    def to_arrow(self) -> pyarrow.Table:
+        raise NotImplementedError()
+
+
 class FakeSnowflakeConnection:
     def __init__(
         self,
@@ -481,19 +508,64 @@ class FakeSnowflakeConnection:
         # NB: catalog names are not case-sensitive in duckdb but stored as cased in information_schema.schemata
         self.database = database and database.upper()
         self.schema = schema and schema.upper()
+        self.database_set = False
+        self.schema_set = False
         self.db_path = db_path
         self._paramstyle = "pyformat"
 
-        database_set, schema_set = init_connection(
-            duck_conn,
-            database=self.database,
-            schema=self.schema,
-            create_database=create_database,
-            create_schema=create_schema,
-            db_path=db_path,
-        )
-        self.database_set = database_set
-        self.schema_set = schema_set
+        create_global_database(duck_conn)
+
+        # create database if needed
+        if (
+            create_database
+            and self.database
+            and not duck_conn.execute(
+                f"""select * from information_schema.schemata
+                where catalog_name = '{self.database}'"""
+            ).fetchone()
+        ):
+            db_file = f"{Path(db_path)/self.database}.db" if db_path else ":memory:"
+            duck_conn.execute(f"ATTACH DATABASE '{db_file}' AS {self.database}")
+            duck_conn.execute(info_schema.creation_sql(self.database))
+            duck_conn.execute(macros.creation_sql(self.database))
+
+        # create schema if needed
+        if (
+            create_schema
+            and self.database
+            and self.schema
+            and not duck_conn.execute(
+                f"""select * from information_schema.schemata
+                where catalog_name = '{self.database}' and schema_name = '{self.schema}'"""
+            ).fetchone()
+        ):
+            duck_conn.execute(f"CREATE SCHEMA {self.database}.{self.schema}")
+
+        # set database and schema if both exist
+        if (
+            self.database
+            and self.schema
+            and duck_conn.execute(
+                f"""select * from information_schema.schemata
+                where catalog_name = '{self.database}' and schema_name = '{self.schema}'"""
+            ).fetchone()
+        ):
+            duck_conn.execute(f"SET schema='{self.database}.{self.schema}'")
+            self.database_set = True
+            self.schema_set = True
+        # set database if only that exists
+        elif (
+            self.database
+            and duck_conn.execute(
+                f"""select * from information_schema.schemata
+                where catalog_name = '{self.database}'"""
+            ).fetchone()
+        ):
+            duck_conn.execute(f"SET schema='{self.database}.main'")
+            self.database_set = True
+
+        # use UTC instead of local time zone for consistent testing
+        duck_conn.execute("SET GLOBAL TimeZone = 'UTC'")
 
     def __enter__(self) -> Self:
         return self
@@ -555,30 +627,6 @@ class FakeSnowflakeConnection:
 
         self._duck_conn.execute(f"INSERT INTO {table_name}({','.join(df.columns.to_list())}) SELECT * FROM df")
         return self._duck_conn.fetchall()[0][0]
-
-
-class FakeResultBatch(ResultBatch):
-    def __init__(self, use_dict_result: bool, batch: pyarrow.RecordBatch):
-        self._use_dict_result = use_dict_result
-        self._batch = batch
-
-    def create_iter(
-        self, **kwargs: dict[str, Any]
-    ) -> Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]:
-        if self._use_dict_result:
-            return iter(self._batch.to_pylist())
-
-        return iter(tuple(d.values()) for d in self._batch.to_pylist())
-
-    @property
-    def rowcount(self) -> int:
-        return self._batch.num_rows
-
-    def to_pandas(self) -> pd.DataFrame:
-        return self._batch.to_pandas()
-
-    def to_arrow(self) -> pyarrow.Table:
-        raise NotImplementedError()
 
 
 CopyResult = tuple[
