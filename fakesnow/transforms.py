@@ -273,22 +273,15 @@ def flatten(expression: exp.Expression) -> exp.Expression:
         return exp.Lateral(
             this=exp.Unnest(
                 expressions=[
-                    exp.Anonymous(
-                        # duckdb unnests in reserve, so we reverse the list to match
-                        # the order of the original array (and snowflake)
-                        this="list_reverse",
-                        expressions=[
-                            exp.Cast(
-                                this=explode_expression,
-                                to=exp.DataType(
-                                    this=exp.DataType.Type.ARRAY,
-                                    expressions=[exp.DataType(this=exp.DataType.Type.JSON, nested=False, prefix=False)],
-                                    nested=True,
-                                ),
-                            )
-                        ],
+                    exp.Cast(
+                        this=explode_expression,
+                        to=exp.DataType(
+                            this=exp.DataType.Type.ARRAY,
+                            expressions=[exp.DataType(this=exp.DataType.Type.JSON, nested=False, prefix=False)],
+                            nested=True,
+                        ),
                     )
-                ]
+                ],
             ),
             alias=exp.TableAlias(this=alias.this, columns=[exp.Identifier(this="VALUE", quoted=False)]),
         )

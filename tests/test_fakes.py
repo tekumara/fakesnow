@@ -5,7 +5,6 @@ from __future__ import annotations
 import datetime
 import json
 import tempfile
-import typing
 from collections.abc import Sequence
 from decimal import Decimal
 
@@ -599,7 +598,7 @@ def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
             union
             select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
         ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
-        order by 1, 2
+        order by id
         """
         # duckdb lateral join order is non-deterministic so order by id
         # within an id the order of fruits should match the json array
@@ -799,9 +798,7 @@ def test_info_schema_databases(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("create database db2")
         cur.execute("select * from information_schema.databases")
 
-        databases = typing.cast(list[dict], cur.fetchall())
-
-        assert databases == [
+        assert cur.fetchall() == [
             {
                 "database_name": "DB1",
                 "database_owner": "SYSADMIN",

@@ -11,7 +11,10 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal, Optional, cast
 
 import duckdb
-import pandas as pd
+
+if TYPE_CHECKING:
+    import pandas as pd
+    import pyarrow.lib
 import pyarrow
 import snowflake.connector.converter
 import snowflake.connector.errors
@@ -21,10 +24,6 @@ from snowflake.connector.cursor import DictCursor, ResultMetadata, SnowflakeCurs
 from snowflake.connector.result_batch import ResultBatch
 from sqlglot import exp, parse_one
 from typing_extensions import Self
-
-if TYPE_CHECKING:
-    import pandas as pd
-    import pyarrow.lib
 
 import fakesnow.checks as checks
 import fakesnow.expr as expr
@@ -467,30 +466,6 @@ class FakeSnowflakeCursor:
         return command, params
 
 
-class FakeResultBatch(ResultBatch):
-    def __init__(self, use_dict_result: bool, batch: pyarrow.RecordBatch):
-        self._use_dict_result = use_dict_result
-        self._batch = batch
-
-    def create_iter(
-        self, **kwargs: dict[str, Any]
-    ) -> Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]:
-        if self._use_dict_result:
-            return iter(self._batch.to_pylist())
-
-        return iter(tuple(d.values()) for d in self._batch.to_pylist())
-
-    @property
-    def rowcount(self) -> int:
-        return self._batch.num_rows
-
-    def to_pandas(self) -> pd.DataFrame:
-        return self._batch.to_pandas()
-
-    def to_arrow(self) -> pyarrow.Table:
-        raise NotImplementedError()
-
-
 class FakeSnowflakeConnection:
     def __init__(
         self,
@@ -627,6 +602,30 @@ class FakeSnowflakeConnection:
 
         self._duck_conn.execute(f"INSERT INTO {table_name}({','.join(df.columns.to_list())}) SELECT * FROM df")
         return self._duck_conn.fetchall()[0][0]
+
+
+class FakeResultBatch(ResultBatch):
+    def __init__(self, use_dict_result: bool, batch: pyarrow.RecordBatch):
+        self._use_dict_result = use_dict_result
+        self._batch = batch
+
+    def create_iter(
+        self, **kwargs: dict[str, Any]
+    ) -> Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]:
+        if self._use_dict_result:
+            return iter(self._batch.to_pylist())
+
+        return iter(tuple(d.values()) for d in self._batch.to_pylist())
+
+    @property
+    def rowcount(self) -> int:
+        return self._batch.num_rows
+
+    def to_pandas(self) -> pd.DataFrame:
+        return self._batch.to_pandas()
+
+    def to_arrow(self) -> pyarrow.Table:
+        raise NotImplementedError()
 
 
 CopyResult = tuple[
