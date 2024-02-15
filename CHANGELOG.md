@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.2](https://github.com/tekumara/fakesnow/compare/v0.9.1...v0.9.2) (2024-02-15)
+
+
+### Features
+
+* Implement SHOW USERS. ([#47](https://github.com/tekumara/fakesnow/issues/47)) ([1be00bc](https://github.com/tekumara/fakesnow/commit/1be00bc231e285c306b2bfbd2de23608c76ef4a5))
+
 ## [0.9.1](https://github.com/tekumara/fakesnow/compare/v0.9.0...v0.9.1) (2024-02-09)
 
 
