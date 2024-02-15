@@ -74,7 +74,8 @@ select
     1 as retention_time,
     'STANDARD' as type
 from information_schema.schemata
-where catalog_name not in ('memory', 'system', 'temp') and schema_name = 'information_schema'
+where catalog_name not in ('memory', 'system', 'temp', '_fs_global')
+  and schema_name = 'information_schema'
 """
 )
 

@@ -30,6 +30,7 @@ import fakesnow.expr as expr
 import fakesnow.info_schema as info_schema
 import fakesnow.macros as macros
 import fakesnow.transforms as transforms
+from fakesnow.global_database import create_global_database
 
 SCHEMA_UNSET = "schema_unset"
 SQL_SUCCESS = "SELECT 'Statement executed successfully.' as 'status'"
@@ -195,6 +196,8 @@ class FakeSnowflakeCursor:
             .transform(transforms.identifier)
             .transform(lambda e: transforms.show_schemas(e, self._conn.database))
             .transform(lambda e: transforms.show_objects_tables(e, self._conn.database))
+            .transform(transforms.show_users)
+            .transform(transforms.create_user)
         )
         sql = transformed.sql(dialect="duckdb")
         result_sql = None
@@ -484,6 +487,8 @@ class FakeSnowflakeConnection:
         self.schema_set = False
         self.db_path = db_path
         self._paramstyle = "pyformat"
+
+        create_global_database(duck_conn)
 
         # create database if needed
         if (
