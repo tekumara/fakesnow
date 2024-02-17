@@ -80,12 +80,39 @@ where catalog_name not in ('memory', 'system', 'temp', '_fs_global')
 )
 
 
+# replicates https://docs.snowflake.com/sql-reference/info-schema/views
+SQL_CREATE_INFORMATION_SCHEMA_VIEWS_VIEW = Template(
+    """
+create view if not exists ${catalog}.information_schema.views AS
+select
+    database_name as table_catalog,
+    schema_name as table_schema,
+    view_name as table_name,
+    'SYSADMIN' as table_owner,
+    sql as view_definition,
+    'NONE' as check_option,
+    'NO' as is_updatable,
+    'NO' as insertable_into,
+    'NO' as is_secure,
+    to_timestamp(0)::timestamptz as created,
+    to_timestamp(0)::timestamptz as last_altered,
+    to_timestamp(0)::timestamptz as last_ddl,
+    'SYSADMIN' as last_ddl_by,
+    null as comment
+from duckdb_views
+where database_name = '${catalog}'
+  and schema_name != 'information_schema'
+"""
+)
+
+
 def creation_sql(catalog: str) -> str:
     return f"""
         {SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_EXT.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_DATABASES_VIEW.substitute(catalog=catalog)};
+        {SQL_CREATE_INFORMATION_SCHEMA_VIEWS_VIEW.substitute(catalog=catalog)};
     """
 
 

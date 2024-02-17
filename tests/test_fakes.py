@@ -1017,6 +1017,13 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "database_name": "DB1",
             "schema_name": "information_schema",
         },
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "name": "views",
+            "kind": "VIEW",
+            "database_name": "DB1",
+            "schema_name": "information_schema",
+        },
     ]
     assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
 
