@@ -29,6 +29,6 @@ PR titles use [conventional commit](https://www.conventionalcommits.org/en/v1.0.
 - `feat` adding an unimplemented feature
 - `fix` fixing an already implemented feature
 
-Breaking changes are indicated with an exclamation mark in the title.
+Changes to behaviour covered by a test is considered a breaking change. Breaking changes are indicated with an exclamation mark in the title.
 
-New features and bug fixes require a minimal test case that mimics the behaviour of Snowflake and passes if run against a real Snowflake instance.
+New features and bug fixes require a minimal test case that mimics the behaviour of Snowflake and passes if run against a real Snowflake instance, or documents clearly where it deviates.

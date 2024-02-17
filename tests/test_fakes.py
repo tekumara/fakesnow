@@ -64,7 +64,17 @@ def test_binding_qmark(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchall() == [(1, "Jenny", True)]
 
 
-def test_close(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_close_conn(conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor):
+    conn.close()
+    with pytest.raises(snowflake.connector.errors.DatabaseError) as excinfo:
+        conn.execute_string("select 1")
+
+    # actual snowflake error message is:
+    # 250002 (08003): Connection is closed
+    assert "250002 (08003)" in str(excinfo.value)
+
+
+def test_close_cur(conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.close() is True
 
 

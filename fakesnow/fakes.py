@@ -226,6 +226,8 @@ class FakeSnowflakeCursor:
                 result_sql = SQL_SUCCESS
             else:
                 raise e
+        except duckdb.ConnectionException as e:
+            raise snowflake.connector.errors.DatabaseError(msg=e.args[0], errno=250002, sqlstate="08003") from None
 
         affected_count = None
         if cmd == "USE DATABASE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
@@ -552,6 +554,9 @@ class FakeSnowflakeConnection:
         traceback: TracebackType | None,
     ) -> None:
         pass
+
+    def close(self, retry: bool = True) -> None:
+        self._duck_conn.close()
 
     def commit(self) -> None:
         self.cursor().execute("COMMIT")
