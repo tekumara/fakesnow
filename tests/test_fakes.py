@@ -36,7 +36,7 @@ def test_array_size(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_binding_default_paramstyle(conn: snowflake.connector.SnowflakeConnection):
-    assert conn._paramstyle == "pyformat"  # noqa: SLF001
+    assert snowflake.connector.paramstyle == "pyformat"
     with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
         cur.execute("insert into customers values (%s, %s, %s)", (1, "Jenny", True))
@@ -45,7 +45,7 @@ def test_binding_default_paramstyle(conn: snowflake.connector.SnowflakeConnectio
 
 
 def test_binding_default_paramstyle_dict(conn: snowflake.connector.SnowflakeConnection):
-    assert conn._paramstyle == "pyformat"  # noqa: SLF001
+    assert snowflake.connector.paramstyle == "pyformat"
     with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
         cur.execute(
@@ -55,13 +55,18 @@ def test_binding_default_paramstyle_dict(conn: snowflake.connector.SnowflakeConn
         assert cur.fetchall() == [(1, "Jenny", True)]
 
 
-def test_binding_qmark(conn: snowflake.connector.SnowflakeConnection):
-    conn._paramstyle = "qmark"  # noqa: SLF001
-    with conn.cursor() as cur:
+def test_binding_qmark(_fakesnow: None):
+    snowflake.connector.paramstyle = "qmark"
+
+    with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
         cur.execute("insert into customers values (?, ?, ?)", (1, "Jenny", True))
         cur.execute("select * from customers")
         assert cur.fetchall() == [(1, "Jenny", True)]
+
+        # this has no effect after connection created, so qmark style still works
+        snowflake.connector.paramstyle = "pyformat"
+        cur.execute("select * from customers where id = ?", (1,))
 
 
 def test_close_conn(conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor):

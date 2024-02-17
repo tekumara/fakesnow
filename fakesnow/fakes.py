@@ -488,7 +488,7 @@ class FakeSnowflakeConnection:
         self.database_set = False
         self.schema_set = False
         self.db_path = db_path
-        self._paramstyle = "pyformat"
+        self._paramstyle = snowflake.connector.paramstyle
 
         create_global_database(duck_conn)
 
