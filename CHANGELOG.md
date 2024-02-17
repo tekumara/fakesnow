@@ -2,6 +2,14 @@
 
 # Changelog
 
+## [0.9.3](https://github.com/tekumara/fakesnow/compare/v0.9.2...v0.9.3) (2024-02-17)
+
+
+### Features
+
+* connection close ([2715d04](https://github.com/tekumara/fakesnow/commit/2715d0451036dbf6df6b1a6a82995190c7c3d6f4)), closes [#45](https://github.com/tekumara/fakesnow/issues/45)
+* support snowflake.connector.paramstyle ([524d136](https://github.com/tekumara/fakesnow/commit/524d13625f4a427bec24323a13df62a5b211e1b4)), closes [#46](https://github.com/tekumara/fakesnow/issues/46)
+
 ## [0.9.2](https://github.com/tekumara/fakesnow/compare/v0.9.1...v0.9.2) (2024-02-15)
 
 
