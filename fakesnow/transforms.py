@@ -987,3 +987,48 @@ def create_user(expression: exp.Expression) -> exp.Expression:
             return sqlglot.parse_one(f"INSERT INTO {USERS_TABLE_FQ_NAME} (name) VALUES ('{name}')", read="duckdb")
 
     return expression
+
+
+def show_primary_keys(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
+    """Transform SHOW PRIMARY KEYS to a query against the information_schema._fs_columns_snowflake table.
+
+    https://docs.snowflake.com/en/sql-reference/sql/show-primary-keys
+    """
+    if (
+        isinstance(expression, exp.Show)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "PRIMARY KEYS"
+    ):
+        statement = f"""
+            SELECT
+                to_timestamp(0)::timestamptz as created_on,
+                database_name as database_name,
+                schema_name as schema_name,
+                table_name as table_name,
+                unnest(constraint_column_names) as column_name,
+                1 as key_sequence,
+                LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS constraint_name,
+                'false' as rely,
+                null as comment
+            FROM duckdb_constraints
+            WHERE constraint_type = 'PRIMARY KEY'
+              AND database_name = '{current_database}'
+              AND table_name NOT LIKE '_fs_%'
+            """
+
+        scope_kind = expression.args.get("scope_kind")
+        if scope_kind:
+            table = expression.args["scope"]
+
+            if scope_kind == "SCHEMA":
+                db = table and table.db
+                schema = table and table.name
+                if db:
+                    statement += f"AND database_name = '{db}' "
+
+                if schema:
+                    statement += f"AND schema_name = '{schema}' "
+            else:
+                raise NotImplementedError(f"SHOW PRIMARY KEYS with {scope_kind} not yet supported")
+        return sqlglot.parse_one(statement)
+    return expression

@@ -941,6 +941,47 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
 
 
+def test_show_primary_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("CREATE TABLE example (id int, name varchar, PRIMARY KEY (id, name))")
+
+    dcur.execute("show primary keys")
+    result = dcur.fetchall()
+
+    assert result == [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+            "table_name": "EXAMPLE",
+            "column_name": "ID",
+            "key_sequence": 1,
+            "constraint_name": "db1_schema1_example_pkey",
+            "rely": "false",
+            "comment": None,
+        },
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+            "table_name": "EXAMPLE",
+            "column_name": "NAME",
+            "key_sequence": 1,
+            "constraint_name": "db1_schema1_example_pkey",
+            "rely": "false",
+            "comment": None,
+        },
+    ]
+
+    dcur.execute("show primary keys in schema db1.schema1")
+    result2 = dcur.fetchall()
+    assert result == result2
+
+    # Assertion to sanity check that the above "in schema" filter isnt wrong, and in fact filters
+    dcur.execute("show primary keys in schema db1.information_schema")
+    result3 = dcur.fetchall()
+    assert result3 == []
+
+
 def test_sqlstate(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select 'hello world'")
     # sqlstate is None on success
