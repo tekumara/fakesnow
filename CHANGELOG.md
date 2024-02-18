@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.4](https://github.com/tekumara/fakesnow/compare/v0.9.3...v0.9.4) (2024-02-18)
+
+
+### Features
+
+* implement information_schema.views ([#50](https://github.com/tekumara/fakesnow/issues/50)) ([c6d0bab](https://github.com/tekumara/fakesnow/commit/c6d0bab95319ed7e2ccd26bbf3dfd40eeb03dcb0))
+
 ## [0.9.3](https://github.com/tekumara/fakesnow/compare/v0.9.2...v0.9.3) (2024-02-17)
 
 
