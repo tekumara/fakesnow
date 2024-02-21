@@ -85,6 +85,7 @@ def patch(
         p = mock.patch(im, side_effect=fake)
         stack.enter_context(p)
 
-    yield None
-
-    stack.close()
+    try:
+        yield None
+    finally:
+        stack.close()
