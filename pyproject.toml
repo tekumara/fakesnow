@@ -30,9 +30,10 @@ dev = [
     "pytest~=7.4",
     "ruff~=0.1.6",
     "twine~=4.0",
+    "snowflake-sqlalchemy~=1.5.0",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
-notebook = ["duckdb-engine", "ipykernel", "jupysql", "snowflake-sqlalchemy"]
+notebook = ["duckdb-engine", "ipykernel", "jupysql"]
 
 [tool.setuptools.packages.find]
 where = ["."]

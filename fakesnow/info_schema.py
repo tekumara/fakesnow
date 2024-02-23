@@ -35,28 +35,45 @@ create table if not exists ${catalog}.information_schema._fs_columns_ext (
 SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW = Template(
     """
 create view if not exists ${catalog}.information_schema._fs_columns_snowflake AS
-select table_catalog, table_schema, table_name, column_name, ordinal_position, column_default, is_nullable,
-case when starts_with(data_type, 'DECIMAL') or data_type='BIGINT' then 'NUMBER'
-     when data_type='VARCHAR' then 'TEXT'
-     when data_type='DOUBLE' then 'FLOAT'
-     when data_type='BLOB' then 'BINARY'
-     when data_type='TIMESTAMP' then 'TIMESTAMP_NTZ'
-     when data_type='TIMESTAMP WITH TIME ZONE' then 'TIMESTAMP_TZ'
-     when data_type='JSON' then 'VARIANT'
-     else data_type end as data_type,
+select
+    columns.table_catalog AS table_catalog,
+    columns.table_schema AS table_schema,
+    columns.table_name AS table_name,
+    columns.column_name AS column_name,
+    columns.ordinal_position AS ordinal_position,
+    columns.column_default AS column_default,
+    columns.is_nullable AS is_nullable,
+case when starts_with(columns.data_type, 'DECIMAL') or columns.data_type='BIGINT' then 'NUMBER'
+     when columns.data_type='VARCHAR' then 'TEXT'
+     when columns.data_type='DOUBLE' then 'FLOAT'
+     when columns.data_type='BLOB' then 'BINARY'
+     when columns.data_type='TIMESTAMP' then 'TIMESTAMP_NTZ'
+     when columns.data_type='TIMESTAMP WITH TIME ZONE' then 'TIMESTAMP_TZ'
+     when columns.data_type='JSON' then 'VARIANT'
+     else columns.data_type end as data_type,
 ext_character_maximum_length as character_maximum_length, ext_character_octet_length as character_octet_length,
-case when data_type='BIGINT' then 38
-     when data_type='DOUBLE' then NULL
-    else numeric_precision end as numeric_precision,
-case when data_type='BIGINT' then 10
-    when data_type='DOUBLE' then NULL
-    else numeric_precision_radix end as numeric_precision_radix,
-case when data_type='DOUBLE' then NULL else numeric_scale end as numeric_scale,
-collation_name, is_identity, identity_generation, identity_cycle
-from ${catalog}.information_schema.columns
+case when columns.data_type='BIGINT' then 38
+     when columns.data_type='DOUBLE' then NULL
+    else columns.numeric_precision end as numeric_precision,
+case when columns.data_type='BIGINT' then 10
+    when columns.data_type='DOUBLE' then NULL
+    else columns.numeric_precision_radix end as numeric_precision_radix,
+case when columns.data_type='DOUBLE' then NULL else columns.numeric_scale end as numeric_scale,
+collation_name, is_identity, identity_generation, identity_cycle,
+    ddb_columns.comment as comment,
+    null as identity_start,
+    null as identity_increment,
+from ${catalog}.information_schema.columns columns
 left join ${catalog}.information_schema._fs_columns_ext ext
-on ext_table_catalog = table_catalog AND ext_table_schema = table_schema
-AND ext_table_name = table_name AND ext_column_name = column_name
+  on ext_table_catalog = columns.table_catalog
+ AND ext_table_schema = columns.table_schema
+ AND ext_table_name = columns.table_name
+ AND ext_column_name = columns.column_name
+LEFT JOIN duckdb_columns ddb_columns
+  ON ddb_columns.database_name = columns.table_catalog
+ AND ddb_columns.schema_name = columns.table_schema
+ AND ddb_columns.table_name = columns.table_name
+ AND ddb_columns.column_name = columns.column_name
 """
 )
 

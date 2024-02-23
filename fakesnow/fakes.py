@@ -37,6 +37,7 @@ SQL_SUCCESS = "SELECT 'Statement executed successfully.' as 'status'"
 SQL_CREATED_DATABASE = Template("SELECT 'Database ${name} successfully created.' as 'status'")
 SQL_CREATED_SCHEMA = Template("SELECT 'Schema ${name} successfully created.' as 'status'")
 SQL_CREATED_TABLE = Template("SELECT 'Table ${name} successfully created.' as 'status'")
+SQL_CREATED_VIEW = Template("SELECT 'View ${name} successfully created.' as 'status'")
 SQL_DROPPED = Template("SELECT '${name} successfully dropped.' as 'status'")
 SQL_INSERTED_ROWS = Template("SELECT ${count} as 'number of rows inserted'")
 SQL_UPDATED_ROWS = Template("SELECT ${count} as 'number of rows updated', 0 as 'number of multi-joined rows updated'")
@@ -196,6 +197,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.identifier)
             .transform(lambda e: transforms.show_schemas(e, self._conn.database))
             .transform(lambda e: transforms.show_objects_tables(e, self._conn.database))
+            .transform(lambda e: transforms.show_primary_keys(e, self._conn.database))
             .transform(transforms.show_users)
             .transform(transforms.create_user)
         )
@@ -230,12 +232,18 @@ class FakeSnowflakeCursor:
             raise snowflake.connector.errors.DatabaseError(msg=e.args[0], errno=250002, sqlstate="08003") from None
 
         affected_count = None
-        if cmd == "USE DATABASE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
-            self._conn.database = ident.this.upper()
+
+        if (maybe_ident := expression.find(exp.Identifier, bfs=False)) and isinstance(maybe_ident.this, str):
+            ident = maybe_ident.this if maybe_ident.quoted else maybe_ident.this.upper()
+        else:
+            ident = None
+
+        if cmd == "USE DATABASE" and ident:
+            self._conn.database = ident
             self._conn.database_set = True
 
-        elif cmd == "USE SCHEMA" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
-            self._conn.schema = ident.this.upper()
+        elif cmd == "USE SCHEMA" and ident:
+            self._conn.schema = ident
             self._conn.schema_set = True
 
         elif create_db_name := transformed.args.get("create_db_name"):
@@ -243,24 +251,24 @@ class FakeSnowflakeCursor:
             self._duck_conn.execute(info_schema.creation_sql(create_db_name))
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
-        elif cmd == "CREATE SCHEMA" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
-            name = ident.this if ident.quoted else ident.this.upper()
-            result_sql = SQL_CREATED_SCHEMA.substitute(name=name)
+        elif cmd == "CREATE SCHEMA" and ident:
+            result_sql = SQL_CREATED_SCHEMA.substitute(name=ident)
 
-        elif cmd == "CREATE TABLE" and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
-            name = ident.this if ident.quoted else ident.this.upper()
-            result_sql = SQL_CREATED_TABLE.substitute(name=name)
+        elif cmd == "CREATE TABLE" and ident:
+            result_sql = SQL_CREATED_TABLE.substitute(name=ident)
 
-        elif cmd.startswith("DROP") and (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
-            name = ident.this if ident.quoted else ident.this.upper()
-            result_sql = SQL_DROPPED.substitute(name=name)
+        elif cmd == "CREATE VIEW" and ident:
+            result_sql = SQL_CREATED_VIEW.substitute(name=ident)
+
+        elif cmd.startswith("DROP") and ident:
+            result_sql = SQL_DROPPED.substitute(name=ident)
 
             # if dropping the current database/schema then reset conn metadata
-            if cmd == "DROP DATABASE" and name == self._conn.database:
+            if cmd == "DROP DATABASE" and ident == self._conn.database:
                 self._conn.database = None
                 self._conn.schema = None
 
-            elif cmd == "DROP SCHEMA" and name == self._conn.schema:
+            elif cmd == "DROP SCHEMA" and ident == self._conn.schema:
                 self._conn.schema = None
 
         elif cmd == "INSERT":

@@ -438,6 +438,15 @@ def test_description_create_drop_table(dcur: snowflake.connector.cursor.DictCurs
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
+def test_description_create_drop_view(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create view example(id) as select 1")
+    assert dcur.fetchall() == [{"status": "View EXAMPLE successfully created."}]
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    dcur.execute("drop view example")
+    assert dcur.fetchall() == [{"status": "EXAMPLE successfully dropped."}]
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+
+
 def test_description_insert(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create table example (x int)")
     dcur.execute("insert into example values (1), (2)")
@@ -930,6 +939,47 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show terse tables in db1.schema1")
     assert dcur.fetchall() == objects
     assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
+
+
+def test_show_primary_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("CREATE TABLE example (id int, name varchar, PRIMARY KEY (id, name))")
+
+    dcur.execute("show primary keys")
+    result = dcur.fetchall()
+
+    assert result == [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+            "table_name": "EXAMPLE",
+            "column_name": "ID",
+            "key_sequence": 1,
+            "constraint_name": "db1_schema1_example_pkey",
+            "rely": "false",
+            "comment": None,
+        },
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+            "table_name": "EXAMPLE",
+            "column_name": "NAME",
+            "key_sequence": 1,
+            "constraint_name": "db1_schema1_example_pkey",
+            "rely": "false",
+            "comment": None,
+        },
+    ]
+
+    dcur.execute("show primary keys in schema db1.schema1")
+    result2 = dcur.fetchall()
+    assert result == result2
+
+    # Assertion to sanity check that the above "in schema" filter isnt wrong, and in fact filters
+    dcur.execute("show primary keys in schema db1.information_schema")
+    result3 = dcur.fetchall()
+    assert result3 == []
 
 
 def test_sqlstate(cur: snowflake.connector.cursor.SnowflakeCursor):

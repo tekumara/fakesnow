@@ -3,6 +3,7 @@ from typing import cast
 
 import pytest
 import snowflake.connector
+from sqlalchemy.engine import Engine, create_engine
 
 import fakesnow.fixtures
 
@@ -34,3 +35,8 @@ def dcur(conn: snowflake.connector.SnowflakeConnection) -> Iterator[snowflake.co
     """
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         yield cast(snowflake.connector.cursor.DictCursor, cur)
+
+
+@pytest.fixture
+def snowflake_engine(_fakesnow: None) -> Engine:
+    return create_engine("snowflake://user:password@account/db1/schema1")  # type: ignore
