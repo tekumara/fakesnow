@@ -233,10 +233,10 @@ class FakeSnowflakeCursor:
 
         affected_count = None
 
-        maybe_ident = expression.find(exp.Identifier)
-        ident = None
-        if maybe_ident and isinstance(maybe_ident.this, str):
+        if (maybe_ident := expression.find(exp.Identifier, bfs=False)) and isinstance(maybe_ident.this, str):
             ident = maybe_ident.this if maybe_ident.quoted else maybe_ident.this.upper()
+        else:
+            ident = None
 
         if cmd == "USE DATABASE" and ident:
             self._conn.database = ident

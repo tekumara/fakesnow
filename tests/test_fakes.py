@@ -439,7 +439,7 @@ def test_description_create_drop_table(dcur: snowflake.connector.cursor.DictCurs
 
 
 def test_description_create_drop_view(dcur: snowflake.connector.cursor.DictCursor):
-    dcur.execute("create view example as select 1")
+    dcur.execute("create view example(id) as select 1")
     assert dcur.fetchall() == [{"status": "View EXAMPLE successfully created."}]
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
     dcur.execute("drop view example")
