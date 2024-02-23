@@ -2,6 +2,18 @@
 
 # Changelog
 
+## [0.9.5](https://github.com/tekumara/fakesnow/compare/v0.9.4...v0.9.5) (2024-02-23)
+
+
+### Features
+
+* SHOW PRIMARY KEYS + description for CREATE VIEW + fix information_schema.columns to work with sqlalchemy ([#52](https://github.com/tekumara/fakesnow/issues/52)) ([ff0ab13](https://github.com/tekumara/fakesnow/commit/ff0ab13587cb57b615e77a95041aeac5c54a1931))
+
+
+### Bug Fixes
+
+* GET_PATH has higher precedence than comparison operators ([91c57a5](https://github.com/tekumara/fakesnow/commit/91c57a544116279e6d1e7d385b79ef20d95420d8)), closes [#53](https://github.com/tekumara/fakesnow/issues/53)
+
 ## [0.9.4](https://github.com/tekumara/fakesnow/compare/v0.9.3...v0.9.4) (2024-02-18)
 
 
