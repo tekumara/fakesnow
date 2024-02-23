@@ -126,7 +126,7 @@ For more detail see [tests/test_fakes.py](tests/test_fakes.py)
 ## Caveats
 
 - The order of rows is non deterministic and may not match Snowflake unless ORDER BY is fully specified.
-- VARCHAR field sizes are not enforced. Unlike Snowflake which errors with "User character length limit (xxx) exceeded by string" when an inserted string exceeds the column limit.
+- A more liberal Snowflake SQL dialect than a real Snowflake instance is supported, ie: some queries might pass using fakesnow that a real Snowflake instance would reject.
 
 ## Contributing
 
