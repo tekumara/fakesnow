@@ -449,6 +449,16 @@ def json_extract_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def json_extract_precedence(expression: exp.Expression) -> exp.Expression:
+    """Associate json extract operands to avoid duckdb operators of higher precedence transforming the expression.
+
+    See https://github.com/tekumara/fakesnow/issues/53
+    """
+    if isinstance(expression, exp.JSONExtract):
+        return exp.Paren(this=expression)
+    return expression
+
+
 def random(expression: exp.Expression) -> exp.Expression:
     """Convert random() and random(seed).
 

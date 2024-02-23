@@ -658,6 +658,11 @@ def test_get_path_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [("42",)]
 
 
+def test_get_path_precedence(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select {'K1': {'K2': 1}} as col where col:K1:K2 > 0")
+    assert indent(cur.fetchall()) == [('{\n  "K1": {\n    "K2": 1\n  }\n}',)]
+
+
 def test_get_result_batches(cur: snowflake.connector.cursor.SnowflakeCursor):
     # no result set
     assert cur.get_result_batches() is None

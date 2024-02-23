@@ -21,6 +21,7 @@ from fakesnow.transforms import (
     integer_precision,
     json_extract_cased_as_varchar,
     json_extract_cast_as_varchar,
+    json_extract_precedence,
     object_construct,
     parse_json,
     random,
@@ -234,6 +235,18 @@ def test_json_extract_cast_as_varchar() -> None:
         .transform(json_extract_cast_as_varchar)
         .sql(dialect="duckdb")
         == """SELECT JSON('{"fruit":"banana"}') ->> '$.fruit'"""
+    )
+
+
+def test_json_extract_precedence() -> None:
+    assert (
+        sqlglot.parse_one(
+            """select {'K1': {'K2': 1}} as col where col:K1:K2 > 0""",
+            read="snowflake",
+        )
+        .transform(json_extract_precedence)
+        .sql(dialect="duckdb")
+        == """SELECT {'K1': {'K2': 1}} AS col WHERE (col -> '$.K1' -> '$.K2') > 0"""
     )
 
 
