@@ -990,7 +990,7 @@ def create_user(expression: exp.Expression) -> exp.Expression:
 
 
 def show_primary_keys(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
-    """Transform SHOW PRIMARY KEYS to a query against the information_schema._fs_columns_snowflake table.
+    """Transform SHOW PRIMARY KEYS to a query against the duckdb_constraints table.
 
     https://docs.snowflake.com/en/sql-reference/sql/show-primary-keys
     """
