@@ -5,8 +5,8 @@ from sqlalchemy.engine import Engine
 from sqlalchemy.sql.expression import TextClause
 
 
-def test_create_view(snowflake_engine: Engine):
-    """SQLalchemy internally calls `cursor.description`, which will fail if `CREATE VIEW` isn't handled."""
+def test_engine(snowflake_engine: Engine):
+    # verifies cursor.description, commit, and rollback issued by SQLAlchemy
     with snowflake_engine.connect() as conn:
         conn.execute(TextClause("CREATE VIEW foo AS SELECT * FROM information_schema.databases"))
 
@@ -15,7 +15,7 @@ def test_create_view(snowflake_engine: Engine):
         assert result.fetchall() == [("DB1",)]
 
 
-def test_metadata_createall(snowflake_engine: Engine):
+def test_metadata_create_all(snowflake_engine: Engine):
     metadata = MetaData()
 
     table = Table("foo", metadata, Column(types.Integer, name="id"), Column(types.String, name="name"))
