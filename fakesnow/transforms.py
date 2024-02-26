@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from string import Template
-from typing import cast
+from typing import Literal, cast
 
 import sqlglot
 from sqlglot import exp
@@ -687,7 +687,8 @@ select
     table_name as 'name',
     case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind',
     table_catalog as 'database_name',
-    table_schema as 'schema_name'
+    table_schema as 'schema_name',
+    null as comment,
 from information_schema.tables
 """
 
@@ -999,32 +1000,70 @@ def create_user(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def show_primary_keys(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
-    """Transform SHOW PRIMARY KEYS to a query against the duckdb_constraints table.
+def show_keys(
+    expression: exp.Expression,
+    current_database: str | None = None,
+    *,
+    kind: Literal["PRIMARY", "UNIQUE", "FOREIGN"],
+) -> exp.Expression:
+    """Transform SHOW <kind> KEYS to a query against the duckdb_constraints meta-table.
 
     https://docs.snowflake.com/en/sql-reference/sql/show-primary-keys
     """
+    snowflake_kind = kind
+    if kind == "FOREIGN":
+        snowflake_kind = "IMPORTED"
+
     if (
         isinstance(expression, exp.Show)
         and isinstance(expression.this, str)
-        and expression.this.upper() == "PRIMARY KEYS"
+        and expression.this.upper() == f"{snowflake_kind} KEYS"
     ):
-        statement = f"""
-            SELECT
-                to_timestamp(0)::timestamptz as created_on,
-                database_name as database_name,
-                schema_name as schema_name,
-                table_name as table_name,
-                unnest(constraint_column_names) as column_name,
-                1 as key_sequence,
-                LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS constraint_name,
-                'false' as rely,
-                null as comment
-            FROM duckdb_constraints
-            WHERE constraint_type = 'PRIMARY KEY'
-              AND database_name = '{current_database}'
-              AND table_name NOT LIKE '_fs_%'
-            """
+        if kind == "FOREIGN":
+            statement = f"""
+                SELECT
+                    to_timestamp(0)::timestamptz as created_on,
+
+                    '' as pk_database_name,
+                    '' as pk_schema_name,
+                    '' as pk_table_name,
+                    '' as pk_column_name,
+                    unnest(constraint_column_names) as pk_column_name,
+
+                    database_name as fk_database_name,
+                    schema_name as fk_schema_name,
+                    table_name as fk_table_name,
+                    unnest(constraint_column_names) as fk_column_name,
+                    1 as key_sequence,
+                    'NO ACTION' as update_rule,
+                    'NO ACTION' as delete_rule,
+                    LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS fk_name,
+                    LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS pk_name,
+                    'NOT DEFERRABLE' as deferrability,
+                    'false' as rely,
+                    null as comment
+                FROM duckdb_constraints
+                WHERE constraint_type = 'PRIMARY KEY'
+                  AND database_name = '{current_database}'
+                  AND table_name NOT LIKE '_fs_%'
+                """
+        else:
+            statement = f"""
+                SELECT
+                    to_timestamp(0)::timestamptz as created_on,
+                    database_name as database_name,
+                    schema_name as schema_name,
+                    table_name as table_name,
+                    unnest(constraint_column_names) as column_name,
+                    1 as key_sequence,
+                    LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS constraint_name,
+                    'false' as rely,
+                    null as comment
+                FROM duckdb_constraints
+                WHERE constraint_type = '{kind} KEY'
+                  AND database_name = '{current_database}'
+                  AND table_name NOT LIKE '_fs_%'
+                """
 
         scope_kind = expression.args.get("scope_kind")
         if scope_kind:

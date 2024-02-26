@@ -1,5 +1,3 @@
-import duckdb
-import pytest
 from sqlalchemy import Column, MetaData, Table, types
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql.expression import TextClause
@@ -27,13 +25,20 @@ def test_metadata_create_all(snowflake_engine: Engine):
         assert result.fetchall() == []
 
 
-@pytest.mark.xfail(
-    reason="sqlglot currently has unsupported SHOW variants",
-    strict=True,
-    raises=duckdb.ParserException,
-)
 def test_reflect(snowflake_engine: Engine):
-    snowflake_engine.execute(TextClause("CREATE TABLE foo (id INTEGER, name VARCHAR)"))
+    with snowflake_engine.connect() as conn:
+        conn.execute(TextClause("CREATE TABLE foo (id INTEGER, name VARCHAR)"))
 
     metadata = MetaData()
     metadata.reflect(bind=snowflake_engine, only=["foo"])
+
+    assert metadata.tables
+    foo_table: Table = metadata.tables["foo"]
+
+    with snowflake_engine.connect() as conn:
+        result = conn.execute(foo_table.insert().values(id=1, name="one"))
+
+        result = conn.execute(foo_table.select())
+
+        assert result
+        assert result.fetchall() == [(1, "one")]

@@ -875,6 +875,7 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "kind": "TABLE",
             "database_name": "DB1",
             "schema_name": "SCHEMA1",
+            "comment": None,
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
@@ -882,6 +883,7 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "kind": "VIEW",
             "database_name": "DB1",
             "schema_name": "SCHEMA1",
+            "comment": None,
         },
     ]
     assert dcur.fetchall() == objects
@@ -894,6 +896,7 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "kind": "VIEW",
             "database_name": "DB1",
             "schema_name": "information_schema",
+            "comment": None,
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
@@ -901,9 +904,17 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "kind": "VIEW",
             "database_name": "DB1",
             "schema_name": "information_schema",
+            "comment": None,
         },
     ]
-    assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
+    assert [r.name.lower() for r in dcur.description] == [
+        "created_on",
+        "name",
+        "kind",
+        "database_name",
+        "schema_name",
+        "comment",
+    ]
 
 
 def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -938,12 +949,20 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "kind": "TABLE",
             "database_name": "DB1",
             "schema_name": "SCHEMA1",
+            "comment": None,
         },
     ]
     # assert dcur.fetchall() == objects
     dcur.execute("show terse tables in db1.schema1")
     assert dcur.fetchall() == objects
-    assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
+    assert [r.name.lower() for r in dcur.description] == [
+        "created_on",
+        "name",
+        "kind",
+        "database_name",
+        "schema_name",
+        "comment",
+    ]
 
 
 def test_show_primary_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
