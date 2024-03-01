@@ -875,7 +875,6 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "kind": "TABLE",
             "database_name": "DB1",
             "schema_name": "SCHEMA1",
-            "comment": None,
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
@@ -883,10 +882,8 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "kind": "VIEW",
             "database_name": "DB1",
             "schema_name": "SCHEMA1",
-            "comment": None,
         },
     ]
-    assert dcur.fetchall() == objects
     dcur.execute("show terse objects in database")
     assert dcur.fetchall() == [
         *objects,
@@ -896,7 +893,6 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "kind": "VIEW",
             "database_name": "DB1",
             "schema_name": "information_schema",
-            "comment": None,
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
@@ -904,10 +900,12 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "kind": "VIEW",
             "database_name": "DB1",
             "schema_name": "information_schema",
-            "comment": None,
         },
     ]
-    assert [r.name.lower() for r in dcur.description] == [
+    assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
+
+    dcur.execute("show objects").fetchall()
+    assert [r.name for r in dcur.description] == [
         "created_on",
         "name",
         "kind",
@@ -949,12 +947,20 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "kind": "TABLE",
             "database_name": "DB1",
             "schema_name": "SCHEMA1",
-            "comment": None,
         },
     ]
     # assert dcur.fetchall() == objects
     dcur.execute("show terse tables in db1.schema1")
     assert dcur.fetchall() == objects
+    assert [r.name.lower() for r in dcur.description] == [
+        "created_on",
+        "name",
+        "kind",
+        "database_name",
+        "schema_name",
+    ]
+
+    dcur.execute("show tables in db1.schema1")
     assert [r.name.lower() for r in dcur.description] == [
         "created_on",
         "name",
@@ -1000,7 +1006,7 @@ def test_show_primary_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
     result2 = dcur.fetchall()
     assert result == result2
 
-    # Assertion to sanity check that the above "in schema" filter isnt wrong, and in fact filters
+    # Assertion to sanity check that the above "in schema" filter isn't wrong, and in fact filters
     dcur.execute("show primary keys in schema db1.information_schema")
     result3 = dcur.fetchall()
     assert result3 == []

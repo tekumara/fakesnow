@@ -681,56 +681,60 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
     return expression
 
 
-SQL_SHOW_OBJECTS = """
-select
-    to_timestamp(0)::timestamptz as 'created_on',
-    table_name as 'name',
-    case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind',
-    table_catalog as 'database_name',
-    table_schema as 'schema_name',
-    null as comment,
-from information_schema.tables
-"""
-
-
 def show_objects_tables(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
     """Transform SHOW OBJECTS/TABLES to a query against the information_schema.tables table.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-objects
         https://docs.snowflake.com/en/sql-reference/sql/show-tables
     """
-    if (
-        isinstance(expression, exp.Show)
-        and isinstance(expression.this, str)
-        and expression.this.upper() in ["OBJECTS", "TABLES"]
-    ):
-        scope_kind = expression.args.get("scope_kind")
-        table = expression.find(exp.Table)
+    if not (isinstance(expression, exp.Show) and isinstance(expression.this, str)):
+        return expression
 
-        if scope_kind == "DATABASE":
-            catalog = (table and table.name) or current_database
-            schema = None
-        elif scope_kind == "SCHEMA" and table:
-            catalog = table.db or current_database
-            schema = table.name
-        else:
-            # all objects / tables
-            catalog = None
-            schema = None
+    this = expression.this.upper()
+    if this not in {"OBJECTS", "TABLES"}:
+        return expression
 
-        tables_only = "table_type = 'BASE TABLE' and " if expression.this.upper() == "TABLES" else ""
-        exclude_fakesnow_tables = "not (table_schema == 'information_schema' and table_name like '_fs_%%')"
-        # without a database will show everything in the "account"
-        table_catalog = f" and table_catalog = '{catalog}'" if catalog else ""
-        schema = f" and table_schema = '{schema}'" if schema else ""
-        limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
+    scope_kind = expression.args.get("scope_kind")
+    table = expression.find(exp.Table)
 
-        return sqlglot.parse_one(
-            f"{SQL_SHOW_OBJECTS} where {tables_only}{exclude_fakesnow_tables}{table_catalog}{schema}{limit}",
-            read="duckdb",
-        )
+    if scope_kind == "DATABASE":
+        catalog = (table and table.name) or current_database
+        schema = None
+    elif scope_kind == "SCHEMA" and table:
+        catalog = table.db or current_database
+        schema = table.name
+    else:
+        # all objects / tables
+        catalog = None
+        schema = None
 
-    return expression
+    tables_only = "table_type = 'BASE TABLE' and " if expression.this.upper() == "TABLES" else ""
+    exclude_fakesnow_tables = "not (table_schema == 'information_schema' and table_name like '_fs_%%')"
+    # without a database will show everything in the "account"
+    table_catalog = f" and table_catalog = '{catalog}'" if catalog else ""
+    schema = f" and table_schema = '{schema}'" if schema else ""
+    limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
+
+    columns = [
+        "to_timestamp(0)::timestamptz as 'created_on'",
+        "table_name as 'name'",
+        "case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind'",
+        "table_catalog as 'database_name'",
+        "table_schema as 'schema_name'",
+    ]
+
+    terse = expression.args["terse"]
+    if not terse:
+        columns.append('null as "comment"')
+
+    columns_str = ", ".join(columns)
+
+    query = (
+        f"SELECT {columns_str} from information_schema.tables "
+        f"where {tables_only}{exclude_fakesnow_tables}{table_catalog}{schema}{limit}"
+    )
+
+    return sqlglot.parse_one(query, read="duckdb")
 
 
 SQL_SHOW_SCHEMAS = """
@@ -1041,7 +1045,7 @@ def show_keys(
                     LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS pk_name,
                     'NOT DEFERRABLE' as deferrability,
                     'false' as rely,
-                    null as comment
+                    null as "comment"
                 FROM duckdb_constraints
                 WHERE constraint_type = 'PRIMARY KEY'
                   AND database_name = '{current_database}'
@@ -1058,7 +1062,7 @@ def show_keys(
                     1 as key_sequence,
                     LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS constraint_name,
                     'false' as rely,
-                    null as comment
+                    null as "comment"
                 FROM duckdb_constraints
                 WHERE constraint_type = '{kind} KEY'
                   AND database_name = '{current_database}'
