@@ -884,6 +884,8 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "schema_name": "SCHEMA1",
         },
     ]
+    assert dcur.fetchall() == objects
+
     dcur.execute("show terse objects in database")
     assert dcur.fetchall() == [
         *objects,
@@ -912,6 +914,14 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "database_name",
         "schema_name",
         "comment",
+        # TODO: include these columns
+        # "cluster_by",
+        # "rows",
+        # "bytes",
+        # "owner",
+        # "retention_time",
+        # "owner_role_type",
+        # "budget"
     ]
 
 
@@ -952,7 +962,7 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     # assert dcur.fetchall() == objects
     dcur.execute("show terse tables in db1.schema1")
     assert dcur.fetchall() == objects
-    assert [r.name.lower() for r in dcur.description] == [
+    assert [r.name for r in dcur.description] == [
         "created_on",
         "name",
         "kind",
@@ -961,13 +971,31 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
     dcur.execute("show tables in db1.schema1")
-    assert [r.name.lower() for r in dcur.description] == [
+    assert [r.name for r in dcur.description] == [
         "created_on",
         "name",
         "kind",
         "database_name",
         "schema_name",
         "comment",
+        # TODO: include these columns
+        # "cluster_by",
+        # "rows",
+        # "bytes",
+        # "owner",
+        # "retention_time",
+        # "automatic_clustering",
+        # "change_tracking",
+        # "search_optimization",
+        # "search_optimization_progress",
+        # "search_optimization_bytes",
+        # "is_external",
+        # "enable_schema_evolution",
+        # "owner_role_type",
+        # "is_event",
+        # "budget",
+        # "is_hybrid",
+        # "is_iceberg",
     ]
 
 

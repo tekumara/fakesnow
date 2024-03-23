@@ -687,11 +687,12 @@ def show_objects_tables(expression: exp.Expression, current_database: str | None
     See https://docs.snowflake.com/en/sql-reference/sql/show-objects
         https://docs.snowflake.com/en/sql-reference/sql/show-tables
     """
-    if not (isinstance(expression, exp.Show) and isinstance(expression.this, str)):
-        return expression
-
-    this = expression.this.upper()
-    if this not in {"OBJECTS", "TABLES"}:
+    if not (
+        isinstance(expression, exp.Show)
+        and isinstance(expression.this, str)
+        and (show := expression.this.upper())
+        and show in {"OBJECTS", "TABLES"}
+    ):
         return expression
 
     scope_kind = expression.args.get("scope_kind")
@@ -708,7 +709,7 @@ def show_objects_tables(expression: exp.Expression, current_database: str | None
         catalog = None
         schema = None
 
-    tables_only = "table_type = 'BASE TABLE' and " if expression.this.upper() == "TABLES" else ""
+    tables_only = "table_type = 'BASE TABLE' and " if show == "TABLES" else ""
     exclude_fakesnow_tables = "not (table_schema == 'information_schema' and table_name like '_fs_%%')"
     # without a database will show everything in the "account"
     table_catalog = f" and table_catalog = '{catalog}'" if catalog else ""
