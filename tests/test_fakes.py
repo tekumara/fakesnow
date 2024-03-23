@@ -864,6 +864,76 @@ def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
+@pytest.mark.xfail(
+    reason="only partial supports exists to support sqlalchemy, see test_reflect",
+)
+def test_show_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("CREATE TABLE test_table (id INT PRIMARY KEY, name TEXT UNIQUE)")
+    dcur.execute("CREATE TABLE test_table2 (id INT, other_id INT, FOREIGN KEY (other_id) REFERENCES test_table(id))")
+
+    dcur.execute("SHOW PRIMARY KEYS")
+    primary_keys = dcur.fetchall()
+    assert primary_keys == [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+            "table_name": "TEST_TABLE",
+            "column_name": "ID",
+            "key_sequence": 1,
+            "constraint_name": "SYS_CONSTRAINT_DB1_SCHEMA1_TEST_TABLE_ID_pk",
+            "rely": "false",
+            "comment": None,
+        }
+    ]
+
+    dcur.execute("SHOW UNIQUE KEYS")
+    unique_keys = dcur.fetchall()
+    assert unique_keys == [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+            "table_name": "TEST_TABLE",
+            "column_name": "NAME",
+            "key_sequence": 1,
+            "constraint_name": "SYS_CONSTRAINT_DB1_SCHEMA1_TEST_TABLE_NAME_uk",
+            "rely": "false",
+            "comment": None,
+        }
+    ]
+
+    dcur.execute("SHOW IMPORTED KEYS")
+    foreign_keys = dcur.fetchall()
+    assert foreign_keys == [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "pk_database_name": "DB1",
+            "pk_schema_name": "SCHEMA1",
+            "pk_table_name": "TEST_TABLE",
+            "pk_column_name": "ID",
+            "fk_database_name": "DB1",
+            "fk_schema_name": "SCHEMA1",
+            "fk_table_name": "TEST_TABLE2",
+            "fk_column_name": "OTHER_ID",
+            "key_sequence": 1,
+            "update_rule": "NO ACTION",
+            "delete_rule": "NO ACTION",
+            "fk_name": "SYS_CONSTRAINT_DB1_SCHEMA1_TEST_TABLE2_OTHER_ID_fk",
+            "pk_name": "SYS_CONSTRAINT_DB1_SCHEMA1_TEST_TABLE_ID_pk",
+            "deferrability": "NOT DEFERRABLE",
+            "rely": "false",
+            "comment": None,
+        }
+    ]
+
+    dcur.execute("SHOW PRIMARY KEYS IN SCHEMA")
+    assert dcur.fetchall() == primary_keys
+
+    dcur.execute("SHOW PRIMARY KEYS IN DATABASE")
+    assert dcur.fetchall() == primary_keys
+
+
 def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("create table example(x int)")
     dcur.execute("create view view1 as select * from example")
@@ -885,6 +955,7 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
         },
     ]
     assert dcur.fetchall() == objects
+
     dcur.execute("show terse objects in database")
     assert dcur.fetchall() == [
         *objects,
@@ -904,6 +975,24 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
         },
     ]
     assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
+
+    dcur.execute("show objects").fetchall()
+    assert [r.name for r in dcur.description] == [
+        "created_on",
+        "name",
+        "kind",
+        "database_name",
+        "schema_name",
+        "comment",
+        # TODO: include these columns
+        # "cluster_by",
+        # "rows",
+        # "bytes",
+        # "owner",
+        # "retention_time",
+        # "owner_role_type",
+        # "budget"
+    ]
 
 
 def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -943,7 +1032,41 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     # assert dcur.fetchall() == objects
     dcur.execute("show terse tables in db1.schema1")
     assert dcur.fetchall() == objects
-    assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
+    assert [r.name for r in dcur.description] == [
+        "created_on",
+        "name",
+        "kind",
+        "database_name",
+        "schema_name",
+    ]
+
+    dcur.execute("show tables in db1.schema1")
+    assert [r.name for r in dcur.description] == [
+        "created_on",
+        "name",
+        "kind",
+        "database_name",
+        "schema_name",
+        "comment",
+        # TODO: include these columns
+        # "cluster_by",
+        # "rows",
+        # "bytes",
+        # "owner",
+        # "retention_time",
+        # "automatic_clustering",
+        # "change_tracking",
+        # "search_optimization",
+        # "search_optimization_progress",
+        # "search_optimization_bytes",
+        # "is_external",
+        # "enable_schema_evolution",
+        # "owner_role_type",
+        # "is_event",
+        # "budget",
+        # "is_hybrid",
+        # "is_iceberg",
+    ]
 
 
 def test_show_primary_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -981,7 +1104,7 @@ def test_show_primary_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
     result2 = dcur.fetchall()
     assert result == result2
 
-    # Assertion to sanity check that the above "in schema" filter isnt wrong, and in fact filters
+    # Assertion to sanity check that the above "in schema" filter isn't wrong, and in fact filters
     dcur.execute("show primary keys in schema db1.information_schema")
     result3 = dcur.fetchall()
     assert result3 == []

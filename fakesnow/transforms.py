@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from string import Template
-from typing import cast
+from typing import Literal, cast
 
 import sqlglot
 from sqlglot import exp
@@ -681,55 +681,61 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
     return expression
 
 
-SQL_SHOW_OBJECTS = """
-select
-    to_timestamp(0)::timestamptz as 'created_on',
-    table_name as 'name',
-    case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind',
-    table_catalog as 'database_name',
-    table_schema as 'schema_name'
-from information_schema.tables
-"""
-
-
 def show_objects_tables(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
     """Transform SHOW OBJECTS/TABLES to a query against the information_schema.tables table.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-objects
         https://docs.snowflake.com/en/sql-reference/sql/show-tables
     """
-    if (
+    if not (
         isinstance(expression, exp.Show)
         and isinstance(expression.this, str)
-        and expression.this.upper() in ["OBJECTS", "TABLES"]
+        and (show := expression.this.upper())
+        and show in {"OBJECTS", "TABLES"}
     ):
-        scope_kind = expression.args.get("scope_kind")
-        table = expression.find(exp.Table)
+        return expression
 
-        if scope_kind == "DATABASE":
-            catalog = (table and table.name) or current_database
-            schema = None
-        elif scope_kind == "SCHEMA" and table:
-            catalog = table.db or current_database
-            schema = table.name
-        else:
-            # all objects / tables
-            catalog = None
-            schema = None
+    scope_kind = expression.args.get("scope_kind")
+    table = expression.find(exp.Table)
 
-        tables_only = "table_type = 'BASE TABLE' and " if expression.this.upper() == "TABLES" else ""
-        exclude_fakesnow_tables = "not (table_schema == 'information_schema' and table_name like '_fs_%%')"
-        # without a database will show everything in the "account"
-        table_catalog = f" and table_catalog = '{catalog}'" if catalog else ""
-        schema = f" and table_schema = '{schema}'" if schema else ""
-        limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
+    if scope_kind == "DATABASE":
+        catalog = (table and table.name) or current_database
+        schema = None
+    elif scope_kind == "SCHEMA" and table:
+        catalog = table.db or current_database
+        schema = table.name
+    else:
+        # all objects / tables
+        catalog = None
+        schema = None
 
-        return sqlglot.parse_one(
-            f"{SQL_SHOW_OBJECTS} where {tables_only}{exclude_fakesnow_tables}{table_catalog}{schema}{limit}",
-            read="duckdb",
-        )
+    tables_only = "table_type = 'BASE TABLE' and " if show == "TABLES" else ""
+    exclude_fakesnow_tables = "not (table_schema == 'information_schema' and table_name like '_fs_%%')"
+    # without a database will show everything in the "account"
+    table_catalog = f" and table_catalog = '{catalog}'" if catalog else ""
+    schema = f" and table_schema = '{schema}'" if schema else ""
+    limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
 
-    return expression
+    columns = [
+        "to_timestamp(0)::timestamptz as 'created_on'",
+        "table_name as 'name'",
+        "case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind'",
+        "table_catalog as 'database_name'",
+        "table_schema as 'schema_name'",
+    ]
+
+    terse = expression.args["terse"]
+    if not terse:
+        columns.append('null as "comment"')
+
+    columns_str = ", ".join(columns)
+
+    query = (
+        f"SELECT {columns_str} from information_schema.tables "
+        f"where {tables_only}{exclude_fakesnow_tables}{table_catalog}{schema}{limit}"
+    )
+
+    return sqlglot.parse_one(query, read="duckdb")
 
 
 SQL_SHOW_SCHEMAS = """
@@ -999,32 +1005,70 @@ def create_user(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def show_primary_keys(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
-    """Transform SHOW PRIMARY KEYS to a query against the duckdb_constraints table.
+def show_keys(
+    expression: exp.Expression,
+    current_database: str | None = None,
+    *,
+    kind: Literal["PRIMARY", "UNIQUE", "FOREIGN"],
+) -> exp.Expression:
+    """Transform SHOW <kind> KEYS to a query against the duckdb_constraints meta-table.
 
     https://docs.snowflake.com/en/sql-reference/sql/show-primary-keys
     """
+    snowflake_kind = kind
+    if kind == "FOREIGN":
+        snowflake_kind = "IMPORTED"
+
     if (
         isinstance(expression, exp.Show)
         and isinstance(expression.this, str)
-        and expression.this.upper() == "PRIMARY KEYS"
+        and expression.this.upper() == f"{snowflake_kind} KEYS"
     ):
-        statement = f"""
-            SELECT
-                to_timestamp(0)::timestamptz as created_on,
-                database_name as database_name,
-                schema_name as schema_name,
-                table_name as table_name,
-                unnest(constraint_column_names) as column_name,
-                1 as key_sequence,
-                LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS constraint_name,
-                'false' as rely,
-                null as comment
-            FROM duckdb_constraints
-            WHERE constraint_type = 'PRIMARY KEY'
-              AND database_name = '{current_database}'
-              AND table_name NOT LIKE '_fs_%'
-            """
+        if kind == "FOREIGN":
+            statement = f"""
+                SELECT
+                    to_timestamp(0)::timestamptz as created_on,
+
+                    '' as pk_database_name,
+                    '' as pk_schema_name,
+                    '' as pk_table_name,
+                    '' as pk_column_name,
+                    unnest(constraint_column_names) as pk_column_name,
+
+                    database_name as fk_database_name,
+                    schema_name as fk_schema_name,
+                    table_name as fk_table_name,
+                    unnest(constraint_column_names) as fk_column_name,
+                    1 as key_sequence,
+                    'NO ACTION' as update_rule,
+                    'NO ACTION' as delete_rule,
+                    LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS fk_name,
+                    LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS pk_name,
+                    'NOT DEFERRABLE' as deferrability,
+                    'false' as rely,
+                    null as "comment"
+                FROM duckdb_constraints
+                WHERE constraint_type = 'PRIMARY KEY'
+                  AND database_name = '{current_database}'
+                  AND table_name NOT LIKE '_fs_%'
+                """
+        else:
+            statement = f"""
+                SELECT
+                    to_timestamp(0)::timestamptz as created_on,
+                    database_name as database_name,
+                    schema_name as schema_name,
+                    table_name as table_name,
+                    unnest(constraint_column_names) as column_name,
+                    1 as key_sequence,
+                    LOWER(CONCAT(database_name, '_', schema_name, '_', table_name, '_pkey')) AS constraint_name,
+                    'false' as rely,
+                    null as "comment"
+                FROM duckdb_constraints
+                WHERE constraint_type = '{kind} KEY'
+                  AND database_name = '{current_database}'
+                  AND table_name NOT LIKE '_fs_%'
+                """
 
         scope_kind = expression.args.get("scope_kind")
         if scope_kind:
