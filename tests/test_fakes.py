@@ -864,6 +864,76 @@ def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
+@pytest.mark.xfail(
+    reason="only partial supports exists to support sqlalchemy, see test_reflect",
+)
+def test_show_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("CREATE TABLE test_table (id INT PRIMARY KEY, name TEXT UNIQUE)")
+    dcur.execute("CREATE TABLE test_table2 (id INT, other_id INT, FOREIGN KEY (other_id) REFERENCES test_table(id))")
+
+    dcur.execute("SHOW PRIMARY KEYS")
+    primary_keys = dcur.fetchall()
+    assert primary_keys == [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+            "table_name": "TEST_TABLE",
+            "column_name": "ID",
+            "key_sequence": 1,
+            "constraint_name": "SYS_CONSTRAINT_DB1_SCHEMA1_TEST_TABLE_ID_pk",
+            "rely": "false",
+            "comment": None,
+        }
+    ]
+
+    dcur.execute("SHOW UNIQUE KEYS")
+    unique_keys = dcur.fetchall()
+    assert unique_keys == [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+            "table_name": "TEST_TABLE",
+            "column_name": "NAME",
+            "key_sequence": 1,
+            "constraint_name": "SYS_CONSTRAINT_DB1_SCHEMA1_TEST_TABLE_NAME_uk",
+            "rely": "false",
+            "comment": None,
+        }
+    ]
+
+    dcur.execute("SHOW IMPORTED KEYS")
+    foreign_keys = dcur.fetchall()
+    assert foreign_keys == [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "pk_database_name": "DB1",
+            "pk_schema_name": "SCHEMA1",
+            "pk_table_name": "TEST_TABLE",
+            "pk_column_name": "ID",
+            "fk_database_name": "DB1",
+            "fk_schema_name": "SCHEMA1",
+            "fk_table_name": "TEST_TABLE2",
+            "fk_column_name": "OTHER_ID",
+            "key_sequence": 1,
+            "update_rule": "NO ACTION",
+            "delete_rule": "NO ACTION",
+            "fk_name": "SYS_CONSTRAINT_DB1_SCHEMA1_TEST_TABLE2_OTHER_ID_fk",
+            "pk_name": "SYS_CONSTRAINT_DB1_SCHEMA1_TEST_TABLE_ID_pk",
+            "deferrability": "NOT DEFERRABLE",
+            "rely": "false",
+            "comment": None,
+        }
+    ]
+
+    dcur.execute("SHOW PRIMARY KEYS IN SCHEMA")
+    assert dcur.fetchall() == primary_keys
+
+    dcur.execute("SHOW PRIMARY KEYS IN DATABASE")
+    assert dcur.fetchall() == primary_keys
+
+
 def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("create table example(x int)")
     dcur.execute("create view view1 as select * from example")
