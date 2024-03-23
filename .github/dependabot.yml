@@ -8,8 +8,6 @@ updates:
     pip:
       applies-to: version-updates
       dependency-type: development
-      patterns:
-        - "*"
   # use increase otherwise widen is chosen
   versioning-strategy: increase
 - package-ecosystem: "npm"
