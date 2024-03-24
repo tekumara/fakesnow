@@ -14,7 +14,7 @@ $(pip): $(if $(value CI),|,) .python-version
 # create venv using system python even when another venv is active
 	PATH=$${PATH#$${VIRTUAL_ENV}/bin:} python3 -m venv --clear $(venv)
 	$(venv)/bin/python --version
-	$(pip) install pip~=23.3 wheel~=0.40
+	$(pip) install --upgrade pip~=24.0
 
 $(venv): $(if $(value CI),|,) pyproject.toml $(pip)
 	$(pip) install -e '.[dev$(if $(value CI),,,notebook)]'
@@ -49,7 +49,7 @@ test: $(venv)
 
 ## build python distribution
 dist: $(venv)
-	rm -rf build dist *.egg-info
+	rm -rf dist *.egg-info
 	$(venv)/bin/python -m build --sdist --wheel
 
 ## publish to pypi

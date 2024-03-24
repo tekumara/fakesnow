@@ -115,17 +115,21 @@ def test_connect_different_sessions_use_database(_fakesnow_no_auto_create: None)
 
 def test_connect_reuse_db():
     with tempfile.TemporaryDirectory(prefix="fakesnow-test") as db_path:
-        with fakesnow.patch(db_path=db_path), snowflake.connector.connect(
-            database="db1", schema="schema1"
-        ) as conn, conn.cursor() as cur:
+        with (
+            fakesnow.patch(db_path=db_path),
+            snowflake.connector.connect(database="db1", schema="schema1") as conn,
+            conn.cursor() as cur,
+        ):
             # creates db1.schema1.example
             cur.execute("create table example (x int)")
             cur.execute("insert into example values (420)")
 
         # reconnect
-        with fakesnow.patch(db_path=db_path), snowflake.connector.connect(
-            database="db1", schema="schema1"
-        ) as conn, conn.cursor() as cur:
+        with (
+            fakesnow.patch(db_path=db_path),
+            snowflake.connector.connect(database="db1", schema="schema1") as conn,
+            conn.cursor() as cur,
+        ):
             assert cur.execute("select * from example").fetchall() == [(420,)]
 
 

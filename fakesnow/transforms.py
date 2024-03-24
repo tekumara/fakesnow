@@ -38,7 +38,8 @@ def create_database(expression: exp.Expression, db_path: Path | None = None) -> 
     """
 
     if isinstance(expression, exp.Create) and str(expression.args.get("kind")).upper() == "DATABASE":
-        assert (ident := expression.find(exp.Identifier)), f"No identifier in {expression.sql}"
+        ident = expression.find(exp.Identifier)
+        assert ident, f"No identifier in {expression.sql}"
         db_name = ident.this
         db_file = f"{db_path/db_name}.db" if db_path else ":memory:"
 
