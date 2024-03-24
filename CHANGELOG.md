@@ -2,6 +2,19 @@
 
 # Changelog
 
+## [0.9.6](https://github.com/tekumara/fakesnow/compare/v0.9.5...v0.9.6) (2024-03-24)
+
+
+### Features
+
+* support sqlalchemy metadata reflection ([#55](https://github.com/tekumara/fakesnow/issues/55)) ([904156c](https://github.com/tekumara/fakesnow/commit/904156c701b6430dcb600b07e7b45c7409e932d7))
+
+
+### Chores
+
+* add ruff-format (cruft update) ([46fd572](https://github.com/tekumara/fakesnow/commit/46fd5723ee8aa46ad99047b3af4c2b9ae9c40f45))
+* **deps-dev:** bump pyright from 1.1.330 to 1.1.355 ([#58](https://github.com/tekumara/fakesnow/issues/58)) ([9060a2e](https://github.com/tekumara/fakesnow/commit/9060a2ee23f40bb46420d58d6a77fbb162abf304))
+
 ## [0.9.5](https://github.com/tekumara/fakesnow/compare/v0.9.4...v0.9.5) (2024-02-23)
 
 
