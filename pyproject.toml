@@ -24,6 +24,8 @@ fakesnow = "fakesnow.cli:main"
 dev = [
     "black~=23.9",
     "build~=1.0",
+    # to fix https://github.com/pandas-dev/pandas/issues/56995
+    "pandas-stubs",
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
     "pre-commit~=3.4",
