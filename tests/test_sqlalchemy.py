@@ -1,3 +1,5 @@
+from typing import cast
+
 from sqlalchemy import Column, MetaData, Table, types
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql.expression import TextClause
@@ -16,7 +18,7 @@ def test_engine(snowflake_engine: Engine):
 def test_metadata_create_all(snowflake_engine: Engine):
     metadata = MetaData()
 
-    table = Table("foo", metadata, Column(types.Integer, name="id"), Column(types.String, name="name"))
+    table = cast(Table, Table("foo", metadata, Column(types.Integer, name="id"), Column(types.String, name="name")))
     metadata.create_all(bind=snowflake_engine)
 
     with snowflake_engine.connect() as conn:
