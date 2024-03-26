@@ -782,7 +782,10 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
 
         if kind.name.upper() == "DATABASE":
             # duckdb's default schema is main
-            name = f"{expression.this.name}.main"
+            database = expression.this.name
+            return exp.Command(
+                this="SET", expression=exp.Literal.string(f"schema = '{database}.main'"), set_database=database
+            )
         else:
             # SCHEMA
             if db := expression.this.args.get("db"):  # noqa: SIM108
@@ -791,9 +794,10 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
                 # isn't qualified with a database
                 db_name = current_database or MISSING_DATABASE
 
-            name = f"{db_name}.{expression.this.name}"
-
-        return exp.Command(this="SET", expression=exp.Literal.string(f"schema = '{name}'"))
+            schema = expression.this.name
+            return exp.Command(
+                this="SET", expression=exp.Literal.string(f"schema = '{db_name}.{schema}'"), set_schema=schema
+            )
 
     return expression
 

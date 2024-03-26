@@ -246,43 +246,18 @@ class FakeSnowflakeCursor:
 
         affected_count = None
 
-        if (maybe_ident := expression.find(exp.Identifier, bfs=False)) and isinstance(maybe_ident.this, str):
-            ident = maybe_ident.this if maybe_ident.quoted else maybe_ident.this.upper()
-        else:
-            ident = None
-
-        if cmd == "USE DATABASE" and ident:
-            self._conn.database = ident
+        if set_database := transformed.args.get("set_database"):
+            self._conn.database = set_database
             self._conn.database_set = True
 
-        elif cmd == "USE SCHEMA" and ident:
-            self._conn.schema = ident
+        elif set_schema := transformed.args.get("set_schema"):
+            self._conn.schema = set_schema
             self._conn.schema_set = True
 
         elif create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions
             self._duck_conn.execute(info_schema.creation_sql(create_db_name))
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
-
-        elif cmd == "CREATE SCHEMA" and ident:
-            result_sql = SQL_CREATED_SCHEMA.substitute(name=ident)
-
-        elif cmd == "CREATE TABLE" and ident:
-            result_sql = SQL_CREATED_TABLE.substitute(name=ident)
-
-        elif cmd == "CREATE VIEW" and ident:
-            result_sql = SQL_CREATED_VIEW.substitute(name=ident)
-
-        elif cmd.startswith("DROP") and ident:
-            result_sql = SQL_DROPPED.substitute(name=ident)
-
-            # if dropping the current database/schema then reset conn metadata
-            if cmd == "DROP DATABASE" and ident == self._conn.database:
-                self._conn.database = None
-                self._conn.schema = None
-
-            elif cmd == "DROP SCHEMA" and ident == self._conn.schema:
-                self._conn.schema = None
 
         elif cmd == "INSERT":
             (affected_count,) = self._duck_conn.fetchall()[0]
@@ -302,6 +277,28 @@ class FakeSnowflakeCursor:
             result_sql = transformed.transform(
                 lambda e: transforms.describe_table(e, self._conn.database, self._conn.schema)
             ).sql(dialect="duckdb")
+
+        elif (eid := transformed.find(exp.Identifier, bfs=False)) and isinstance(eid.this, str):
+            ident = eid.this if eid.quoted else eid.this.upper()
+            if cmd == "CREATE SCHEMA" and ident:
+                result_sql = SQL_CREATED_SCHEMA.substitute(name=ident)
+
+            elif cmd == "CREATE TABLE" and ident:
+                result_sql = SQL_CREATED_TABLE.substitute(name=ident)
+
+            elif cmd == "CREATE VIEW" and ident:
+                result_sql = SQL_CREATED_VIEW.substitute(name=ident)
+
+            elif cmd.startswith("DROP") and ident:
+                result_sql = SQL_DROPPED.substitute(name=ident)
+
+                # if dropping the current database/schema then reset conn metadata
+                if cmd == "DROP DATABASE" and ident == self._conn.database:
+                    self._conn.database = None
+                    self._conn.schema = None
+
+                elif cmd == "DROP SCHEMA" and ident == self._conn.schema:
+                    self._conn.schema = None
 
         if table_comment := cast(tuple[exp.Table, str], transformed.args.get("table_comment")):
             # record table comment
