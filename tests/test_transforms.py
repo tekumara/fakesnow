@@ -40,6 +40,7 @@ from fakesnow.transforms import (
     to_decimal,
     to_timestamp,
     to_timestamp_ntz,
+    try_parse_json,
     upper_case_unquoted_identifiers,
     values_columns,
 )
@@ -560,6 +561,15 @@ def test_to_number_numeric() -> None:
         sqlglot.parse_one("SELECT to_numeric('100', 'TM9', 10, 2)", read="snowflake").transform(to_decimal).sql(
             dialect="duckdb"
         )
+
+
+def test_try_parse_json() -> None:
+    assert (
+        sqlglot.parse_one("""INSERT INTO table1 (name) SELECT TRY_PARSE_JSON('{"first":"foo", "last":"bar"}')""")
+        .transform(try_parse_json)
+        .sql(dialect="duckdb")
+        == """INSERT INTO table1 (name) SELECT TRY_CAST('{"first":"foo", "last":"bar"}' AS JSON)"""
+    )
 
 
 def test_upper_case_unquoted_identifiers() -> None:
