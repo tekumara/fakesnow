@@ -617,7 +617,9 @@ class FakeSnowflakeConnection:
             # don't jsonify string
             df[col] = df[col].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x)
 
-        self._duck_conn.execute(f"INSERT INTO {table_name}({','.join(df.columns.to_list())}) SELECT * FROM df")
+        escaped_cols = ",".join(f'"{col}"' for col in df.columns.to_list())
+
+        self._duck_conn.execute(f"INSERT INTO {table_name}({escaped_cols}) SELECT * FROM df")
         return self._duck_conn.fetchall()[0][0]
 
 
