@@ -206,6 +206,7 @@ class FakeSnowflakeCursor:
             .transform(lambda e: transforms.show_keys(e, self._conn.database, kind="FOREIGN"))
             .transform(transforms.show_users)
             .transform(transforms.create_user)
+            .transform(transforms.sha256)
         )
         sql = transformed.sql(dialect="duckdb")
         result_sql = None
