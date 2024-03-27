@@ -35,6 +35,38 @@ def test_array_size(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(None,)]
 
 
+def test_array_agg_within_group(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("CREATE TABLE table1 (ID INT, amount INT)")
+
+        # two unique ids, for id 1 there are 3 amounts, for id 2 there are 2 amounts
+        values = [
+            (2, 40),
+            (1, 10),
+            (1, 30),
+            (2, 50),
+            (1, 20),
+        ]
+        cur.executemany("INSERT INTO TABLE1 VALUES (%s, %s)", values)
+
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("SELECT id, ARRAY_AGG(amount) WITHIN GROUP (ORDER BY amount DESC) amounts FROM table1 GROUP BY id")
+        rows = cur.fetchall()
+
+        assert rows == [
+            {"ID": 1, "AMOUNTS": [30, 20, 10]},
+            {"ID": 2, "AMOUNTS": [50, 40]},
+        ]
+
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("SELECT id, ARRAY_AGG(amount) WITHIN GROUP (ORDER BY amount ASC) amounts FROM table1 GROUP BY id")
+        rows = cur.fetchall()
+
+        assert rows == [
+            {"ID": 1, "AMOUNTS": [10, 20, 30]},
+            {"ID": 2, "AMOUNTS": [40, 50]},
+        ]
+
 def test_binding_default_paramstyle(conn: snowflake.connector.SnowflakeConnection):
     assert snowflake.connector.paramstyle == "pyformat"
     with conn.cursor() as cur:
