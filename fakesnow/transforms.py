@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from string import Template
-from typing import Literal, cast
+from typing import ClassVar, Literal, cast
 
 import sqlglot
 from sqlglot import exp
@@ -1179,4 +1179,38 @@ def show_keys(
             else:
                 raise NotImplementedError(f"SHOW PRIMARY KEYS with {scope_kind} not yet supported")
         return sqlglot.parse_one(statement)
+    return expression
+
+
+class SHA256(exp.Func):
+    _sql_names: ClassVar = ["SHA256"]
+    arg_types: ClassVar = {"this": True}
+
+
+def sha256(expression: exp.Expression) -> exp.Expression:
+    """Convert sha2() or sha2_hex() to sha256().
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("insert into table1 (name) select sha2('foo')").transform(sha256).sql()
+        "INSERT INTO table1 (name) SELECT SHA256('foo')"
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    if isinstance(expression, exp.SHA2) and expression.args.get("length", exp.Literal.number(256)).this == "256":
+        return SHA256(this=expression.this)
+    elif (
+        isinstance(expression, exp.Anonymous)
+        and expression.this.upper() == "SHA2_HEX"
+        and (
+            len(expression.expressions) == 1
+            or (len(expression.expressions) == 2 and expression.expressions[1].this == "256")
+        )
+    ):
+        return SHA256(this=expression.expressions[0])
+
     return expression
