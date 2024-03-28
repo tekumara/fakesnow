@@ -138,7 +138,6 @@ def test_dateadd_date_cast() -> None:
         == "SELECT col + INTERVAL 3 DAY AS D"
     )
 
-
     # WEEk
     assert (
         sqlglot.parse_one("SELECT DATEADD(WEEK, 3, '2023-03-03'::DATE) as D", read="snowflake")
@@ -203,7 +202,6 @@ def test_dateadd_date_cast() -> None:
         == "SELECT col + INTERVAL 3 MONTH AS D"
     )
 
-
     # YEAR
     assert (
         sqlglot.parse_one("SELECT DATEADD(YEAR, 3, '2023-03-03'::DATE) as D", read="snowflake")
@@ -235,8 +233,6 @@ def test_dateadd_date_cast() -> None:
         .sql(dialect="duckdb")
         == "SELECT col + INTERVAL 3 YEAR AS D"
     )
-
-
 
 
 def test_extract_comment_on_columns() -> None:
