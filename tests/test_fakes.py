@@ -299,7 +299,7 @@ def test_dateadd_date_cast(conn: snowflake.connector.SnowflakeConnection):
         SELECT
             dateadd(hour, 1, d::date) as d_noop,
             dateadd(day, 1, d::date) as d_day,
-            dateadd(wk, 1, d::date) as d_week,
+            dateadd(week, 1, d::date) as d_week,
             dateadd(month, 1, d::date) as d_month,
             dateadd(year, 1, d::date) as d_year
         FROM example
@@ -321,7 +321,7 @@ def test_dateadd_date_cast(conn: snowflake.connector.SnowflakeConnection):
         SELECT
             dateadd(hour, 1, '2023-04-02'::date) as d_noop,
             dateadd(day, 1, '2023-04-02'::date) as d_day,
-            dateadd(wk, 1, '2023-04-02'::date) as d_week,
+            dateadd(week, 1, '2023-04-02'::date) as d_week,
             dateadd(month, 1, '2023-04-02'::date) as d_month,
             dateadd(year, 1, '2023-04-02'::date) as d_year
         FROM example
