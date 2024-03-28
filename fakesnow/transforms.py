@@ -878,6 +878,7 @@ def timestamp_ntz_ns(expression: exp.Expression) -> exp.Expression:
 
     return expression
 
+
 def try_parse_json(expression: exp.Expression) -> exp.Expression:
     """Convert TRY_PARSE_JSON() to TRY_CAST(... as JSON).
 
@@ -904,6 +905,7 @@ def try_parse_json(expression: exp.Expression) -> exp.Expression:
         )
 
     return expression
+
 
 # sqlglot.parse_one("create table example(date TIMESTAMP_NTZ(9));", read="snowflake")
 def semi_structured_types(expression: exp.Expression) -> exp.Expression:
