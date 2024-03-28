@@ -1166,6 +1166,20 @@ def test_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
+def test_try_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute(
+        "SELECT column1 AS orig_string, TRY_TO_DECIMAL(column1) AS dec, TRY_TO_DECIMAL(column1, 10, 2) AS dec_with_scale, TRY_TO_DECIMAL(column1, 4, 2) AS dec_with_range_err FROM VALUES ('345.123');"
+    )
+    assert cur.fetchall() == [
+        (
+            "345.123",
+            Decimal("345"),
+            Decimal("345.12"),
+            None,
+        ),
+    ]
+
+
 def test_transactions(conn: snowflake.connector.SnowflakeConnection):
     # test behaviours required for sqlalchemy
 
