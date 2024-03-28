@@ -67,6 +67,7 @@ def test_array_agg_within_group(conn: snowflake.connector.SnowflakeConnection):
             {"ID": 2, "AMOUNTS": [40, 50]},
         ]
 
+
 def test_binding_default_paramstyle(conn: snowflake.connector.SnowflakeConnection):
     assert snowflake.connector.paramstyle == "pyformat"
     with conn.cursor() as cur:
