@@ -35,6 +35,18 @@ def test_array_size(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(None,)]
 
 
+def test_array_agg_to_json(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table table1 (id number, name varchar)")
+        values = [(1, "foo"), (2, "bar"), (1, "baz"), (2, "qux")]
+
+        cur.executemany("insert into table1 values (%s, %s)", values)
+
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("select array_agg(name) as names from table1")
+        assert cur.fetchall() == [{"NAMES": '["foo","bar","baz","qux"]'}]
+
+
 def test_array_agg_within_group(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("CREATE TABLE table1 (ID INT, amount INT)")
@@ -54,8 +66,8 @@ def test_array_agg_within_group(conn: snowflake.connector.SnowflakeConnection):
         rows = cur.fetchall()
 
         assert rows == [
-            {"ID": 1, "AMOUNTS": [30, 20, 10]},
-            {"ID": 2, "AMOUNTS": [50, 40]},
+            {"ID": 1, "AMOUNTS": "[30,20,10]"},
+            {"ID": 2, "AMOUNTS": "[50,40]"},
         ]
 
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
@@ -63,8 +75,8 @@ def test_array_agg_within_group(conn: snowflake.connector.SnowflakeConnection):
         rows = cur.fetchall()
 
         assert rows == [
-            {"ID": 1, "AMOUNTS": [10, 20, 30]},
-            {"ID": 2, "AMOUNTS": [40, 50]},
+            {"ID": 1, "AMOUNTS": "[10,20,30]"},
+            {"ID": 2, "AMOUNTS": "[40,50]"},
         ]
 
 

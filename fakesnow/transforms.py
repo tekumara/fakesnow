@@ -22,6 +22,13 @@ def array_size(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def array_agg_to_json(expression: exp.Expression) -> exp.Expression:
+    if isinstance(expression, exp.ArrayAgg):
+        return exp.Anonymous(this="TO_JSON", expressions=[expression])
+
+    return expression
+
+
 def array_agg_within_group(expression: exp.Expression) -> exp.Expression:
     """Convert ARRAY_AGG(<expr>) WITHIN GROUP (<order-by-clause>) to ARRAY_AGG( <expr> <order-by-clause> )
     Snowflake uses ARRAY_AGG(<expr>) WITHIN GROUP (ORDER BY <order-by-clause>)
