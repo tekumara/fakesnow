@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.7](https://github.com/tekumara/fakesnow/compare/v0.9.6...v0.9.7) (2024-03-28)
+
+
+### Bug Fixes
+
+* write_pandas quotes columns when inserting dataframe ([#65](https://github.com/tekumara/fakesnow/issues/65)) ([f62ab03](https://github.com/tekumara/fakesnow/commit/f62ab034204bbe029962f60938736bbf53fea73b))
+
 ## [0.9.6](https://github.com/tekumara/fakesnow/compare/v0.9.5...v0.9.6) (2024-03-24)
 
 
