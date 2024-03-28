@@ -195,6 +195,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.array_size)
             .transform(transforms.random)
             .transform(transforms.identifier)
+            .transform(transforms.dateadd_string_literal_timestamp_cast)
             .transform(lambda e: transforms.show_schemas(e, self._conn.database))
             .transform(lambda e: transforms.show_objects_tables(e, self._conn.database))
             # TODO collapse into a single show_keys function
