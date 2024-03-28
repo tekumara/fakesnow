@@ -37,6 +37,7 @@ from fakesnow.transforms import (
     to_decimal,
     to_timestamp,
     to_timestamp_ntz,
+    trim_cast_varchar,
     upper_case_unquoted_identifiers,
     values_columns,
 )
@@ -393,6 +394,23 @@ def test_use() -> None:
     assert (
         sqlglot.parse_one("use schema foo.bar").transform(set_schema, current_database="marts").sql()
         == "SET schema = 'foo.bar'"
+    )
+
+
+def test_trim_cast_varchar() -> None:
+    assert (
+        sqlglot.parse_one("SELECT TRIM(col) FROM table1").transform(trim_cast_varchar).sql(dialect="duckdb")
+        == "SELECT TRIM(CAST(col AS TEXT)) FROM table1"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT TRIM(col::varchar) FROM table1").transform(trim_cast_varchar).sql(dialect="duckdb")
+        == "SELECT TRIM(CAST(col AS TEXT)) FROM table1"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT TRIM(col::TEXT) FROM table1").transform(trim_cast_varchar).sql(dialect="duckdb")
+        == "SELECT TRIM(CAST(col AS TEXT)) FROM table1"
     )
 
 
