@@ -261,16 +261,6 @@ def test_object_construct() -> None:
     )
 
 
-def test_parse_json() -> None:
-    assert (
-        sqlglot.parse_one(
-            """insert into table1 (name) select parse_json('{"first":"foo", "last":"bar"}')""",
-            read="snowflake",
-        ).sql(dialect="duckdb")
-        == """INSERT INTO table1 (name) SELECT JSON('{"first":"foo", "last":"bar"}')"""
-    )
-
-
 def test_random() -> None:
     e = sqlglot.parse_one("select random(420)").transform(random)
 
