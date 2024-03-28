@@ -518,32 +518,6 @@ def object_construct(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def parse_json(expression: exp.Expression) -> exp.Expression:
-    """Convert parse_json() to json().
-
-    Example:
-        >>> import sqlglot
-        >>> sqlglot.parse_one("insert into table1 (name) select parse_json('{}')").transform(parse_json).sql()
-        "CREATE TABLE table1 (name JSON)"
-    Args:
-        expression (exp.Expression): the expression that will be transformed.
-
-    Returns:
-        exp.Expression: The transformed expression.
-    """
-
-    if (
-        isinstance(expression, exp.Anonymous)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == "PARSE_JSON"
-    ):
-        new = expression.copy()
-        new.args["this"] = "JSON"
-        return new
-
-    return expression
-
-
 def regex_replace(expression: exp.Expression) -> exp.Expression:
     """Transform regex_replace expressions from snowflake to duckdb."""
 

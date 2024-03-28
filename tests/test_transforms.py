@@ -23,7 +23,6 @@ from fakesnow.transforms import (
     json_extract_cast_as_varchar,
     json_extract_precedence,
     object_construct,
-    parse_json,
     random,
     regex_replace,
     regex_substr,
@@ -259,15 +258,6 @@ def test_object_construct() -> None:
         .transform(object_construct)
         .sql(dialect="duckdb")
         == "SELECT TO_JSON({'a': 1, 'b': 'BBBB', 'd': JSON('NULL')})"
-    )
-
-
-def test_parse_json() -> None:
-    assert (
-        sqlglot.parse_one("""insert into table1 (name) select parse_json('{"first":"foo", "last":"bar"}')""")
-        .transform(parse_json)
-        .sql(dialect="duckdb")
-        == """INSERT INTO table1 (name) SELECT JSON('{"first":"foo", "last":"bar"}')"""
     )
 
 
