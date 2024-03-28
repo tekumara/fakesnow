@@ -169,6 +169,47 @@ def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:
     return new
 
 
+def dateadd_date_cast(expression: exp.Expression) -> exp.Expression:
+    """Cast result of DATEADD to DATE if the given expression is a cast to DATE
+       and unit is either DAY, WEEK, MONTH or YEAR to mimic Snowflake's DATEADD
+       behaviour.
+
+    Snowflake;
+        SELECT DATEADD(DAY, 3, '2023-03-03'::DATE) as D;
+            D: 2023-03-06 (DATE)
+    DuckDB;
+        SELECT CAST('2023-03-03' AS DATE) + INTERVAL 3 DAY AS D
+            D: 2023-03-06 00:00:00 (TIMESTAMP)
+    """
+
+    if not isinstance(expression, exp.DateAdd):
+        return expression
+
+    dateadd = expression
+
+    if dateadd.unit is None:
+        return expression
+
+    if not isinstance(dateadd.unit.this, str):
+        return expression
+
+    if (unit := dateadd.unit.this.upper()) and unit.upper() not in {"DAY", "WEEK", "MONTH", "YEAR"}:
+        return expression
+
+    if not isinstance(dateadd.this, exp.Cast):
+        return expression
+
+    cast = dateadd.this
+
+    if cast.to.this != exp.DataType.Type.DATE:
+        return expression
+
+    return exp.Cast(
+        this=expression,
+        to=exp.DataType(this=exp.DataType.Type.DATE, nested=False, prefix=False),
+    )
+
+
 def extract_comment_on_columns(expression: exp.Expression) -> exp.Expression:
     """Extract column comments, removing it from the Expression.
 
