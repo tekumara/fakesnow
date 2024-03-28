@@ -22,6 +22,32 @@ def array_size(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def array_agg_within_group(expression: exp.Expression) -> exp.Expression:
+    """Convert ARRAY_AGG(<expr>) WITHIN GROUP (<order-by-clause>) to ARRAY_AGG( <expr> <order-by-clause> )
+    Snowflake uses ARRAY_AGG(<expr>) WITHIN GROUP (ORDER BY <order-by-clause>)
+    to order the array, but DuckDB uses ARRAY_AGG( <expr> <order-by-clause> ).
+    See;
+        - https://docs.snowflake.com/en/sql-reference/functions/array_agg
+        - https://duckdb.org/docs/sql/aggregates.html#order-by-clause-in-aggregate-functions
+    Note; Snowflake has following restriction;
+            If you specify DISTINCT and WITHIN GROUP, both must refer to the same column.
+          Transformation does not handle this restriction.
+    """
+    if (
+        isinstance(expression, exp.WithinGroup)
+        and (agg := expression.find(exp.ArrayAgg))
+        and (order := expression.expression)
+    ):
+        return exp.ArrayAgg(
+            this=exp.Order(
+                this=agg.this,
+                expressions=order.expressions,
+            )
+        )
+
+    return expression
+
+
 # TODO: move this into a Dialect as a transpilation
 def create_database(expression: exp.Expression, db_path: Path | None = None) -> exp.Expression:
     """Transform create database to attach database.
