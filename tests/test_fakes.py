@@ -1154,6 +1154,68 @@ def test_timestamp_to_date(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(datetime.date(1970, 1, 1), datetime.date(1970, 1, 1), datetime.date(2024, 1, 26))]
 
 
+def test_timeadd(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("create table t1(d timestamp)")
+        cur.execute("insert into t1 values ('2024-01-26 12:00:00')")
+
+        cur.execute("""
+            SELECT
+              timeadd(second, 1, d) as d_second,
+              timeadd(minute, 1, d) as d_minute,
+              timeadd(hour, 1, d) as d_hour,
+              timeadd(day, 1, d) as d_day,
+              timeadd(week, 1, d) as d_week,
+              timeadd(month, 1, d) as d_month,
+              timeadd(year, 1, d) as d_year
+            FROM t1
+            """)
+
+        assert cur.fetchall() == [
+            {
+                "D_SECOND": datetime.datetime(2024, 1, 26, 12, 0, 1),
+                "D_MINUTE": datetime.datetime(2024, 1, 26, 12, 1, 0),
+                "D_HOUR": datetime.datetime(2024, 1, 26, 13, 0, 0),
+                "D_DAY": datetime.datetime(2024, 1, 27, 12, 0, 0),
+                "D_WEEK": datetime.datetime(2024, 2, 2, 12, 0, 0),
+                "D_MONTH": datetime.datetime(2024, 2, 26, 12, 0, 0),
+                "D_YEAR": datetime.datetime(2025, 1, 26, 12, 0, 0),
+            }
+        ]
+
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("create table t2(d timestamp)")
+        cur.execute("insert into t2 values ('2024-01-26 12:00:00')")
+
+        cur.execute("""
+            SELECT
+              timeadd('second', 1, d) as d_second,
+              timeadd('minute', 1, d) as d_minute,
+              timeadd('hour', 1, d) as d_hour,
+              timeadd('day', 1, d) as d_day,
+              timeadd('week', 1, d) as d_week,
+              timeadd('month', 1, d) as d_month,
+              timeadd('year', 1, d) as d_year
+            FROM t1
+            """)
+
+        assert cur.fetchall() == [
+            {
+                "D_SECOND": datetime.datetime(2024, 1, 26, 12, 0, 1),
+                "D_MINUTE": datetime.datetime(2024, 1, 26, 12, 1, 0),
+                "D_HOUR": datetime.datetime(2024, 1, 26, 13, 0, 0),
+                "D_DAY": datetime.datetime(2024, 1, 27, 12, 0, 0),
+                "D_WEEK": datetime.datetime(2024, 2, 2, 12, 0, 0),
+                "D_MONTH": datetime.datetime(2024, 2, 26, 12, 0, 0),
+                "D_YEAR": datetime.datetime(2025, 1, 26, 12, 0, 0),
+            }
+        ]
+
+    # TODO: Following PR's would require new test cases
+    # * https://github.com/tekumara/fakesnow/pull/71
+    # * https://github.com/tekumara/fakesnow/pull/72
+
+
 def test_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/functions/to_decimal#examples
     cur.execute("create or replace table number_conv(expr varchar);")

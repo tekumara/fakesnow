@@ -879,6 +879,32 @@ def timestamp_ntz_ns(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def timeadd(expression: exp.Expression) -> exp.Expression:
+    """TIMEADD is an alias for DATEADD
+    See: https://docs.snowflake.com/en/sql-reference/functions/timeadd
+    """
+    if not (
+        isinstance(expression, exp.Anonymous)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "TIMEADD"
+    ):
+        return expression
+
+    if len(expression.expressions) != 3:
+        return expression
+
+    unit, value, date = expression.expressions.copy()
+
+    if isinstance(unit, exp.Literal):
+        unit = exp.Var(this=unit.this.upper())
+    elif isinstance(unit, exp.Column) and isinstance(unit.this, exp.Identifier):
+        unit = exp.Var(this=unit.this.this.upper())
+    else:
+        return expression
+
+    return exp.DateAdd(this=date, expression=value, unit=unit)
+
+
 # sqlglot.parse_one("create table example(date TIMESTAMP_NTZ(9));", read="snowflake")
 def semi_structured_types(expression: exp.Expression) -> exp.Expression:
     """Convert OBJECT, ARRAY, and VARIANT types to duckdb compatible types.

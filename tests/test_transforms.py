@@ -32,6 +32,7 @@ from fakesnow.transforms import (
     show_objects_tables,
     show_schemas,
     tag,
+    timeadd,
     timestamp_ntz_ns,
     to_date,
     to_decimal,
@@ -344,6 +345,42 @@ def test_timestamp_ntz_ns() -> None:
         .transform(timestamp_ntz_ns)
         .sql(dialect="duckdb")
         == "CREATE TABLE table1 (ts TIMESTAMP)"
+    )
+
+
+def test_timeadd() -> None:
+    assert (
+        sqlglot.parse_one("SELECT timeadd(hour, 3, col)", read="snowflake").transform(timeadd).sql(dialect="duckdb")
+        == "SELECT col + INTERVAL 3 HOUR"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT timeadd(HOUR, 3, col)", read="snowflake").transform(timeadd).sql(dialect="duckdb")
+        == "SELECT col + INTERVAL 3 HOUR"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT timeadd('hour', 3, col)", read="snowflake").transform(timeadd).sql(dialect="duckdb")
+        == "SELECT col + INTERVAL 3 HOUR"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT timeadd('HOUR', 3, col)", read="snowflake").transform(timeadd).sql(dialect="duckdb")
+        == "SELECT col + INTERVAL 3 HOUR"
+    )
+
+    assert (
+        sqlglot.parse_one("""SELECT timeadd("HOUR", 3, col)""", read="snowflake")
+        .transform(timeadd)
+        .sql(dialect="duckdb")
+        == "SELECT col + INTERVAL 3 HOUR"
+    )
+
+    assert (
+        sqlglot.parse_one("""SELECT timeadd(week, 3, '2023-01-01')""", read="snowflake")
+        .transform(timeadd)
+        .sql(dialect="duckdb")
+        == "SELECT '2023-01-01' + (7 * INTERVAL 3 DAY)"
     )
 
 
