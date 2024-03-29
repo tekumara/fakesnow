@@ -765,16 +765,44 @@ def test_non_existent_table_throws_snowflake_exception(cur: snowflake.connector.
         cur.execute("select * from this_table_does_not_exist")
 
 
-def test_object_construct(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)")
+def test_object_construct(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)")
 
-    # TODO: strip null within duckdb via python UDF
-    def strip_none_values(d: dict) -> dict:
-        return {k: v for k, v in d.items() if v}
+        # TODO: strip null within duckdb via python UDF
+        def strip_none_values(d: dict) -> dict:
+            return {k: v for k, v in d.items() if v}
 
-    result = cur.fetchone()
-    assert isinstance(result, tuple)
-    assert strip_none_values(json.loads(result[0])) == json.loads('{\n  "a": 1,\n  "b": "BBBB"\n}')
+        result = cur.fetchone()
+        assert isinstance(result, tuple)
+        assert strip_none_values(json.loads(result[0])) == json.loads('{\n  "a": 1,\n  "b": "BBBB"\n}')
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT OBJECT_CONSTRUCT('a', 1, null, 'nulkeyed') as col")
+
+        result = cur.fetchone()
+        assert isinstance(result, tuple)
+        assert strip_none_values(json.loads(result[0])) == json.loads('{\n  "a": 1\n}')
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT NULL as col, OBJECT_CONSTRUCT( 'k1', 'v1', 'k2', CASE WHEN ZEROIFNULL(col) + 1 >= 2 THEN 'v2' ELSE NULL END, 'k3', 'v3')"
+        )
+
+        result = cur.fetchone()
+        assert isinstance(result, tuple)
+        assert strip_none_values(json.loads(result[1])) == json.loads('{\n  "k1": "v1",\n  "k3": "v3"\n}')
+
+    with conn.cursor() as cur:
+        cur.execute(
+            "SELECT 1 as col, OBJECT_CONSTRUCT( 'k1', 'v1', 'k2', CASE WHEN ZEROIFNULL(col) + 1 >= 2 THEN 'v2' ELSE NULL END, 'k3', 'v3')"
+        )
+
+        result = cur.fetchone()
+        assert isinstance(result, tuple)
+        assert strip_none_values(json.loads(result[1])) == json.loads(
+            '{\n  "k1": "v1",\n  "k2": "v2",\n  "k3": "v3"\n}'
+        )
 
 
 def test_percentile_cont(conn: snowflake.connector.SnowflakeConnection):

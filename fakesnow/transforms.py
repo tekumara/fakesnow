@@ -541,12 +541,26 @@ def object_construct(expression: exp.Expression) -> exp.Expression:
     """
 
     if isinstance(expression, exp.Struct):
-        # remove expressions containing NULL
-        for enull in expression.find_all(exp.Null):
-            if enull.parent:
-                enull.parent.pop()
+        non_null_expressions = []
+        for e in expression.expressions:
+            if not (isinstance(e, exp.EQ)):
+                non_null_expressions.append(e)
+                continue
 
-        return exp.Anonymous(this="TO_JSON", expressions=[expression])
+            left = e.left
+            right = e.right
+
+            left_is_null = isinstance(left, exp.Null)
+            right_is_null = isinstance(right, exp.Null)
+
+            if left_is_null or right_is_null:
+                continue
+
+            non_null_expressions.append(e)
+
+        new_struct = expression.copy()
+        new_struct.set("expressions", non_null_expressions)
+        return exp.Anonymous(this="TO_JSON", expressions=[new_struct])
 
     return expression
 
