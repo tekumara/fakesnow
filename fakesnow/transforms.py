@@ -803,16 +803,74 @@ def to_date(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def _get_to_number_args(e: exp.ToNumber) -> tuple[exp.Expression | None, exp.Expression | None, exp.Expression | None]:
+    arg_format = e.args.get("format")
+    arg_precision = e.args.get("precision")
+    arg_scale = e.args.get("scale")
+
+    _format = None
+    _precision = None
+    _scale = None
+
+    # to_number(value, <format>, <precision>, <scale>)
+    if arg_format:
+        if arg_format.is_string:
+            # to_number('100', 'TM9' ...)
+            _format = arg_format
+
+            # to_number('100', 'TM9', 10 ...)
+            if arg_precision:
+                _precision = arg_precision
+
+                # to_number('100', 'TM9', 10, 2)
+                if arg_scale:
+                    _scale = arg_scale
+            else:
+                pass
+        else:
+            # to_number('100', 10, ...)
+            # arg_format is not a string, so it must be precision.
+            _precision = arg_format
+
+            # to_number('100', 10, 2)
+            # And arg_precision must be scale
+            if arg_precision:
+                _scale = arg_precision
+    else:
+        # If format is not provided, just check for precision and scale directly
+        if arg_precision:
+            _precision = arg_precision
+            if arg_scale:
+                _scale = arg_scale
+
+    return _format, _precision, _scale
+
+
 def to_decimal(expression: exp.Expression) -> exp.Expression:
     """Transform to_decimal, to_number, to_numeric expressions from snowflake to duckdb.
 
     See https://docs.snowflake.com/en/sql-reference/functions/to_decimal
     """
 
+    if isinstance(expression, exp.ToNumber):
+        format_, precision, scale = _get_to_number_args(expression)
+        if format_:
+            raise NotImplementedError(f"{expression.this} with format argument")
+
+        if not precision:
+            precision = exp.Literal(this="38", is_string=False)
+        if not scale:
+            scale = exp.Literal(this="0", is_string=False)
+
+        return exp.Cast(
+            this=expression.this,
+            to=exp.DataType(this=exp.DataType.Type.DECIMAL, expressions=[precision, scale], nested=False, prefix=False),
+        )
+
     if (
         isinstance(expression, exp.Anonymous)
         and isinstance(expression.this, str)
-        and expression.this.upper() in ["TO_DECIMAL", "TO_NUMBER", "TO_NUMERIC"]
+        and expression.this.upper() in ["TO_DECIMAL", "TO_NUMERIC"]
     ):
         expressions: list[exp.Expression] = expression.expressions
 
