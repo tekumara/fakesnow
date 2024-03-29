@@ -501,6 +501,7 @@ def test_to_number_decimal() -> None:
             dialect="duckdb"
         )
 
+
 def test_to_number_numeric() -> None:
     assert (
         sqlglot.parse_one("SELECT to_numeric('100')", read="snowflake").transform(to_decimal).sql(dialect="duckdb")
