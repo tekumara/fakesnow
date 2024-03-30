@@ -543,7 +543,7 @@ def object_construct(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, exp.Struct):
         non_null_expressions = []
         for e in expression.expressions:
-            if not (isinstance(e, exp.EQ)):
+            if not (isinstance(e, exp.PropertyEQ)):
                 non_null_expressions.append(e)
                 continue
 
