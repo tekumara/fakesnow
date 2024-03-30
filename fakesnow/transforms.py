@@ -878,6 +878,7 @@ def _get_to_number_args(e: exp.ToNumber) -> tuple[exp.Expression | None, exp.Exp
 
     return _format, _precision, _scale
 
+
 def _to_decimal(expression: exp.Expression, cast_node: type[exp.Cast]) -> exp.Expression:
     expressions: list[exp.Expression] = expression.expressions
 
