@@ -7,6 +7,7 @@ from sqlglot import exp
 from fakesnow.transforms import (
     SUCCESS_NOP,
     _get_to_number_args,
+    array_agg_within_group,
     array_size,
     create_database,
     describe_table,
@@ -48,6 +49,31 @@ def test_array_size() -> None:
     assert (
         sqlglot.parse_one("""select array_size(parse_json('["a","b"]'))""").transform(array_size).sql(dialect="duckdb")
         == """SELECT CASE WHEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) THEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) END"""
+    )
+
+
+def test_array_agg_within_group() -> None:
+    assert (
+        sqlglot.parse_one(
+            "SELECT someid, ARRAY_AGG(DISTINCT id) WITHIN GROUP (ORDER BY id) AS ids FROM example GROUP BY someid"
+        )
+        .transform(array_agg_within_group)
+        .sql(dialect="duckdb")
+        == "SELECT someid, ARRAY_AGG(DISTINCT id ORDER BY id NULLS FIRST) AS ids FROM example GROUP BY someid"
+    )
+
+    assert (
+        sqlglot.parse_one(
+            "SELECT someid, ARRAY_AGG(id) WITHIN GROUP (ORDER BY id DESC) AS ids FROM example WHERE someid IS NOT NULL GROUP BY someid"  # noqa: E501
+        )
+        .transform(array_agg_within_group)
+        .sql(dialect="duckdb")
+        == "SELECT someid, ARRAY_AGG(id ORDER BY id DESC) AS ids FROM example WHERE NOT someid IS NULL GROUP BY someid"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT ARRAY_AGG(id) FROM example").transform(array_agg_within_group).sql(dialect="duckdb")
+        == "SELECT ARRAY_AGG(id) FROM example"
     )
 
 

@@ -7,6 +7,7 @@ import json
 import tempfile
 from collections.abc import Sequence
 from decimal import Decimal
+from typing import cast
 
 import pandas as pd
 import pytest
@@ -33,6 +34,46 @@ def test_array_size(cur: snowflake.connector.cursor.SnowflakeCursor):
     # when json is not an array
     cur.execute("""select array_size(parse_json('{"a":"b"}'))""")
     assert cur.fetchall() == [(None,)]
+
+
+def test_array_agg_to_json(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create table table1 (id number, name varchar)")
+    values = [(1, "foo"), (2, "bar"), (1, "baz"), (2, "qux")]
+
+    dcur.executemany("insert into table1 values (%s, %s)", values)
+
+    dcur.execute("select array_agg(name) as names from table1")
+    assert dindent(dcur.fetchall()) == [{"NAMES": '[\n  "foo",\n  "bar",\n  "baz",\n  "qux"\n]'}]
+
+
+def test_array_agg_within_group(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("CREATE TABLE table1 (ID INT, amount INT)")
+
+    # two unique ids, for id 1 there are 3 amounts, for id 2 there are 2 amounts
+    values = [
+        (2, 40),
+        (1, 10),
+        (1, 30),
+        (2, 50),
+        (1, 20),
+    ]
+    dcur.executemany("INSERT INTO TABLE1 VALUES (%s, %s)", values)
+
+    dcur.execute("SELECT id, ARRAY_AGG(amount) WITHIN GROUP (ORDER BY amount DESC) amounts FROM table1 GROUP BY id")
+    rows = dcur.fetchall()
+
+    assert dindent(rows) == [
+        {"ID": 1, "AMOUNTS": "[\n  30,\n  20,\n  10\n]"},
+        {"ID": 2, "AMOUNTS": "[\n  50,\n  40\n]"},
+    ]
+
+    dcur.execute("SELECT id, ARRAY_AGG(amount) WITHIN GROUP (ORDER BY amount ASC) amounts FROM table1 GROUP BY id")
+    rows = dcur.fetchall()
+
+    assert dindent(rows) == [
+        {"ID": 1, "AMOUNTS": "[\n  10,\n  20,\n  30\n]"},
+        {"ID": 2, "AMOUNTS": "[\n  40,\n  50\n]"},
+    ]
 
 
 def test_binding_default_paramstyle(conn: snowflake.connector.SnowflakeConnection):
@@ -1373,9 +1414,22 @@ def test_write_pandas_dict_different_keys(conn: snowflake.connector.SnowflakeCon
 
 
 def indent(rows: Sequence[tuple] | Sequence[dict]) -> list[tuple]:
-    # indent duckdb json strings to match snowflake json strings
+    # indent duckdb json strings tuple values to match snowflake json strings
+    assert isinstance(rows[0], tuple)
     return [
         (*[json.dumps(json.loads(c), indent=2) if (isinstance(c, str) and c.startswith(("[", "{"))) else c for c in r],)
+        for r in rows
+    ]
+
+
+def dindent(rows: Sequence[tuple] | Sequence[dict]) -> list[dict]:
+    # indent duckdb json strings dict values to match snowflake json strings
+    assert isinstance(rows[0], dict)
+    return [
+        {
+            k: json.dumps(json.loads(v), indent=2) if (isinstance(v, str) and v.startswith(("[", "{"))) else v
+            for k, v in cast(dict, r).items()
+        }
         for r in rows
     ]
 
