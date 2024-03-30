@@ -1308,6 +1308,26 @@ def test_values(conn: snowflake.connector.SnowflakeConnection):
         ]
 
 
+def test_write_pandas_quoted_column_names(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as dcur:
+        # colunmn names with spaces
+        dcur.execute('create table customers (id int, "first name" varchar)')
+        df = pd.DataFrame.from_records(
+            [
+                {"ID": 1, "first name": "Jenny"},
+                {"ID": 2, "first name": "Jasper"},
+            ]
+        )
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS")
+
+        dcur.execute("select * from customers")
+
+        assert dcur.fetchall() == [
+            {"ID": 1, "first name": "Jenny"},
+            {"ID": 2, "first name": "Jasper"},
+        ]
+
+
 def test_write_pandas_array(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar, ORDERS array)")
