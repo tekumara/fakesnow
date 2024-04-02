@@ -1207,14 +1207,12 @@ def test_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
-def test_try_parse_json(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("""SELECT TRY_PARSE_JSON('{"first":"foo", "last":"bar"}') AS j""")
-        assert cur.fetchall() == [{"J": '{"first":"foo", "last":"bar"}'}]
+def test_try_parse_json(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("""SELECT TRY_PARSE_JSON('{"first":"foo", "last":"bar"}') AS j""")
+    assert dindent(dcur.fetchall()) == [{"J": '{\n  "first": "foo",\n  "last": "bar"\n}'}]
 
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("""SELECT TRY_PARSE_JSON('{invalid: ,]') AS j""")
-        assert cur.fetchall() == [{"J": None}]
+    dcur.execute("""SELECT TRY_PARSE_JSON('{invalid: ,]') AS j""")
+    assert dcur.fetchall() == [{"J": None}]
 
 
 def test_transactions(conn: snowflake.connector.SnowflakeConnection):
