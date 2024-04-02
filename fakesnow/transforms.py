@@ -169,6 +169,37 @@ def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:
     return new
 
 
+def datediff_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Expression:
+    """Snowflake's DATEDIFF function implicitly casts string literals to
+    timestamps regardless of unit.
+    """
+
+    if not isinstance(expression, exp.DateDiff):
+        return expression
+
+    datediff = expression
+    op1 = datediff.this.copy()
+    op2 = datediff.expression.copy()
+
+    if isinstance(op1, exp.Literal) and op1.is_string:
+        op1 = exp.Cast(
+            this=op1,
+            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
+        )
+
+    if isinstance(op2, exp.Literal) and op2.is_string:
+        op2 = exp.Cast(
+            this=op2,
+            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
+        )
+
+    new_datediff = datediff.copy()
+    new_datediff.set("this", op1)
+    new_datediff.set("expression", op2)
+
+    return new_datediff
+
+
 def extract_comment_on_columns(expression: exp.Expression) -> exp.Expression:
     """Extract column comments, removing it from the Expression.
 

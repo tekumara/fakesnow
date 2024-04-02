@@ -290,6 +290,21 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
         assert conn.schema == "JAFFLES"
 
 
+def test_datediff_string_literal_timestamp_cast(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("SELECT DATEDIFF(DAY, '2023-04-02', '2023-03-02') AS D")
+    assert cur.fetchall() == [(-31,)]
+
+    cur.execute("SELECT DATEDIFF(HOUR, '2023-04-02', '2023-03-02') AS D")
+    assert cur.fetchall() == [(-744,)]
+
+    cur.execute("SELECT DATEDIFF(week, '2023-04-02', '2023-03-02') AS D")
+    assert cur.fetchall() == [(-4,)]
+
+    # noop
+    cur.execute("select '2023-04-02'::timestamp as c1, '2023-03-02'::timestamp as c2, DATEDIFF(minute, c1, c2) AS D")
+    assert cur.fetchall() == [(datetime.datetime(2023, 4, 2, 0, 0), datetime.datetime(2023, 3, 2, 0, 0), -44640)]
+
+
 def test_current_database_schema(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("select current_database(), current_schema()")

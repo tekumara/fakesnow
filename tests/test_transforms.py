@@ -10,6 +10,7 @@ from fakesnow.transforms import (
     array_agg_within_group,
     array_size,
     create_database,
+    datediff_string_literal_timestamp_cast,
     describe_table,
     drop_schema_cascade,
     extract_comment_on_columns,
@@ -101,6 +102,36 @@ def test_describe_table() -> None:
 def test_drop_schema_cascade() -> None:
     assert (
         sqlglot.parse_one("drop schema schema1").transform(drop_schema_cascade).sql() == "DROP schema schema1 CASCADE"
+    )
+
+
+def test_datediff_string_literal_timestamp_cast() -> None:
+    assert (
+        sqlglot.parse_one("SELECT DATEDIFF(DAY, somecolumn, '2023-04-02') AS D", read="snowflake")
+        .transform(datediff_string_literal_timestamp_cast)
+        .sql(dialect="duckdb")
+        == "SELECT DATE_DIFF('DAY', somecolumn, CAST('2023-04-02' AS TIMESTAMP)) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEDIFF(HOUR, '2023-04-02', somecolumn) AS D", read="snowflake")
+        .transform(datediff_string_literal_timestamp_cast)
+        .sql(dialect="duckdb")
+        == "SELECT DATE_DIFF('HOUR', CAST('2023-04-02' AS TIMESTAMP), somecolumn) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEDIFF(week, '2023-04-02', '2023-03-02') AS D", read="snowflake")
+        .transform(datediff_string_literal_timestamp_cast)
+        .sql(dialect="duckdb")
+        == "SELECT DATE_DIFF('WEEK', CAST('2023-04-02' AS TIMESTAMP), CAST('2023-03-02' AS TIMESTAMP)) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEDIFF(minute, c1, c2) AS D", read="duckdb")
+        .transform(datediff_string_literal_timestamp_cast)
+        .sql(dialect="duckdb")
+        == "SELECT DATE_DIFF('MINUTE', c1, c2) AS D"
     )
 
 
