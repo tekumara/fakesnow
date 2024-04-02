@@ -1207,6 +1207,14 @@ def test_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
+def test_try_parse_json(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("""SELECT TRY_PARSE_JSON('{"first":"foo", "last":"bar"}') AS j""")
+    assert dindent(dcur.fetchall()) == [{"J": '{\n  "first": "foo",\n  "last": "bar"\n}'}]
+
+    dcur.execute("""SELECT TRY_PARSE_JSON('{invalid: ,]') AS j""")
+    assert dcur.fetchall() == [{"J": None}]
+
+
 def test_transactions(conn: snowflake.connector.SnowflakeConnection):
     # test behaviours required for sqlalchemy
 
