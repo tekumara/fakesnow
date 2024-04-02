@@ -566,6 +566,9 @@ def json_extract_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
     """
     if (
         isinstance(expression, exp.Cast)
+        and (to := expression.to)
+        and isinstance(to, exp.DataType)
+        and to.this in {exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT}
         and (je := expression.this)
         and isinstance(je, exp.JSONExtract)
         and (path := je.expression)
