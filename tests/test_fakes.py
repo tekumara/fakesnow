@@ -1393,6 +1393,24 @@ def test_transactions(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchall() == [("Statement executed successfully.",)]
 
 
+def test_trim_cast_varchar(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create or replace table trim_cast_varchar(id number, name varchar);")
+        cur.execute("insert into trim_cast_varchar(id, name) values (1, '  name 1  '), (2, 'name2   ');")
+        cur.execute("select trim(id), trim(name) from trim_cast_varchar;")
+
+        assert cur.fetchall() == [("1", "name 1"), ("2", "name2")]
+
+    with conn.cursor() as cur:
+        cur.execute("create or replace table trim_cast_varchar_variant_field(data variant);")
+        cur.execute(
+            """insert into trim_cast_varchar_variant_field(data) values ('{"k1": "   v11  "}'),('{"k1": 21}');"""
+        )
+        cur.execute("select trim(data:k1) from trim_cast_varchar_variant_field;")
+
+        assert cur.fetchall() == [("v11",), ("21",)]
+
+
 def test_unquoted_identifiers_are_upper_cased(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("create table customers (id int, first_name varchar, last_name varchar)")
     dcur.execute("insert into customers values (1, 'Jenny', 'P')")
