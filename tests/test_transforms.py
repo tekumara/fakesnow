@@ -617,22 +617,20 @@ def test_sha256() -> None:
 
     # values with hash length other than 256 are not transformed
     assert (
-        sqlglot.parse_one("insert into table1 (name) select sha2('foo', 224)").transform(values_columns).sql()
+        sqlglot.parse_one("insert into table1 (name) select sha2('foo', 224)").transform(sha256).sql()
         == "INSERT INTO table1 (name) SELECT SHA2('foo', 224)"
     )
     assert (
-        sqlglot.parse_one("insert into table1 (name) select sha2_hex('foo', 224)").transform(values_columns).sql()
+        sqlglot.parse_one("insert into table1 (name) select sha2_hex('foo', 224)").transform(sha256).sql()
         == "INSERT INTO table1 (name) SELECT SHA2_HEX('foo', 224)"
     )
 
     # values with unrecognised args signature are not transformed
     assert (
-        sqlglot.parse_one("insert into table1 (name) select sha2_hex()").transform(values_columns).sql()
+        sqlglot.parse_one("insert into table1 (name) select sha2_hex()").transform(sha256).sql()
         == "INSERT INTO table1 (name) SELECT SHA2_HEX()"
     )
     assert (
-        sqlglot.parse_one("insert into table1 (name) select sha2_hex('foo', 256, 'wtf')")
-        .transform(values_columns)
-        .sql()
+        sqlglot.parse_one("insert into table1 (name) select sha2_hex('foo', 256, 'wtf')").transform(sha256).sql()
         == "INSERT INTO table1 (name) SELECT SHA2_HEX('foo', 256, 'wtf')"
     )
