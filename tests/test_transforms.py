@@ -634,3 +634,34 @@ def test_sha256() -> None:
         sqlglot.parse_one("insert into table1 (name) select sha2_hex('foo', 256, 'wtf')").transform(sha256).sql()
         == "INSERT INTO table1 (name) SELECT SHA2_HEX('foo', 256, 'wtf')"
     )
+
+
+def test_sha256_binary() -> None:
+    # snowflake default sha2 length is 256
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_binary('foo')").transform(sha256).sql(dialect="duckdb")
+        == "INSERT INTO table1 (name) SELECT UNHEX(SHA256('foo'))"
+    )
+
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_binary('foo', 256)")
+        .transform(sha256)
+        .sql(dialect="duckdb")
+        == "INSERT INTO table1 (name) SELECT UNHEX(SHA256('foo'))"
+    )
+
+    # values with hash length other than 256 are not transformed
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_binary('foo', 224)").transform(sha256).sql()
+        == "INSERT INTO table1 (name) SELECT SHA2_BINARY('foo', 224)"
+    )
+
+    # values with unrecognised args signature are not transformed
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_binary()").transform(sha256).sql()
+        == "INSERT INTO table1 (name) SELECT SHA2_BINARY()"
+    )
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_binary('foo', 256, 'wtf')").transform(sha256).sql()
+        == "INSERT INTO table1 (name) SELECT SHA2_BINARY('foo', 256, 'wtf')"
+    )

@@ -1190,6 +1190,8 @@ class SHA256(exp.Func):
 def sha256(expression: exp.Expression) -> exp.Expression:
     """Convert sha2() or sha2_hex() to sha256().
 
+    Convert sha2_binary() to unhex(sha256()).
+
     Example:
         >>> import sqlglot
         >>> sqlglot.parse_one("insert into table1 (name) select sha2('foo')").transform(sha256).sql()
@@ -1212,5 +1214,14 @@ def sha256(expression: exp.Expression) -> exp.Expression:
         )
     ):
         return SHA256(this=expression.expressions[0])
+    elif (
+        isinstance(expression, exp.Anonymous)
+        and expression.this.upper() == "SHA2_BINARY"
+        and (
+            len(expression.expressions) == 1
+            or (len(expression.expressions) == 2 and expression.expressions[1].this == "256")
+        )
+    ):
+        return exp.Unhex(this=SHA256(this=expression.expressions[0]))
 
     return expression
