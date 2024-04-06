@@ -1207,6 +1207,17 @@ def test_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
+def test_sha2(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/functions/sha2#examples
+    cur.execute(
+        "select sha2('Snowflake') as a, sha2_hex('Snowflake') as b, sha2('Snowflake', 256) as c, sha2_hex('Snowflake', 256) as d;"
+    )
+
+    assert cur.fetchall() == [
+        ("1dbd59f661d68b90724f21084396b865497173e4d2714f4d91cf05fa5fc5e18d",) * 4,
+    ]
+
+
 def test_try_parse_json(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("""SELECT TRY_PARSE_JSON('{"first":"foo", "last":"bar"}') AS j""")
     assert dindent(dcur.fetchall()) == [{"J": '{\n  "first": "foo",\n  "last": "bar"\n}'}]
