@@ -290,6 +290,28 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
         assert conn.schema == "JAFFLES"
 
 
+def test_dateadd_date_cast(dcur: snowflake.connector.DictCursor):
+    q = """
+    SELECT
+        dateadd(hour, 1, '2023-04-02'::date) as d_noop,
+        dateadd(day, 1, '2023-04-02'::date) as d_day,
+        dateadd(week, 1, '2023-04-02'::date) as d_week,
+        dateadd(month, 1, '2023-04-02'::date) as d_month,
+        dateadd(year, 1, '2023-04-02'::date) as d_year
+    """
+
+    dcur.execute(q)
+    assert dcur.fetchall() == [
+        {
+            "D_NOOP": datetime.datetime(2023, 4, 2, 1, 0),
+            "D_DAY": datetime.date(2023, 4, 3),
+            "D_WEEK": datetime.date(2023, 4, 9),
+            "D_MONTH": datetime.date(2023, 5, 2),
+            "D_YEAR": datetime.date(2024, 4, 2),
+        }
+    ]
+
+
 def test_dateadd_string_literal_timestamp_cast(dcur: snowflake.connector.cursor.DictCursor):
     q = """
     SELECT

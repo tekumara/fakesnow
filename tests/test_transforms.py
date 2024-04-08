@@ -10,6 +10,7 @@ from fakesnow.transforms import (
     array_agg_within_group,
     array_size,
     create_database,
+    dateadd_date_cast,
     dateadd_string_literal_timestamp_cast,
     datediff_string_literal_timestamp_cast,
     describe_table,
@@ -105,6 +106,136 @@ def test_describe_table() -> None:
 def test_drop_schema_cascade() -> None:
     assert (
         sqlglot.parse_one("drop schema schema1").transform(drop_schema_cascade).sql() == "DROP schema schema1 CASCADE"
+    )
+
+
+def test_dateadd_date_cast() -> None:
+    # DAY
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(DAY, 3, '2023-03-03'::DATE) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST('2023-03-03' AS DATE) + INTERVAL 3 DAY AS DATE) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one(
+            "SELECT DATEADD(day, col-1, CAST('2023-04-02' AS DATE))",
+            read="snowflake",
+        )
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST('2023-04-02' AS DATE) + INTERVAL (col - 1) DAY AS DATE)"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(DAY, 3, col::DATE) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST(col AS DATE) + INTERVAL 3 DAY AS DATE) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(DAY, 3, col) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT col + INTERVAL 3 DAY AS D"
+    )
+
+    # WEEk
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(WEEK, 3, '2023-03-03'::DATE) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST('2023-03-03' AS DATE) + (7 * INTERVAL 3 DAY) AS DATE) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one(
+            "SELECT DATEADD(week, col-1, CAST('2023-04-02' AS DATE))",
+            read="snowflake",
+        )
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST('2023-04-02' AS DATE) + (7 * INTERVAL (col - 1) DAY) AS DATE)"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(week, 3, col::DATE) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST(col AS DATE) + (7 * INTERVAL 3 DAY) AS DATE) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(week, 3, col) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT col + (7 * INTERVAL 3 DAY) AS D"
+    )
+
+    # MONTH
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(MONTH, 3, '2023-03-03'::DATE) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST('2023-03-03' AS DATE) + INTERVAL 3 MONTH AS DATE) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one(
+            "SELECT DATEADD(month, col-1, CAST('2023-04-02' AS DATE))",
+            read="snowflake",
+        )
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST('2023-04-02' AS DATE) + INTERVAL (col - 1) MONTH AS DATE)"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(month, 3, col::DATE) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST(col AS DATE) + INTERVAL 3 MONTH AS DATE) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(month, 3, col) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT col + INTERVAL 3 MONTH AS D"
+    )
+
+    # YEAR
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(YEAR, 3, '2023-03-03'::DATE) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST('2023-03-03' AS DATE) + INTERVAL 3 YEAR AS DATE) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one(
+            "SELECT DATEADD(year, col-1, CAST('2023-04-02' AS DATE))",
+            read="snowflake",
+        )
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST('2023-04-02' AS DATE) + INTERVAL (col - 1) YEAR AS DATE)"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(YEAR, 3, col::DATE) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(CAST(col AS DATE) + INTERVAL 3 YEAR AS DATE) AS D"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(YEAR, 3, col) as D", read="snowflake")
+        .transform(dateadd_date_cast)
+        .sql(dialect="duckdb")
+        == "SELECT col + INTERVAL 3 YEAR AS D"
     )
 
 
