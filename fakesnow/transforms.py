@@ -184,7 +184,7 @@ def dateadd_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Exp
         "this",
         exp.Cast(
             this=expression.this,
-            # TODO(selman): TIMESTAMP_TZ OR NTZ?
+            # TODO: support TIMESTAMP_TYPE_MAPPING of TIMESTAMP_LTZ/TZ
             to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
         ),
     )
