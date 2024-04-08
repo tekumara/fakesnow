@@ -192,6 +192,38 @@ def dateadd_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Exp
     return new_dateadd
 
 
+def datediff_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Expression:
+    """Snowflake's DATEDIFF function implicitly casts string literals to
+    timestamps regardless of unit.
+    """
+
+    if not isinstance(expression, exp.DateDiff):
+        return expression
+
+    op1 = expression.this.copy()
+    op2 = expression.expression.copy()
+
+    if isinstance(op1, exp.Literal) and op1.is_string:
+        op1 = exp.Cast(
+            this=op1,
+            # TODO: support TIMESTAMP_TYPE_MAPPING of TIMESTAMP_LTZ/TZ
+            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
+        )
+
+    if isinstance(op2, exp.Literal) and op2.is_string:
+        op2 = exp.Cast(
+            this=op2,
+            # TODO: support TIMESTAMP_TYPE_MAPPING of TIMESTAMP_LTZ/TZ
+            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
+        )
+
+    new_datediff = expression.copy()
+    new_datediff.set("this", op1)
+    new_datediff.set("expression", op2)
+
+    return new_datediff
+
+
 def extract_comment_on_columns(expression: exp.Expression) -> exp.Expression:
     """Extract column comments, removing it from the Expression.
 
