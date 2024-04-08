@@ -176,18 +176,14 @@ def dateadd_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Exp
     if not isinstance(expression, exp.DateAdd):
         return expression
 
-    dateadd = expression
-
-    if not isinstance(dateadd.this, exp.Literal) or not dateadd.this.is_string:
+    if not isinstance(expression.this, exp.Literal) or not expression.this.is_string:
         return expression
 
-    string_literal = dateadd.this
-
-    new_dateadd = dateadd.copy()
+    new_dateadd = expression.copy()
     new_dateadd.set(
         "this",
         exp.Cast(
-            this=string_literal,
+            this=expression.this,
             # TODO(selman): TIMESTAMP_TZ OR NTZ?
             to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
         ),

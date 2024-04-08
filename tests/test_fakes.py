@@ -290,54 +290,52 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
         assert conn.schema == "JAFFLES"
 
 
-def test_dateadd_string_literal_timestamp_cast(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        q = """
-        SELECT
-          DATEADD('MINUTE', 3, '2023-04-02') AS D_MINUTE,
-          DATEADD('HOUR', 3, '2023-04-02') AS D_HOUR,
-          DATEADD('DAY', 3, '2023-04-02') AS D_DAY,
-          DATEADD('WEEK', 3, '2023-04-02') AS D_WEEK,
-          DATEADD('MONTH', 3, '2023-04-02') AS D_MONTH,
-          DATEADD('YEAR', 3, '2023-04-02') AS D_YEAR
-        ;
-        """
-        cur.execute(q)
+def test_dateadd_string_literal_timestamp_cast(dcur: snowflake.connector.cursor.DictCursor):
+    q = """
+    SELECT
+        DATEADD('MINUTE', 3, '2023-04-02') AS D_MINUTE,
+        DATEADD('HOUR', 3, '2023-04-02') AS D_HOUR,
+        DATEADD('DAY', 3, '2023-04-02') AS D_DAY,
+        DATEADD('WEEK', 3, '2023-04-02') AS D_WEEK,
+        DATEADD('MONTH', 3, '2023-04-02') AS D_MONTH,
+        DATEADD('YEAR', 3, '2023-04-02') AS D_YEAR
+    ;
+    """
+    dcur.execute(q)
 
-        assert cur.fetchall() == [
-            {
-                "D_MINUTE": datetime.datetime(2023, 4, 2, 0, 3),
-                "D_HOUR": datetime.datetime(2023, 4, 2, 3, 0),
-                "D_DAY": datetime.datetime(2023, 4, 5, 0, 0),
-                "D_WEEK": datetime.datetime(2023, 4, 23, 0, 0),
-                "D_MONTH": datetime.datetime(2023, 7, 2, 0, 0),
-                "D_YEAR": datetime.datetime(2026, 4, 2, 0, 0),
-            }
-        ]
+    assert dcur.fetchall() == [
+        {
+            "D_MINUTE": datetime.datetime(2023, 4, 2, 0, 3),
+            "D_HOUR": datetime.datetime(2023, 4, 2, 3, 0),
+            "D_DAY": datetime.datetime(2023, 4, 5, 0, 0),
+            "D_WEEK": datetime.datetime(2023, 4, 23, 0, 0),
+            "D_MONTH": datetime.datetime(2023, 7, 2, 0, 0),
+            "D_YEAR": datetime.datetime(2026, 4, 2, 0, 0),
+        }
+    ]
 
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        q = """
-        SELECT
-          DATEADD('MINUTE', 3, '2023-04-02 01:15:00') AS DT_MINUTE,
-          DATEADD('HOUR', 3, '2023-04-02 01:15:00') AS DT_HOUR,
-          DATEADD('DAY', 3, '2023-04-02 01:15:00') AS DT_DAY,
-          DATEADD('WEEK', 3, '2023-04-02 01:15:00') AS DT_WEEK,
-          DATEADD('MONTH', 3, '2023-04-02 01:15:00') AS DT_MONTH,
-          DATEADD('YEAR', 3, '2023-04-02 01:15:00') AS DT_YEAR
-        ;
-        """
-        cur.execute(q)
+    q = """
+    SELECT
+        DATEADD('MINUTE', 3, '2023-04-02 01:15:00') AS DT_MINUTE,
+        DATEADD('HOUR', 3, '2023-04-02 01:15:00') AS DT_HOUR,
+        DATEADD('DAY', 3, '2023-04-02 01:15:00') AS DT_DAY,
+        DATEADD('WEEK', 3, '2023-04-02 01:15:00') AS DT_WEEK,
+        DATEADD('MONTH', 3, '2023-04-02 01:15:00') AS DT_MONTH,
+        DATEADD('YEAR', 3, '2023-04-02 01:15:00') AS DT_YEAR
+    ;
+    """
+    dcur.execute(q)
 
-        assert cur.fetchall() == [
-            {
-                "DT_MINUTE": datetime.datetime(2023, 4, 2, 1, 18),
-                "DT_HOUR": datetime.datetime(2023, 4, 2, 4, 15),
-                "DT_DAY": datetime.datetime(2023, 4, 5, 1, 15),
-                "DT_WEEK": datetime.datetime(2023, 4, 23, 1, 15),
-                "DT_MONTH": datetime.datetime(2023, 7, 2, 1, 15),
-                "DT_YEAR": datetime.datetime(2026, 4, 2, 1, 15),
-            }
-        ]
+    assert dcur.fetchall() == [
+        {
+            "DT_MINUTE": datetime.datetime(2023, 4, 2, 1, 18),
+            "DT_HOUR": datetime.datetime(2023, 4, 2, 4, 15),
+            "DT_DAY": datetime.datetime(2023, 4, 5, 1, 15),
+            "DT_WEEK": datetime.datetime(2023, 4, 23, 1, 15),
+            "DT_MONTH": datetime.datetime(2023, 7, 2, 1, 15),
+            "DT_YEAR": datetime.datetime(2026, 4, 2, 1, 15),
+        }
+    ]
 
 
 def test_current_database_schema(conn: snowflake.connector.SnowflakeConnection):
