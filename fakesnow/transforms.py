@@ -185,23 +185,19 @@ def dateadd_date_cast(expression: exp.Expression) -> exp.Expression:
     if not isinstance(expression, exp.DateAdd):
         return expression
 
-    dateadd = expression
-
-    if dateadd.unit is None:
+    if expression.unit is None:
         return expression
 
-    if not isinstance(dateadd.unit.this, str):
+    if not isinstance(expression.unit.this, str):
         return expression
 
-    if (unit := dateadd.unit.this.upper()) and unit.upper() not in {"DAY", "WEEK", "MONTH", "YEAR"}:
+    if (unit := expression.unit.this.upper()) and unit.upper() not in {"DAY", "WEEK", "MONTH", "YEAR"}:
         return expression
 
-    if not isinstance(dateadd.this, exp.Cast):
+    if not isinstance(expression.this, exp.Cast):
         return expression
 
-    cast = dateadd.this
-
-    if cast.to.this != exp.DataType.Type.DATE:
+    if expression.this.to.this != exp.DataType.Type.DATE:
         return expression
 
     return exp.Cast(
