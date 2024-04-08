@@ -290,6 +290,54 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
         assert conn.schema == "JAFFLES"
 
 
+def test_dateadd_string_literal_timestamp_cast(dcur: snowflake.connector.cursor.DictCursor):
+    q = """
+    SELECT
+        DATEADD('MINUTE', 3, '2023-04-02') AS D_MINUTE,
+        DATEADD('HOUR', 3, '2023-04-02') AS D_HOUR,
+        DATEADD('DAY', 3, '2023-04-02') AS D_DAY,
+        DATEADD('WEEK', 3, '2023-04-02') AS D_WEEK,
+        DATEADD('MONTH', 3, '2023-04-02') AS D_MONTH,
+        DATEADD('YEAR', 3, '2023-04-02') AS D_YEAR
+    ;
+    """
+    dcur.execute(q)
+
+    assert dcur.fetchall() == [
+        {
+            "D_MINUTE": datetime.datetime(2023, 4, 2, 0, 3),
+            "D_HOUR": datetime.datetime(2023, 4, 2, 3, 0),
+            "D_DAY": datetime.datetime(2023, 4, 5, 0, 0),
+            "D_WEEK": datetime.datetime(2023, 4, 23, 0, 0),
+            "D_MONTH": datetime.datetime(2023, 7, 2, 0, 0),
+            "D_YEAR": datetime.datetime(2026, 4, 2, 0, 0),
+        }
+    ]
+
+    q = """
+    SELECT
+        DATEADD('MINUTE', 3, '2023-04-02 01:15:00') AS DT_MINUTE,
+        DATEADD('HOUR', 3, '2023-04-02 01:15:00') AS DT_HOUR,
+        DATEADD('DAY', 3, '2023-04-02 01:15:00') AS DT_DAY,
+        DATEADD('WEEK', 3, '2023-04-02 01:15:00') AS DT_WEEK,
+        DATEADD('MONTH', 3, '2023-04-02 01:15:00') AS DT_MONTH,
+        DATEADD('YEAR', 3, '2023-04-02 01:15:00') AS DT_YEAR
+    ;
+    """
+    dcur.execute(q)
+
+    assert dcur.fetchall() == [
+        {
+            "DT_MINUTE": datetime.datetime(2023, 4, 2, 1, 18),
+            "DT_HOUR": datetime.datetime(2023, 4, 2, 4, 15),
+            "DT_DAY": datetime.datetime(2023, 4, 5, 1, 15),
+            "DT_WEEK": datetime.datetime(2023, 4, 23, 1, 15),
+            "DT_MONTH": datetime.datetime(2023, 7, 2, 1, 15),
+            "DT_YEAR": datetime.datetime(2026, 4, 2, 1, 15),
+        }
+    ]
+
+
 def test_datediff_string_literal_timestamp_cast(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("SELECT DATEDIFF(DAY, '2023-04-02', '2023-03-02') AS D")
     assert cur.fetchall() == [(-31,)]
@@ -1222,12 +1270,37 @@ def test_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
+def test_sha2(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/functions/sha2#examples
+    cur.execute(
+        "select sha2('Snowflake') as a, sha2_hex('Snowflake') as b, sha2('Snowflake', 256) as c, sha2_hex('Snowflake', 256) as d;"
+    )
+
+    assert cur.fetchall() == [
+        ("1dbd59f661d68b90724f21084396b865497173e4d2714f4d91cf05fa5fc5e18d",) * 4,
+    ]
+
+
 def test_try_parse_json(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("""SELECT TRY_PARSE_JSON('{"first":"foo", "last":"bar"}') AS j""")
     assert dindent(dcur.fetchall()) == [{"J": '{\n  "first": "foo",\n  "last": "bar"\n}'}]
 
     dcur.execute("""SELECT TRY_PARSE_JSON('{invalid: ,]') AS j""")
     assert dcur.fetchall() == [{"J": None}]
+
+
+def test_try_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute(
+        "SELECT column1 AS orig_string, TRY_TO_DECIMAL(column1) AS dec, TRY_TO_DECIMAL(column1, 10, 2) AS dec_with_scale, TRY_TO_DECIMAL(column1, 4, 2) AS dec_with_range_err FROM VALUES ('345.123');"
+    )
+    assert cur.fetchall() == [
+        (
+            "345.123",
+            Decimal("345"),
+            Decimal("345.12"),
+            None,
+        ),
+    ]
 
 
 def test_transactions(conn: snowflake.connector.SnowflakeConnection):

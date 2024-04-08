@@ -10,6 +10,7 @@ from fakesnow.transforms import (
     array_agg_within_group,
     array_size,
     create_database,
+    dateadd_string_literal_timestamp_cast,
     datediff_string_literal_timestamp_cast,
     describe_table,
     drop_schema_cascade,
@@ -33,6 +34,7 @@ from fakesnow.transforms import (
     sample,
     semi_structured_types,
     set_schema,
+    sha256,
     show_objects_tables,
     show_schemas,
     tag,
@@ -42,6 +44,7 @@ from fakesnow.transforms import (
     to_timestamp,
     to_timestamp_ntz,
     try_parse_json,
+    try_to_decimal,
     upper_case_unquoted_identifiers,
     values_columns,
 )
@@ -102,6 +105,22 @@ def test_describe_table() -> None:
 def test_drop_schema_cascade() -> None:
     assert (
         sqlglot.parse_one("drop schema schema1").transform(drop_schema_cascade).sql() == "DROP schema schema1 CASCADE"
+    )
+
+
+def test_dateadd_string_literal_timestamp_cast() -> None:
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(DAY, 3, '2023-03-03') as D", read="snowflake")
+        .transform(dateadd_string_literal_timestamp_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST('2023-03-03' AS TIMESTAMP) + INTERVAL 3 DAY AS D"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT DATEADD(MONTH, 3, '2023-03-03') as D", read="snowflake")
+        .transform(dateadd_string_literal_timestamp_cast)
+        .sql(dialect="duckdb")
+        == "SELECT CAST('2023-03-03' AS TIMESTAMP) + INTERVAL 3 MONTH AS D"
     )
 
 
@@ -416,8 +435,15 @@ def test_to_date() -> None:
 
 def test_to_decimal() -> None:
     assert (
-        sqlglot.parse_one("SELECT to_decimal('1.245',10,2)").transform(to_decimal).sql()
+        sqlglot.parse_one("SELECT to_decimal('1.245',10,2)", read="snowflake").transform(to_decimal).sql()
         == "SELECT CAST('1.245' AS DECIMAL(10, 2))"
+    )
+
+
+def test_try_to_decimal() -> None:
+    assert (
+        sqlglot.parse_one("SELECT try_to_decimal('1.245',10,2)", read="snowflake").transform(try_to_decimal).sql()
+        == "SELECT TRY_CAST('1.245' AS DECIMAL(10, 2))"
     )
 
 
@@ -620,4 +646,78 @@ def test_values_columns() -> None:
     assert (
         sqlglot.parse_one("INSERT INTO cities VALUES ('Amsterdam', 1)").transform(values_columns).sql()
         == "INSERT INTO cities VALUES ('Amsterdam', 1)"
+    )
+
+
+def test_sha256() -> None:
+    # snowflake default sha2 length is 256
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2('foo')").transform(sha256).sql(dialect="duckdb")
+        == "INSERT INTO table1 (name) SELECT SHA256('foo')"
+    )
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_hex('foo')").transform(sha256).sql(dialect="duckdb")
+        == "INSERT INTO table1 (name) SELECT SHA256('foo')"
+    )
+
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2('foo', 256)").transform(sha256).sql(dialect="duckdb")
+        == "INSERT INTO table1 (name) SELECT SHA256('foo')"
+    )
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_hex('foo', 256)")
+        .transform(sha256)
+        .sql(dialect="duckdb")
+        == "INSERT INTO table1 (name) SELECT SHA256('foo')"
+    )
+
+    # values with hash length other than 256 are not transformed
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2('foo', 224)").transform(sha256).sql()
+        == "INSERT INTO table1 (name) SELECT SHA2('foo', 224)"
+    )
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_hex('foo', 224)").transform(sha256).sql()
+        == "INSERT INTO table1 (name) SELECT SHA2_HEX('foo', 224)"
+    )
+
+    # values with unrecognised args signature are not transformed
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_hex()").transform(sha256).sql()
+        == "INSERT INTO table1 (name) SELECT SHA2_HEX()"
+    )
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_hex('foo', 256, 'wtf')").transform(sha256).sql()
+        == "INSERT INTO table1 (name) SELECT SHA2_HEX('foo', 256, 'wtf')"
+    )
+
+
+def test_sha256_binary() -> None:
+    # snowflake default sha2 length is 256
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_binary('foo')").transform(sha256).sql(dialect="duckdb")
+        == "INSERT INTO table1 (name) SELECT UNHEX(SHA256('foo'))"
+    )
+
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_binary('foo', 256)")
+        .transform(sha256)
+        .sql(dialect="duckdb")
+        == "INSERT INTO table1 (name) SELECT UNHEX(SHA256('foo'))"
+    )
+
+    # values with hash length other than 256 are not transformed
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_binary('foo', 224)").transform(sha256).sql()
+        == "INSERT INTO table1 (name) SELECT SHA2_BINARY('foo', 224)"
+    )
+
+    # values with unrecognised args signature are not transformed
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_binary()").transform(sha256).sql()
+        == "INSERT INTO table1 (name) SELECT SHA2_BINARY()"
+    )
+    assert (
+        sqlglot.parse_one("insert into table1 (name) select sha2_binary('foo', 256, 'wtf')").transform(sha256).sql()
+        == "INSERT INTO table1 (name) SELECT SHA2_BINARY('foo', 256, 'wtf')"
     )
