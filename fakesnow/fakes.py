@@ -185,6 +185,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.values_columns)
             .transform(transforms.to_date)
             .transform(transforms.to_decimal)
+            .transform(transforms.try_to_decimal)
             .transform(transforms.to_timestamp_ntz)
             .transform(transforms.to_timestamp)
             .transform(transforms.object_construct)
@@ -199,6 +200,8 @@ class FakeSnowflakeCursor:
             .transform(transforms.array_agg_within_group)
             .transform(transforms.array_agg_to_json)
             .transform(transforms.dateadd_date_cast)
+            .transform(transforms.dateadd_string_literal_timestamp_cast)
+            .transform(transforms.datediff_string_literal_timestamp_cast)
             .transform(lambda e: transforms.show_schemas(e, self._conn.database))
             .transform(lambda e: transforms.show_objects_tables(e, self._conn.database))
             # TODO collapse into a single show_keys function
@@ -207,6 +210,7 @@ class FakeSnowflakeCursor:
             .transform(lambda e: transforms.show_keys(e, self._conn.database, kind="FOREIGN"))
             .transform(transforms.show_users)
             .transform(transforms.create_user)
+            .transform(transforms.sha256)
         )
         sql = transformed.sql(dialect="duckdb")
         result_sql = None

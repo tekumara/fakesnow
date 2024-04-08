@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 from string import Template
-from typing import Literal, cast
+from typing import ClassVar, Literal, cast
 
 import sqlglot
 from sqlglot import exp
@@ -208,6 +208,61 @@ def dateadd_date_cast(expression: exp.Expression) -> exp.Expression:
         this=expression,
         to=exp.DataType(this=exp.DataType.Type.DATE, nested=False, prefix=False),
     )
+
+
+def dateadd_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Expression:
+    """Snowflake's DATEADD function implicitly casts string literals to
+    timestamps regardless of unit.
+    """
+    if not isinstance(expression, exp.DateAdd):
+        return expression
+
+    if not isinstance(expression.this, exp.Literal) or not expression.this.is_string:
+        return expression
+
+    new_dateadd = expression.copy()
+    new_dateadd.set(
+        "this",
+        exp.Cast(
+            this=expression.this,
+            # TODO: support TIMESTAMP_TYPE_MAPPING of TIMESTAMP_LTZ/TZ
+            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
+        ),
+    )
+
+    return new_dateadd
+
+
+def datediff_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Expression:
+    """Snowflake's DATEDIFF function implicitly casts string literals to
+    timestamps regardless of unit.
+    """
+
+    if not isinstance(expression, exp.DateDiff):
+        return expression
+
+    op1 = expression.this.copy()
+    op2 = expression.expression.copy()
+
+    if isinstance(op1, exp.Literal) and op1.is_string:
+        op1 = exp.Cast(
+            this=op1,
+            # TODO: support TIMESTAMP_TYPE_MAPPING of TIMESTAMP_LTZ/TZ
+            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
+        )
+
+    if isinstance(op2, exp.Literal) and op2.is_string:
+        op2 = exp.Cast(
+            this=op2,
+            # TODO: support TIMESTAMP_TYPE_MAPPING of TIMESTAMP_LTZ/TZ
+            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
+        )
+
+    new_datediff = expression.copy()
+    new_datediff.set("this", op1)
+    new_datediff.set("expression", op2)
+
+    return new_datediff
 
 
 def extract_comment_on_columns(expression: exp.Expression) -> exp.Expression:
@@ -920,6 +975,22 @@ def _get_to_number_args(e: exp.ToNumber) -> tuple[exp.Expression | None, exp.Exp
     return _format, _precision, _scale
 
 
+def _to_decimal(expression: exp.Expression, cast_node: type[exp.Cast]) -> exp.Expression:
+    expressions: list[exp.Expression] = expression.expressions
+
+    if len(expressions) > 1 and expressions[1].is_string:
+        # see https://docs.snowflake.com/en/sql-reference/functions/to_decimal#arguments
+        raise NotImplementedError(f"{expression.this} with format argument")
+
+    precision = expressions[1] if len(expressions) > 1 else exp.Literal(this="38", is_string=False)
+    scale = expressions[2] if len(expressions) > 2 else exp.Literal(this="0", is_string=False)
+
+    return cast_node(
+        this=expressions[0],
+        to=exp.DataType(this=exp.DataType.Type.DECIMAL, expressions=[precision, scale], nested=False, prefix=False),
+    )
+
+
 def to_decimal(expression: exp.Expression) -> exp.Expression:
     """Transform to_decimal, to_number, to_numeric expressions from snowflake to duckdb.
 
@@ -946,19 +1017,22 @@ def to_decimal(expression: exp.Expression) -> exp.Expression:
         and isinstance(expression.this, str)
         and expression.this.upper() in ["TO_DECIMAL", "TO_NUMERIC"]
     ):
-        expressions: list[exp.Expression] = expression.expressions
+        return _to_decimal(expression, exp.Cast)
 
-        if len(expressions) > 1 and expressions[1].is_string:
-            # see https://docs.snowflake.com/en/sql-reference/functions/to_decimal#arguments
-            raise NotImplementedError(f"{expression.this} with format argument")
+    return expression
 
-        precision = expressions[1] if len(expressions) > 1 else exp.Literal(this="38", is_string=False)
-        scale = expressions[2] if len(expressions) > 2 else exp.Literal(this="0", is_string=False)
 
-        return exp.Cast(
-            this=expressions[0],
-            to=exp.DataType(this=exp.DataType.Type.DECIMAL, expressions=[precision, scale], nested=False, prefix=False),
-        )
+def try_to_decimal(expression: exp.Expression) -> exp.Expression:
+    """Transform try_to_decimal, try_to_number, try_to_numeric expressions from snowflake to duckdb.
+    See https://docs.snowflake.com/en/sql-reference/functions/try_to_decimal
+    """
+
+    if (
+        isinstance(expression, exp.Anonymous)
+        and isinstance(expression.this, str)
+        and expression.this.upper() in ["TRY_TO_DECIMAL", "TRY_TO_NUMBER", "TRY_TO_NUMERIC"]
+    ):
+        return _to_decimal(expression, exp.TryCast)
 
     return expression
 
@@ -1220,4 +1294,49 @@ def show_keys(
             else:
                 raise NotImplementedError(f"SHOW PRIMARY KEYS with {scope_kind} not yet supported")
         return sqlglot.parse_one(statement)
+    return expression
+
+
+class SHA256(exp.Func):
+    _sql_names: ClassVar = ["SHA256"]
+    arg_types: ClassVar = {"this": True}
+
+
+def sha256(expression: exp.Expression) -> exp.Expression:
+    """Convert sha2() or sha2_hex() to sha256().
+
+    Convert sha2_binary() to unhex(sha256()).
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("insert into table1 (name) select sha2('foo')").transform(sha256).sql()
+        "INSERT INTO table1 (name) SELECT SHA256('foo')"
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+
+    if isinstance(expression, exp.SHA2) and expression.args.get("length", exp.Literal.number(256)).this == "256":
+        return SHA256(this=expression.this)
+    elif (
+        isinstance(expression, exp.Anonymous)
+        and expression.this.upper() == "SHA2_HEX"
+        and (
+            len(expression.expressions) == 1
+            or (len(expression.expressions) == 2 and expression.expressions[1].this == "256")
+        )
+    ):
+        return SHA256(this=expression.expressions[0])
+    elif (
+        isinstance(expression, exp.Anonymous)
+        and expression.this.upper() == "SHA2_BINARY"
+        and (
+            len(expression.expressions) == 1
+            or (len(expression.expressions) == 2 and expression.expressions[1].this == "256")
+        )
+    ):
+        return exp.Unhex(this=SHA256(this=expression.expressions[0]))
+
     return expression
