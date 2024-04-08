@@ -169,6 +169,29 @@ def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:
     return new
 
 
+def dateadd_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Expression:
+    """Snowflake's DATEADD function implicitly casts string literals to
+    timestamps regardless of unit.
+    """
+    if not isinstance(expression, exp.DateAdd):
+        return expression
+
+    if not isinstance(expression.this, exp.Literal) or not expression.this.is_string:
+        return expression
+
+    new_dateadd = expression.copy()
+    new_dateadd.set(
+        "this",
+        exp.Cast(
+            this=expression.this,
+            # TODO: support TIMESTAMP_TYPE_MAPPING of TIMESTAMP_LTZ/TZ
+            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
+        ),
+    )
+
+    return new_dateadd
+
+
 def extract_comment_on_columns(expression: exp.Expression) -> exp.Expression:
     """Extract column comments, removing it from the Expression.
 
