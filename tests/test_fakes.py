@@ -797,7 +797,7 @@ def test_get_path_precedence(cur: snowflake.connector.cursor.SnowflakeCursor):
 
     cur.execute("create table example (col variant)")
 
-    cur.execute("""insert into example values ('{"K1": "a", "K2": "b"}')""")
+    cur.execute("""insert into example select parse_json('{"K1": "a", "K2": "b"}')""")
     cur.execute("select case when col:K1::VARCHAR = 'a' and col:K2::VARCHAR = 'b' then 'yes' end from example")
     assert cur.fetchall() == [("yes",)]
 
