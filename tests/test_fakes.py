@@ -1452,7 +1452,7 @@ def test_values(conn: snowflake.connector.SnowflakeConnection):
 
 def test_json_extract_cast_as_varchar(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("CREATE TABLE example (j VARIANT)")
-    dcur.execute("""INSERT INTO example VALUES ('{"str": "100", "number" : 100}')""")
+    dcur.execute("""INSERT INTO example SELECT PARSE_JSON('{"str": "100", "number" : 100}')""")
 
     dcur.execute("SELECT j:str::varchar as c_str_varchar, j:number::varchar as c_num_varchar  FROM example")
     assert dcur.fetchall() == [{"C_STR_VARCHAR": "100", "C_NUM_VARCHAR": "100"}]
