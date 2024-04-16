@@ -1404,7 +1404,7 @@ def test_trim_cast_varchar(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create or replace table trim_cast_varchar_variant_field(data variant);")
         cur.execute(
-            """insert into trim_cast_varchar_variant_field(data) values ('{"k1": "   v11  "}'),('{"k1": 21}');"""
+            """insert into trim_cast_varchar_variant_field(data) select parse_json(column1) from values ('{"k1": "   v11  "}'),('{"k1": 21}');"""
         )
         cur.execute("select trim(data:k1) from trim_cast_varchar_variant_field;")
 
