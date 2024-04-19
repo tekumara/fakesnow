@@ -44,6 +44,7 @@ from fakesnow.transforms import (
     to_decimal,
     to_timestamp,
     to_timestamp_ntz,
+    trim_cast_varchar,
     try_parse_json,
     try_to_decimal,
     upper_case_unquoted_identifiers,
@@ -777,6 +778,23 @@ def test_try_parse_json() -> None:
         .transform(try_parse_json)
         .sql(dialect="duckdb")
         == """INSERT INTO table1 (name) SELECT TRY_CAST('{"first":"foo", "last":"bar"}' AS JSON)"""
+    )
+
+
+def test_trim_cast_varchar() -> None:
+    assert (
+        sqlglot.parse_one("SELECT TRIM(col) FROM table1").transform(trim_cast_varchar).sql(dialect="duckdb")
+        == "SELECT TRIM(CAST(col AS TEXT)) FROM table1"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT TRIM(col::varchar) FROM table1").transform(trim_cast_varchar).sql(dialect="duckdb")
+        == "SELECT TRIM(CAST(col AS TEXT)) FROM table1"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT TRIM(col::TEXT) FROM table1").transform(trim_cast_varchar).sql(dialect="duckdb")
+        == "SELECT TRIM(CAST(col AS TEXT)) FROM table1"
     )
 
 

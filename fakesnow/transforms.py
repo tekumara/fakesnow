@@ -1098,6 +1098,21 @@ def timestamp_ntz_ns(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def trim_cast_varchar(expression: exp.Expression) -> exp.Expression:
+    """Snowflake's TRIM casts input to VARCHAR implicitly."""
+
+    if not (isinstance(expression, exp.Trim)):
+        return expression
+
+    operand = expression.this
+    if isinstance(operand, exp.Cast) and operand.to.this in [exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT]:
+        return expression
+
+    return exp.Trim(
+        this=exp.Cast(this=operand, to=exp.DataType(this=exp.DataType.Type.VARCHAR, nested=False, prefix=False))
+    )
+
+
 def try_parse_json(expression: exp.Expression) -> exp.Expression:
     """Convert TRY_PARSE_JSON() to TRY_CAST(... as JSON).
 

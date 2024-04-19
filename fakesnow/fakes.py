@@ -174,6 +174,8 @@ class FakeSnowflakeCursor:
             .transform(transforms.tag)
             .transform(transforms.semi_structured_types)
             .transform(transforms.try_parse_json)
+            # NOTE: trim_cast_varchar must be before json_extract_cast_as_varchar
+            .transform(transforms.trim_cast_varchar)
             # indices_to_json_extract must be before regex_substr
             .transform(transforms.indices_to_json_extract)
             .transform(transforms.json_extract_cast_as_varchar)
