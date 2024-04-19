@@ -2,6 +2,20 @@
 
 # Changelog
 
+## [0.9.8](https://github.com/tekumara/fakesnow/compare/v0.9.7...v0.9.8) (2024-04-19)
+
+
+### Features
+
+* support trim with numeric and variant types ([#69](https://github.com/tekumara/fakesnow/issues/69)) ([00ab619](https://github.com/tekumara/fakesnow/commit/00ab619985e50624c047a704aa85060ad7938407))
+
+
+### Bug Fixes
+
+* don't double transform cur.description sql ([76551ef](https://github.com/tekumara/fakesnow/commit/76551efabc94444de4a755fa78b58a0e2fd95c14)), closes [#61](https://github.com/tekumara/fakesnow/issues/61)
+* GET_PATH precedence for JSONExtractScalar ([#78](https://github.com/tekumara/fakesnow/issues/78)) ([8a888a1](https://github.com/tekumara/fakesnow/commit/8a888a1f2b048afa7201679bf03e9689bffa4caa))
+* **json extraction:** only return string when casting to varchar ([#77](https://github.com/tekumara/fakesnow/issues/77)) ([173344e](https://github.com/tekumara/fakesnow/commit/173344ec4b6358aab49fc227372edd494da1a9fc))
+
 ## [0.9.7](https://github.com/tekumara/fakesnow/compare/v0.9.6...v0.9.7) (2024-04-08)
 
 
