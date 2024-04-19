@@ -1450,6 +1450,17 @@ def test_values(conn: snowflake.connector.SnowflakeConnection):
         ]
 
 
+def test_json_extract_cast_as_varchar(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("CREATE TABLE example (j VARIANT)")
+    dcur.execute("""INSERT INTO example SELECT PARSE_JSON('{"str": "100", "number" : 100}')""")
+
+    dcur.execute("SELECT j:str::varchar as c_str_varchar, j:number::varchar as c_num_varchar  FROM example")
+    assert dcur.fetchall() == [{"C_STR_VARCHAR": "100", "C_NUM_VARCHAR": "100"}]
+
+    dcur.execute("SELECT j:str::number as c_str_number, j:number::number as c_num_number  FROM example")
+    assert dcur.fetchall() == [{"C_STR_NUMBER": 100, "C_NUM_NUMBER": 100}]
+
+
 def test_write_pandas_quoted_column_names(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as dcur:
         # colunmn names with spaces

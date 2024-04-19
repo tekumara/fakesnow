@@ -446,6 +446,16 @@ def test_json_extract_cast_as_varchar() -> None:
         == """SELECT JSON('{"fruit":"banana"}') ->> '$.fruit'"""
     )
 
+    assert (
+        sqlglot.parse_one(
+            """select parse_json('{"fruit":"9000"}'):fruit::number""",
+            read="snowflake",
+        )
+        .transform(json_extract_cast_as_varchar)
+        .sql(dialect="duckdb")
+        == """SELECT CAST(JSON('{"fruit":"9000"}') -> '$.fruit' AS DECIMAL)"""
+    )
+
 
 def test_json_extract_precedence() -> None:
     assert (
