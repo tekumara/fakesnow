@@ -583,7 +583,7 @@ def json_extract_precedence(expression: exp.Expression) -> exp.Expression:
 
     See https://github.com/tekumara/fakesnow/issues/53
     """
-    if isinstance(expression, exp.JSONExtract):
+    if isinstance(expression, (exp.JSONExtract, exp.JSONExtractScalar)):
         return exp.Paren(this=expression)
     return expression
 
