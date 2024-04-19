@@ -612,6 +612,17 @@ def test_description_delete(dcur: snowflake.connector.cursor.DictCursor):
     # fmt: on
 
 
+def test_description_select(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("SELECT DATEDIFF( DAY, '2023-04-02'::DATE, '2023-04-05'::DATE) as days")
+    assert dcur.fetchall() == [{"DAYS": 3}]
+    # TODO: Snowflake is actually precision=9, is_nullable=False
+    # fmt: off
+    assert dcur.description == [
+        ResultMetadata(name='DAYS', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+    ]
+    # fmt: on
+
+
 def test_equal_null(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select equal_null(NULL, NULL), equal_null(1, 1), equal_null(1, 2), equal_null(1, NULL)")
     assert cur.fetchall() == [(True, True, False, False)]

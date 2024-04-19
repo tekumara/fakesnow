@@ -11,6 +11,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Any, Literal, Optional, cast
 
 import duckdb
+from sqlglot import exp
 
 if TYPE_CHECKING:
     import pandas as pd
@@ -22,7 +23,7 @@ import sqlglot
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import DictCursor, ResultMetadata, SnowflakeCursor
 from snowflake.connector.result_batch import ResultBatch
-from sqlglot import exp, parse_one
+from sqlglot import parse_one
 from typing_extensions import Self
 
 import fakesnow.checks as checks
@@ -112,7 +113,9 @@ class FakeSnowflakeCursor:
     def description(self) -> list[ResultMetadata]:
         # use a separate cursor to avoid consuming the result set on this cursor
         with self._conn.cursor() as cur:
-            cur.execute(f"DESCRIBE {self._last_sql}", self._last_params)
+            # self._duck_conn.execute(sql, params)
+            expression = sqlglot.parse_one(f"DESCRIBE {self._last_sql}", read="duckdb")
+            cur._execute(expression, self._last_params)  # noqa: SLF001
             meta = FakeSnowflakeCursor._describe_as_result_metadata(cur.fetchall())
 
         return meta
@@ -126,43 +129,20 @@ class FakeSnowflakeCursor:
     ) -> FakeSnowflakeCursor:
         try:
             self._sqlstate = None
-            return self._execute(command, params, *args, **kwargs)
+
+            if os.environ.get("FAKESNOW_DEBUG") == "snowflake":
+                print(f"{command};{params=}" if params else f"{command};", file=sys.stderr)
+
+            command, params = self._rewrite_with_params(command, params)
+            expression = parse_one(command, read="snowflake")
+            transformed = self._transform(expression)
+            return self._execute(transformed, params)
         except snowflake.connector.errors.ProgrammingError as e:
             self._sqlstate = e.sqlstate
             raise e
 
-    def _execute(
-        self,
-        command: str,
-        params: Sequence[Any] | dict[Any, Any] | None = None,
-        *args: Any,
-        **kwargs: Any,
-    ) -> FakeSnowflakeCursor:
-        self._arrow_table = None
-        self._arrow_table_fetch_index = None
-        self._rowcount = None
-
-        command, params = self._rewrite_with_params(command, params)
-        expression = parse_one(command, read="snowflake")
-
-        cmd = expr.key_command(expression)
-
-        no_database, no_schema = checks.is_unqualified_table_expression(expression)
-
-        if no_database and not self._conn.database_set:
-            raise snowflake.connector.errors.ProgrammingError(
-                msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
-                errno=90105,
-                sqlstate="22000",
-            )
-        elif no_schema and not self._conn.schema_set:
-            raise snowflake.connector.errors.ProgrammingError(
-                msg=f"Cannot perform {cmd}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
-                errno=90106,
-                sqlstate="22000",
-            )
-
-        transformed = (
+    def _transform(self, expression: exp.Expression) -> exp.Expression:
+        return (
             expression.transform(transforms.upper_case_unquoted_identifiers)
             .transform(transforms.set_schema, current_database=self._conn.database)
             .transform(transforms.create_database, db_path=self._conn.db_path)
@@ -214,15 +194,40 @@ class FakeSnowflakeCursor:
             .transform(transforms.create_user)
             .transform(transforms.sha256)
         )
+
+    def _execute(
+        self, transformed: exp.Expression, params: Sequence[Any] | dict[Any, Any] | None = None
+    ) -> FakeSnowflakeCursor:
+        self._arrow_table = None
+        self._arrow_table_fetch_index = None
+        self._rowcount = None
+
+        cmd = expr.key_command(transformed)
+
+        no_database, no_schema = checks.is_unqualified_table_expression(transformed)
+
+        if no_database and not self._conn.database_set:
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
+                errno=90105,
+                sqlstate="22000",
+            )
+        elif no_schema and not self._conn.schema_set:
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"Cannot perform {cmd}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
+                errno=90106,
+                sqlstate="22000",
+            )
+
         sql = transformed.sql(dialect="duckdb")
-        result_sql = None
 
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
             sql = f"SELECT setseed({seed}); {sql}"
 
-        if fs_debug := os.environ.get("FAKESNOW_DEBUG"):
-            debug = command if fs_debug == "snowflake" else sql
-            print(f"{debug};{params=}" if params else f"{debug};", file=sys.stderr)
+        if (fs_debug := os.environ.get("FAKESNOW_DEBUG")) and fs_debug != "snowflake":
+            print(f"{sql};{params=}" if params else f"{sql};", file=sys.stderr)
+
+        result_sql = None
 
         try:
             self._duck_conn.execute(sql, params)
