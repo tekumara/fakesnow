@@ -335,6 +335,25 @@ def test_extract_text_length() -> None:
     assert e.sql() == sql
     assert e.args["text_lengths"] == [("t1", 16777216), ("t2", 10), ("t3", 20)]
 
+    sql = "ALTER TABLE t1 ALTER COLUMN c4 SET DATA TYPE VARCHAR(50)"
+    e = sqlglot.parse_one(sql).transform(extract_text_length)
+    assert e.sql() == sql
+    assert e.args["text_lengths"] == [("c4", 50)]
+
+    # test column name is correct with alias
+    sql = """CREATE TABLE table1 AS (
+                SELECT CAST(C1 AS TEXT) AS K, CAST(C2 AS TEXT(10)) AS V
+                FROM (VALUES (1, 2)) AS T(C1, C2))"""
+    e = sqlglot.parse_one(sql).transform(extract_text_length)
+    assert e.args["text_lengths"] == [("K", 16777216), ("V", 10)]
+
+    # test ctas column name is correct for combined field
+    sql = """CREATE TABLE SOME_TABLE AS (
+                SELECT CAST(C1 AS TEXT) || '-' || CAST(C1 AS TEXT) AS K
+                FROM VALUES (1), (2) AS T (C1))"""
+    e = sqlglot.parse_one(sql).transform(extract_text_length)
+    assert e.args["text_lengths"] == [("K", 16777216)]
+
 
 def test_flatten() -> None:
     assert (

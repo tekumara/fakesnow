@@ -360,10 +360,19 @@ def extract_text_length(expression: exp.Expression) -> exp.Expression:
 
     if isinstance(expression, (exp.Create, exp.AlterTable)):
         text_lengths = []
-        for dt in expression.find_all(exp.DataType):
-            if dt.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT):
-                col_name = dt.parent and dt.parent.this and dt.parent.this.this
-                if dt_size := dt.find(exp.DataTypeParam):
+
+        # exp.Select is for a ctas, exp.Schema is a plain definition
+        if cols := expression.find(exp.Select, exp.Schema):
+            expressions = cols.expressions
+        else:
+            # alter table
+            expressions = expression.args.get("actions") or []
+        for e in expressions:
+            if dts := [
+                dt for dt in e.find_all(exp.DataType) if dt.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT)
+            ]:
+                col_name = e.alias if isinstance(e, exp.Alias) else e.name
+                if len(dts) == 1 and (dt_size := dts[0].find(exp.DataTypeParam)):
                     size = (
                         isinstance(dt_size.this, exp.Literal)
                         and isinstance(dt_size.this.this, str)
