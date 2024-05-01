@@ -2,6 +2,19 @@
 
 # Changelog
 
+## [0.9.9](https://github.com/tekumara/fakesnow/compare/v0.9.8...v0.9.9) (2024-05-01)
+
+
+### Bug Fixes
+
+* CREATE TABLE AS with aliases and combined fields ([dbffa01](https://github.com/tekumara/fakesnow/commit/dbffa01b3abf35f8c9ed5bfda62839756fb4526c)), closes [#82](https://github.com/tekumara/fakesnow/issues/82)
+* patching in fakesnow.ipynb ([388c0ef](https://github.com/tekumara/fakesnow/commit/388c0eff80b843ad9a1a72fde58e29bad1d795a5))
+
+
+### Chores
+
+* bump sqlglot 23.12.2 ([d22facb](https://github.com/tekumara/fakesnow/commit/d22facb70d605ef7589bdbf095245504f3915482)), closes [#83](https://github.com/tekumara/fakesnow/issues/83)
+
 ## [0.9.8](https://github.com/tekumara/fakesnow/compare/v0.9.7...v0.9.8) (2024-04-19)
 
 
