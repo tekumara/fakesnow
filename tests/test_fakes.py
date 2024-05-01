@@ -1284,6 +1284,13 @@ def test_show_primary_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert result3 == []
 
 
+def test_sqlglot_regression(cur: snowflake.connector.cursor.SnowflakeCursor):
+    assert cur.execute(
+        """with SOURCE_TABLE AS (SELECT '2024-01-01' AS start_date)
+            SELECT date(a.start_date) from SOURCE_TABLE AS a"""
+    ).fetchone() == (datetime.date(2024, 1, 1),)
+
+
 def test_sqlstate(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select 'hello world'")
     # sqlstate is None on success

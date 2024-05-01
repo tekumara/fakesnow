@@ -309,7 +309,7 @@ def extract_comment_on_table(expression: exp.Expression) -> exp.Expression:
         if props := cast(exp.Properties, expression.args.get("properties")):
             other_props = []
             for p in props.expressions:
-                if isinstance(p, exp.SchemaCommentProperty) and (isinstance(p.this, (exp.Literal, exp.Identifier))):
+                if isinstance(p, exp.SchemaCommentProperty) and (isinstance(p.this, (exp.Literal, exp.Var))):
                     comment = p.this.this
                 else:
                     other_props.append(p)

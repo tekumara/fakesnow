@@ -11,7 +11,7 @@ dependencies = [
     "duckdb~=0.10.0",
     "pyarrow",
     "snowflake-connector-python",
-    "sqlglot~=23.3.0",
+    "sqlglot~=23.12.2",
 ]
 
 [project.urls]
