@@ -29,7 +29,7 @@ dev = [
     "snowflake-connector-python[pandas, secure-local-storage]",
     "pre-commit~=3.4",
     "pytest~=8.0",
-    "ruff~=0.3.2",
+    "ruff~=0.4.2",
     "twine~=5.0",
     "snowflake-sqlalchemy~=1.5.0",
 ]
