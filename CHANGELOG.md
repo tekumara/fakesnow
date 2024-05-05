@@ -2,6 +2,19 @@
 
 # Changelog
 
+## [0.9.10](https://github.com/tekumara/fakesnow/compare/v0.9.9...v0.9.10) (2024-05-05)
+
+
+### Features
+
+* support CREATE TABLE .. CLONE ([ad049d9](https://github.com/tekumara/fakesnow/commit/ad049d99a077cec9a843a28e0efb8c8087717545))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.355 to 1.1.361 ([#85](https://github.com/tekumara/fakesnow/issues/85)) ([adfa9f0](https://github.com/tekumara/fakesnow/commit/adfa9f0d495e1377131e6d8a64f079315abebb42))
+* **deps:** update ruff requirement from ~=0.3.2 to ~=0.4.2 ([#86](https://github.com/tekumara/fakesnow/issues/86)) ([d2ec882](https://github.com/tekumara/fakesnow/commit/d2ec8827f5e250d83be07f702b5a3afb1bd5ad08))
+
 ## [0.9.9](https://github.com/tekumara/fakesnow/compare/v0.9.8...v0.9.9) (2024-05-01)
 
 
