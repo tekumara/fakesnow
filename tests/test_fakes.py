@@ -110,6 +110,16 @@ def test_binding_qmark(_fakesnow: None):
         cur.execute("select * from customers where id = ?", (1,))
 
 
+def test_clone(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
+    cur.execute("insert into customers values (1, 'Jenny', True)")
+
+    cur.execute("create table customers2 clone db1.schema1.customers")
+    cur.execute("select * from customers2")
+    # TODO check tags are copied too
+    assert cur.fetchall() == [(1, "Jenny", True)]
+
+
 def test_close_conn(conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor):
     conn.close()
     with pytest.raises(snowflake.connector.errors.DatabaseError) as excinfo:
