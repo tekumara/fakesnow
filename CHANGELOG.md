@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.11](https://github.com/tekumara/fakesnow/compare/v0.9.10...v0.9.11) (2024-05-07)
+
+
+### Bug Fixes
+
+* write_pandas using database and schema params ([d210c0b](https://github.com/tekumara/fakesnow/commit/d210c0b4abed024ed658a017e0bc6510f2340349))
+
 ## [0.9.10](https://github.com/tekumara/fakesnow/compare/v0.9.9...v0.9.10) (2024-05-05)
 
 
