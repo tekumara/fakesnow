@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.12](https://github.com/tekumara/fakesnow/compare/v0.9.11...v0.9.12) (2024-05-07)
+
+
+### Features
+
+* add write_pandas support for auto_create_table param ([b78ba1d](https://github.com/tekumara/fakesnow/commit/b78ba1ddedffbac7bed74462b07a9ea2def52ed0))
+
 ## [0.9.11](https://github.com/tekumara/fakesnow/compare/v0.9.10...v0.9.11) (2024-05-07)
 
 
