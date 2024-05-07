@@ -1611,6 +1611,26 @@ def test_write_pandas_dict_different_keys(conn: snowflake.connector.SnowflakeCon
         assert indent(cur.fetchall()) == [('{\n  "k": "v1"\n}',), ('{\n  "k2": [\n    "v\'2",\n    "v\\"3"\n  ]\n}',)]
 
 
+def test_write_pandas_db_schema(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create database db2")
+        cur.execute("create schema db2.schema2")
+        cur.execute("create or replace table db2.schema2.customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+
+        df = pd.DataFrame.from_records(
+            [
+                {"ID": 1, "FIRST_NAME": "Jenny"},
+                {"ID": 2, "FIRST_NAME": "Jasper"},
+            ]
+        )
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS", "DB2", "SCHEMA2")
+
+        cur.execute("select id, first_name, last_name from db2.schema2.customers")
+
+        # columns not in dataframe will receive their default value
+        assert cur.fetchall() == [(1, "Jenny", None), (2, "Jasper", None)]
+
+
 def indent(rows: Sequence[tuple] | Sequence[dict]) -> list[tuple]:
     # indent duckdb json strings tuple values to match snowflake json strings
     assert isinstance(rows[0], tuple)
