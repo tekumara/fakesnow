@@ -1502,6 +1502,21 @@ def test_json_extract_cast_as_varchar(dcur: snowflake.connector.cursor.DictCurso
     assert dcur.fetchall() == [{"C_STR_NUMBER": 100, "C_NUM_NUMBER": 100}]
 
 
+def test_write_pandas_auto_create(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        df = pd.DataFrame.from_records(
+            [
+                {"ID": 1, "FIRST_NAME": "Jenny"},
+                {"ID": 2, "FIRST_NAME": "Jasper"},
+            ]
+        )
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS", auto_create_table=True)
+
+        cur.execute("select id, first_name from customers")
+
+        assert cur.fetchall() == [(1, "Jenny"), (2, "Jasper")]
+
+
 def test_write_pandas_quoted_column_names(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as dcur:
         # colunmn names with spaces
