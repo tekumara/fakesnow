@@ -870,6 +870,12 @@ def test_identifier(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1,)]
 
 
+def test_nop_regexes():
+    with fakesnow.patch(nop_regexes=["^CALL.*"]), snowflake.connector.connect() as conn, conn.cursor() as cur:
+        cur.execute("call this_procedure_does_not_exist('foo', 'bar);")
+        assert cur.fetchall() == [("Statement executed successfully.",)]
+
+
 def test_non_existent_table_throws_snowflake_exception(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
         cur.execute("select * from this_table_does_not_exist")

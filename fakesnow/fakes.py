@@ -135,8 +135,11 @@ class FakeSnowflakeCursor:
                 print(f"{command};{params=}" if params else f"{command};", file=sys.stderr)
 
             command, params = self._rewrite_with_params(command, params)
-            expression = parse_one(command, read="snowflake")
-            transformed = self._transform(expression)
+            if self._conn.nop_regexes and any(re.match(p, command, re.IGNORECASE) for p in self._conn.nop_regexes):
+                transformed = transforms.SUCCESS_NOP
+            else:
+                expression = parse_one(command, read="snowflake")
+                transformed = self._transform(expression)
             return self._execute(transformed, params)
         except snowflake.connector.errors.ProgrammingError as e:
             self._sqlstate = e.sqlstate
@@ -502,6 +505,7 @@ class FakeSnowflakeConnection:
         create_database: bool = True,
         create_schema: bool = True,
         db_path: str | os.PathLike | None = None,
+        nop_regexes: list[str] | None = None,
         *args: Any,
         **kwargs: Any,
     ):
@@ -513,6 +517,7 @@ class FakeSnowflakeConnection:
         self.database_set = False
         self.schema_set = False
         self.db_path = db_path
+        self.nop_regexes = nop_regexes
         self._paramstyle = snowflake.connector.paramstyle
 
         create_global_database(duck_conn)
