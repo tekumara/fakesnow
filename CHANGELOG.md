@@ -2,6 +2,18 @@
 
 # Changelog
 
+## [0.9.13](https://github.com/tekumara/fakesnow/compare/v0.9.12...v0.9.13) (2024-05-08)
+
+
+### Features
+
+* nop regexes to ignore unimplemented commands ([f3783bb](https://github.com/tekumara/fakesnow/commit/f3783bbac5cdc1c38f777842cc39cd2b83ded5e8))
+
+
+### Chores
+
+* bump sqlglot 23.14.0 ([e1255c0](https://github.com/tekumara/fakesnow/commit/e1255c0322d18d88711c966ff09b2695ae52ea50))
+
 ## [0.9.12](https://github.com/tekumara/fakesnow/compare/v0.9.11...v0.9.12) (2024-05-07)
 
 
