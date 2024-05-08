@@ -24,5 +24,3 @@ def dindent(rows: Sequence[tuple] | Sequence[dict]) -> list[dict]:
         }
         for r in rows
     ]
-
-

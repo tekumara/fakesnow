@@ -594,6 +594,10 @@ def test_show_schemas() -> None:
 
 def test_tag() -> None:
     assert sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'", read="snowflake").transform(tag) == SUCCESS_NOP
+    assert (
+        sqlglot.parse_one("ALTER TABLE db1.schema1.table1 SET TAG foo.bar='baz'", read="snowflake").transform(tag)
+        == SUCCESS_NOP
+    )
 
 
 def test_timestamp_ntz_ns() -> None:

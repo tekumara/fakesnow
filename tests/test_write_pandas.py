@@ -155,6 +155,7 @@ def test_write_pandas_db_schema(conn: snowflake.connector.SnowflakeConnection):
         # columns not in dataframe will receive their default value
         assert cur.fetchall() == [(1, "Jenny", None), (2, "Jasper", None)]
 
+
 def sort_keys(sdict: str, indent: int | None = 2) -> str:
     return json.dumps(
         json.loads(sdict, object_pairs_hook=lambda x: dict(sorted(x))),

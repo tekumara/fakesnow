@@ -1122,12 +1122,10 @@ def timestamp_ntz_ns(expression: exp.Expression) -> exp.Expression:
 
     if (
         isinstance(expression, exp.DataType)
-        and expression.this == exp.DataType.Type.TIMESTAMP
+        and expression.this == exp.DataType.Type.TIMESTAMPNTZ
         and exp.DataTypeParam(this=exp.Literal(this="9", is_string=False)) in expression.expressions
     ):
-        new = expression.copy()
-        del new.args["expressions"]
-        return new
+        return exp.DataType(this=exp.DataType.Type.TIMESTAMP)
 
     return expression
 
