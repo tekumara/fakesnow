@@ -476,12 +476,12 @@ def test_json_extract_cast_as_varchar() -> None:
 
     assert (
         sqlglot.parse_one(
-            """select parse_json('{"fruit":"9000"}'):fruit::number""",
+            """select parse_json('{"count":"9000"}'):count::number""",
             read="snowflake",
         )
         .transform(json_extract_cast_as_varchar)
         .sql(dialect="duckdb")
-        == """SELECT CAST(JSON('{"fruit":"9000"}') -> '$.fruit' AS DECIMAL)"""
+        == """SELECT CAST(JSON('{"count":"9000"}') -> '$.count' AS DECIMAL)"""
     )
 
 
