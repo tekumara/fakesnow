@@ -1,5 +1,7 @@
+import datetime
 from typing import cast
 
+import snowflake.sqlalchemy
 from sqlalchemy import Column, MetaData, Table, types
 from sqlalchemy.engine import Engine
 from sqlalchemy.sql.expression import TextClause
@@ -44,3 +46,20 @@ def test_reflect(snowflake_engine: Engine):
 
         assert result
         assert result.fetchall() == [(1, "one")]
+
+
+def test_timestamp_ntz(snowflake_engine: Engine):
+    metadata = MetaData()
+    Table(
+        "foo",
+        metadata,
+        Column("created_at", snowflake.sqlalchemy.TIMESTAMP_NTZ(), nullable=False),
+    )
+
+    metadata.create_all(bind=snowflake_engine)
+    with snowflake_engine.connect() as conn:
+        conn.execute(TextClause("INSERT INTO foo (created_at) VALUES ('2020-01-01')"))
+        result = conn.execute(TextClause("SELECT created_at FROM foo"))
+
+        assert result
+        assert result.fetch() == [datetime.datetime(2020, 1, 1, 0, 0)]
