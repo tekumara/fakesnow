@@ -2,6 +2,25 @@
 
 # Changelog
 
+## [0.9.14](https://github.com/tekumara/fakesnow/compare/v0.9.13...v0.9.14) (2024-06-02)
+
+
+### Features
+
+* support alias in join ([8d31dce](https://github.com/tekumara/fakesnow/commit/8d31dcec4f8b25089fa49d8baad796836785b553)), closes [#90](https://github.com/tekumara/fakesnow/issues/90)
+* support TIMESTAMP_NTZ ([0493ce6](https://github.com/tekumara/fakesnow/commit/0493ce6e068931d25c5f2fef333e135c2f0988a0)), closes [#96](https://github.com/tekumara/fakesnow/issues/96)
+
+
+### Bug Fixes
+
+* CREATE TAG is a no-op ([5085b59](https://github.com/tekumara/fakesnow/commit/5085b599b5b666b426ef727dd5536d96ccb6777c)), closes [#94](https://github.com/tekumara/fakesnow/issues/94)
+
+
+### Chores
+
+* bump duckdb 0.10.3 ([7c2a29b](https://github.com/tekumara/fakesnow/commit/7c2a29bd65c84b046e77f238921ee27ed0c90167))
+* bump sqlglot 24.1.0 ([d3750be](https://github.com/tekumara/fakesnow/commit/d3750be9c81bdb93f3c8ef0ea30ed24aa2b72cfc))
+
 ## [0.9.13](https://github.com/tekumara/fakesnow/compare/v0.9.12...v0.9.13) (2024-05-08)
 
 
