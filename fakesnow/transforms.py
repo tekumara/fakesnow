@@ -1114,17 +1114,15 @@ def to_timestamp_ntz(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def timestamp_ntz_ns(expression: exp.Expression) -> exp.Expression:
-    """Convert timestamp_ntz(9) to timestamp_ntz.
+def timestamp_ntz(expression: exp.Expression) -> exp.Expression:
+    """Convert timestamp_ntz (snowflake) to timestamp (duckdb).
 
-    To compensate for https://github.com/duckdb/duckdb/issues/7980
+    NB: timestamp_ntz defaults to nanosecond precision (ie: NTZ(9)). The duckdb equivalent is TIMESTAMP_NS.
+    However we use TIMESTAMP (ie: microsecond precision) here rather than TIMESTAMP_NS to avoid
+    https://github.com/duckdb/duckdb/issues/7980 in test_write_pandas_timestamp_ntz.
     """
 
-    if (
-        isinstance(expression, exp.DataType)
-        and expression.this == exp.DataType.Type.TIMESTAMPNTZ
-        and exp.DataTypeParam(this=exp.Literal(this="9", is_string=False)) in expression.expressions
-    ):
+    if isinstance(expression, exp.DataType) and expression.this == exp.DataType.Type.TIMESTAMPNTZ:
         return exp.DataType(this=exp.DataType.Type.TIMESTAMP)
 
     return expression
@@ -1173,7 +1171,6 @@ def try_parse_json(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-# sqlglot.parse_one("create table example(date TIMESTAMP_NTZ(9));", read="snowflake")
 def semi_structured_types(expression: exp.Expression) -> exp.Expression:
     """Convert OBJECT, ARRAY, and VARIANT types to duckdb compatible types.
 

@@ -79,7 +79,7 @@ def test_info_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCurs
     cur.execute(
         """
         create or replace table example (
-            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XTIMESTAMP_TZ TIMESTAMP_TZ, XDATE DATE, XTIME TIME,
+            XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ TIMESTAMP_NTZ, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XTIMESTAMP_TZ TIMESTAMP_TZ, XDATE DATE, XTIME TIME,
             XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT */ XVARIANT VARIANT
         )
         """
@@ -94,6 +94,7 @@ def test_info_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCurs
 
     assert cur.fetchall() == [
         ("XTIMESTAMP", "TIMESTAMP_NTZ"),
+        ("XTIMESTAMP_NTZ", "TIMESTAMP_NTZ"),
         ("XTIMESTAMP_NTZ9", "TIMESTAMP_NTZ"),
         ("XTIMESTAMP_TZ", "TIMESTAMP_TZ"),
         ("XDATE", "DATE"),

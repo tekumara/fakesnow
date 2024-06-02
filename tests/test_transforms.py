@@ -40,7 +40,7 @@ from fakesnow.transforms import (
     show_objects_tables,
     show_schemas,
     tag,
-    timestamp_ntz_ns,
+    timestamp_ntz,
     to_date,
     to_decimal,
     to_timestamp,
@@ -611,7 +611,7 @@ def test_tag() -> None:
 def test_timestamp_ntz_ns() -> None:
     assert (
         sqlglot.parse_one("CREATE TABLE table1(ts TIMESTAMP_NTZ(9))", read="snowflake")
-        .transform(timestamp_ntz_ns)
+        .transform(timestamp_ntz)
         .sql(dialect="duckdb")
         == "CREATE TABLE table1 (ts TIMESTAMP)"
     )
