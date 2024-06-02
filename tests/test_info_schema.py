@@ -180,7 +180,7 @@ def test_info_schema_views_with_views(conn: snowflake.connector.SnowflakeConnect
                 "table_schema": "SCHEMA1",
                 "table_name": "BAR",
                 "table_owner": "SYSADMIN",
-                "view_definition": "CREATE VIEW SCHEMA1.BAR AS SELECT * FROM FOO WHERE (ID > 5);\n",
+                "view_definition": "CREATE VIEW SCHEMA1.BAR AS SELECT * FROM FOO WHERE (ID > 5);",
                 "check_option": "NONE",
                 "is_updatable": "NO",
                 "insertable_into": "NO",
