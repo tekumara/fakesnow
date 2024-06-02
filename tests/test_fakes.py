@@ -20,6 +20,25 @@ import fakesnow
 from tests.utils import dindent, indent
 
 
+def test_alias_on_join(conn: snowflake.connector.SnowflakeConnection):
+    *_, cur = conn.execute_string(
+        """
+        CREATE OR REPLACE TEMPORARY TABLE TEST (COL VARCHAR);
+        INSERT INTO TEST (COL) VALUES ('VARCHAR1'), ('VARCHAR2');
+        CREATE OR REPLACE TEMPORARY TABLE JOINED (COL VARCHAR, ANOTHER VARCHAR);
+        INSERT INTO JOINED (COL, ANOTHER) VALUES ('CHAR1', 'JOIN');
+        SELECT
+            T.COL
+            , SUBSTR(T.COL, 4) AS ALIAS
+            , J.ANOTHER
+        FROM TEST AS T
+        LEFT JOIN JOINED AS J
+        ON ALIAS = J.COL;
+        """
+    )
+    assert cur.fetchall() == [("VARCHAR1", "CHAR1", "JOIN"), ("VARCHAR2", "CHAR2", None)]
+
+
 def test_alter_table(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table table1 (id int)")
     cur.execute("alter table table1 add column name varchar(20)")

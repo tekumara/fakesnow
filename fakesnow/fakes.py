@@ -198,6 +198,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.create_user)
             .transform(transforms.sha256)
             .transform(transforms.create_clone)
+            .transform(transforms.alias_in_join)
         )
 
     def _execute(

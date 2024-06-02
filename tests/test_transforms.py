@@ -7,6 +7,7 @@ from sqlglot import exp
 from fakesnow.transforms import (
     SUCCESS_NOP,
     _get_to_number_args,
+    alias_in_join,
     array_agg_within_group,
     array_size,
     create_clone,
@@ -51,6 +52,23 @@ from fakesnow.transforms import (
     upper_case_unquoted_identifiers,
     values_columns,
 )
+
+
+def test_alias_in_join() -> None:
+    assert (
+        sqlglot.parse_one("""
+            SELECT
+                T.COL
+                , SUBSTR(T.COL, 4) AS ALIAS
+                , J.ANOTHER
+            FROM TEST AS T
+            LEFT JOIN JOINED AS J
+            ON ALIAS = J.COL
+        """)
+        .transform(alias_in_join)
+        .sql()
+        == "SELECT T.COL, SUBSTR(T.COL, 4) AS ALIAS, J.ANOTHER FROM TEST AS T LEFT JOIN JOINED AS J ON SUBSTR(T.COL, 4) = J.COL"  # noqa: E501
+    )
 
 
 def test_array_size() -> None:

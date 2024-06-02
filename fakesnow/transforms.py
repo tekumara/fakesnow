@@ -13,6 +13,25 @@ MISSING_DATABASE = "missing_database"
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
 
 
+def alias_in_join(expression: exp.Expression) -> exp.Expression:
+    if (
+        isinstance(expression, exp.Select)
+        and (aliases := {e.args.get("alias"): e for e in expression.expressions if isinstance(e, exp.Alias)})
+        and (joins := expression.args.get("joins"))
+    ):
+        j: exp.Join
+        for j in joins:
+            if (
+                (on := j.args.get("on"))
+                and (col := on.this)
+                and (isinstance(col, exp.Column))
+                and (alias := aliases.get(col.this))
+            ):
+                col.args["this"] = alias.this
+
+    return expression
+
+
 def array_size(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, exp.ArraySize):
         # case is used to convert 0 to null, because null is returned by duckdb when no case matches
