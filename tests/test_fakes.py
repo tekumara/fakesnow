@@ -1325,6 +1325,7 @@ def test_tags_noop(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("CREATE TABLE table1 (id int)")
     cur.execute("ALTER TABLE table1 SET TAG foo='bar'")
     cur.execute("ALTER TABLE table1 MODIFY COLUMN name1 SET TAG foo='bar'")
+    cur.execute("CREATE TAG cost_center COMMENT = 'cost_center tag'")
 
 
 def test_to_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
