@@ -114,7 +114,7 @@ def test_describe_table() -> None:
 
 def test_drop_schema_cascade() -> None:
     assert (
-        sqlglot.parse_one("drop schema schema1").transform(drop_schema_cascade).sql() == "DROP schema schema1 CASCADE"
+        sqlglot.parse_one("drop schema schema1").transform(drop_schema_cascade).sql() == "DROP SCHEMA schema1 CASCADE"
     )
 
 
@@ -422,7 +422,7 @@ def test_integer_precision() -> None:
         )
         .transform(integer_precision)
         .sql(dialect="duckdb")
-        == "CREATE TABLE example (XNUMBER82 DECIMAL(8, 2), XNUMBER BIGINT, XDECIMAL BIGINT, XNUMERIC BIGINT, XINT BIGINT, XINTEGER BIGINT, XBIGINT BIGINT, XSMALLINT BIGINT, XTINYINT BIGINT, XBYTEINT BIGINT)"  # noqa: E501
+        == "CREATE TABLE example (XNUMBER82 DECIMAL(8, 2), XNUMBER DECIMAL(38, 0), XDECIMAL DECIMAL(38, 0), XNUMERIC DECIMAL(38, 0), XINT BIGINT, XINTEGER BIGINT, XBIGINT BIGINT, XSMALLINT BIGINT, XTINYINT BIGINT, XBYTEINT BIGINT)"  # noqa: E501
     )
 
 
@@ -471,7 +471,7 @@ def test_json_extract_cast_as_varchar() -> None:
         )
         .transform(json_extract_cast_as_varchar)
         .sql(dialect="duckdb")
-        == """SELECT JSON('{"fruit":"banana"}') ->> '$.fruit'"""
+        == """SELECT CAST(JSON('{"fruit":"banana"}') ->> '$.fruit' AS TEXT)"""
     )
 
     assert (
@@ -481,7 +481,7 @@ def test_json_extract_cast_as_varchar() -> None:
         )
         .transform(json_extract_cast_as_varchar)
         .sql(dialect="duckdb")
-        == """SELECT CAST(JSON('{"count":"9000"}') -> '$.count' AS DECIMAL)"""
+        == """SELECT CAST(JSON('{"count":"9000"}') ->> '$.count' AS DECIMAL(38, 0))"""
     )
 
 

@@ -350,17 +350,13 @@ def extract_comment_on_table(expression: exp.Expression) -> exp.Expression:
         return new
     elif (
         isinstance(expression, exp.AlterTable)
-        and (sexp := expression.find(exp.Set))
-        and not sexp.args["tag"]
-        and (eq := sexp.find(exp.EQ))
-        and (eid := eq.find(exp.Identifier))
-        and isinstance(eid.this, str)
-        and eid.this.upper() == "COMMENT"
-        and (lit := eq.find(exp.Literal))
+        and (sexp := expression.find(exp.AlterSet))
+        and (scp := sexp.find(exp.SchemaCommentProperty))
+        and isinstance(scp.this, exp.Literal)
         and (table := expression.find(exp.Table))
     ):
         new = SUCCESS_NOP.copy()
-        new.args["table_comment"] = (table, lit.this)
+        new.args["table_comment"] = (table, scp.this.this)
         return new
 
     return expression
@@ -596,15 +592,12 @@ def json_extract_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
     """
     if (
         isinstance(expression, exp.Cast)
-        and (to := expression.to)
-        and isinstance(to, exp.DataType)
-        and to.this in {exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT}
         and (je := expression.this)
         and isinstance(je, exp.JSONExtract)
         and (path := je.expression)
         and isinstance(path, exp.JSONPath)
     ):
-        return exp.JSONExtractScalar(this=je.this, expression=path)
+        je.replace(exp.JSONExtractScalar(this=je.this, expression=path))
     return expression
 
 
@@ -937,7 +930,7 @@ def tag(expression: exp.Expression) -> exp.Expression:
 
     if isinstance(expression, exp.AlterTable) and (actions := expression.args.get("actions")):
         for a in actions:
-            if isinstance(a, exp.Set) and a.args["tag"]:
+            if isinstance(a, exp.AlterSet) and a.args.get("tag"):
                 return SUCCESS_NOP
     elif (
         isinstance(expression, exp.Command)
