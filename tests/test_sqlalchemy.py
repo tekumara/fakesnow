@@ -44,3 +44,9 @@ def test_reflect(snowflake_engine: Engine):
 
         assert result
         assert result.fetchall() == [(1, "one")]
+
+
+def test_alter_table(snowflake_engine: Engine):
+    with snowflake_engine.connect() as conn:
+        conn.execute(TextClause("CREATE TABLE foo (id INTEGER)"))
+        conn.execute(TextClause("alter table foo add column name varchar(20)"))

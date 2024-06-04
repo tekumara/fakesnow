@@ -297,6 +297,9 @@ class FakeSnowflakeCursor:
             elif cmd == "CREATE TABLE" and ident:
                 result_sql = SQL_CREATED_TABLE.substitute(name=ident)
 
+            elif cmd.startswith("ALTER") and ident:
+                result_sql = SQL_SUCCESS
+
             elif cmd == "CREATE VIEW" and ident:
                 result_sql = SQL_CREATED_VIEW.substitute(name=ident)
 
