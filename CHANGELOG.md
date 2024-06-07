@@ -2,6 +2,18 @@
 
 # Changelog
 
+## [0.9.15](https://github.com/tekumara/fakesnow/compare/v0.9.14...v0.9.15) (2024-06-07)
+
+
+### Bug Fixes
+
+* ALTER TABLE result output ([#100](https://github.com/tekumara/fakesnow/issues/100)) ([3e0e236](https://github.com/tekumara/fakesnow/commit/3e0e236fe630e41062f9ad5edb1a889f039b617b))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.361 to 1.1.366 ([#102](https://github.com/tekumara/fakesnow/issues/102)) ([81839a4](https://github.com/tekumara/fakesnow/commit/81839a4cabf2c694c0c5eca582a469ca4cf29a53))
+
 ## [0.9.14](https://github.com/tekumara/fakesnow/compare/v0.9.13...v0.9.14) (2024-06-02)
 
 
