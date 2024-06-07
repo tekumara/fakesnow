@@ -589,9 +589,12 @@ def test_description_create_drop_schema(dcur: snowflake.connector.cursor.DictCur
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
-def test_description_create_drop_table(dcur: snowflake.connector.cursor.DictCursor):
+def test_description_create_alter_drop_table(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create table example (x int)")
     assert dcur.fetchall() == [{"status": "Table EXAMPLE successfully created."}]
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    dcur.execute("alter table example add column name varchar(20)")
+    assert dcur.fetchall() == [{"status": "Statement executed successfully."}]
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
     dcur.execute("drop table example")
     assert dcur.fetchall() == [{"status": "EXAMPLE successfully dropped."}]
