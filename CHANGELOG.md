@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.16](https://github.com/tekumara/fakesnow/compare/v0.9.15...v0.9.16) (2024-06-21)
+
+
+### Bug Fixes
+
+* CREATE DATABASE when using db_path ([#103](https://github.com/tekumara/fakesnow/issues/103)) ([1f6db72](https://github.com/tekumara/fakesnow/commit/1f6db72d25691fe484256b77ac5d1ce2d5ee72d2))
+
 ## [0.9.15](https://github.com/tekumara/fakesnow/compare/v0.9.14...v0.9.15) (2024-06-07)
 
 
