@@ -520,7 +520,7 @@ class FakeSnowflakeConnection:
         self.schema = schema and schema.upper()
         self.database_set = False
         self.schema_set = False
-        self.db_path = db_path
+        self.db_path = Path(db_path) if db_path else None
         self.nop_regexes = nop_regexes
         self._paramstyle = snowflake.connector.paramstyle
 
@@ -535,7 +535,7 @@ class FakeSnowflakeConnection:
                 where catalog_name = '{self.database}'"""
             ).fetchone()
         ):
-            db_file = f"{Path(db_path)/self.database}.db" if db_path else ":memory:"
+            db_file = f"{self.db_path/self.database}.db" if self.db_path else ":memory:"
             duck_conn.execute(f"ATTACH DATABASE '{db_file}' AS {self.database}")
             duck_conn.execute(info_schema.creation_sql(self.database))
             duck_conn.execute(macros.creation_sql(self.database))
