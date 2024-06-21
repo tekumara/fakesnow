@@ -201,6 +201,11 @@ def test_connect_reuse_db():
         ):
             assert cur.execute("select * from example").fetchall() == [(420,)]
 
+def test_can_create_duckdb_stored_on_local_filesystem() -> None:
+    with tempfile.TemporaryDirectory(prefix="fakesnow-test") as db_path:
+        with fakesnow.patch(db_path=db_path):
+            cursor = snowflake.connector.connect().cursor()
+            cursor.execute(f"CREATE DATABASE TEST32cs3s3")
 
 def test_connect_without_database(_fakesnow_no_auto_create: None):
     with snowflake.connector.connect() as conn, conn.cursor() as cur:
