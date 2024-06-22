@@ -1329,6 +1329,10 @@ def test_show_primary_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert result3 == []
 
 
+def test_split(cur: snowflake.connector.cursor.SnowflakeCursor):
+    assert indent(cur.execute("select split('a,b,c', ',')").fetchall()) == [('[\n  "a",\n  "b",\n  "c"\n]',)]
+
+
 def test_sqlglot_regression(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.execute(
         """with SOURCE_TABLE AS (SELECT '2024-01-01' AS start_date)

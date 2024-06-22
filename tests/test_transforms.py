@@ -40,6 +40,7 @@ from fakesnow.transforms import (
     sha256,
     show_objects_tables,
     show_schemas,
+    split,
     tag,
     timestamp_ntz,
     to_date,
@@ -607,6 +608,12 @@ def test_show_schemas() -> None:
     assert (
         sqlglot.parse_one("show terse schemas in database db1", read="snowflake").transform(show_schemas).sql()
         == """SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS "created_on", schema_name AS "name", NULL AS "kind", catalog_name AS "database_name", NULL AS "schema_name" FROM information_schema.schemata WHERE NOT catalog_name IN ('memory', 'system', 'temp') AND NOT schema_name IN ('main', 'pg_catalog') AND catalog_name = 'db1'"""  # noqa: E501
+    )
+
+
+def test_split() -> None:
+    assert (
+        sqlglot.parse_one("SELECT split('a,b,c', ',')").transform(split).sql() == "SELECT TO_JSON(SPLIT('a,b,c', ','))"
     )
 
 

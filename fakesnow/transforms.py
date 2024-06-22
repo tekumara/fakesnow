@@ -931,6 +931,16 @@ def show_schemas(expression: exp.Expression, current_database: str | None = None
     return expression
 
 
+def split(expression: exp.Expression) -> exp.Expression:
+    """
+    Convert output of duckdb str_split from varchar[] to JSON array to match Snowflake.
+    """
+    if isinstance(expression, exp.Split):
+        return exp.Anonymous(this="to_json", expressions=[expression])
+
+    return expression
+
+
 def tag(expression: exp.Expression) -> exp.Expression:
     """Handle tags. Transfer tags into upserts of the tag table.
 
