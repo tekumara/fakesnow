@@ -2,6 +2,26 @@
 
 # Changelog
 
+## [0.9.17](https://github.com/tekumara/fakesnow/compare/v0.9.16...v0.9.17) (2024-06-23)
+
+
+### Features
+
+* SPLIT ([28f0d98](https://github.com/tekumara/fakesnow/commit/28f0d98ef863b55964f14393b0b7417d4bd83ccc))
+
+
+### Bug Fixes
+
+* ARRAY_AGG with OVER ([6d94c61](https://github.com/tekumara/fakesnow/commit/6d94c613dfc8ecfcf268ac769a56d41d777bdebf)), closes [#92](https://github.com/tekumara/fakesnow/issues/92)
+* flatten VALUE cast to varchar as raw string ([818efcc](https://github.com/tekumara/fakesnow/commit/818efccacf36fecc71bf61385c192e0f0cc596eb))
+* more selective flatten_value_cast_as_varchar ([7748fbf](https://github.com/tekumara/fakesnow/commit/7748fbf10db59919759acd37d2ad9cc5f1c57349))
+
+
+### Chores
+
+* **deps:** update duckdb requirement from ~=0.10.3 to ~=1.0.0 ([#107](https://github.com/tekumara/fakesnow/issues/107)) ([8ead354](https://github.com/tekumara/fakesnow/commit/8ead354202b096559605b218358dc96a2ff4058c))
+* **deps:** update sqlglot requirement from ~=24.1.0 to ~=25.3.0 ([#106](https://github.com/tekumara/fakesnow/issues/106)) ([89bee6f](https://github.com/tekumara/fakesnow/commit/89bee6f06e9adc99e8524c03e91cc173e6c2b8d3))
+
 ## [0.9.16](https://github.com/tekumara/fakesnow/compare/v0.9.15...v0.9.16) (2024-06-21)
 
 
