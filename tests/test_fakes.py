@@ -54,7 +54,7 @@ def test_array_size(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(None,)]
 
 
-def test_array_agg_to_json(dcur: snowflake.connector.cursor.DictCursor):
+def test_array_agg(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create table table1 (id number, name varchar)")
     values = [(1, "foo"), (2, "bar"), (1, "baz"), (2, "qux")]
 

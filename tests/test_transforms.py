@@ -8,6 +8,7 @@ from fakesnow.transforms import (
     SUCCESS_NOP,
     _get_to_number_args,
     alias_in_join,
+    array_agg,
     array_agg_within_group,
     array_size,
     create_clone,
@@ -77,6 +78,13 @@ def test_array_size() -> None:
     assert (
         sqlglot.parse_one("""select array_size(parse_json('["a","b"]'))""").transform(array_size).sql(dialect="duckdb")
         == """SELECT CASE WHEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) THEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) END"""
+    )
+
+
+def test_array_agg() -> None:
+    assert (
+        sqlglot.parse_one("SELECT ARRAY_AGG(name) AS names FROM table1").transform(array_agg).sql(dialect="duckdb")
+        == "SELECT TO_JSON(ARRAY_AGG(name)) AS names FROM table1"
     )
 
 
