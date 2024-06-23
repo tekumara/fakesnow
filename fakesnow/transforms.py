@@ -472,7 +472,7 @@ def flatten_value_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
         and expression.this.name.upper() == "VALUE"
         and expression.to.this in [exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT]
         and (select := expression.find_ancestor(exp.Select))
-        and select.find(exp.Lateral)
+        and select.find(exp.Explode)
     ):
         return exp.JSONExtractScalar(this=expression.this, expression=exp.JSONPath(expressions=[exp.JSONPathRoot()]))
 
