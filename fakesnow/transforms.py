@@ -42,7 +42,10 @@ def array_size(expression: exp.Expression) -> exp.Expression:
 
 
 def array_agg(expression: exp.Expression) -> exp.Expression:
-    if isinstance(expression, exp.ArrayAgg):
+    if isinstance(expression, exp.ArrayAgg) and not isinstance(expression.parent, exp.Window):
+        return exp.Anonymous(this="TO_JSON", expressions=[expression])
+
+    if isinstance(expression, exp.Window) and isinstance(expression.this, exp.ArrayAgg):
         return exp.Anonymous(this="TO_JSON", expressions=[expression])
 
     return expression

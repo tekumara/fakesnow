@@ -63,6 +63,24 @@ def test_array_agg(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("select array_agg(name) as names from table1")
     assert dindent(dcur.fetchall()) == [{"NAMES": '[\n  "foo",\n  "bar",\n  "baz",\n  "qux"\n]'}]
 
+    # using over
+
+    dcur.execute(
+        """
+            SELECT DISTINCT
+                ID
+                , ANOTHER
+                , ARRAY_AGG(DISTINCT COL) OVER(PARTITION BY ID) AS COLS
+            FROM (select column1 as ID, column2 as COL, column3 as ANOTHER from
+            (VALUES (1, 's1', 'c1'),(1, 's2', 'c1'),(1, 's3', 'c1'),(2, 's1', 'c2'), (2,'s2','c2')))
+            ORDER BY ID
+            """
+    )
+    assert dindent(dcur.fetchall()) == [
+        {"ID": 1, "ANOTHER": "c1", "COLS": '[\n  "s1",\n  "s2",\n  "s3"\n]'},
+        {"ID": 2, "ANOTHER": "c2", "COLS": '[\n  "s1",\n  "s2"\n]'},
+    ]
+
 
 def test_array_agg_within_group(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("CREATE TABLE table1 (ID INT, amount INT)")

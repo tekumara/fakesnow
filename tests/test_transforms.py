@@ -87,6 +87,15 @@ def test_array_agg() -> None:
         == "SELECT TO_JSON(ARRAY_AGG(name)) AS names FROM table1"
     )
 
+    assert (
+        sqlglot.parse_one(
+            "SELECT DISTINCT ID, ANOTHER, ARRAY_AGG(DISTINCT COL) OVER(PARTITION BY ID) AS COLS FROM TEST"
+        )
+        .transform(array_agg)
+        .sql(dialect="duckdb")
+        == "SELECT DISTINCT ID, ANOTHER, TO_JSON(ARRAY_AGG(DISTINCT COL) OVER (PARTITION BY ID)) AS COLS FROM TEST"
+    )
+
 
 def test_array_agg_within_group() -> None:
     assert (
