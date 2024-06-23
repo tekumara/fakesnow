@@ -21,6 +21,7 @@ from fakesnow.transforms import (
     extract_comment_on_table,
     extract_text_length,
     flatten,
+    flatten_value_cast_as_varchar,
     float_to_double,
     identifier,
     indices_to_json_extract,
@@ -398,6 +399,22 @@ def test_flatten() -> None:
         .transform(flatten)
         .sql(dialect="duckdb")
         == """SELECT t.id, flat.value -> '$.fruit' FROM (SELECT 1, JSON('[{"fruit":"banana"}]') UNION SELECT 2, JSON('[{"fruit":"coconut"}, {"fruit":"durian"}]')) AS t(id, fruits), LATERAL UNNEST(CAST(t.fruits AS JSON[])) AS flat(VALUE)"""  # noqa: E501
+    )
+
+
+def test_flatten_value_cast_as_varchar() -> None:
+    assert (
+        sqlglot.parse_one(
+            """
+            SELECT ID , F.VALUE::varchar as V
+            FROM TEST AS T
+            , LATERAL FLATTEN(input => SPLIT(T.COL, ',')) AS F;
+            """,
+            read="snowflake",
+        )
+        .transform(flatten_value_cast_as_varchar)
+        .sql(dialect="duckdb")
+        == """SELECT ID, F.VALUE ->> '$' AS V FROM TEST AS T, LATERAL UNNEST(input => STR_SPLIT(T.COL, ',')) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)"""  # noqa: E501
     )
 
 

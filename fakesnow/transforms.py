@@ -436,7 +436,7 @@ def flatten(expression: exp.Expression) -> exp.Expression:
         isinstance(expression, exp.Lateral)
         and isinstance(expression.this, exp.Explode)
         and (alias := expression.args.get("alias"))
-        # always true; when no explicit alias provided this will be _flattened
+        # always true; when no explicit alias provided this will be flattened
         and isinstance(alias, exp.TableAlias)
     ):
         explode_expression = expression.this.this.expression
@@ -456,6 +456,25 @@ def flatten(expression: exp.Expression) -> exp.Expression:
             ),
             alias=exp.TableAlias(this=alias.this, columns=[exp.Identifier(this="VALUE", quoted=False)]),
         )
+
+    return expression
+
+
+def flatten_value_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
+    """Return raw unquoted string when flatten VALUE is cast to varchar.
+
+    Returns a raw string using the Duckdb ->> operator, aka the json_extract_string function, see
+    https://duckdb.org/docs/extensions/json#json-extraction-functions
+    """
+    if (
+        isinstance(expression, exp.Cast)
+        and isinstance(expression.this, exp.Column)
+        and expression.this.name.upper() == "VALUE"
+        and expression.to.this in [exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT]
+        and (select := expression.find_ancestor(exp.Select))
+        and select.find(exp.Lateral)
+    ):
+        return exp.JSONExtractScalar(this=expression.this, expression=exp.JSONPath(expressions=[exp.JSONPathRoot()]))
 
     return expression
 

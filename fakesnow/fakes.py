@@ -158,6 +158,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.tag)
             .transform(transforms.semi_structured_types)
             .transform(transforms.try_parse_json)
+            .transform(transforms.split)
             # NOTE: trim_cast_varchar must be before json_extract_cast_as_varchar
             .transform(transforms.trim_cast_varchar)
             # indices_to_json_extract must be before regex_substr
@@ -166,6 +167,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.json_extract_cased_as_varchar)
             .transform(transforms.json_extract_precedence)
             .transform(transforms.flatten)
+            .transform(transforms.flatten_value_cast_as_varchar)
             .transform(transforms.regex_replace)
             .transform(transforms.regex_substr)
             .transform(transforms.values_columns)
@@ -199,7 +201,6 @@ class FakeSnowflakeCursor:
             .transform(transforms.sha256)
             .transform(transforms.create_clone)
             .transform(transforms.alias_in_join)
-            .transform(transforms.split)
         )
 
     def _execute(

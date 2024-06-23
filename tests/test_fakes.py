@@ -796,6 +796,18 @@ def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1, '"banana"'), (2, '"coconut"'), (2, '"durian"')]
 
 
+def test_flatten_value_cast_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute(
+        """
+        select id, f.value::varchar as v
+        from (select column1 as id, column2 as col from (values (1, 's1,s2,s3'), (2, 's1,s2'))) as t
+        , lateral flatten(input => split(t.col, ',')) as f order by id
+        """
+    )
+    # should be raw string not json string with double quotes
+    assert cur.fetchall() == [(1, "s1"), (1, "s2"), (1, "s3"), (2, "s1"), (2, "s2")]
+
+
 def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table example (f float, f4 float4, f8 float8, d double, r real)")
     cur.execute("insert into example values (1.23, 1.23, 1.23, 1.23, 1.23)")
