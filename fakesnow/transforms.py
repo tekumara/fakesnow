@@ -119,9 +119,13 @@ def create_database(expression: exp.Expression, db_path: Path | None = None) -> 
         db_name = ident.this
         db_file = f"{db_path/db_name}.db" if db_path else ":memory:"
 
+        exists_exp = ""
+        if expression.args.get("exists"):
+            exists_exp += "IF NOT EXISTS "
+
         return exp.Command(
             this="ATTACH",
-            expression=exp.Literal(this=f"DATABASE '{db_file}' AS {db_name}", is_string=True),
+            expression=exp.Literal(this=f"{exists_exp}DATABASE '{db_file}' AS {db_name}", is_string=True),
             create_db_name=db_name,
         )
 
