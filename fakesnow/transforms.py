@@ -652,6 +652,73 @@ def json_extract_precedence(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def merge(expression: exp.Expression) -> list[exp.Expression]:
+    """Create multiple compatible duckdb statements to be functionally equivalent to Snowflake's MERGE INTO.
+    Snowflake's MERGE INTO: See https://docs.snowflake.com/en/sql-reference/sql/merge.html
+    """
+
+    if isinstance(expression, exp.Merge):
+        output_expressions = []
+        target_table = expression.this
+        source_table = expression.args.get("using")
+        on_expression = expression.args.get("on")
+        whens = expression.expressions
+        for w in whens:
+            assert isinstance(w, exp.When), f"Expected When expression, got {w}"
+
+            and_condition = w.args.get("condition")
+            subquery_on_expression = on_expression.copy()
+            if and_condition:
+                subquery_on_expression = exp.And(this=subquery_on_expression, expression=and_condition)
+            subquery = exp.Exists(
+                this=exp.Select(expressions=[exp.Star()])
+                .from_(source_table)
+                .join(target_table, on=subquery_on_expression)
+            )
+
+            matched = w.args.get("matched")
+            then = w.args.get("then")
+            if matched:
+                if isinstance(then, exp.Update):
+
+                    def remove_source_alias(eq_exp: exp.EQ) -> exp.EQ:
+                        eq_exp.args.get("this").set("table", None)
+                        return eq_exp
+
+                    then.set("this", target_table)
+                    then.set(
+                        "expressions",
+                        exp.Set(expressions=[remove_source_alias(e) for e in then.args.get("expressions")]),
+                    )
+                    then.set("from", exp.From(this=source_table))
+                    then.set("where", exp.Where(this=subquery))
+                    output_expressions.append(then)
+                elif then.args.get("this") == "DELETE":  # Var(this=DELETE) when processing WHEN MATCHED THEN DELETE.
+                    output_expressions.append(exp.Delete(this=target_table).where(subquery))
+                else:
+                    assert isinstance(then, (exp.Update, exp.Delete)), f"Expected 'Update' or 'Delete', got {then}"
+            else:
+                assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
+                not_exists_subquery = exp.Not(this=subquery)
+
+                def remove_table_alias(eq_exp: exp.Column) -> exp.Column:
+                    eq_exp.set("table", None)
+                    return eq_exp
+
+                columns = [remove_table_alias(e) for e in then.args.get("this").expressions]
+                statement = exp.Insert(
+                    this=exp.Schema(this=target_table, expressions=columns),
+                    expression=exp.Select()
+                    .select(*(then.args.get("expression").args.get("expressions")))
+                    .from_(source_table)
+                    .where(not_exists_subquery),
+                )
+                output_expressions.append(statement)
+        return output_expressions
+    else:
+        return [expression]
+
+
 def random(expression: exp.Expression) -> exp.Expression:
     """Convert random() and random(seed).
 

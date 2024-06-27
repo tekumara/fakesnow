@@ -32,6 +32,7 @@ from fakesnow.transforms import (
     json_extract_cased_as_varchar,
     json_extract_cast_as_varchar,
     json_extract_precedence,
+    merge,
     object_construct,
     random,
     regex_replace,
@@ -547,6 +548,113 @@ def test_json_extract_precedence() -> None:
         .transform(json_extract_precedence)
         .sql(dialect="duckdb")
         == """SELECT {'K1': {'K2': 1}} AS col WHERE (col -> '$.K1.K2') > 0"""
+    )
+
+
+def test_merge_update_insert() -> None:
+    expression = sqlglot.parse_one("""
+    MERGE INTO table1 T
+    USING table2 S
+    ON T.id = S.id AND T.blah = S.blah AND T.foo = S.foo
+    WHEN MATCHED THEN
+        UPDATE SET T.name = S.name, T.version = S.version
+    WHEN NOT MATCHED THEN
+        INSERT (id, name) VALUES (S.id, S.name)
+    """)
+
+    expressions = merge(expression)
+    assert len(expressions) == 2
+    assert (
+        expressions[0].sql()
+        == "UPDATE table1 AS T SET name = S.name, version = S.version FROM table2 AS S WHERE EXISTS(SELECT * FROM table2 AS S JOIN table1 AS T ON T.id = S.id AND T.blah = S.blah AND T.foo = S.foo)"  # noqa: E501
+    )
+    assert (
+        expressions[1].sql()
+        == "INSERT INTO table1 AS T (id, name) SELECT S.id, S.name FROM table2 AS S WHERE NOT EXISTS(SELECT * FROM table2 AS S JOIN table1 AS T ON T.id = S.id AND T.blah = S.blah AND T.foo = S.foo)"  # noqa: E501
+    )
+
+
+def test_merge_update_insert_and() -> None:
+    expression = sqlglot.parse_one("""
+    MERGE INTO table1 T
+    USING table2 S
+    ON T.id = S.id AND T.blah = S.blah
+    WHEN MATCHED AND T.foo = S.foo THEN
+        UPDATE SET T.name = S.name, T.version = S.version
+    WHEN NOT MATCHED AND T.foo = S.foo THEN
+        INSERT (id, name) VALUES (S.id, S.name)
+    """)
+
+    expressions = merge(expression)
+    assert len(expressions) == 2
+    assert (
+        expressions[0].sql()
+        == "UPDATE table1 AS T SET name = S.name, version = S.version FROM table2 AS S WHERE EXISTS(SELECT * FROM table2 AS S JOIN table1 AS T ON T.id = S.id AND T.blah = S.blah AND T.foo = S.foo)"  # noqa: E501
+    )
+    assert (
+        expressions[1].sql()
+        == "INSERT INTO table1 AS T (id, name) SELECT S.id, S.name FROM table2 AS S WHERE NOT EXISTS(SELECT * FROM table2 AS S JOIN table1 AS T ON T.id = S.id AND T.blah = S.blah AND T.foo = S.foo)"  # noqa: E501
+    )
+
+
+def test_merge_delete_insert() -> None:
+    expression = sqlglot.parse_one("""
+    MERGE INTO table1 T
+    USING table2 S
+    ON T.id = S.id AND T.blah = S.blah AND T.foo = S.foo
+    WHEN MATCHED THEN DELETE
+    WHEN NOT MATCHED THEN
+        INSERT (id, name) VALUES (S.id, S.name)
+    """)
+
+    expressions = merge(expression)
+    assert len(expressions) == 2
+    assert (
+        expressions[0].sql()
+        == "DELETE FROM table1 AS T WHERE EXISTS(SELECT * FROM table2 AS S JOIN table1 AS T ON T.id = S.id AND T.blah = S.blah AND T.foo = S.foo)"  # noqa: E501
+    )
+    assert (
+        expressions[1].sql()
+        == "INSERT INTO table1 AS T (id, name) SELECT S.id, S.name FROM table2 AS S WHERE NOT EXISTS(SELECT * FROM table2 AS S JOIN table1 AS T ON T.id = S.id AND T.blah = S.blah AND T.foo = S.foo)"  # noqa: E501
+    )
+
+
+def test_merge_delete_insert_and() -> None:
+    expression = sqlglot.parse_one("""
+    MERGE INTO table1 T
+    USING table2 S
+    ON T.id = S.id AND T.blah = S.blah
+    WHEN MATCHED AND T.foo = S.foo THEN DELETE
+    WHEN NOT MATCHED AND T.foo = S.foo THEN
+        INSERT (id, name) VALUES (S.id, S.name)
+    """)
+
+    expressions = merge(expression)
+    assert len(expressions) == 2
+    assert (
+        expressions[0].sql()
+        == "DELETE FROM table1 AS T WHERE EXISTS(SELECT * FROM table2 AS S JOIN table1 AS T ON T.id = S.id AND T.blah = S.blah AND T.foo = S.foo)"  # noqa: E501
+    )
+    assert (
+        expressions[1].sql()
+        == "INSERT INTO table1 AS T (id, name) SELECT S.id, S.name FROM table2 AS S WHERE NOT EXISTS(SELECT * FROM table2 AS S JOIN table1 AS T ON T.id = S.id AND T.blah = S.blah AND T.foo = S.foo)"  # noqa: E501
+    )
+
+
+def test_merge_insert_strips_insert_table_aliases() -> None:
+    expression = sqlglot.parse_one("""
+    MERGE INTO table1 T
+    USING table2 S
+    ON T.id = S.id
+    WHEN NOT MATCHED AND T.foo = S.foo THEN
+        INSERT (T.id, T.name) VALUES (S.id, S.name)
+    """)
+
+    expressions = merge(expression)
+    assert len(expressions) == 1
+    assert (
+        expressions[0].sql()
+        == "INSERT INTO table1 AS T (id, name) SELECT S.id, S.name FROM table2 AS S WHERE NOT EXISTS(SELECT * FROM table2 AS S JOIN table1 AS T ON T.id = S.id AND T.foo = S.foo)"  # noqa: E501
     )
 
 
