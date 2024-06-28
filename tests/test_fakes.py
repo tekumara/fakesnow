@@ -15,6 +15,7 @@ import snowflake.connector.cursor
 import snowflake.connector.pandas_tools
 from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
+from snowflake.connector.errors import ProgrammingError
 
 import fakesnow
 from tests.utils import dindent, indent
@@ -340,6 +341,17 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
 
         # schema still present on connection
         assert conn.schema == "JAFFLES"
+
+
+def test_create_database_respects_if_not_exists() -> None:
+    with tempfile.TemporaryDirectory(prefix="fakesnow-test") as db_path, fakesnow.patch(db_path=db_path):
+        cursor = snowflake.connector.connect().cursor()
+        cursor.execute("CREATE DATABASE db2")
+
+        with pytest.raises(ProgrammingError, match='Database "DB2" is already attached with path'):
+            cursor.execute("CREATE DATABASE db2")  # Fails as db already exists.
+
+        cursor.execute("CREATE DATABASE IF NOT EXISTS db2")
 
 
 def test_dateadd_date_cast(dcur: snowflake.connector.DictCursor):
