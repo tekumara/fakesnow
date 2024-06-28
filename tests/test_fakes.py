@@ -7,6 +7,7 @@ import json
 import tempfile
 from decimal import Decimal
 
+import duckdb
 import pandas as pd
 import pytest
 import pytz
@@ -1540,6 +1541,54 @@ def test_use_invalid_schema(_fakesnow: None):
             "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
             in str(excinfo.value)
         )
+
+
+# Snowflake SQL variables: https://docs.snowflake.com/en/sql-reference/session-variables#using-variables-in-sql
+#
+# Variables are scoped to the session (Eg. The connection, not the cursor)
+# [x] Simple scalar variables: SET var1 = 1;
+# [x] Unset variables: UNSET var1;
+# [x] Simple SQL expression variables: SET INCREMENTAL_DATE = DATEADD( 'DAY', -7, CURRENT_DATE());
+# [x] Basic use of variables in SQL using $ syntax: SELECT $var1;
+# [ ] Multiple variables: SET (var1, var2) = (1, 'hello');
+# [ ] Variables set via 'properties' on the connection https://docs.snowflake.com/en/sql-reference/session-variables#setting-variables-on-connection
+# [ ] Using variables via the IDENTIFIER function: INSERT INTO IDENTIFIER($my_table_name) (i) VALUES (42);
+# [ ] Session variable functions: https://docs.snowflake.com/en/sql-reference/session-variables#session-variable-functions
+def test_variables(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("SET var1 = 1;")
+        cur.execute("SET var2 = 'hello';")
+        cur.execute('SET var3 = parse_json(\'{"k1": "v1"}\');')
+        cur.execute("SET var4 = array_construct(1, 2, 3);")
+        cur.execute("SET day = CURRENT_DATE();")
+
+        cur.execute("select $var1, $var2, $var3, $var4, $day;")
+        assert cur.fetchall() == [(1, "hello", '{"k1":"v1"}', [1, 2, 3], datetime.date.today())]
+
+        cur.execute("CREATE TABLE example (id int, name varchar);")
+        cur.execute("INSERT INTO example VALUES (10, 'hello'), (20, 'world');")
+        cur.execute("select id, name from example where name = $var2;")
+        assert cur.fetchall() == [(10, "hello")]
+
+        cur.execute("UNSET var3;")
+        try:
+            cur.execute("select $var3;")
+            raise AssertionError("Expected exception")
+        except duckdb.duckdb.InvalidInputException:
+            pass
+
+    # variables are scoped to the session, so they should be available in a new cursor.
+    with conn.cursor() as cur:
+        cur.execute("select $var1, $var2, $var4;")
+        assert cur.fetchall() == [(1, "hello", [1, 2, 3])]
+
+    # but not in a new connection.
+    with snowflake.connector.connect() as conn, conn.cursor() as cur:
+        try:
+            cur.execute("select $var1;")
+            raise AssertionError("Expected exception")
+        except duckdb.duckdb.InvalidInputException:
+            pass
 
 
 def test_values(conn: snowflake.connector.SnowflakeConnection):
