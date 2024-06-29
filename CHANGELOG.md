@@ -2,6 +2,14 @@
 
 # Changelog
 
+## [0.9.18](https://github.com/tekumara/fakesnow/compare/v0.9.17...v0.9.18) (2024-06-29)
+
+
+### Bug Fixes
+
+* execute_string ignores comments ([e6513f7](https://github.com/tekumara/fakesnow/commit/e6513f79e50af5c97634849d4be02b818ab7e796))
+* Support IF NOT EXISTS in CREATE DATABASE statements ([#108](https://github.com/tekumara/fakesnow/issues/108)) ([e7f3f97](https://github.com/tekumara/fakesnow/commit/e7f3f97b26fccc7758892d004e1bfab339d9c732))
+
 ## [0.9.17](https://github.com/tekumara/fakesnow/compare/v0.9.16...v0.9.17) (2024-06-23)
 
 
