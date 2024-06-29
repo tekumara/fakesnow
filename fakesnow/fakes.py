@@ -611,7 +611,7 @@ class FakeSnowflakeConnection:
         cursors = [
             self.cursor(cursor_class).execute(e.sql(dialect="snowflake"))
             for e in sqlglot.parse(sql_text, read="snowflake")
-            if e
+            if e and not isinstance(e, exp.Semicolon)  # ignore comments
         ]
         return cursors if return_cursors else []
 

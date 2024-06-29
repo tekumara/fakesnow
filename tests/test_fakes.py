@@ -708,11 +708,14 @@ def test_executemany(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_execute_string(conn: snowflake.connector.SnowflakeConnection):
-    [_, cur2] = conn.execute_string(
-        """ create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar);
-            select count(*) customers """
+    *_, cur = conn.execute_string(
+        """
+        create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar);
+        -- test comments are ignored
+        select count(*) customers
+        """
     )
-    assert cur2.fetchall() == [(1,)]
+    assert cur.fetchall() == [(1,)]
 
 
 def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
