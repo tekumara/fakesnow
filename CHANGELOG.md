@@ -2,6 +2,18 @@
 
 # Changelog
 
+## [0.9.19](https://github.com/tekumara/fakesnow/compare/v0.9.18...v0.9.19) (2024-07-08)
+
+
+### Features
+
+* Implements basic snowflake session variables via SET/UNSET ([#111](https://github.com/tekumara/fakesnow/issues/111)) ([7696cbd](https://github.com/tekumara/fakesnow/commit/7696cbdae629971f7f61546be4301c35dd9e8173))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.366 to 1.1.369 ([#112](https://github.com/tekumara/fakesnow/issues/112)) ([7656ab9](https://github.com/tekumara/fakesnow/commit/7656ab910034e166e2b92703bf9af5a7f7fb1668))
+
 ## [0.9.18](https://github.com/tekumara/fakesnow/compare/v0.9.17...v0.9.18) (2024-06-29)
 
 
