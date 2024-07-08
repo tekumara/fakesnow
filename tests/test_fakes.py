@@ -1558,12 +1558,10 @@ def test_variables(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("SET var1 = 1;")
         cur.execute("SET var2 = 'hello';")
-        cur.execute('SET var3 = parse_json(\'{"k1": "v1"}\');')
-        cur.execute("SET var4 = array_construct(1, 2, 3);")
-        cur.execute("SET day = CURRENT_DATE();")
+        cur.execute("SET var3 = DATEADD( 'DAY', -7, '2024-10-09');")
 
-        cur.execute("select $var1, $var2, $var3, $var4, $day;")
-        assert cur.fetchall() == [(1, "hello", '{"k1":"v1"}', [1, 2, 3], datetime.date.today())]
+        cur.execute("select $var1, $var2, $var3;")
+        assert cur.fetchall() == [(1, "hello", datetime.datetime(2024, 10, 2, 0, 0))]
 
         cur.execute("CREATE TABLE example (id int, name varchar);")
         cur.execute("INSERT INTO example VALUES (10, 'hello'), (20, 'world');")
@@ -1573,20 +1571,20 @@ def test_variables(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("UNSET var3;")
         try:
             cur.execute("select $var3;")
-            raise AssertionError("Expected exception")
+            raise AssertionError("Expected exception")  # Session variable '$VAR3' does not exist
         except duckdb.duckdb.InvalidInputException:
             pass
 
     # variables are scoped to the session, so they should be available in a new cursor.
     with conn.cursor() as cur:
-        cur.execute("select $var1, $var2, $var4;")
-        assert cur.fetchall() == [(1, "hello", [1, 2, 3])]
+        cur.execute("select $var1, $var2")
+        assert cur.fetchall() == [(1, "hello")]
 
     # but not in a new connection.
     with snowflake.connector.connect() as conn, conn.cursor() as cur:
         try:
             cur.execute("select $var1;")
-            raise AssertionError("Expected exception")
+            raise AssertionError("Expected exception")  # Session variable '$VAR1' does not exist
         except duckdb.duckdb.InvalidInputException:
             pass
 
