@@ -33,6 +33,7 @@ import fakesnow.info_schema as info_schema
 import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 from fakesnow.global_database import create_global_database
+from fakesnow.variables import Variables
 
 SCHEMA_UNSET = "schema_unset"
 SQL_SUCCESS = "SELECT 'Statement executed successfully.' as 'status'"
@@ -134,6 +135,7 @@ class FakeSnowflakeCursor:
             if os.environ.get("FAKESNOW_DEBUG") == "snowflake":
                 print(f"{command};{params=}" if params else f"{command};", file=sys.stderr)
 
+            command = self._inline_variables(command)
             command, params = self._rewrite_with_params(command, params)
             if self._conn.nop_regexes and any(re.match(p, command, re.IGNORECASE) for p in self._conn.nop_regexes):
                 transformed = transforms.SUCCESS_NOP
@@ -148,6 +150,7 @@ class FakeSnowflakeCursor:
     def _transform(self, expression: exp.Expression) -> exp.Expression:
         return (
             expression.transform(transforms.upper_case_unquoted_identifiers)
+            .transform(transforms.update_variables, variables=self._conn.variables)
             .transform(transforms.set_schema, current_database=self._conn.database)
             .transform(transforms.create_database, db_path=self._conn.db_path)
             .transform(transforms.extract_comment_on_table)
@@ -501,6 +504,9 @@ class FakeSnowflakeCursor:
 
         return command, params
 
+    def _inline_variables(self, sql: str) -> str:
+        return self._conn.variables.inline_variables(sql)
+
 
 class FakeSnowflakeConnection:
     def __init__(
@@ -525,6 +531,7 @@ class FakeSnowflakeConnection:
         self.db_path = Path(db_path) if db_path else None
         self.nop_regexes = nop_regexes
         self._paramstyle = snowflake.connector.paramstyle
+        self.variables = Variables()
 
         create_global_database(duck_conn)
 

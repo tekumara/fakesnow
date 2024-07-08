@@ -4,6 +4,7 @@ from __future__ import annotations
 # pyright: reportOptionalMemberAccess=false
 import datetime
 import json
+import re
 import tempfile
 from decimal import Decimal
 
@@ -1555,6 +1556,53 @@ def test_use_invalid_schema(_fakesnow: None):
             "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
             in str(excinfo.value)
         )
+
+
+# Snowflake SQL variables: https://docs.snowflake.com/en/sql-reference/session-variables#using-variables-in-sql
+#
+# Variables are scoped to the session (Eg. The connection, not the cursor)
+# [x] Simple scalar variables: SET var1 = 1;
+# [x] Unset variables: UNSET var1;
+# [x] Simple SQL expression variables: SET INCREMENTAL_DATE = DATEADD( 'DAY', -7, CURRENT_DATE());
+# [x] Basic use of variables in SQL using $ syntax: SELECT $var1;
+# [ ] Multiple variables: SET (var1, var2) = (1, 'hello');
+# [ ] Variables set via 'properties' on the connection https://docs.snowflake.com/en/sql-reference/session-variables#setting-variables-on-connection
+# [ ] Using variables via the IDENTIFIER function: INSERT INTO IDENTIFIER($my_table_name) (i) VALUES (42);
+# [ ] Session variable functions: https://docs.snowflake.com/en/sql-reference/session-variables#session-variable-functions
+def test_variables(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("SET var1 = 1;")
+        cur.execute("SET var2 = 'hello';")
+        cur.execute("SET var3 = DATEADD( 'DAY', -7, '2024-10-09');")
+
+        cur.execute("select $var1, $var2, $var3;")
+        assert cur.fetchall() == [(1, "hello", datetime.datetime(2024, 10, 2, 0, 0))]
+
+        cur.execute("CREATE TABLE example (id int, name varchar);")
+        cur.execute("INSERT INTO example VALUES (10, 'hello'), (20, 'world');")
+        cur.execute("select id, name from example where name = $var2;")
+        assert cur.fetchall() == [(10, "hello")]
+
+        cur.execute("UNSET var3;")
+        with pytest.raises(
+            snowflake.connector.errors.ProgrammingError, match=re.escape("Session variable '$VAR3' does not exist")
+        ):
+            cur.execute("select $var3;")
+
+    # variables are scoped to the session, so they should be available in a new cursor.
+    with conn.cursor() as cur:
+        cur.execute("select $var1, $var2")
+        assert cur.fetchall() == [(1, "hello")]
+
+    # but not in a new connection.
+    with (
+        snowflake.connector.connect() as conn,
+        conn.cursor() as cur,
+        pytest.raises(
+            snowflake.connector.errors.ProgrammingError, match=re.escape("Session variable '$VAR1' does not exist")
+        ),
+    ):
+        cur.execute("select $var1;")
 
 
 def test_values(conn: snowflake.connector.SnowflakeConnection):
