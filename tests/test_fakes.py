@@ -4,10 +4,10 @@ from __future__ import annotations
 # pyright: reportOptionalMemberAccess=false
 import datetime
 import json
+import re
 import tempfile
 from decimal import Decimal
 
-import duckdb
 import pandas as pd
 import pytest
 import pytz
@@ -1569,11 +1569,10 @@ def test_variables(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchall() == [(10, "hello")]
 
         cur.execute("UNSET var3;")
-        try:
+        with pytest.raises(
+            snowflake.connector.errors.ProgrammingError, match=re.escape("Session variable '$VAR3' does not exist")
+        ):
             cur.execute("select $var3;")
-            raise AssertionError("Expected exception")  # Session variable '$VAR3' does not exist
-        except duckdb.duckdb.InvalidInputException:
-            pass
 
     # variables are scoped to the session, so they should be available in a new cursor.
     with conn.cursor() as cur:
@@ -1581,12 +1580,14 @@ def test_variables(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchall() == [(1, "hello")]
 
     # but not in a new connection.
-    with snowflake.connector.connect() as conn, conn.cursor() as cur:
-        try:
-            cur.execute("select $var1;")
-            raise AssertionError("Expected exception")  # Session variable '$VAR1' does not exist
-        except duckdb.duckdb.InvalidInputException:
-            pass
+    with (
+        snowflake.connector.connect() as conn,
+        conn.cursor() as cur,
+        pytest.raises(
+            snowflake.connector.errors.ProgrammingError, match=re.escape("Session variable '$VAR1' does not exist")
+        ),
+    ):
+        cur.execute("select $var1;")
 
 
 def test_values(conn: snowflake.connector.SnowflakeConnection):

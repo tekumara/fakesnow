@@ -786,4 +786,10 @@ class Variables:
     def inline_variables(self, sql: str) -> str:
         for name, value in self._variables.items():
             sql = re.sub(rf"\${name}", value, sql, flags=re.IGNORECASE)
+
+        remaining_variables = re.search(r"\$\w+", sql)
+        if remaining_variables:
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"Session variable '{remaining_variables.group().upper()}' does not exist"
+            )
         return sql
