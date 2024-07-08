@@ -33,6 +33,7 @@ import fakesnow.info_schema as info_schema
 import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 from fakesnow.global_database import create_global_database
+from fakesnow.variables import Variables
 
 SCHEMA_UNSET = "schema_unset"
 SQL_SUCCESS = "SELECT 'Statement executed successfully.' as 'status'"
@@ -141,9 +142,6 @@ class FakeSnowflakeCursor:
             else:
                 expression = parse_one(command, read="snowflake")
                 transformed = self._transform(expression)
-                if Variables.is_variable_modifier(transformed):
-                    self._conn.variables.update_variables(transformed)
-                    transformed = transforms.SUCCESS_NOP  # Nothing further to do if its a SET/UNSET operation.
             return self._execute(transformed, params)
         except snowflake.connector.errors.ProgrammingError as e:
             self._sqlstate = e.sqlstate
@@ -152,6 +150,7 @@ class FakeSnowflakeCursor:
     def _transform(self, expression: exp.Expression) -> exp.Expression:
         return (
             expression.transform(transforms.upper_case_unquoted_identifiers)
+            .transform(transforms.update_variables, variables=self._conn.variables)
             .transform(transforms.set_schema, current_database=self._conn.database)
             .transform(transforms.create_database, db_path=self._conn.db_path)
             .transform(transforms.extract_comment_on_table)
@@ -742,58 +741,3 @@ def write_pandas(
 
     # return success
     return (True, len(mock_copy_results), count, mock_copy_results)
-
-
-# Implements snowflake variables: https://docs.snowflake.com/en/sql-reference/session-variables#using-variables-in-sql
-class Variables:
-    @classmethod
-    def is_variable_modifier(cls, expr: exp.Expression) -> bool:
-        if isinstance(expr, exp.Set):
-            return True
-        elif cls._is_unset_expression(expr):
-            return expr.this.args.get("this").this == "UNSET"
-        else:
-            return False
-
-    @classmethod
-    def _is_unset_expression(cls, expr: exp.Expression) -> bool:
-        return isinstance(expr, exp.Alias) and expr.this.args.get("this").this == "UNSET"
-
-    def __init__(self) -> None:
-        self._variables = {}
-
-    def update_variables(self, expr: exp.Expression) -> None:
-        if isinstance(expr, exp.Set):
-            unset = expr.args.get("unset")
-            if not unset:  # SET varname = value;
-                unset_expressions = expr.args.get("expressions")
-                assert unset_expressions, "SET without values in expression(s) is unexpected."
-                eq = unset_expressions[0].this
-                name = eq.this.sql()
-                value = eq.args.get("expression").sql()
-                self._set(name, value)
-            else:
-                # Haven't been able to produce this in tests yet due to UNSET being parsed as an Alias expression.
-                raise NotImplementedError("UNSET not supported yet")
-        elif self._is_unset_expression(expr):  # Unfortunately UNSET varname; is parsed as an Alias expression :(
-            alias = expr.args.get("alias")
-            assert alias, "UNSET without value in alias attribute is unexpected."
-            name = alias.this
-            self._unset(name)
-
-    def _set(self, name: str, value: str) -> None:
-        self._variables[name] = value
-
-    def _unset(self, name: str) -> None:
-        self._variables.pop(name)
-
-    def inline_variables(self, sql: str) -> str:
-        for name, value in self._variables.items():
-            sql = re.sub(rf"\${name}", value, sql, flags=re.IGNORECASE)
-
-        remaining_variables = re.search(r"\$\w+", sql)
-        if remaining_variables:
-            raise snowflake.connector.errors.ProgrammingError(
-                msg=f"Session variable '{remaining_variables.group().upper()}' does not exist"
-            )
-        return sql
