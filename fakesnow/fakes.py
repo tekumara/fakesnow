@@ -766,7 +766,9 @@ class Variables:
         if isinstance(expr, exp.Set):
             unset = expr.args.get("unset")
             if not unset:  # SET varname = value;
-                eq = expr.args.get("expressions")[0].this
+                unset_expressions = expr.args.get("expressions")
+                assert unset_expressions, "SET without values in expression(s) is unexpected."
+                eq = unset_expressions[0].this
                 name = eq.this.sql()
                 value = eq.args.get("expression").sql()
                 self._set(name, value)
@@ -774,7 +776,9 @@ class Variables:
                 # Haven't been able to produce this in tests yet due to UNSET being parsed as an Alias expression.
                 raise NotImplementedError("UNSET not supported yet")
         elif self._is_unset_expression(expr):  # Unfortunately UNSET varname; is parsed as an Alias expression :(
-            name = expr.args.get("alias").this
+            alias = expr.args.get("alias")
+            assert alias, "UNSET without value in alias attribute is unexpected."
+            name = alias.this
             self._unset(name)
 
     def _set(self, name: str, value: str) -> None:
