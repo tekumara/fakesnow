@@ -13,6 +13,7 @@ import snowflake.connector
 import snowflake.connector.pandas_tools
 
 import fakesnow.fakes as fakes
+from fakesnow.global_database import create_global_database
 
 
 @contextmanager
@@ -52,6 +53,7 @@ def patch(
     assert not isinstance(snowflake.connector.connect, mock.MagicMock), "Snowflake connector is already patched"
 
     duck_conn = duckdb.connect(database=":memory:")
+    create_global_database(duck_conn)
 
     fake_fns = {
         # every time we connect, create a new cursor (ie: connection) so we can isolate each connection's

@@ -32,7 +32,6 @@ import fakesnow.expr as expr
 import fakesnow.info_schema as info_schema
 import fakesnow.macros as macros
 import fakesnow.transforms as transforms
-from fakesnow.global_database import create_global_database
 from fakesnow.variables import Variables
 
 SCHEMA_UNSET = "schema_unset"
@@ -532,8 +531,6 @@ class FakeSnowflakeConnection:
         self.nop_regexes = nop_regexes
         self._paramstyle = snowflake.connector.paramstyle
         self.variables = Variables()
-
-        create_global_database(duck_conn)
 
         # create database if needed
         if (

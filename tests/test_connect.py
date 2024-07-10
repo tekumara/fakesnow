@@ -1,5 +1,6 @@
-
 from __future__ import annotations
+
+import concurrent.futures
 
 # ruff: noqa: E501
 # pyright: reportOptionalMemberAccess=false
@@ -43,10 +44,24 @@ def test_connect_different_sessions_use_database(_fakesnow_no_auto_create: None)
         assert cur.fetchall() == [(1, "Jenny", "P"), (2, "Jasper", "M")]
 
 
+def test_connect_concurrently(_fakesnow: None) -> None:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=2) as executor:
+        future_a = executor.submit(snowflake.connector.connect)
+        future_b = executor.submit(snowflake.connector.connect)
+
+        futures = [future_a, future_b]
+
+        for future in concurrent.futures.as_completed(futures):
+            # exceptions if any will be raised here. we want to avoid
+            # duckdb.duckdb.TransactionException: TransactionContext Error: Catalog write-write conflict
+            _ = future.result()
+
+
 def test_connect_db_path_can_create_database() -> None:
     with tempfile.TemporaryDirectory(prefix="fakesnow-test") as db_path, fakesnow.patch(db_path=db_path):
         cursor = snowflake.connector.connect().cursor()
         cursor.execute("CREATE DATABASE db2")
+
 
 def test_connect_db_path_reuse():
     with tempfile.TemporaryDirectory(prefix="fakesnow-test") as db_path:
@@ -66,8 +81,6 @@ def test_connect_db_path_reuse():
             conn.cursor() as cur,
         ):
             assert cur.execute("select * from example").fetchall() == [(420,)]
-
-
 
 
 def test_connect_without_database(_fakesnow_no_auto_create: None):
@@ -152,7 +165,6 @@ def test_connect_without_schema(_fakesnow: None):
 
         conn.execute_string("CREATE SCHEMA schema1; USE SCHEMA schema1;")
         assert conn.schema == "SCHEMA1"
-
 
 
 def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
