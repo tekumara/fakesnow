@@ -2,6 +2,19 @@
 
 # Changelog
 
+## [0.9.20](https://github.com/tekumara/fakesnow/compare/v0.9.19...v0.9.20) (2024-07-10)
+
+
+### Features
+
+* SHOW PRIMARY KEYS for table ([#114](https://github.com/tekumara/fakesnow/issues/114)) ([2c006b3](https://github.com/tekumara/fakesnow/commit/2c006b31c4f1f4e39ac6bb5d435182ec7d43e938))
+
+
+### Bug Fixes
+
+* $$  not considered a variable ([235fbc1](https://github.com/tekumara/fakesnow/commit/235fbc16081e85d309f911ae0662fc4332f14de0))
+* concurrent connection write-write conflict ([96ba682](https://github.com/tekumara/fakesnow/commit/96ba6826d879fdcab6bb1bf4e0aea3a3f2d406cc))
+
 ## [0.9.19](https://github.com/tekumara/fakesnow/compare/v0.9.18...v0.9.19) (2024-07-08)
 
 
