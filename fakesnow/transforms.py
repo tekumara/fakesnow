@@ -1402,6 +1402,11 @@ def show_keys(
 
                 if schema:
                     statement += f"AND schema_name = '{schema}' "
+            elif scope_kind == "TABLE":
+                if not table:
+                    raise ValueError(f"SHOW PRIMARY KEYS with {scope_kind} scope requires a table")
+
+                statement += f"AND table_name = '{table.name}' "
             else:
                 raise NotImplementedError(f"SHOW PRIMARY KEYS with {scope_kind} not yet supported")
         return sqlglot.parse_one(statement)
