@@ -49,8 +49,7 @@ class Variables:
         for name, value in self._variables.items():
             sql = re.sub(rf"\${name}", value, sql, flags=re.IGNORECASE)
 
-        remaining_variables = re.search(r"\$\w+", sql)
-        if remaining_variables:
+        if remaining_variables := re.search(r"(?<!\$)\$\w+", sql):
             raise snowflake.connector.errors.ProgrammingError(
                 msg=f"Session variable '{remaining_variables.group().upper()}' does not exist"
             )

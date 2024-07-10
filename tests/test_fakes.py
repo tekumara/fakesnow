@@ -1229,6 +1229,12 @@ def test_sfqid(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.sfqid == "fakesnow"
 
 
+def test_string_constant(cur: snowflake.connector.cursor.SnowflakeCursor):
+    assert cur.execute("""
+        select $$hello
+world$$""").fetchall() == [("hello\nworld",)]
+
+
 def test_tags_noop(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("CREATE TABLE table1 (id int)")
     cur.execute("ALTER TABLE table1 SET TAG foo='bar'")
