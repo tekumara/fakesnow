@@ -193,3 +193,21 @@ def test_info_schema_views_with_views(conn: snowflake.connector.SnowflakeConnect
                 "comment": None,
             }
         ]
+
+
+def test_info_schema_show_primary_keys_from_table(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute(
+        """
+        CREATE TABLE test_table (
+            ID varchar,
+            VERSION varchar,
+            PRIMARY KEY (ID, VERSION)
+        )
+        """
+    )
+
+    cur.execute("SHOW PRIMARY KEYS IN test_table")
+    pk_result = cur.fetchall()
+
+    pk_columns = [result[4] for result in pk_result]
+    assert pk_columns == ["ID", "VERSION"]

@@ -2,6 +2,39 @@
 
 # Changelog
 
+## [0.9.20](https://github.com/tekumara/fakesnow/compare/v0.9.19...v0.9.20) (2024-07-10)
+
+
+### Features
+
+* SHOW PRIMARY KEYS for table ([#114](https://github.com/tekumara/fakesnow/issues/114)) ([2c006b3](https://github.com/tekumara/fakesnow/commit/2c006b31c4f1f4e39ac6bb5d435182ec7d43e938))
+
+
+### Bug Fixes
+
+* $$  not considered a variable ([235fbc1](https://github.com/tekumara/fakesnow/commit/235fbc16081e85d309f911ae0662fc4332f14de0))
+* concurrent connection write-write conflict ([96ba682](https://github.com/tekumara/fakesnow/commit/96ba6826d879fdcab6bb1bf4e0aea3a3f2d406cc))
+
+## [0.9.19](https://github.com/tekumara/fakesnow/compare/v0.9.18...v0.9.19) (2024-07-08)
+
+
+### Features
+
+* Implements basic snowflake session variables via SET/UNSET ([#111](https://github.com/tekumara/fakesnow/issues/111)) ([7696cbd](https://github.com/tekumara/fakesnow/commit/7696cbdae629971f7f61546be4301c35dd9e8173))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.366 to 1.1.369 ([#112](https://github.com/tekumara/fakesnow/issues/112)) ([7656ab9](https://github.com/tekumara/fakesnow/commit/7656ab910034e166e2b92703bf9af5a7f7fb1668))
+
+## [0.9.18](https://github.com/tekumara/fakesnow/compare/v0.9.17...v0.9.18) (2024-06-29)
+
+
+### Bug Fixes
+
+* execute_string ignores comments ([e6513f7](https://github.com/tekumara/fakesnow/commit/e6513f79e50af5c97634849d4be02b818ab7e796))
+* Support IF NOT EXISTS in CREATE DATABASE statements ([#108](https://github.com/tekumara/fakesnow/issues/108)) ([e7f3f97](https://github.com/tekumara/fakesnow/commit/e7f3f97b26fccc7758892d004e1bfab339d9c732))
+
 ## [0.9.17](https://github.com/tekumara/fakesnow/compare/v0.9.16...v0.9.17) (2024-06-23)
 
 

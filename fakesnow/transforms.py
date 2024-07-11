@@ -8,6 +8,7 @@ import sqlglot
 from sqlglot import exp
 
 from fakesnow.global_database import USERS_TABLE_FQ_NAME
+from fakesnow.variables import Variables
 
 MISSING_DATABASE = "missing_database"
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
@@ -1468,9 +1469,24 @@ def show_keys(
 
                 if schema:
                     statement += f"AND schema_name = '{schema}' "
+            elif scope_kind == "TABLE":
+                if not table:
+                    raise ValueError(f"SHOW PRIMARY KEYS with {scope_kind} scope requires a table")
+
+                statement += f"AND table_name = '{table.name}' "
             else:
                 raise NotImplementedError(f"SHOW PRIMARY KEYS with {scope_kind} not yet supported")
         return sqlglot.parse_one(statement)
+    return expression
+
+
+def update_variables(
+    expression: exp.Expression,
+    variables: Variables,
+) -> exp.Expression:
+    if Variables.is_variable_modifier(expression):
+        variables.update_variables(expression)
+        return SUCCESS_NOP  # Nothing further to do if its a SET/UNSET operation.
     return expression
 
 
