@@ -813,8 +813,7 @@ def test_merge(conn: snowflake.connector.SnowflakeConnection):
         cursor_class=snowflake.connector.cursor.DictCursor, # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
     )
 
-    # TODO
-    # assert dcur.fetchall() == [{"number of rows inserted": 1, "number of rows updated": 2, "number of rows deleted": 1}]
+    assert dcur.fetchall() == [{"number of rows inserted": 1, "number of rows updated": 2, "number of rows deleted": 1}]
 
     dcur.execute("select * from t1 order by t1key")
     res= dcur.fetchall()

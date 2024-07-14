@@ -741,7 +741,7 @@ def merge2(expression: exp.Expression) -> list[exp.Expression]:
         on_expression = expression.args.get("on")
 
         # Create temp table for update and delete operations
-        temp_table_inserts.append(sqlglot.parse_one("CREATE OR REPLACE TEMP TABLE temp_merge_table (target_rowid INTEGER, when_id INTEGER)"))
+        temp_table_inserts.append(sqlglot.parse_one("CREATE OR REPLACE TEMP TABLE temp_merge_table (target_rowid INTEGER, when_id INTEGER, type CHAR(1))"))
         # Create temp table for insert operations
         temp_table_inserts.append(sqlglot.parse_one("CREATE OR REPLACE TEMP TABLE temp_merge_inserts_table (source_rowid INTEGER, when_id INTEGER)"))
 
@@ -765,13 +765,16 @@ def merge2(expression: exp.Expression) -> list[exp.Expression]:
                     .where(subquery_on_expression))
                 subquery = exp.And(this=subquery_ignoring_temp_table, expression=not_in_temp_table_subquery)
 
-                temp_match_expr = exp.insert(
-                    into="temp_merge_table",
-                    expression=exp.select("rowid", w_idx).from_(target_table).where(subquery)
-                )
-                temp_table_inserts.append(temp_match_expr)
+                def insert_temp_merge_operation(op_type: str, w_idx: int=w_idx, subquery: exp.Expression=subquery) -> exp.Expression:
+                    assert op_type in ["U", "D"], f"Expected 'U' or 'D', got merge op_type: {op_type}" # Updates or Deletes
+                    return exp.insert(
+                        into="temp_merge_table",
+                        expression=exp.select("rowid", w_idx, exp.Literal(this=op_type, is_string=True)).from_(target_table).where(subquery)
+                    )
 
                 if isinstance(then, exp.Update):
+                    temp_table_inserts.append(insert_temp_merge_operation("U"))
+
                     def remove_source_alias(eq_exp: exp.EQ) -> exp.EQ:
                         eq_exp.args.get("this").set("table", None)
                         return eq_exp
@@ -785,6 +788,7 @@ def merge2(expression: exp.Expression) -> list[exp.Expression]:
                     then.set("where", exp.Where(this=exp.And(this=subquery_on_expression, expression=rowid_in_temp_table_expr)))
                     output_expressions.append(then)
                 elif then.args.get("this") == "DELETE":  # Var(this=DELETE) when processing WHEN MATCHED THEN DELETE.
+                    temp_table_inserts.append(insert_temp_merge_operation("D"))
                     delete_from_temp = exp.delete(table=target_table, where=rowid_in_temp_table_expr)
                     output_expressions.append(delete_from_temp)
                 else:
@@ -821,9 +825,24 @@ def merge2(expression: exp.Expression) -> list[exp.Expression]:
                     .where(rowid_in_temp_table_expr)
                 )
                 output_expressions.append(statement)
-        output_expressions = temp_table_inserts + output_expressions
-        print(*output_expressions, sep='\n')
-        return output_expressions
+
+        # Operate in a transaction to freeze rowids https://duckdb.org/docs/sql/statements/select#row-ids
+        begin_transaction_exp = sqlglot.parse_one("BEGIN TRANSACTION")
+        end_transaction_exp = sqlglot.parse_one("COMMIT")
+        # Add modifications results outcome query
+        results_exp = sqlglot.parse_one("""
+WITH merge_update_deletes AS (
+	select count_if(type == 'U')::int AS "updates", count_if(type == 'D')::int as "deletes"
+	from temp_merge_table
+), merge_inserts AS (select count() AS "inserts" from temp_merge_inserts_table)
+SELECT mi.inserts as "number of rows inserted",
+    mud.updates as "number of rows updated",
+    mud.deletes as "number of rows deleted"
+from merge_update_deletes mud, merge_inserts mi
+""")
+        expressions = [begin_transaction_exp, *temp_table_inserts, *output_expressions, end_transaction_exp, results_exp]
+        print(*expressions, sep='\n')
+        return expressions
     else:
         return [expression]
 
