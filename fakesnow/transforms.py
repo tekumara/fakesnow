@@ -660,74 +660,6 @@ def merge(expression: exp.Expression) -> list[exp.Expression]:
     Snowflake's MERGE INTO: See https://docs.snowflake.com/en/sql-reference/sql/merge.html
     """
 
-    if isinstance(expression, exp.Merge):
-        output_expressions = []
-        target_table = expression.this
-        source_table = expression.args.get("using")
-        on_expression = expression.args.get("on")
-        whens = expression.expressions
-        for w in whens:
-            assert isinstance(w, exp.When), f"Expected When expression, got {w}"
-
-            and_condition = w.args.get("condition")
-            subquery_on_expression = on_expression.copy()
-            if and_condition:
-                subquery_on_expression = exp.And(this=subquery_on_expression, expression=and_condition)
-            subquery = exp.Exists(
-                this=exp.Select(expressions=[exp.Star()])
-                .from_(source_table)
-                .join(target_table, on=subquery_on_expression)
-            )
-
-            matched = w.args.get("matched")
-            then = w.args.get("then")
-            if matched:
-                if isinstance(then, exp.Update):
-
-                    def remove_source_alias(eq_exp: exp.EQ) -> exp.EQ:
-                        eq_exp.args.get("this").set("table", None)
-                        return eq_exp
-
-                    then.set("this", target_table)
-                    then.set(
-                        "expressions",
-                        exp.Set(expressions=[remove_source_alias(e) for e in then.args.get("expressions")]),
-                    )
-                    then.set("from", exp.From(this=source_table))
-                    then.set("where", exp.Where(this=subquery))
-                    output_expressions.append(then)
-                elif then.args.get("this") == "DELETE":  # Var(this=DELETE) when processing WHEN MATCHED THEN DELETE.
-                    output_expressions.append(exp.Delete(this=target_table).where(subquery))
-                else:
-                    assert isinstance(then, (exp.Update, exp.Delete)), f"Expected 'Update' or 'Delete', got {then}"
-            else:
-                assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
-                not_exists_subquery = exp.Not(this=subquery)
-
-                def remove_table_alias(eq_exp: exp.Column) -> exp.Column:
-                    eq_exp.set("table", None)
-                    return eq_exp
-
-                columns = [remove_table_alias(e) for e in then.args.get("this").expressions]
-                statement = exp.Insert(
-                    this=exp.Schema(this=target_table, expressions=columns),
-                    expression=exp.Select()
-                    .select(*(then.args.get("expression").args.get("expressions")))
-                    .from_(source_table)
-                    .where(not_exists_subquery),
-                )
-                output_expressions.append(statement)
-        return output_expressions
-    else:
-        return [expression]
-
-
-
-def merge2(expression: exp.Expression) -> list[exp.Expression]:
-    """Create multiple compatible duckdb statements to be functionally equivalent to Snowflake's MERGE INTO.
-    Snowflake's MERGE INTO: See https://docs.snowflake.com/en/sql-reference/sql/merge.html
-    """
-
     # Insert into a temp table the source rows (rowid is stable in a transaction: https://duckdb.org/docs/sql/statements/select.html#row-ids)
     # and which modification to apply.
     # Error if attempting to update the same source row multiple times (based on a config in the doco).
@@ -741,9 +673,9 @@ def merge2(expression: exp.Expression) -> list[exp.Expression]:
         on_expression = expression.args.get("on")
 
         # Create temp table for update and delete operations
-        temp_table_inserts.append(sqlglot.parse_one("CREATE OR REPLACE TEMP TABLE temp_merge_table (target_rowid INTEGER, when_id INTEGER, type CHAR(1))"))
+        temp_table_inserts.append(sqlglot.parse_one("CREATE OR REPLACE TEMP TABLE temp_merge_updates_deletes (target_rowid INTEGER, when_id INTEGER, type CHAR(1))"))
         # Create temp table for insert operations
-        temp_table_inserts.append(sqlglot.parse_one("CREATE OR REPLACE TEMP TABLE temp_merge_inserts_table (source_rowid INTEGER, when_id INTEGER)"))
+        temp_table_inserts.append(sqlglot.parse_one("CREATE OR REPLACE TEMP TABLE temp_merge_inserts (source_rowid INTEGER, when_id INTEGER)"))
 
         whens = expression.expressions
         for w_idx, w in enumerate(whens):
@@ -757,8 +689,8 @@ def merge2(expression: exp.Expression) -> list[exp.Expression]:
             matched = w.args.get("matched")
             then = w.args.get("then")
             if matched:
-                rowid_in_temp_table_expr = exp.In(this=exp.Column(this="rowid", table=target_table), expressions=[exp.select("target_rowid").from_("temp_merge_table").where(exp.EQ(this="when_id", expression=exp.Literal(this=f"{w_idx}", is_string=False))).where(exp.EQ(this="target_rowid", expression=exp.Column(this="rowid", table=target_table)))])
-                not_in_temp_table_subquery = exp.Not(this=exp.Exists(this=exp.select(1).from_("temp_merge_table").where(exp.EQ(this=exp.Column(this="rowid", table=target_table), expression=exp.Column(this="target_rowid")))))
+                rowid_in_temp_table_expr = exp.In(this=exp.Column(this="rowid", table=target_table), expressions=[exp.select("target_rowid").from_("temp_merge_updates_deletes").where(exp.EQ(this="when_id", expression=exp.Literal(this=f"{w_idx}", is_string=False))).where(exp.EQ(this="target_rowid", expression=exp.Column(this="rowid", table=target_table)))])
+                not_in_temp_table_subquery = exp.Not(this=exp.Exists(this=exp.select(1).from_("temp_merge_updates_deletes").where(exp.EQ(this=exp.Column(this="rowid", table=target_table), expression=exp.Column(this="target_rowid")))))
                 subquery_ignoring_temp_table = exp.Exists(
                     this=exp.select(1)
                     .from_(source_table)
@@ -768,7 +700,7 @@ def merge2(expression: exp.Expression) -> list[exp.Expression]:
                 def insert_temp_merge_operation(op_type: str, w_idx: int=w_idx, subquery: exp.Expression=subquery) -> exp.Expression:
                     assert op_type in ["U", "D"], f"Expected 'U' or 'D', got merge op_type: {op_type}" # Updates or Deletes
                     return exp.insert(
-                        into="temp_merge_table",
+                        into="temp_merge_updates_deletes",
                         expression=exp.select("rowid", w_idx, exp.Literal(this=op_type, is_string=True)).from_(target_table).where(subquery)
                     )
 
@@ -796,8 +728,8 @@ def merge2(expression: exp.Expression) -> list[exp.Expression]:
             else:
                 # TODO: Add a test for NOT MATCHED <AND case> THEN INSERT
                 assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
-                rowid_in_temp_table_expr = exp.In(this=exp.Column(this="rowid", table=source_table), expressions=[exp.select("source_rowid").from_("temp_merge_inserts_table").where(exp.EQ(this="when_id", expression=exp.Literal(this=f"{w_idx}", is_string=False))).where(exp.EQ(this="source_rowid", expression=exp.Column(this="rowid", table=source_table)))])
-                not_in_temp_table_subquery = exp.Not(this=exp.Exists(this=exp.select(1).from_("temp_merge_inserts_table").where(exp.EQ(this=exp.Column(this="rowid", table=source_table), expression=exp.Column(this="source_rowid")))))
+                rowid_in_temp_table_expr = exp.In(this=exp.Column(this="rowid", table=source_table), expressions=[exp.select("source_rowid").from_("temp_merge_inserts").where(exp.EQ(this="when_id", expression=exp.Literal(this=f"{w_idx}", is_string=False))).where(exp.EQ(this="source_rowid", expression=exp.Column(this="rowid", table=source_table)))])
+                not_in_temp_table_subquery = exp.Not(this=exp.Exists(this=exp.select(1).from_("temp_merge_inserts").where(exp.EQ(this=exp.Column(this="rowid", table=source_table), expression=exp.Column(this="source_rowid")))))
                 subquery_ignoring_temp_table = exp.Exists(
                     this=exp.select(1)
                     .from_(target_table)
@@ -806,7 +738,7 @@ def merge2(expression: exp.Expression) -> list[exp.Expression]:
 
                 not_exists_subquery = exp.Not(this=subquery)
                 temp_match_expr = exp.insert(
-                    into="temp_merge_inserts_table",
+                    into="temp_merge_inserts",
                     expression=exp.select("rowid", w_idx).from_(source_table).where(not_exists_subquery)
                 )
                 temp_table_inserts.append(temp_match_expr)
@@ -833,8 +765,8 @@ def merge2(expression: exp.Expression) -> list[exp.Expression]:
         results_exp = sqlglot.parse_one("""
 WITH merge_update_deletes AS (
 	select count_if(type == 'U')::int AS "updates", count_if(type == 'D')::int as "deletes"
-	from temp_merge_table
-), merge_inserts AS (select count() AS "inserts" from temp_merge_inserts_table)
+	from temp_merge_updates_deletes
+), merge_inserts AS (select count() AS "inserts" from temp_merge_inserts)
 SELECT mi.inserts as "number of rows inserted",
     mud.updates as "number of rows updated",
     mud.deletes as "number of rows deleted"

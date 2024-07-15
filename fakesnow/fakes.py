@@ -214,7 +214,7 @@ class FakeSnowflakeCursor:
     def _split_transform(self, expression: exp.Expression) -> list[exp.Expression]:
         # Applies transformations that require splitting the expression into multiple expressions
         # Split transforms have limited support at the moment.
-        return transforms.merge2(expression)
+        return transforms.merge(expression)
 
     def _execute(
         self, transformed: exp.Expression, params: Sequence[Any] | dict[Any, Any] | None = None
