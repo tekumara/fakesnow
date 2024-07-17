@@ -203,6 +203,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.sha256)
             .transform(transforms.create_clone)
             .transform(transforms.alias_in_join)
+            .transform(transforms.alter_table_strip_cluster_by)
         )
 
     def _execute(
