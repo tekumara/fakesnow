@@ -76,8 +76,10 @@ class FakeSnow:
         self, database: str | None = None, schema: str | None = None, **kwargs: Any
     ) -> fakes.FakeSnowflakeConnection:
         # every time we connect, create a new cursor (ie: connection) so we can isolate each connection's
-        # schema setting
-        # see https://github.com/duckdb/duckdb/blob/18254ec/tools/pythonpkg/src/pyconnection.cpp#L1440
+        # schema setting see
+        # https://github.com/duckdb/duckdb/blob/18254ec/tools/pythonpkg/src/pyconnection.cpp#L1440
+        # and to make connections thread-safe see
+        # https://duckdb.org/docs/api/python/overview.html#using-connections-in-parallel-python-programs
         return fakes.FakeSnowflakeConnection(
             self.duck_conn.cursor(),
             database,

@@ -29,12 +29,15 @@ dev = [
     "snowflake-connector-python[pandas, secure-local-storage]",
     "pre-commit~=3.4",
     "pytest~=8.0",
+    "pytest-asyncio",
     "ruff~=0.5.1",
     "twine~=5.0",
     "snowflake-sqlalchemy~=1.5.0",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
 notebook = ["duckdb-engine", "ipykernel", "jupysql"]
+# for the standalone server
+server = ["starlette", "uvicorn"]
 
 [build-system]
 requires = ["setuptools~=69.1", "wheel~=0.42"]
@@ -55,6 +58,9 @@ reportIncompatibleVariableOverride = true
 reportIncompatibleMethodOverride = true
 reportMatchNotExhaustive = true
 reportUnnecessaryTypeIgnoreComment = true
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
 
 [tool.ruff]
 line-length = 120
