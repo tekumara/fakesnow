@@ -7,7 +7,7 @@ from typing import ClassVar, Literal, cast
 import sqlglot
 from sqlglot import exp
 
-from fakesnow.global_database import USERS_TABLE_FQ_NAME
+from fakesnow.instance import USERS_TABLE_FQ_NAME
 from fakesnow.variables import Variables
 
 MISSING_DATABASE = "missing_database"
