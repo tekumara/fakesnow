@@ -19,10 +19,6 @@ def session_login_request(request: Request) -> JSONResponse:
     return JSONResponse({"data": {"token": token}, "success": True})
 
 
-def startup():
-    print("Ready to go")
-
-
 routes = [
     Route(
         "/session/v1/login-request",
@@ -31,5 +27,4 @@ routes = [
     ),
 ]
 
-app = Starlette(debug=True, routes=routes, on_startup=[startup])
-
+app = Starlette(debug=True, routes=routes)

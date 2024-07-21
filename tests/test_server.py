@@ -1,5 +1,7 @@
-import asyncio
-from typing import AsyncIterator, Callable, Iterator
+import threading
+from collections.abc import Iterator
+from time import sleep
+from typing import Callable
 
 import pytest
 import snowflake.connector
@@ -7,22 +9,29 @@ import uvicorn
 
 
 @pytest.fixture(scope="session")
-async def unused_port(unused_tcp_port_factory: Callable[[], int]) -> int:
-    # use pytest-asyncio.unused_tcp_port_factory
+def unused_port(unused_tcp_port_factory: Callable[[], int]) -> int:
+    # unused_tcp_port_factory is from pytest-asyncio
     return unused_tcp_port_factory()
 
+
 @pytest.fixture(scope="session")
-async def server(unused_tcp_port_factory: Callable[[], int]) -> AsyncIterator[int]:
+def server(unused_tcp_port_factory: Callable[[], int]) -> Iterator[int]:
     port = unused_tcp_port_factory()
     s = uvicorn.Server(uvicorn.Config("fakesnow.server:app", port=port, log_level="info"))
-    _ = asyncio.create_task(s.serve())  # noqa: RUF006
+    thread = threading.Thread(target=s.run, name="Server", daemon=True)
+    thread.start()
+
     while not s.started:
-        await asyncio.sleep(0.1)
+        sleep(0.1)
     yield port
+
     s.should_exit = True
-    await asyncio.sleep(0.1)
+    # wait for server thread to end
+    thread.join()
+
 
 def test_server_connect(server: int) -> None:
+    print(f"server is {server}")
     with (
         snowflake.connector.connect(
             user="fake", password="snow", account="fakesnow", host="localhost", port=server, protocol="http"
