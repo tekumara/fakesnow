@@ -8,6 +8,7 @@ from fakesnow.transforms import (
     SUCCESS_NOP,
     _get_to_number_args,
     alias_in_join,
+    alter_table_strip_cluster_by,
     array_agg,
     array_agg_within_group,
     array_size,
@@ -71,6 +72,13 @@ def test_alias_in_join() -> None:
         .transform(alias_in_join)
         .sql()
         == "SELECT T.COL, SUBSTR(T.COL, 4) AS ALIAS, J.ANOTHER FROM TEST AS T LEFT JOIN JOINED AS J ON SUBSTR(T.COL, 4) = J.COL"  # noqa: E501
+    )
+
+
+def test_alter_table_strip_cluster_by() -> None:
+    assert (
+        sqlglot.parse_one("alter table table1 cluster by (name)").transform(alter_table_strip_cluster_by).sql()
+        == "SELECT 'Statement executed successfully.' AS status"
     )
 
 
@@ -342,7 +350,7 @@ def test_extract_comment_on_columns() -> None:
     e = sqlglot.parse_one("ALTER TABLE ingredients ALTER amount COMMENT 'tablespoons'").transform(
         extract_comment_on_columns
     )
-    assert e.sql() == "SELECT 'Statement executed successfully.'"
+    assert e.sql() == "SELECT 'Statement executed successfully.' AS status"
     assert e.args["col_comments"] == [("amount", "tablespoons")]
 
     # TODO
@@ -365,19 +373,19 @@ def test_extract_comment_on_table() -> None:
     assert e.args["table_comment"] == (table1, "foobar")
 
     e = sqlglot.parse_one("COMMENT ON TABLE table1 IS 'comment1'").transform(extract_comment_on_table)
-    assert e.sql() == "SELECT 'Statement executed successfully.'"
+    assert e.sql() == "SELECT 'Statement executed successfully.' AS status"
     assert e.args["table_comment"] == (table1, "comment1")
 
     e = sqlglot.parse_one("COMMENT ON TABLE table1 IS $$comment2$$", read="snowflake").transform(
         extract_comment_on_table
     )
-    assert e.sql() == "SELECT 'Statement executed successfully.'"
+    assert e.sql() == "SELECT 'Statement executed successfully.' AS status"
     assert e.args["table_comment"] == (table1, "comment2")
 
     e = sqlglot.parse_one("ALTER TABLE table1 SET COMMENT = 'comment1'", read="snowflake").transform(
         extract_comment_on_table
     )
-    assert e.sql() == "SELECT 'Statement executed successfully.'"
+    assert e.sql() == "SELECT 'Statement executed successfully.' AS status"
     assert e.args["table_comment"] == (table1, "comment1")
 
 

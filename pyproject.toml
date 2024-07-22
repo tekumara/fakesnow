@@ -11,7 +11,7 @@ dependencies = [
     "duckdb~=1.0.0",
     "pyarrow",
     "snowflake-connector-python",
-    "sqlglot~=25.3.0",
+    "sqlglot~=25.5.1",
 ]
 
 [project.urls]
@@ -29,7 +29,7 @@ dev = [
     "snowflake-connector-python[pandas, secure-local-storage]",
     "pre-commit~=3.4",
     "pytest~=8.0",
-    "ruff~=0.4.2",
+    "ruff~=0.5.1",
     "twine~=5.0",
     "snowflake-sqlalchemy~=1.5.0",
 ]
@@ -51,7 +51,9 @@ strictListInference = true
 strictDictionaryInference = true
 strictParameterNoneValue = true
 reportTypedDictNotRequiredAccess = false
+reportIncompatibleVariableOverride = true
 reportIncompatibleMethodOverride = true
+reportMatchNotExhaustive = true
 reportUnnecessaryTypeIgnoreComment = true
 
 [tool.ruff]

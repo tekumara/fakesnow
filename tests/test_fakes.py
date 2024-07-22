@@ -41,10 +41,13 @@ def test_alias_on_join(conn: snowflake.connector.SnowflakeConnection):
     assert cur.fetchall() == [("VARCHAR1", "CHAR1", "JOIN"), ("VARCHAR2", "CHAR2", None)]
 
 
-def test_alter_table(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("create table table1 (id int)")
-    cur.execute("alter table table1 add column name varchar(20)")
-    cur.execute("select name from table1")
+def test_alter_table(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("create table table1 (id int)")
+    dcur.execute("alter table table1 add column name varchar(20)")
+    dcur.execute("select name from table1")
+    assert dcur.execute("alter table table1 cluster by (name)").fetchall() == [
+        {"status": "Statement executed successfully."}
+    ]
 
 
 def test_array_size(cur: snowflake.connector.cursor.SnowflakeCursor):

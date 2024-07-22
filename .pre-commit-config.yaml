@@ -2,7 +2,7 @@
 default_stages: [push]
 repos:
   - repo: https://github.com/crate-ci/typos
-    rev: v1.19.0
+    rev: v1.23.2
     hooks:
       - id: typos
   # formatters and linters are available in the virtualenv so they can be run from the makefile & vscode

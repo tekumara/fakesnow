@@ -11,7 +11,7 @@ from fakesnow.global_database import USERS_TABLE_FQ_NAME
 from fakesnow.variables import Variables
 
 MISSING_DATABASE = "missing_database"
-SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.'")
+SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.' as status")
 
 
 def alias_in_join(expression: exp.Expression) -> exp.Expression:
@@ -30,6 +30,18 @@ def alias_in_join(expression: exp.Expression) -> exp.Expression:
             ):
                 col.args["this"] = alias.this
 
+    return expression
+
+
+def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
+    """Turn alter table cluster by into a no-op"""
+    if (
+        isinstance(expression, exp.AlterTable)
+        and (actions := expression.args.get("actions"))
+        and len(actions) == 1
+        and (isinstance(actions[0], exp.Cluster))
+    ):
+        return SUCCESS_NOP
     return expression
 
 
