@@ -738,20 +738,23 @@ def merge(expression: exp.Expression) -> list[exp.Expression]:
                 else:
                     assert isinstance(then, (exp.Update, exp.Delete)), f"Expected 'Update' or 'Delete', got {then}"
             else:
-                # TODO: Add a test for NOT MATCHED <AND case> THEN INSERT
                 assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
                 rowid_in_temp_table_expr = exp.In(this=exp.Column(this="rowid", table=source_table), expressions=[exp.select("source_rowid").from_("temp_merge_inserts").where(exp.EQ(this="when_id", expression=exp.Literal(this=f"{w_idx}", is_string=False))).where(exp.EQ(this="source_rowid", expression=exp.Column(this="rowid", table=source_table)))])
                 not_in_temp_table_subquery = exp.Not(this=exp.Exists(this=exp.select(1).from_("temp_merge_inserts").where(exp.EQ(this=exp.Column(this="rowid", table=source_table), expression=exp.Column(this="source_rowid")))))
                 subquery_ignoring_temp_table = exp.Exists(
                     this=exp.select(1)
                     .from_(target_table)
-                    .where(subquery_on_expression))
+                    .where(on_expression))
                 subquery = exp.And(this=subquery_ignoring_temp_table, expression=not_in_temp_table_subquery)
 
                 not_exists_subquery = exp.Not(this=subquery)
+                if and_condition:
+                    temp_match_where = exp.And(this=and_condition, expression=not_exists_subquery)
+                else:
+                    temp_match_where = not_exists_subquery
                 temp_match_expr = exp.insert(
                     into="temp_merge_inserts",
-                    expression=exp.select("rowid", w_idx).from_(source_table).where(not_exists_subquery)
+                    expression=exp.select("rowid", w_idx).from_(source_table).where(temp_match_where)
                 )
                 temp_table_inserts.append(temp_match_expr)
 
