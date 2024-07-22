@@ -49,11 +49,8 @@ async def query_request(request: Request) -> JSONResponse:
         cur = await run_in_threadpool(conn.cursor().execute, sql_text)
 
         assert cur._arrow_table, "No result set"  # noqa: SLF001
-        batch = cur._arrow_table.to_batches()[0]  # noqa: SLF001
-        batch = pa.RecordBatch.from_pandas(cur.fetch_pandas_all())
 
-        batch.cast(with_sf_metadata(batch.schema))
-        batch_bytes = to_ipc(batch)
+        batch_bytes = to_ipc(cur._arrow_table)  # noqa: SLF001
         rowset_b64 = b64encode(batch_bytes).decode("utf-8")
 
         return JSONResponse(
@@ -62,16 +59,11 @@ async def query_request(request: Request) -> JSONResponse:
                     "rowtype": [
                         {
                             "name": "'HELLO WORLD'",
-                            "database": "",
-                            "schema": "",
-                            "table": "",
                             "nullable": False,
-                            "byteLength": 44,
                             "type": "text",
                             "length": 11,
                             "scale": None,
                             "precision": None,
-                            "collation": None,
                         }
                     ],
                     "rowsetBase64": rowset_b64,

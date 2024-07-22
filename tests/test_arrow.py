@@ -17,11 +17,11 @@ def test_ipc_writes_sf_metadata() -> None:
         }
     )
 
-    wbatch = pa.RecordBatch.from_pandas(df)
-    wbytes = to_ipc(wbatch)
+    table = pa.Table.from_pandas(df)
+    table_bytes = to_ipc(table)
 
-    rbatch = next(iter(pa.ipc.open_stream(wbytes)))
+    batch = next(iter(pa.ipc.open_stream(table_bytes)))
 
     # field and schema metadata is ignored
-    assert rbatch == wbatch
-    assert rbatch.schema.field(0).metadata == {b"logicalType": b"TEXT"}, "Missing Snowflake field metadata"
+    assert pa.table(batch) == table
+    assert batch.schema.field(0).metadata == {b"logicalType": b"TEXT"}, "Missing Snowflake field metadata"

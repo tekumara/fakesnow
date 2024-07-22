@@ -14,10 +14,15 @@ def with_sf_metadata(schema: pa.Schema) -> pa.Schema:
     return pa.schema(fms)
 
 
-def to_ipc(b: pa.RecordBatch) -> bytes:
+def to_ipc(table: pa.Table) -> bytes:
+    batches = table.to_batches()
+    if len(batches) != 1:
+        raise NotImplementedError(f"{len(batches)} batches")
+    batch = batches[0]
+
     sink = pa.BufferOutputStream()
 
-    with pa.ipc.new_stream(sink, with_sf_metadata(b.schema)) as writer:
-        writer.write_batch(b)
+    with pa.ipc.new_stream(sink, with_sf_metadata(batch.schema)) as writer:
+        writer.write_batch(batch)
 
     return sink.getvalue()
