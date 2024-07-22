@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from base64 import b64encode
 import gzip
 import json
 import secrets
@@ -11,8 +12,11 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from fakesnow.arrow import to_ipc, with_sf_metadata
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
+import pyarrow as pa
+
 
 fs = FakeSnow()
 sessions = {}
@@ -33,6 +37,7 @@ def login_request(request: Request) -> JSONResponse:
     return JSONResponse({"data": {"token": token}, "success": True})
 
 
+
 async def query_request(request: Request) -> JSONResponse:
     try:
         conn = to_conn(request)
@@ -43,10 +48,19 @@ async def query_request(request: Request) -> JSONResponse:
         sql_text = body_json["sqlText"]
 
         # only a single sql statement is sent at a time by the python snowflake connector
-        cur = run_in_threadpool(conn.cursor().execute, sql_text)
+        cur = await run_in_threadpool(conn.cursor().execute, sql_text)
 
         # TODO:
         # a = cur._arrow_table
+
+        rowset_b64 = "/////0ABAAAQAAAAAAAKAA4ABgANAAgACgAAAAAABAAQAAAAAAEKAAwAAAAIAAQACgAAAAgAAAAIAAAAAAAAAAEAAAAYAAAAAAASABgAFAATABIADAAAAAgABAASAAAAFAAAAMQAAADIAAAAAAAFAcQAAAAEAAAAiAAAAFgAAAAsAAAABAAAAJD///8IAAAADAAAAAIAAAAxMQAACgAAAGNoYXJMZW5ndGgAALT///8IAAAAEAAAAAQAAABURVhUAAAAAAsAAABsb2dpY2FsVHlwZQDc////CAAAAAwAAAACAAAANDQAAAoAAABieXRlTGVuZ3RoAAAIAAwACAAEAAgAAAAIAAAADAAAAAMAAABMT0IADAAAAHBoeXNpY2FsVHlwZQAAAAAAAAAABAAEAAQAAAANAAAAJ0hFTExPIFdPUkxEJwAAAP////+YAAAAFAAAAAAAAAAMABYADgAVABAABAAMAAAAIAAAAAAAAAAAAAQAEAAAAAADCgAYAAwACAAEAAoAAAAUAAAASAAAAAEAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAEAAAAAAAAACAAAAAAAAAAIAAAAAAAAABAAAAAAAAAACwAAAAAAAAAAAAAAAQAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAALAAAAaGVsbG8gd29ybGQAAAAAAP////8AAAAA"
+
+        batch = cur._arrow_table.to_batches()[0]
+        batch = pa.RecordBatch.from_pandas(cur.fetch_pandas_all())
+
+        batch.cast(with_sf_metadata(batch.schema))
+        batch_bytes = to_ipc(batch)
+        rowset_b64 = b64encode(batch_bytes).decode("utf-8")
 
         return JSONResponse(
             {
@@ -66,7 +80,8 @@ async def query_request(request: Request) -> JSONResponse:
                             "collation": None,
                         }
                     ],
-                    "rowsetBase64": "/////0ABAAAQAAAAAAAKAA4ABgANAAgACgAAAAAABAAQAAAAAAEKAAwAAAAIAAQACgAAAAgAAAAIAAAAAAAAAAEAAAAYAAAAAAASABgAFAATABIADAAAAAgABAASAAAAFAAAAMQAAADIAAAAAAAFAcQAAAAEAAAAiAAAAFgAAAAsAAAABAAAAJD///8IAAAADAAAAAIAAAAxMQAACgAAAGNoYXJMZW5ndGgAALT///8IAAAAEAAAAAQAAABURVhUAAAAAAsAAABsb2dpY2FsVHlwZQDc////CAAAAAwAAAACAAAANDQAAAoAAABieXRlTGVuZ3RoAAAIAAwACAAEAAgAAAAIAAAADAAAAAMAAABMT0IADAAAAHBoeXNpY2FsVHlwZQAAAAAAAAAABAAEAAQAAAANAAAAJ0hFTExPIFdPUkxEJwAAAP////+YAAAAFAAAAAAAAAAMABYADgAVABAABAAMAAAAIAAAAAAAAAAAAAQAEAAAAAADCgAYAAwACAAEAAoAAAAUAAAASAAAAAEAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAEAAAAAAAAACAAAAAAAAAAIAAAAAAAAABAAAAAAAAAACwAAAAAAAAAAAAAAAQAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAALAAAAaGVsbG8gd29ybGQAAAAAAP////8AAAAA",
+                    "rowsetBase64": rowset_b64,
+                    "total": 1,
                     "queryResultFormat": "arrow",
                 },
                 "success": True,

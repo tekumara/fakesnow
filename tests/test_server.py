@@ -1,8 +1,10 @@
 import threading
+from base64 import b64decode, b64encode
 from collections.abc import Iterator
 from time import sleep
 from typing import Callable
 
+import pandas as pd
 import pytest
 import snowflake.connector
 import uvicorn
@@ -41,3 +43,4 @@ def test_server_connect(server: int) -> None:
     ):
         cur.execute("select 'hello world'")
         assert cur.fetchall() == [("hello world",)]
+
