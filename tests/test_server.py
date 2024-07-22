@@ -7,6 +7,8 @@ import pytest
 import snowflake.connector
 import uvicorn
 
+import fakesnow.server
+
 
 @pytest.fixture(scope="session")
 def unused_port(unused_tcp_port_factory: Callable[[], int]) -> int:
@@ -17,21 +19,20 @@ def unused_port(unused_tcp_port_factory: Callable[[], int]) -> int:
 @pytest.fixture(scope="session")
 def server(unused_tcp_port_factory: Callable[[], int]) -> Iterator[int]:
     port = unused_tcp_port_factory()
-    s = uvicorn.Server(uvicorn.Config("fakesnow.server:app", port=port, log_level="info"))
-    thread = threading.Thread(target=s.run, name="Server", daemon=True)
+    server = uvicorn.Server(uvicorn.Config(fakesnow.server.app, port=port, log_level="info"))
+    thread = threading.Thread(target=server.run, name="Server", daemon=True)
     thread.start()
 
-    while not s.started:
+    while not server.started:
         sleep(0.1)
     yield port
 
-    s.should_exit = True
+    server.should_exit = True
     # wait for server thread to end
     thread.join()
 
 
 def test_server_connect(server: int) -> None:
-    print(f"server is {server}")
     with (
         snowflake.connector.connect(
             user="fake", password="snow", account="fakesnow", host="localhost", port=server, protocol="http"
