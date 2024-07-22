@@ -1,11 +1,12 @@
 from __future__ import annotations
 
-from base64 import b64encode
 import gzip
 import json
 import secrets
+from base64 import b64encode
 from dataclasses import dataclass
 
+import pyarrow as pa
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
@@ -15,8 +16,6 @@ from starlette.routing import Route
 from fakesnow.arrow import to_ipc, with_sf_metadata
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
-import pyarrow as pa
-
 
 fs = FakeSnow()
 sessions = {}
@@ -37,7 +36,6 @@ def login_request(request: Request) -> JSONResponse:
     return JSONResponse({"data": {"token": token}, "success": True})
 
 
-
 async def query_request(request: Request) -> JSONResponse:
     try:
         conn = to_conn(request)
@@ -50,12 +48,8 @@ async def query_request(request: Request) -> JSONResponse:
         # only a single sql statement is sent at a time by the python snowflake connector
         cur = await run_in_threadpool(conn.cursor().execute, sql_text)
 
-        # TODO:
-        # a = cur._arrow_table
-
-        rowset_b64 = "/////0ABAAAQAAAAAAAKAA4ABgANAAgACgAAAAAABAAQAAAAAAEKAAwAAAAIAAQACgAAAAgAAAAIAAAAAAAAAAEAAAAYAAAAAAASABgAFAATABIADAAAAAgABAASAAAAFAAAAMQAAADIAAAAAAAFAcQAAAAEAAAAiAAAAFgAAAAsAAAABAAAAJD///8IAAAADAAAAAIAAAAxMQAACgAAAGNoYXJMZW5ndGgAALT///8IAAAAEAAAAAQAAABURVhUAAAAAAsAAABsb2dpY2FsVHlwZQDc////CAAAAAwAAAACAAAANDQAAAoAAABieXRlTGVuZ3RoAAAIAAwACAAEAAgAAAAIAAAADAAAAAMAAABMT0IADAAAAHBoeXNpY2FsVHlwZQAAAAAAAAAABAAEAAQAAAANAAAAJ0hFTExPIFdPUkxEJwAAAP////+YAAAAFAAAAAAAAAAMABYADgAVABAABAAMAAAAIAAAAAAAAAAAAAQAEAAAAAADCgAYAAwACAAEAAoAAAAUAAAASAAAAAEAAAAAAAAAAAAAAAMAAAAAAAAAAAAAAAEAAAAAAAAACAAAAAAAAAAIAAAAAAAAABAAAAAAAAAACwAAAAAAAAAAAAAAAQAAAAEAAAAAAAAAAAAAAAAAAAABAAAAAAAAAAAAAAALAAAAaGVsbG8gd29ybGQAAAAAAP////8AAAAA"
-
-        batch = cur._arrow_table.to_batches()[0]
+        assert cur._arrow_table, "No result set"  # noqa: SLF001
+        batch = cur._arrow_table.to_batches()[0]  # noqa: SLF001
         batch = pa.RecordBatch.from_pandas(cur.fetch_pandas_all())
 
         batch.cast(with_sf_metadata(batch.schema))

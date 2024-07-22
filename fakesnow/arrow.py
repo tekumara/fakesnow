@@ -1,8 +1,7 @@
 import pyarrow as pa
 
-arrow_type_to_sf = {
-    pa.string(): "TEXT"
-}
+arrow_type_to_sf = {pa.string(): "TEXT"}
+
 
 def with_sf_metadata(schema: pa.Schema) -> pa.Schema:
     # see https://github.com/snowflakedb/snowflake-connector-python/blob/e9393a6/src/snowflake/connector/nanoarrow_cpp/ArrowIterator/CArrowTableIterator.cpp#L32
@@ -13,6 +12,7 @@ def with_sf_metadata(schema: pa.Schema) -> pa.Schema:
         fm = f.with_metadata({"logicalType": arrow_type_to_sf[t]})
         fms.append(fm)
     return pa.schema(fms)
+
 
 def to_ipc(b: pa.RecordBatch) -> bytes:
     sink = pa.BufferOutputStream()
