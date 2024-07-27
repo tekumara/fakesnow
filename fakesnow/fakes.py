@@ -603,6 +603,7 @@ class FakeSnowflakeConnection:
         self.cursor().execute("COMMIT")
 
     def cursor(self, cursor_class: type[SnowflakeCursor] = SnowflakeCursor) -> FakeSnowflakeCursor:
+        # TODO: use duck_conn cursor for thread-safety
         return FakeSnowflakeCursor(conn=self, duck_conn=self._duck_conn, use_dict_result=cursor_class == DictCursor)
 
     def execute_string(

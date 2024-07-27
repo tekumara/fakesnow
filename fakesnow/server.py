@@ -6,14 +6,13 @@ import secrets
 from base64 import b64encode
 from dataclasses import dataclass
 
-import pyarrow as pa
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from fakesnow.arrow import to_ipc, with_sf_metadata
+from fakesnow.arrow import to_ipc
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 

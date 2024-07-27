@@ -1,5 +1,6 @@
 import threading
 from collections.abc import Iterator
+from decimal import Decimal
 from time import sleep
 from typing import Callable
 
@@ -39,5 +40,5 @@ def test_server_connect(server: int) -> None:
         ) as conn1,
         conn1.cursor() as cur,
     ):
-        cur.execute("select 'hello world'")
-        assert cur.fetchall() == [("hello world",)]
+        cur.execute("select 'hello', to_decimal('12.3456', 10,2)")
+        assert cur.fetchall() == [("hello", Decimal("12.35"))]
