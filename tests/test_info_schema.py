@@ -211,3 +211,16 @@ def test_info_schema_show_primary_keys_from_table(cur: snowflake.connector.curso
 
     pk_columns = [result[4] for result in pk_result]
     assert pk_columns == ["ID", "VERSION"]
+
+
+def test_null_data_type(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    for table in [
+        "information_schema.databases",
+        "information_schema.views",
+        "information_schema._fs_columns_snowflake",
+    ]:
+        cur.execute(f"DESCRIBE {table}")
+        result = cur.fetchall()
+        data_types = [dt for (_, dt, *_) in result]
+        nulls = [dt for dt in data_types if "NULL" in dt]
+        assert not nulls
