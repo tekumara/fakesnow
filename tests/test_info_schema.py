@@ -38,6 +38,12 @@ def test_info_schema_columns_describe(cur: snowflake.connector.cursor.SnowflakeC
 
     assert cur.description == expected_metadata
 
+    # should contain snowflake-specific columns (from _FS_COLUMNS_SNOWFLAKE)
+    cur.execute("describe view information_schema.columns")
+    result = cur.fetchall()
+    names = [name for (name, *_) in result]
+    assert "comment" in names
+
 
 def test_info_schema_columns_numeric(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-numeric

@@ -563,12 +563,13 @@ def information_schema_fs_columns_snowflake(expression: exp.Expression) -> exp.E
     """
 
     if (
-        isinstance(expression, exp.Select)
-        and (tbl_exp := expression.find(exp.Table))
-        and tbl_exp.name.upper() == "COLUMNS"
-        and tbl_exp.db.upper() == "INFORMATION_SCHEMA"
+        isinstance(expression, exp.Table)
+        and expression.db
+        and expression.db.upper() == "INFORMATION_SCHEMA"
+        and expression.name
+        and expression.name.upper() == "COLUMNS"
     ):
-        tbl_exp.set("this", exp.Identifier(this="_FS_COLUMNS_SNOWFLAKE", quoted=False))
+        expression.set("this", exp.Identifier(this="_FS_COLUMNS_SNOWFLAKE", quoted=False))
 
     return expression
 
