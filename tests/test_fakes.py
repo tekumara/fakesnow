@@ -1470,3 +1470,10 @@ def test_json_extract_cast_as_varchar(dcur: snowflake.connector.cursor.DictCurso
 
     dcur.execute("SELECT j:str::number as j_str_number, j:num::number as j_num_number FROM example")
     assert dcur.fetchall() == [{"J_STR_NUMBER": 100, "J_NUM_NUMBER": 200}]
+
+
+def test_information_schema():
+    with fakesnow.patch(create_schema_on_connect=False):
+        conn = snowflake.connector.connect(database="db1", schema="information_schema")
+        with conn, conn.cursor() as cur:
+            cur.execute("SELECT * FROM databases")

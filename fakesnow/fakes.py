@@ -525,7 +525,11 @@ class FakeSnowflakeConnection:
         # upper case database and schema like snowflake unquoted identifiers
         # NB: catalog names are not case-sensitive in duckdb but stored as cased in information_schema.schemata
         self.database = database and database.upper()
+
         self.schema = schema and schema.upper()
+        if self.schema == "INFORMATION_SCHEMA":
+            self.schema = self.schema.lower()
+
         self.database_set = False
         self.schema_set = False
         self.db_path = Path(db_path) if db_path else None
