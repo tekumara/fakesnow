@@ -62,8 +62,8 @@ case when columns.data_type='BIGINT' then 10
 case when columns.data_type='DOUBLE' then NULL else columns.numeric_scale end as numeric_scale,
 collation_name, is_identity, identity_generation, identity_cycle,
     ddb_columns.comment as comment,
-    null as identity_start,
-    null as identity_increment,
+    null::VARCHAR as identity_start,
+    null::VARCHAR as identity_increment,
 from ${catalog}.information_schema.columns columns
 left join ${catalog}.information_schema._fs_columns_ext ext
   on ext_table_catalog = columns.table_catalog
@@ -86,7 +86,7 @@ select
     catalog_name as database_name,
     'SYSADMIN' as database_owner,
     'NO' as is_transient,
-    null as comment,
+    null::VARCHAR as comment,
     to_timestamp(0)::timestamptz as created,
     to_timestamp(0)::timestamptz as last_altered,
     1 as retention_time,
@@ -116,7 +116,7 @@ select
     to_timestamp(0)::timestamptz as last_altered,
     to_timestamp(0)::timestamptz as last_ddl,
     'SYSADMIN' as last_ddl_by,
-    null as comment
+    null::VARCHAR as comment
 from duckdb_views
 where database_name = '${catalog}'
   and schema_name != 'information_schema'
