@@ -217,7 +217,7 @@ def test_type_column_is_not_null(cur: snowflake.connector.cursor.SnowflakeCursor
     for table in [
         "information_schema.databases",
         "information_schema.views",
-        "information_schema._fs_columns_snowflake",
+        "information_schema.columns",
     ]:
         cur.execute(f"DESCRIBE {table}")
         result = cur.fetchall()
