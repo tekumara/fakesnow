@@ -28,6 +28,7 @@ dev = [
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
     "pre-commit~=3.4",
+    "pyarrow-stubs",
     "pytest~=8.0",
     "pytest-asyncio",
     "ruff~=0.5.1",

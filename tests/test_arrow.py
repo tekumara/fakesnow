@@ -8,16 +8,11 @@ from fakesnow.arrow import to_ipc, with_sf_metadata
 
 def test_with_sf_metadata() -> None:
     # see https://arrow.apache.org/docs/python/api/datatypes.html
-    assert with_sf_metadata(pa.schema([pa.field("string", pa.string())])) == pa.schema(
-        [pa.field("string", pa.string(), metadata={"logicalType": "TEXT"})]
-    )
-    assert with_sf_metadata(pa.schema([pa.field("decimal(10,2)", pa.decimal128(10, 2))])) == pa.schema(
-        [
-            pa.field(
-                "decimal(10,2)", pa.decimal128(10, 2), metadata={"logicalType": "FIXED", "precision": 10, "scale": 2}
-            )
-        ]
-    )
+    def f(t: pa.DataType) -> dict:
+        return with_sf_metadata(pa.schema([pa.field(str(t), t)])).field(0).metadata
+
+    assert f(pa.string()) == {b"logicalType": b"TEXT"}
+    assert f(pa.decimal128(10, 2)) == {b"logicalType": b"FIXED", b"precision": b"10", b"scale": b"2"}
 
 
 def test_ipc_writes_sf_metadata() -> None:
@@ -43,6 +38,7 @@ def test_read_base64() -> None:
 
     f = b64decode(rowset_b64)
     reader = pa.ipc.open_stream(f)
+
     batch = next(reader)
 
     field = batch.schema.field(0)

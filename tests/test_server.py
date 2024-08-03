@@ -36,7 +36,16 @@ def server(unused_tcp_port_factory: Callable[[], int]) -> Iterator[int]:
 def test_server_connect(server: int) -> None:
     with (
         snowflake.connector.connect(
-            user="fake", password="snow", account="fakesnow", host="localhost", port=server, protocol="http"
+            user="fake",
+            password="snow",
+            account="fakesnow",
+            host="localhost",
+            port=server,
+            protocol="http",
+            # disable telemetry
+            session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False},
+            # disable infinite retries on error
+            network_timeout=0,
         ) as conn1,
         conn1.cursor() as cur,
     ):

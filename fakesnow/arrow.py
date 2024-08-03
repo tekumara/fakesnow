@@ -1,7 +1,5 @@
 import pyarrow as pa
 
-arrow_type_to_sf = {pa.string(): "TEXT"}
-
 
 def with_sf_metadata(schema: pa.Schema) -> pa.Schema:
     # see https://github.com/snowflakedb/snowflake-connector-python/blob/e9393a6/src/snowflake/connector/nanoarrow_cpp/ArrowIterator/CArrowTableIterator.cpp#L32
@@ -9,12 +7,18 @@ def with_sf_metadata(schema: pa.Schema) -> pa.Schema:
     fms = []
     for i, t in enumerate(schema.types):
         f = schema.field(i)
-        fm = f.with_metadata({"logicalType": arrow_type_to_sf[t]})
+
+        if isinstance(t, pa.Decimal128Type):
+            fm = f.with_metadata({"logicalType": "FIXED", "precision": str(t.precision), "scale": str(t.scale)})
+        elif t == pa.string():
+            fm = f.with_metadata({"logicalType": "TEXT"})
+        else:
+            raise NotImplementedError(f"Unsupported Arrow type: {t}")
         fms.append(fm)
     return pa.schema(fms)
 
 
-def to_ipc(table: pa.Table) -> bytes:
+def to_ipc(table: pa.Table) -> pa.Buffer:
     batches = table.to_batches()
     if len(batches) != 1:
         raise NotImplementedError(f"{len(batches)} batches")
