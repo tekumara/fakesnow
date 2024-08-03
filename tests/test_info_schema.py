@@ -219,7 +219,7 @@ def test_type_column_is_not_null(cur: snowflake.connector.cursor.SnowflakeCursor
         "information_schema.views",
         "information_schema.columns",
     ]:
-        cur.execute(f"DESCRIBE {table}")
+        cur.execute(f"DESCRIBE VIEW {table}")
         result = cur.fetchall()
         data_types = [dt for (_, dt, *_) in result]
         nulls = [dt for dt in data_types if "NULL" in dt]
