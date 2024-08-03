@@ -213,7 +213,7 @@ def test_info_schema_show_primary_keys_from_table(cur: snowflake.connector.curso
     assert pk_columns == ["ID", "VERSION"]
 
 
-def test_null_data_type(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+def test_type_column_is_not_null(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     for table in [
         "information_schema.databases",
         "information_schema.views",
