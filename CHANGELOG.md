@@ -2,6 +2,28 @@
 
 # Changelog
 
+## [0.9.21](https://github.com/tekumara/fakesnow/compare/v0.9.20...v0.9.21) (2024-08-04)
+
+
+### Features
+
+* alter table cluster by ([9a78fc2](https://github.com/tekumara/fakesnow/commit/9a78fc2658d3da8838c93381e10b4142405fb2b6))
+
+
+### Bug Fixes
+
+* Allow connection with schema=information_schema ([#122](https://github.com/tekumara/fakesnow/issues/122)) ([51e4e68](https://github.com/tekumara/fakesnow/commit/51e4e685f7c78bd520e88ef5351d39601b81a276))
+* columns returned by describe view information_schema.columns ([83c62b6](https://github.com/tekumara/fakesnow/commit/83c62b6a1fdf38a864ffee8fb40a1cef3dcb9057))
+* Ensure type column in information_schema views is not null ([#121](https://github.com/tekumara/fakesnow/issues/121)) ([7340a4a](https://github.com/tekumara/fakesnow/commit/7340a4a55d0657579ec1b158a1219751c6c7c84f))
+* Only set variables for SetItem expressions ([#116](https://github.com/tekumara/fakesnow/issues/116)) ([0e0711c](https://github.com/tekumara/fakesnow/commit/0e0711c821fa8487bd94a9c10d14103a3a3c71c4))
+
+
+### Chores
+
+* bump sqlglot 25.5.1 ([713d93d](https://github.com/tekumara/fakesnow/commit/713d93d06fd3fb67064fc8f67b728b1bc0152628))
+* cruft update ([72b791b](https://github.com/tekumara/fakesnow/commit/72b791b186bf5147a3737733d38bc6bbb39dcb10))
+* **deps-dev:** bump pyright from 1.1.369 to 1.1.374 ([#118](https://github.com/tekumara/fakesnow/issues/118)) ([17a8760](https://github.com/tekumara/fakesnow/commit/17a876004114ae6382dd7febae39598932ed1e42))
+
 ## [0.9.20](https://github.com/tekumara/fakesnow/compare/v0.9.19...v0.9.20) (2024-07-10)
 
 
