@@ -235,12 +235,10 @@ class FakeSnowflakeCursor:
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
             sql = f"SELECT setseed({seed}); {sql}"
 
-        if (fs_debug := os.environ.get("FAKESNOW_DEBUG")) and fs_debug != "snowflake":
-            print(f"{sql};{params=}" if params else f"{sql};", file=sys.stderr)
-
         result_sql = None
 
         try:
+            self._log_sql(sql, params)
             self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]
@@ -337,6 +335,7 @@ class FakeSnowflakeCursor:
             self._duck_conn.execute(info_schema.insert_text_lengths_sql(catalog, schema, table.name, text_lengths))
 
         if result_sql:
+            self._log_sql(result_sql, params)
             self._duck_conn.execute(result_sql)
 
         self._arrow_table = self._duck_conn.fetch_arrow_table()
@@ -346,6 +345,10 @@ class FakeSnowflakeCursor:
         self._last_params = params
 
         return self
+
+    def _log_sql(self, sql: str, params: Sequence[Any] | dict[Any, Any] | None = None) -> None:
+        if (fs_debug := os.environ.get("FAKESNOW_DEBUG")) and fs_debug != "snowflake":
+            print(f"{sql};{params=}" if params else f"{sql};", file=sys.stderr)
 
     def executemany(
         self,
