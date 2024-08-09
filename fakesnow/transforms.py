@@ -159,11 +159,11 @@ SELECT
     column_default AS "default",
     'N' AS "primary key",
     'N' AS "unique key",
-    NULL AS "check",
-    NULL AS "expression",
-    NULL AS "comment",
-    NULL AS "policy name",
-    NULL AS "privacy domain",
+    NULL::VARCHAR AS "check",
+    NULL::VARCHAR AS "expression",
+    NULL::VARCHAR AS "comment",
+    NULL::VARCHAR AS "policy name",
+    NULL::JSON AS "privacy domain",
 FROM information_schema._fs_columns_snowflake
 WHERE table_catalog = '${catalog}' AND table_schema = '${schema}' AND table_name = '${table}'
 ORDER BY ordinal_position
