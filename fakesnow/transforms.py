@@ -174,7 +174,7 @@ ORDER BY ordinal_position
 def describe_table(
     expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
 ) -> exp.Expression:
-    """Redirect to the information_schema._fs_describe_table to match snowflake.
+    """Redirect to the information_schema._fs_columns_snowflake to match snowflake.
 
     See https://docs.snowflake.com/en/sql-reference/sql/desc-table
     """
@@ -183,11 +183,15 @@ def describe_table(
         isinstance(expression, exp.Describe)
         and (kind := expression.args.get("kind"))
         and isinstance(kind, str)
-        and kind.upper() == "TABLE"
+        and kind.upper() in ("TABLE", "VIEW")
         and (table := expression.find(exp.Table))
     ):
         catalog = table.catalog or current_database
         schema = table.db or current_schema
+
+        if schema and schema.upper() == "INFORMATION_SCHEMA":
+            # information schema views don't exist in _fs_columns_snowflake
+            return expression
 
         return sqlglot.parse_one(
             SQL_DESCRIBE_TABLE.substitute(catalog=catalog, schema=schema, table=table.name),

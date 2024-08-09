@@ -436,6 +436,52 @@ def test_describe_table(dcur: snowflake.connector.cursor.DictCursor):
     assert "002003 (42S02): Catalog Error: Table with name THIS_DOES_NOT_EXIST does not exist!" in str(excinfo.value)
 
 
+def test_describe_view(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute(
+        """
+        create or replace table example (
+            XVARCHAR VARCHAR
+            -- ,XVARCHAR20 VARCHAR(20) -- TODO: preserve varchar size
+        )
+        """
+    )
+
+    common = {
+        "kind": "COLUMN",
+        "null?": "Y",
+        "default": None,
+        "primary key": "N",
+        "unique key": "N",
+        "check": None,
+        "expression": None,
+        "comment": None,
+        "policy name": None,
+        "privacy domain": None,
+    }
+    expected = [
+        {"name": "XVARCHAR", "type": "VARCHAR(16777216)", **common},
+        # TODO: preserve varchar size
+        # {"name": "XVARCHAR20", "type": "VARCHAR(20)", **common},
+    ]
+
+    dcur.execute("create view v1 as select * from example")
+    assert dcur.execute("describe view v1").fetchall() == expected
+    assert [r.name for r in dcur.description] == [
+        "name",
+        "type",
+        "kind",
+        "null?",
+        "default",
+        "primary key",
+        "unique key",
+        "check",
+        "expression",
+        "comment",
+        "policy name",
+        "privacy domain",
+    ]
+
+
 ## descriptions are needed for ipython-sql/jupysql which describes every statement
 def test_description_create_drop_database(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create database example")
