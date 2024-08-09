@@ -170,6 +170,25 @@ ORDER BY ordinal_position
 """
 )
 
+SQL_DESCRIBE_INFO_SCHEMA = Template(
+    """
+SELECT
+    column_name AS "name",
+    column_type as "type",
+    'COLUMN' AS "kind",
+    CASE WHEN "null" = 'YES' THEN 'Y' ELSE 'N' END AS "null?",
+    NULL::VARCHAR AS "default",
+    'N' AS "primary key",
+    'N' AS "unique key",
+    NULL::VARCHAR AS "check",
+    NULL::VARCHAR AS "expression",
+    NULL::VARCHAR AS "comment",
+    NULL::VARCHAR AS "policy name",
+    NULL::JSON AS "privacy domain",
+FROM (DESCRIBE information_schema.${view})
+"""
+)
+
 
 def describe_table(
     expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
@@ -191,7 +210,7 @@ def describe_table(
 
         if schema and schema.upper() == "INFORMATION_SCHEMA":
             # information schema views don't exist in _fs_columns_snowflake
-            return expression
+            return sqlglot.parse_one(SQL_DESCRIBE_INFO_SCHEMA.substitute(view=table.name), read="duckdb")
 
         return sqlglot.parse_one(
             SQL_DESCRIBE_TABLE.substitute(catalog=catalog, schema=schema, table=table.name),

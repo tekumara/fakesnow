@@ -78,6 +78,7 @@ LEFT JOIN duckdb_columns ddb_columns
 """
 )
 
+
 # replicates https://docs.snowflake.com/sql-reference/info-schema/databases
 SQL_CREATE_INFORMATION_SCHEMA_DATABASES_VIEW = Template(
     """
