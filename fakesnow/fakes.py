@@ -391,12 +391,13 @@ class FakeSnowflakeCursor:
         if self._arrow_table is None:
             # mimic snowflake python connector error type
             raise TypeError("No open result set")
+        tslice = self._arrow_table.slice(offset=self._arrow_table_fetch_index or 0, length=size).to_pylist()
+
         if self._arrow_table_fetch_index is None:
-            self._arrow_table_fetch_index = 0
+            self._arrow_table_fetch_index = size
         else:
             self._arrow_table_fetch_index += size
 
-        tslice = self._arrow_table.slice(offset=self._arrow_table_fetch_index, length=size).to_pylist()
         return tslice if self._use_dict_result else [tuple(d.values()) for d in tslice]
 
     def get_result_batches(self) -> list[ResultBatch] | None:

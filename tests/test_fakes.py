@@ -651,9 +651,10 @@ def test_fetchmany(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("insert into customers values (3, 'Jeremy', 'K')")
         cur.execute("select id, first_name, last_name from customers")
 
+        # mimic jupysql fetchmany behaviour
         assert cur.fetchmany(2) == [(1, "Jenny", "P"), (2, "Jasper", "M")]
-        assert cur.fetchmany(2) == [(3, "Jeremy", "K")]
-        assert cur.fetchmany(2) == []
+        assert cur.fetchmany(5) == [(3, "Jeremy", "K")]
+        assert cur.fetchmany(5) == []
 
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("select id, first_name, last_name from customers")
@@ -661,10 +662,10 @@ def test_fetchmany(conn: snowflake.connector.SnowflakeConnection):
             {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
             {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
         ]
-        assert cur.fetchmany(2) == [
+        assert cur.fetchmany(5) == [
             {"ID": 3, "FIRST_NAME": "Jeremy", "LAST_NAME": "K"},
         ]
-        assert cur.fetchmany(2) == []
+        assert cur.fetchmany(5) == []
 
 
 def test_fetch_pandas_all(cur: snowflake.connector.cursor.SnowflakeCursor):
