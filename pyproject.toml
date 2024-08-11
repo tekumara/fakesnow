@@ -62,6 +62,9 @@ reportUnnecessaryTypeIgnoreComment = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# error on unhandled exceptions in background threads
+# useful for catching errors in server or snowflake connector threads
+filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 
 [tool.ruff]
 line-length = 120

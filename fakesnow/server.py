@@ -103,6 +103,7 @@ routes = [
         query_request,
         methods=["POST"],
     ),
+    Route("/queries/v1/abort-request", lambda _: JSONResponse({"success": True}), methods=["POST"]),
 ]
 
 app = Starlette(debug=True, routes=routes)
