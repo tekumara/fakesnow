@@ -2,6 +2,26 @@
 
 # Changelog
 
+## [0.9.22](https://github.com/tekumara/fakesnow/compare/v0.9.21...v0.9.22) (2024-08-11)
+
+
+### Features
+
+* DESCRIBE VIEW ([b874fc1](https://github.com/tekumara/fakesnow/commit/b874fc1ed511c8943cc5a4c0a66628068c737167))
+* describe view information_schema.* ([facc390](https://github.com/tekumara/fakesnow/commit/facc390a55c976749cba6258c457ca131ab1fcc5))
+
+
+### Bug Fixes
+
+* column types for DESCRIBE ([572eaf5](https://github.com/tekumara/fakesnow/commit/572eaf58d8b268559687185fd543da0a777e956a))
+* fetchmany supports irregular sizes ([3115afd](https://github.com/tekumara/fakesnow/commit/3115afd35a66f95eed3b1e4fb92dca0660c8b709))
+* log all sql executed (in debug mode) ([6faa120](https://github.com/tekumara/fakesnow/commit/6faa120b17434f405d3e221f0770c15936bb4c94))
+
+
+### Chores
+
+* **deps:** update sqlglot requirement from ~=25.5.1 to ~=25.9.0 ([#123](https://github.com/tekumara/fakesnow/issues/123)) ([da78574](https://github.com/tekumara/fakesnow/commit/da78574e682c742d42c727b8bd67cb4447e02f5d))
+
 ## [0.9.21](https://github.com/tekumara/fakesnow/compare/v0.9.20...v0.9.21) (2024-08-04)
 
 
