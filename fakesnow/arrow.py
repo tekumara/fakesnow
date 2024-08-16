@@ -8,7 +8,17 @@ def with_sf_metadata(schema: pa.Schema) -> pa.Schema:
     for i, t in enumerate(schema.types):
         f = schema.field(i)
 
-        if isinstance(t, pa.Decimal128Type):
+        # TODO: precision, scale, charLength etc. for all types
+
+        if t == pa.bool_():
+            fm = f.with_metadata({"logicalType": "BOOLEAN"})
+        elif t == pa.int64():
+            # scale and precision required, see here
+            # https://github.com/snowflakedb/snowflake-connector-python/blob/416ff57/src/snowflake/connector/nanoarrow_cpp/ArrowIterator/CArrowChunkIterator.cpp#L147
+            fm = f.with_metadata({"logicalType": "FIXED", "precision": "38", "scale": "0"})
+        elif t == pa.float64():
+            fm = f.with_metadata({"logicalType": "REAL"})
+        elif isinstance(t, pa.Decimal128Type):
             fm = f.with_metadata({"logicalType": "FIXED", "precision": str(t.precision), "scale": str(t.scale)})
         elif t == pa.string():
             fm = f.with_metadata({"logicalType": "TEXT"})

@@ -26,6 +26,7 @@ def server(unused_tcp_port_factory: Callable[[], int]) -> Iterator[dict]:
 
     while not server.started:
         sleep(0.1)
+
     yield dict(
         user="fake",
         password="snow",
@@ -51,8 +52,8 @@ def test_server_connect(server: dict) -> None:
         ) as conn1,
         conn1.cursor() as cur,
     ):
-        cur.execute("select 'hello', to_decimal('12.3456', 10,2)")
-        assert cur.fetchall() == [("hello", Decimal("12.35"))]
+        cur.execute("select true, 1::int, 2.0::float, to_decimal('12.3456', 10,2), 'hello'")
+        assert cur.fetchall() == [(True, 1, 2.0, Decimal("12.35"), "hello")]
 
 
 def test_server_abort_request(server: dict) -> None:
