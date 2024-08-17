@@ -23,6 +23,7 @@ fakesnow = "fakesnow.cli:main"
 [project.optional-dependencies]
 dev = [
     "build~=1.0",
+    "dirty-equals",
     # to fix https://github.com/pandas-dev/pandas/issues/56995
     "pandas-stubs",
     # include compatible version of pandas, and secure-local-storage for token caching
