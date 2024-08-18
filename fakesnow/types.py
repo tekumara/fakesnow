@@ -1,73 +1,87 @@
 import re
+from typing import Optional, TypedDict
 
 from snowflake.connector.cursor import ResultMetadata
 
 
-def describe_as_result_metadata(describe_results: list) -> list[ResultMetadata]:
-    # fmt: off
-    def as_result_metadata(column_name: str, column_type: str, _: str) -> ResultMetadata:
-        # see https://docs.snowflake.com/en/user-guide/python-connector-api.html#type-codes
-        # and https://arrow.apache.org/docs/python/api/datatypes.html#type-checking
-        if column_type in {"BIGINT", "INTEGER"}:
-            return ResultMetadata(
-                name=column_name, type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True               # noqa: E501
-            )
-        elif column_type.startswith("DECIMAL"):
-            match = re.search(r'\((\d+),(\d+)\)', column_type)
-            if match:
-                precision = int(match[1])
-                scale = int(match[2])
-            else:
-                precision = scale = None
-            return ResultMetadata(
-                name=column_name, type_code=0, display_size=None, internal_size=None, precision=precision, scale=scale, is_nullable=True    # noqa: E501
-            )
-        elif column_type == "VARCHAR":
-            # TODO: fetch internal_size from varchar size
-            return ResultMetadata(
-                name=column_name, type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True      # noqa: E501
-            )
-        elif column_type == "DOUBLE":
-            return ResultMetadata(
-                name=column_name, type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True          # noqa: E501
-            )
-        elif column_type == "BOOLEAN":
-            return ResultMetadata(
-                name=column_name, type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True         # noqa: E501
-            )
-        elif column_type == "DATE":
-            return ResultMetadata(
-                name=column_name, type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True          # noqa: E501
-            )
-        elif column_type in {"TIMESTAMP", "TIMESTAMP_NS"}:
-            return ResultMetadata(
-                name=column_name, type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True                # noqa: E501
-            )
-        elif column_type == "TIMESTAMP WITH TIME ZONE":
-            return ResultMetadata(
-                name=column_name, type_code=7, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True                # noqa: E501
-            )
-        elif column_type == "BLOB":
-            return ResultMetadata(
-                name=column_name, type_code=11, display_size=None, internal_size=8388608, precision=None, scale=None, is_nullable=True      # noqa: E501
-            )
-        elif column_type == "TIME":
-            return ResultMetadata(
-                name=column_name, type_code=12, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True               # noqa: E501
-            )
-        elif column_type == "JSON":
-            # TODO: correctly map OBJECT and ARRAY see https://github.com/tekumara/fakesnow/issues/26
-            return ResultMetadata(
-                name=column_name, type_code=5, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True               # noqa: E501
-            )
-        else:
-            # TODO handle more types
+class ColumnInfo(TypedDict):
+    name: str
+    database: str
+    schema: str
+    table: str
+    nullable: bool
+    type: str
+    byteLength: Optional[int]
+    length: Optional[int]
+    scale: Optional[int]
+    precision: Optional[int]
+    collation: Optional[str]
+
+
+duckdb_to_sf_type = {
+    "BIGINT": "fixed",
+    "INTEGER": "fixed",
+    "DECIMAL": "fixed",
+    "VARCHAR": "text",
+    "DOUBLE": "real",
+    "BOOLEAN": "boolean",
+    "DATE": "date",
+    "TIMESTAMP": "timestamp_ntz",
+    "TIMESTAMP_NS": "timestamp_ntz",
+    "TIMESTAMP WITH TIME ZONE": "timestamp_tz",
+    "BLOB": "binary",
+    "JSON": "variant",
+    "TIME": "time",
+}
+
+
+def describe_as_rowtype(describe_results: list) -> list[ColumnInfo]:
+    def as_column_info(column_name: str, column_type: str) -> ColumnInfo:
+        if not (sf_type := duckdb_to_sf_type.get("DECIMAL" if column_type.startswith("DECIMAL") else column_type)):
             raise NotImplementedError(f"for column type {column_type}")
 
-    # fmt: on
+        info: ColumnInfo = {
+            "name": column_name,
+            # TODO
+            "database": "",
+            "schema": "",
+            "table": "",
+            # TODO
+            "nullable": True,
+            "type": sf_type,
+            "byteLength": None,
+            "length": None,
+            "scale": None,
+            "precision": None,
+            "collation": None,
+        }
 
-    meta = [
-        as_result_metadata(column_name, column_type, null)
-        for (column_name, column_type, null, _, _, _) in describe_results
+        if column_type in {"BIGINT", "INTEGER"}:
+            info["precision"] = 38
+            info["scale"] = 0
+        elif column_type.startswith("DECIMAL"):
+            match = re.search(r"\((\d+),(\d+)\)", column_type)
+            info["precision"] = int(match[1]) if match else 38
+            info["scale"] = int(match[2]) if match else 0
+        elif column_type == "VARCHAR":
+            # TODO: fetch actual varchar size
+            info["byteLength"] = 16777216
+            info["length"] = 16777216
+        elif column_type in {"TIMESTAMP", "TIMESTAMP_NS", "TIMESTAMP WITH TIME ZONE", "TIME"}:
+            info["precision"] = 0
+            info["scale"] = 9
+        elif column_type == "BLOB":
+            info["byteLength"] = 8388608
+            info["length"] = 8388608
+
+        return info
+
+    column_infos = [
+        as_column_info(column_name, column_type)
+        for (column_name, column_type, _null, _key, _default, _extra) in describe_results
     ]
-    return meta
+    return column_infos
+
+
+def describe_as_result_metadata(describe_results: list) -> list[ResultMetadata]:
+    return [ResultMetadata.from_column(c) for c in describe_as_rowtype(describe_results)]  # pyright: ignore[reportArgumentType]
