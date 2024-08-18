@@ -20,22 +20,24 @@ class ColumnInfo(TypedDict):
 
 duckdb_to_sf_type = {
     "BIGINT": "fixed",
-    "INTEGER": "fixed",
-    "DECIMAL": "fixed",
-    "VARCHAR": "text",
-    "DOUBLE": "real",
+    "BLOB": "binary",
     "BOOLEAN": "boolean",
     "DATE": "date",
-    "TIMESTAMP": "timestamp_ntz",
-    "TIMESTAMP_NS": "timestamp_ntz",
-    "TIMESTAMP WITH TIME ZONE": "timestamp_tz",
-    "BLOB": "binary",
+    "DECIMAL": "fixed",
+    "DOUBLE": "real",
+    "INTEGER": "fixed",
     "JSON": "variant",
     "TIME": "time",
+    "TIMESTAMP WITH TIME ZONE": "timestamp_tz",
+    "TIMESTAMP_NS": "timestamp_ntz",
+    "TIMESTAMP": "timestamp_ntz",
+    "VARCHAR": "text",
 }
 
 
 def describe_as_rowtype(describe_results: list) -> list[ColumnInfo]:
+    """Convert duckdb column type to snowflake rowtype returned by the API."""
+
     def as_column_info(column_name: str, column_type: str) -> ColumnInfo:
         if not (sf_type := duckdb_to_sf_type.get("DECIMAL" if column_type.startswith("DECIMAL") else column_type)):
             raise NotImplementedError(f"for column type {column_type}")
@@ -56,21 +58,21 @@ def describe_as_rowtype(describe_results: list) -> list[ColumnInfo]:
             "collation": None,
         }
 
-        if column_type in {"BIGINT", "INTEGER"}:
-            info["precision"] = 38
-            info["scale"] = 0
-        elif column_type.startswith("DECIMAL"):
+        if column_type.startswith("DECIMAL"):
             match = re.search(r"\((\d+),(\d+)\)", column_type)
             info["precision"] = int(match[1]) if match else 38
             info["scale"] = int(match[2]) if match else 0
-        elif column_type == "VARCHAR":
+        elif sf_type == "fixed":
+            info["precision"] = 38
+            info["scale"] = 0
+        elif sf_type == "text":
             # TODO: fetch actual varchar size
             info["byteLength"] = 16777216
             info["length"] = 16777216
-        elif column_type in {"TIMESTAMP", "TIMESTAMP_NS", "TIMESTAMP WITH TIME ZONE", "TIME"}:
+        elif sf_type.startswith("time"):
             info["precision"] = 0
             info["scale"] = 9
-        elif column_type == "BLOB":
+        elif sf_type == "binary":
             info["byteLength"] = 8388608
             info["length"] = 8388608
 
