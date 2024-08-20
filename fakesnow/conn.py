@@ -36,6 +36,7 @@ class FakeSnowflakeConnection:
         **kwargs: Any,
     ):
         self._duck_conn = duck_conn
+        self._is_closed = False
         # upper case database and schema like snowflake unquoted identifiers
         # so they appear as upper-cased in information_schema
         # catalog and schema names are not actually case-sensitive in duckdb even though
@@ -117,6 +118,7 @@ class FakeSnowflakeConnection:
 
     def close(self, retry: bool = True) -> None:
         self._duck_conn.close()
+        self._is_closed = True
 
     def commit(self) -> None:
         self.cursor().execute("COMMIT")
@@ -139,6 +141,9 @@ class FakeSnowflakeConnection:
             if e and not isinstance(e, exp.Semicolon)  # ignore comments
         ]
         return cursors if return_cursors else []
+
+    def is_closed(self) -> bool:
+        return self._is_closed
 
     def rollback(self) -> None:
         self.cursor().execute("ROLLBACK")
