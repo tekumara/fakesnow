@@ -2,6 +2,15 @@
 
 # Changelog
 
+## [0.9.23](https://github.com/tekumara/fakesnow/compare/v0.9.22...v0.9.23) (2024-08-20)
+
+
+### Features
+
+* **server:** support bool, int, float types ([efd4942](https://github.com/tekumara/fakesnow/commit/efd4942dcb5246b96501fcb65448c4b5da5509cb))
+* **server:** support cur.description ([6e9c1a5](https://github.com/tekumara/fakesnow/commit/6e9c1a582e7f95e3475ad676312cc1d9d3338386))
+* support conn.is_closed() ([36dd461](https://github.com/tekumara/fakesnow/commit/36dd4612017626e044cc26032acac6a998a59d58)), closes [#125](https://github.com/tekumara/fakesnow/issues/125)
+
 ## [0.9.22](https://github.com/tekumara/fakesnow/compare/v0.9.21...v0.9.22) (2024-08-11)
 
 
