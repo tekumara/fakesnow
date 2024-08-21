@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.24](https://github.com/tekumara/fakesnow/compare/v0.9.23...v0.9.24) (2024-08-21)
+
+
+### Bug Fixes
+
+* don't require pandas at import time ([2a7944e](https://github.com/tekumara/fakesnow/commit/2a7944eeb371c6b2180016a84dce915449520fea)), closes [#127](https://github.com/tekumara/fakesnow/issues/127)
+
 ## [0.9.23](https://github.com/tekumara/fakesnow/compare/v0.9.22...v0.9.23) (2024-08-20)
 
 
