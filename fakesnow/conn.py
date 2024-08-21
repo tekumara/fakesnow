@@ -1,13 +1,11 @@
 from __future__ import annotations
 
-import json
 import os
 from collections.abc import Iterable
 from pathlib import Path
 from types import TracebackType
 from typing import Any
 
-import pandas as pd
 import snowflake.connector.converter
 import snowflake.connector.errors
 import sqlglot
@@ -147,29 +145,3 @@ class FakeSnowflakeConnection:
 
     def rollback(self) -> None:
         self.cursor().execute("ROLLBACK")
-
-    def _insert_df(self, df: pd.DataFrame, table_name: str) -> int:
-        # Objects in dataframes are written as parquet structs, and snowflake loads parquet structs as json strings.
-        # Whereas duckdb analyses a dataframe see https://duckdb.org/docs/api/python/data_ingestion.html#pandas-dataframes--object-columns
-        # and converts a object to the most specific type possible, eg: dict -> STRUCT, MAP or varchar, and list -> LIST
-        # For dicts see https://github.com/duckdb/duckdb/pull/3985 and https://github.com/duckdb/duckdb/issues/9510
-        #
-        # When the rows have dicts with different keys there isn't a single STRUCT that can cover them, so the type is
-        # varchar and value a string containing a struct representation. In order to support dicts with different keys
-        # we first convert the dicts to json strings. A pity we can't do something inside duckdb and avoid the dataframe
-        # copy and transform in python.
-
-        df = df.copy()
-
-        # Identify columns of type object
-        object_cols = df.select_dtypes(include=["object"]).columns
-
-        # Apply json.dumps to these columns
-        for col in object_cols:
-            # don't jsonify string
-            df[col] = df[col].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x)
-
-        escaped_cols = ",".join(f'"{col}"' for col in df.columns.to_list())
-        self._duck_conn.execute(f"INSERT INTO {table_name}({escaped_cols}) SELECT * FROM df")
-
-        return self._duck_conn.fetchall()[0][0]

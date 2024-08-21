@@ -26,9 +26,11 @@ import fakesnow.transforms as transforms
 from fakesnow.types import describe_as_result_metadata
 
 if TYPE_CHECKING:
+    # don't require pandas at import time
     import pandas as pd
     import pyarrow.lib
 
+    # avoid circular import
     from fakesnow.conn import FakeSnowflakeConnection
 
 

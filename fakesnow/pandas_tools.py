@@ -1,14 +1,18 @@
 from __future__ import annotations
 
+import json
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
 import numpy as np
+from duckdb import DuckDBPyConnection
+
+from fakesnow.conn import FakeSnowflakeConnection
 
 if TYPE_CHECKING:
+    # don't require pandas at import time
     import pandas as pd
 
-    from fakesnow.conn import FakeSnowflakeConnection
 
 CopyResult = tuple[
     str,
@@ -68,10 +72,37 @@ def write_pandas(
 
         conn.cursor().execute(f"CREATE TABLE IF NOT EXISTS {name} ({','.join(cols)})")
 
-    count = conn._insert_df(df, name)  # noqa: SLF001
+    count = _insert_df(conn._duck_conn, df, name)  # noqa: SLF001
 
     # mocks https://docs.snowflake.com/en/sql-reference/sql/copy-into-table.html#output
     mock_copy_results = [("fakesnow/file0.txt", "LOADED", count, count, 1, 0, None, None, None, None)]
 
     # return success
     return (True, len(mock_copy_results), count, mock_copy_results)
+
+
+def _insert_df(duck_conn: DuckDBPyConnection, df: pd.DataFrame, table_name: str) -> int:
+    # Objects in dataframes are written as parquet structs, and snowflake loads parquet structs as json strings.
+    # Whereas duckdb analyses a dataframe see https://duckdb.org/docs/api/python/data_ingestion.html#pandas-dataframes--object-columns
+    # and converts a object to the most specific type possible, eg: dict -> STRUCT, MAP or varchar, and list -> LIST
+    # For dicts see https://github.com/duckdb/duckdb/pull/3985 and https://github.com/duckdb/duckdb/issues/9510
+    #
+    # When the rows have dicts with different keys there isn't a single STRUCT that can cover them, so the type is
+    # varchar and value a string containing a struct representation. In order to support dicts with different keys
+    # we first convert the dicts to json strings. A pity we can't do something inside duckdb and avoid the dataframe
+    # copy and transform in python.
+
+    df = df.copy()
+
+    # Identify columns of type object
+    object_cols = df.select_dtypes(include=["object"]).columns
+
+    # Apply json.dumps to these columns
+    for col in object_cols:
+        # don't jsonify string
+        df[col] = df[col].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x)
+
+    escaped_cols = ",".join(f'"{col}"' for col in df.columns.to_list())
+    duck_conn.execute(f"INSERT INTO {table_name}({escaped_cols}) SELECT * FROM df")
+
+    return duck_conn.fetchall()[0][0]
