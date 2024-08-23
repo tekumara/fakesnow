@@ -48,13 +48,13 @@ async def query_request(request: Request) -> JSONResponse:
         # only a single sql statement is sent at a time by the python snowflake connector
         cur = await run_in_threadpool(conn.cursor().execute, sql_text)
 
+        rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
+
         if cur._arrow_table:  # noqa: SLF001
-            batch_bytes = to_ipc(cur._arrow_table)  # noqa: SLF001
+            batch_bytes = to_ipc(cur._arrow_table, rowtype)  # noqa: SLF001
             rowset_b64 = b64encode(batch_bytes).decode("utf-8")
         else:
             rowset_b64 = ""
-
-        rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
         return JSONResponse(
             {

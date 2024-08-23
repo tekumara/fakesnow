@@ -4,15 +4,30 @@ import pandas as pd
 import pyarrow as pa
 
 from fakesnow.arrow import to_ipc, with_sf_metadata
+from fakesnow.types import ColumnInfo, describe_as_rowtype
+
+
+def rowtype(types: list[str]) -> list[ColumnInfo]:
+    return describe_as_rowtype([("test", typ, None, None, None, None) for typ in types])
 
 
 def test_with_sf_metadata() -> None:
     # see https://arrow.apache.org/docs/python/api/datatypes.html
-    def f(t: pa.DataType) -> dict:
-        return with_sf_metadata(pa.schema([pa.field(str(t), t)])).field(0).metadata
+    def f(t: pa.DataType, rowtype: list[ColumnInfo]) -> dict:
+        return with_sf_metadata(pa.schema([pa.field(str(t), t)]), rowtype).field(0).metadata
 
-    assert f(pa.string()) == {b"logicalType": b"TEXT", b"charLength": b"16777216"}
-    assert f(pa.decimal128(10, 2)) == {b"logicalType": b"FIXED", b"precision": b"10", b"scale": b"2"}
+    assert f(pa.string(), rowtype(["VARCHAR"])) == {
+        b"logicalType": b"TEXT",
+        b"precision": b"38",
+        b"scale": b"0",
+        b"charLength": b"16777216",
+    }
+    assert f(pa.decimal128(10, 2), rowtype(["DECIMAL(10,2)"])) == {
+        b"logicalType": b"FIXED",
+        b"precision": b"10",
+        b"scale": b"2",
+        b"charLength": b"0",
+    }
 
 
 def test_ipc_writes_sf_metadata() -> None:
@@ -23,7 +38,7 @@ def test_ipc_writes_sf_metadata() -> None:
     )
 
     table = pa.Table.from_pandas(df)
-    table_bytes = to_ipc(table)
+    table_bytes = to_ipc(table, rowtype(["VARCHAR"]))
 
     batch = next(iter(pa.ipc.open_stream(table_bytes)))
 
@@ -31,6 +46,8 @@ def test_ipc_writes_sf_metadata() -> None:
     assert pa.table(batch) == table
     assert batch.schema.field(0).metadata == {
         b"logicalType": b"TEXT",
+        b"precision": b"38",
+        b"scale": b"0",
         b"charLength": b"16777216",
     }
 
