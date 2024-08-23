@@ -6,6 +6,7 @@ import secrets
 from base64 import b64encode
 from dataclasses import dataclass
 
+import snowflake.connector.errors
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
@@ -45,8 +46,22 @@ async def query_request(request: Request) -> JSONResponse:
 
         sql_text = body_json["sqlText"]
 
-        # only a single sql statement is sent at a time by the python snowflake connector
-        cur = await run_in_threadpool(conn.cursor().execute, sql_text)
+        try:
+            # only a single sql statement is sent at a time by the python snowflake connector
+            cur = await run_in_threadpool(conn.cursor().execute, sql_text)
+        except snowflake.connector.errors.ProgrammingError as e:
+            code = f"{e.errno:06d}"
+            return JSONResponse(
+                {
+                    "data": {
+                        "errorCode": code,
+                        "sqlState": e.sqlstate,
+                    },
+                    "code": code,
+                    "message": e.msg,
+                    "success": False,
+                }
+            )
 
         rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 

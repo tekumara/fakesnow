@@ -111,3 +111,14 @@ def test_server_abort_request(server: dict) -> None:
         conn1.cursor() as cur,
     ):
         cur.execute("select 'will abort'")
+
+
+def test_server_errors(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur = scur
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute("select * from this_table_does_not_exist")
+
+    assert excinfo.value.errno == 2003
+    assert excinfo.value.sqlstate == "42S02"
+    assert excinfo.value.msg
+    assert "THIS_TABLE_DOES_NOT_EXIST" in excinfo.value.msg
