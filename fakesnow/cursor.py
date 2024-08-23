@@ -112,13 +112,14 @@ class FakeSnowflakeCursor:
 
     @property
     def description(self) -> list[ResultMetadata]:
+        return describe_as_result_metadata(self._describe_last_sql())
+
+    def _describe_last_sql(self) -> list:
         # use a separate cursor to avoid consuming the result set on this cursor
         with self._conn.cursor() as cur:
             expression = sqlglot.parse_one(f"DESCRIBE {self._last_sql}", read="duckdb")
             cur._execute(expression, self._last_params)  # noqa: SLF001
-            meta = describe_as_result_metadata(cur.fetchall())
-
-        return meta
+            return cur.fetchall()
 
     def execute(
         self,

@@ -50,6 +50,8 @@ def server(unused_tcp_port_factory: Callable[[], int]) -> Iterator[dict]:
 def sconn(server: dict) -> Iterator[snowflake.connector.SnowflakeConnection]:
     with snowflake.connector.connect(
         **server,
+        database="db1",
+        schema="schema1",
         # disable infinite retries on error
         network_timeout=1,
     ) as c:
@@ -64,6 +66,30 @@ def scur(
         yield cur
 
 
+def test_server_types_no_result_set(sconn: snowflake.connector.SnowflakeConnection) -> None:
+    cur = sconn.cursor()
+    cur.execute(
+        """
+        create or replace table example (
+            XBOOLEAN BOOLEAN, XINT INT, XFLOAT FLOAT, XDECIMAL DECIMAL(10,2),
+            XVARCHAR VARCHAR
+        )
+        """
+    )
+    cur.execute("select * from example")
+    # fmt: off
+    assert cur.description == [
+        ResultMetadata(name='XBOOLEAN', type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        # TODO: is_nullable should be False
+        ResultMetadata(name='XINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
+        ResultMetadata(name='XFLOAT', type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name="XDECIMAL", type_code=0, display_size=None, internal_size=None, precision=10, scale=2, is_nullable=True),
+        # TODO: internal_size matches column size
+        ResultMetadata(name="XVARCHAR", type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)
+    ]
+    # fmt: on
+
+
 def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     scur.execute(
         # TODO: match columns names without using AS
@@ -73,17 +99,6 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
         """
     )
     assert scur.fetchall() == [(True, 1, 2.0, Decimal("12.35"), "hello")]
-    # fmt: off
-    assert scur.description == [
-        ResultMetadata(name='TRUE', type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
-        # TODO: is_nullable should be False
-        ResultMetadata(name='1::INT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
-        ResultMetadata(name='2.0::FLOAT', type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name="TO_DECIMAL('12.3456', 10,2)", type_code=0, display_size=None, internal_size=None, precision=10, scale=2, is_nullable=True),
-        # TODO: internal_size=5
-        ResultMetadata(name="'HELLO'", type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)
-    ]
-    # fmt: on
 
 
 def test_server_abort_request(server: dict) -> None:

@@ -12,9 +12,10 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from fakesnow.arrow import to_ipc, to_rowtype, with_sf_metadata
+from fakesnow.arrow import to_ipc
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
+from fakesnow.types import describe_as_rowtype
 
 fs = FakeSnow()
 sessions = {}
@@ -47,13 +48,13 @@ async def query_request(request: Request) -> JSONResponse:
         # only a single sql statement is sent at a time by the python snowflake connector
         cur = await run_in_threadpool(conn.cursor().execute, sql_text)
 
-        assert cur._arrow_table, "No result set"  # noqa: SLF001
+        if cur._arrow_table:  # noqa: SLF001
+            batch_bytes = to_ipc(cur._arrow_table)  # noqa: SLF001
+            rowset_b64 = b64encode(batch_bytes).decode("utf-8")
+        else:
+            rowset_b64 = ""
 
-        batch_bytes = to_ipc(cur._arrow_table)  # noqa: SLF001
-        rowset_b64 = b64encode(batch_bytes).decode("utf-8")
-
-        # TODO: avoid calling with_sf_metadata twice
-        rowtype = to_rowtype(with_sf_metadata(cur._arrow_table.schema))  # noqa: SLF001
+        rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
         return JSONResponse(
             {
