@@ -117,6 +117,7 @@ class FakeSnowflakeCursor:
     def _describe_last_sql(self) -> list:
         # use a separate cursor to avoid consuming the result set on this cursor
         with self._conn.cursor() as cur:
+            # TODO: can we replace with self._duck_conn.description?
             expression = sqlglot.parse_one(f"DESCRIBE {self._last_sql}", read="duckdb")
             cur._execute(expression, self._last_params)  # noqa: SLF001
             return cur.fetchall()

@@ -1,5 +1,6 @@
 # ruff: noqa: E501
 
+import datetime
 import threading
 from collections.abc import Iterator
 from decimal import Decimal
@@ -7,11 +8,13 @@ from time import sleep
 from typing import Callable
 
 import pytest
+import pytz
 import snowflake.connector
 import uvicorn
 from snowflake.connector.cursor import ResultMetadata
 
 import fakesnow.server
+from tests.utils import indent
 
 
 @pytest.fixture(scope="session")
@@ -104,14 +107,36 @@ def test_server_types_no_result_set(sconn: snowflake.connector.SnowflakeConnecti
 
 
 def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
-    scur.execute(
+    cur = scur
+    cur.execute(
         # TODO: match columns names without using AS
         """
-        select true as TRUE, 1::int as "1::INT", 2.0::float as "2.0::FLOAT", to_decimal('12.3456', 10,2) as "TO_DECIMAL('12.3456', 10,2)",
-        'hello' as "'HELLO'"
+        select
+                true, 1::int, 2.0::float, to_decimal('12.3456', 10,2),
+                'hello', 'hello'::varchar(20),
+                to_date('2018-04-15'), to_time('04:15:29.123456'), to_timestamp_tz('2013-04-05 01:02:03.123456'), to_timestamp_ntz('2013-04-05 01:02:03.123456'),
+                /* X'41424320E29D84', ARRAY_CONSTRUCT('foo'), */ OBJECT_CONSTRUCT('k','v1'), 1.23::VARIANT
         """
     )
-    assert scur.fetchall() == [(True, 1, 2.0, Decimal("12.35"), "hello")]
+    assert indent(cur.fetchall()) == [
+        (
+            True,
+            1,
+            2.0,
+            Decimal("12.35"),
+            "hello",
+            "hello",
+            datetime.date(2018, 4, 15),
+            datetime.time(4, 15, 29, 123456),
+            datetime.datetime(2013, 4, 5, 1, 2, 3, 123456, tzinfo=pytz.utc),
+            datetime.datetime(2013, 4, 5, 1, 2, 3, 123456),
+            # TODO
+            # bytearray(b"ABC \xe2\x9d\x84"),
+            # '[\n  "foo"\n]',
+            '{\n  "k": "v1"\n}',
+            "1.23",
+        )
+    ]
 
 
 def test_server_abort_request(server: dict) -> None:

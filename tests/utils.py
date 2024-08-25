@@ -16,7 +16,7 @@ def indent(rows: Sequence[tuple] | Sequence[dict]) -> list[tuple]:
 
 def dindent(rows: Sequence[tuple] | Sequence[dict]) -> list[dict]:
     # indent duckdb json strings dict values to match snowflake json strings
-    assert isinstance(rows[0], dict)
+    assert isinstance(rows[0], dict), f"{type(rows[0]).__name__} is not dict"
     return [
         {
             k: json.dumps(json.loads(v), indent=2) if (isinstance(v, str) and v.startswith(("[", "{"))) else v

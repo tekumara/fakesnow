@@ -13,7 +13,7 @@ from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
-from fakesnow.arrow import to_ipc
+from fakesnow.arrow import to_ipc, to_sf
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.types import describe_as_rowtype
@@ -66,7 +66,7 @@ async def query_request(request: Request) -> JSONResponse:
         rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
         if cur._arrow_table:  # noqa: SLF001
-            batch_bytes = to_ipc(cur._arrow_table, rowtype)  # noqa: SLF001
+            batch_bytes = to_ipc(to_sf(cur._arrow_table, rowtype))  # noqa: SLF001
             rowset_b64 = b64encode(batch_bytes).decode("utf-8")
         else:
             rowset_b64 = ""
