@@ -148,6 +148,7 @@ class FakeSnowflakeCursor:
                     transformed = self._transform(exp)
                     last_execute_result = self._execute(transformed, params)
 
+            assert last_execute_result is not None
             return last_execute_result
         except snowflake.connector.errors.ProgrammingError as e:
             self._sqlstate = e.sqlstate
