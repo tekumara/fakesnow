@@ -828,6 +828,7 @@ def test_identifier(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select * from identifier('example')")
     assert cur.fetchall() == [(1,)]
 
+
 # TODO: Also consider nondeterministic config for throwing errors when multiple source critera match a target row
 # https://docs.snowflake.com/en/sql-reference/sql/merge#nondeterministic-results-for-update-and-delete
 def test_merge(conn: snowflake.connector.SnowflakeConnection):
@@ -865,19 +866,20 @@ def test_merge(conn: snowflake.connector.SnowflakeConnection):
             WHEN MATCHED THEN UPDATE SET val = t2.newVal
             WHEN NOT MATCHED THEN INSERT (t1Key, val, status) VALUES (t2.t2Key, t2.newVal, t2.newStatus);
         """,
-        cursor_class=snowflake.connector.cursor.DictCursor, # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
+        cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
     )
 
     assert dcur.fetchall() == [{"number of rows inserted": 1, "number of rows updated": 2, "number of rows deleted": 1}]
 
     dcur.execute("select * from t1 order by t1key")
-    res= dcur.fetchall()
+    res = dcur.fetchall()
     assert res == [
         {"T1KEY": 1, "VAL": "New Value 1", "STATUS": "New Status 1"},
         {"T1KEY": 3, "VAL": "New Value 3", "STATUS": "Old Status 3"},
         {"T1KEY": 4, "VAL": "Old Value 4", "STATUS": "Old Status 4"},
         {"T1KEY": 5, "VAL": "New Value 5", "STATUS": "New Status 5"},
     ]
+
 
 def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnection):
     *_, dcur = conn.execute_string(
@@ -906,14 +908,14 @@ def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnecti
         MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
             WHEN NOT MATCHED AND t2.insertable = 1 THEN INSERT (t1Key, val, status) VALUES (t2.t2Key, t2.newVal, t2.newStatus);
         """,
-        cursor_class=snowflake.connector.cursor.DictCursor, # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
+        cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
     )
 
     # TODO: Check what the python connector actually returns, does include the updates and deletes? Ours currently returns None values for those columns.
     # assert dcur.fetchall() == [{"number of rows inserted": 1}]
 
     dcur.execute("select * from t1 order by t1key")
-    res= dcur.fetchall()
+    res = dcur.fetchall()
     assert res == [
         {"T1KEY": 1, "VAL": "Old Value 1", "STATUS": "Old Status 1"},
         {"T1KEY": 2, "VAL": "New Value 2", "STATUS": "New Status 2"},
