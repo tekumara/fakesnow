@@ -83,6 +83,15 @@ def test_connect_db_path_reuse():
             assert cur.execute("select * from example").fetchall() == [(420,)]
 
 
+def test_connect_information_schema():
+    with fakesnow.patch(create_schema_on_connect=False):
+        conn = snowflake.connector.connect(database="db1", schema="information_schema")
+        assert conn.schema == "INFORMATION_SCHEMA"
+        with conn, conn.cursor() as cur:
+            # shouldn't fail
+            cur.execute("SELECT * FROM databases")
+
+
 def test_connect_without_database(_fakesnow_no_auto_create: None):
     with snowflake.connector.connect() as conn, conn.cursor() as cur:
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:

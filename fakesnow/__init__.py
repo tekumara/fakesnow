@@ -8,12 +8,11 @@ import unittest.mock as mock
 from collections.abc import Iterator, Sequence
 from contextlib import contextmanager
 
-import duckdb
 import snowflake.connector
 import snowflake.connector.pandas_tools
 
 import fakesnow.fakes as fakes
-from fakesnow.global_database import create_global_database
+from fakesnow.instance import FakeSnow
 
 
 @contextmanager
@@ -52,20 +51,15 @@ def patch(
     # won't be able to patch extra targets
     assert not isinstance(snowflake.connector.connect, mock.MagicMock), "Snowflake connector is already patched"
 
-    duck_conn = duckdb.connect(database=":memory:")
-    create_global_database(duck_conn)
+    fs = FakeSnow(
+        create_database_on_connect=create_database_on_connect,
+        create_schema_on_connect=create_schema_on_connect,
+        db_path=db_path,
+        nop_regexes=nop_regexes,
+    )
 
     fake_fns = {
-        # every time we connect, create a new cursor (ie: connection) so we can isolate each connection's
-        # schema setting, see https://duckdb.org/docs/api/python/overview.html#startup--shutdown
-        snowflake.connector.connect: lambda **kwargs: fakes.FakeSnowflakeConnection(
-            duck_conn.cursor(),
-            create_database=create_database_on_connect,
-            create_schema=create_schema_on_connect,
-            db_path=db_path,
-            nop_regexes=nop_regexes,
-            **kwargs,
-        ),
+        snowflake.connector.connect: fs.connect,
         snowflake.connector.pandas_tools.write_pandas: fakes.write_pandas,
     }
 
