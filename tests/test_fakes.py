@@ -829,7 +829,7 @@ def test_identifier(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1,)]
 
 
-# TODO: Also consider nondeterministic config for throwing errors when multiple source critera match a target row
+# TODO: Also consider nondeterministic config for throwing errors when multiple source criteria match a target row
 # https://docs.snowflake.com/en/sql-reference/sql/merge#nondeterministic-results-for-update-and-delete
 def test_merge(conn: snowflake.connector.SnowflakeConnection):
     *_, dcur = conn.execute_string(
