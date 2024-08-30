@@ -5,6 +5,7 @@ from sqlglot import exp
 class MergeTransform:
     TEMP_MERGE_UPDATED_DELETES = "temp_merge_updates_deletes"
     TEMP_MERGE_INSERTS = "temp_merge_inserts"
+
     def __init__(self, expression: exp.Expression) -> None:
         self._orig_expr = expression
         self._variables = {}
@@ -91,7 +92,8 @@ from merge_update_deletes mud, merge_inserts mi
                             exp.select("target_rowid")
                             .from_(self.TEMP_MERGE_UPDATED_DELETES)
                             .where(exp.EQ(this="when_id", expression=exp.Literal(this=f"{w_idx}", is_string=False)))
-                            .where(exp.EQ(this="target_rowid", expression=exp.Column(this="rowid", table=self._target_table())))
+                            .where(exp.EQ(this="target_rowid",
+                                          expression=exp.Column(this="rowid", table=self._target_table())))
                         ],
                     )
                     not_in_temp_table_subquery = exp.Not(
@@ -128,14 +130,10 @@ from merge_update_deletes mud, merge_inserts mi
                     if isinstance(then, exp.Update):
                         self._temp_table_inserts.append(insert_temp_merge_operation("U"))
 
-                        def remove_source_alias(eq_exp: exp.EQ) -> exp.EQ:
-                            eq_exp.args.get("this").set("table", None)
-                            return eq_exp
-
                         then.set("this", self._target_table())
                         then.set(
                             "expressions",
-                            exp.Set(expressions=[remove_source_alias(e) for e in then.args.get("expressions")]),
+                            exp.Set(expressions=[self._remove_table_alias(e) for e in then.args.get("expressions")]),
                         )
                         then.set("from", exp.From(this=self._source_table()))
                         then.set(
@@ -158,7 +156,8 @@ from merge_update_deletes mud, merge_inserts mi
                             exp.select("source_rowid")
                             .from_(self.TEMP_MERGE_INSERTS)
                             .where(exp.EQ(this="when_id", expression=exp.Literal(this=f"{w_idx}", is_string=False)))
-                            .where(exp.EQ(this="source_rowid", expression=exp.Column(this="rowid", table=self._source_table())))
+                            .where(exp.EQ(this="source_rowid",
+                                          expression=exp.Column(this="rowid", table=self._source_table())))
                         ],
                     )
                     not_in_temp_table_subquery = exp.Not(
@@ -188,11 +187,7 @@ from merge_update_deletes mud, merge_inserts mi
                     )
                     self._temp_table_inserts.append(temp_match_expr)
 
-                    def remove_table_alias(eq_exp: exp.Column) -> exp.Column:
-                        eq_exp.set("table", None)
-                        return eq_exp
-
-                    columns = [remove_table_alias(e) for e in then.args.get("this").expressions]
+                    columns = [self._remove_table_alias(e) for e in then.args.get("this").expressions]
                     statement = exp.insert(
                         into=self._target_table(),
                         columns=[c.this for c in columns],
@@ -205,3 +200,8 @@ from merge_update_deletes mud, merge_inserts mi
             return self._generate_final_expression_set()
         else:
             return [self._orig_expr]
+
+    # helpers
+    def _remove_table_alias(self, eq_exp: exp.Condition) -> exp.Condition:
+        eq_exp.set("table", None)
+        return eq_exp
