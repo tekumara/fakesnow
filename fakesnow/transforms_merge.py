@@ -61,6 +61,19 @@ from merge_update_deletes mud, merge_inserts mi
         print(*expressions, sep="\n")
         return expressions
 
+    def _insert_temp_merge_operation(self, op_type: str, when_idx: int, subquery: exp.Expression) -> None:
+        assert op_type in [
+            "U",
+            "D",
+        ], f"Expected 'U' or 'D', got merge op_type: {op_type}"  # Updates/Deletes
+        self._temp_table_inserts.append(
+            exp.insert(
+                into=self.TEMP_MERGE_UPDATED_DELETES,
+                expression=exp.select("rowid", when_idx, exp.Literal(this=op_type, is_string=True))
+                .from_(self._target_table())
+                .where(subquery),
+            )
+        )
 
     def transform(self) -> list[exp.Expression]:
         """Create multiple compatible duckdb statements to be functionally equivalent to Snowflake's MERGE INTO.
@@ -113,22 +126,8 @@ from merge_update_deletes mud, merge_inserts mi
                     )
                     subquery = exp.And(this=subquery_ignoring_temp_table, expression=not_in_temp_table_subquery)
 
-                    def insert_temp_merge_operation(
-                        op_type: str, w_idx: int = w_idx, subquery: exp.Expression = subquery
-                    ) -> exp.Expression:
-                        assert op_type in [
-                            "U",
-                            "D",
-                        ], f"Expected 'U' or 'D', got merge op_type: {op_type}"  # Updates/Deletes
-                        return exp.insert(
-                            into=self.TEMP_MERGE_UPDATED_DELETES,
-                            expression=exp.select("rowid", w_idx, exp.Literal(this=op_type, is_string=True))
-                            .from_(self._target_table())
-                            .where(subquery),
-                        )
-
                     if isinstance(then, exp.Update):
-                        self._temp_table_inserts.append(insert_temp_merge_operation("U"))
+                        self._insert_temp_merge_operation("U", w_idx, subquery)
 
                         then.set("this", self._target_table())
                         then.set(
@@ -143,7 +142,8 @@ from merge_update_deletes mud, merge_inserts mi
                         self._output_expressions.append(then)
                     # Var(this=DELETE) when processing WHEN MATCHED THEN DELETE.
                     elif then.args.get("this") == "DELETE":
-                        self._temp_table_inserts.append(insert_temp_merge_operation("D"))
+                        self._insert_temp_merge_operation("D", w_idx, subquery)
+
                         delete_from_temp = exp.delete(table=self._target_table(), where=rowid_in_temp_table_expr)
                         self._output_expressions.append(delete_from_temp)
                     else:
