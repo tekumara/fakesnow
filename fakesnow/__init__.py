@@ -90,3 +90,4 @@ def patch(
         yield None
     finally:
         stack.close()
+        fs.duck_conn.close()
