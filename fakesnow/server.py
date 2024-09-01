@@ -19,7 +19,7 @@ from fakesnow.instance import FakeSnow
 from fakesnow.types import describe_as_rowtype
 
 fs = FakeSnow()
-sessions = {}
+sessions: dict[str, FakeSnowflakeConnection] = {}
 
 
 @dataclass
