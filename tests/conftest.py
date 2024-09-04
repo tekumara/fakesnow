@@ -71,7 +71,8 @@ def server(unused_tcp_port_factory: Callable[[], int]) -> Iterator[dict]:
         port=port,
         protocol="http",
         # disable telemetry
-        session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False},
+        # isolate each session to a separate instance to avoid sharing tables between tests
+        session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False, "FAKESNOW_DB_PATH": ":isolated:"},
     )
 
     server.should_exit = True

@@ -5,6 +5,7 @@ import json
 import secrets
 from base64 import b64encode
 from dataclasses import dataclass
+from typing import Any
 
 import snowflake.connector.errors
 from starlette.applications import Starlette
@@ -18,7 +19,7 @@ from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.types import describe_as_rowtype
 
-fs = FakeSnow()
+shared_fs = FakeSnow()
 sessions: dict[str, FakeSnowflakeConnection] = {}
 
 
@@ -29,9 +30,19 @@ class ServerError(Exception):
     message: str
 
 
-def login_request(request: Request) -> JSONResponse:
+async def login_request(request: Request) -> JSONResponse:
     database = request.query_params.get("databaseName")
     schema = request.query_params.get("schemaName")
+    body = await request.body()
+    body_json = json.loads(gzip.decompress(body))
+    session_params: dict[str, Any] = body_json["data"]["SESSION_PARAMETERS"]
+    if db_path := session_params.get("FAKESNOW_DB_PATH"):
+        # isolated creates a new in-memory database, rather than using the shared in-memory database
+        # so this connection won't share any tables with other connections
+        fs = FakeSnow() if db_path == ":isolated:" else FakeSnow(db_path=db_path)
+    else:
+        # share the in-memory database across connections
+        fs = shared_fs
     token = secrets.token_urlsafe(32)
     sessions[token] = fs.connect(database, schema)
     return JSONResponse({"data": {"token": token}, "success": True})
