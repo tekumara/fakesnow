@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import snowflake.connector
-import pytest
+
 
 # TODO: Also consider nondeterministic config for throwing errors when multiple source criteria match a target row
 # https://docs.snowflake.com/en/sql-reference/sql/merge#nondeterministic-results-for-update-and-delete

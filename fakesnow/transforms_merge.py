@@ -1,6 +1,7 @@
 import sqlglot
 from sqlglot import exp
 
+
 # Implements snowflake's MERGE INTO functionality in duckdb (https://docs.snowflake.com/en/sql-reference/sql/merge).
 # An example merge statement that we transform into multiple duckdb statements. t1 is the target, t2 is the source:
 # MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
@@ -64,7 +65,7 @@ class MergeTransform:
         # Operate in a transaction to freeze rowids https://duckdb.org/docs/sql/statements/select#row-ids
         begin_transaction_exp = sqlglot.parse_one("BEGIN TRANSACTION")
         end_transaction_exp = sqlglot.parse_one("COMMIT")
-        
+
         # Add modifications results outcome query
         results_exp = sqlglot.parse_one(f"""
 WITH merge_update_deletes AS (
@@ -107,7 +108,7 @@ from merge_update_deletes mud, merge_inserts mi
         # Breaking down how we implement MERGE:
         # Insert into a temp table the source rows (rowid is stable in a transaction: https://duckdb.org/docs/sql/statements/select.html#row-ids)
         # and which modification to apply to those source rows (insert, update, delete).
-        # 
+        #
         # Then apply the modifications to the target table based on the rowids in the temp tables.
 
         # TODO: Error if attempting to update the same source row multiple times (based on a config in the doco).
@@ -167,7 +168,7 @@ from merge_update_deletes mud, merge_inserts mi
                         # Insert into the temp table the rowids of the rows that match the WHEN condition
                         self._insert_temp_merge_operation("U", w_idx, subquery)
 
-                        # Build the UPDATE statement to apply to the target table for this specific WHEN clause sourcing 
+                        # Build the UPDATE statement to apply to the target table for this specific WHEN clause sourcing
                         # its target rows from the temp table that we just inserted into.
                         then.set("this", self._target_table())
                         then.set(
@@ -180,19 +181,19 @@ from merge_update_deletes mud, merge_inserts mi
                             exp.Where(this=exp.And(this=subquery_on_expression, expression=rowid_in_temp_table_expr)),
                         )
                         self._output_expressions.append(then)
-                    
+
                     # Handling WHEN MATCHED AND <Condition> THEN DELETE
                     elif then.args.get("this") == "DELETE":
                         # Insert into the temp table the rowids of the rows that match the WHEN condition
                         self._insert_temp_merge_operation("D", w_idx, subquery)
 
-                        # Build the DELETE statement to apply to the target table for this specific WHEN clause sourcing 
+                        # Build the DELETE statement to apply to the target table for this specific WHEN clause sourcing
                         # its target rows from the temp table that we just inserted into.
                         delete_from_temp = exp.delete(table=self._target_table(), where=rowid_in_temp_table_expr)
                         self._output_expressions.append(delete_from_temp)
                     else:
                         assert isinstance(then, (exp.Update, exp.Delete)), f"Expected 'Update' or 'Delete', got {then}"
-                
+
                 # Handling WHEN NOT MATCHED THEN INSERT (<Columns>) VALUES (<Values>)
                 else:
                     assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
@@ -239,7 +240,7 @@ from merge_update_deletes mud, merge_inserts mi
                     )
 
                     columns = [self._remove_table_alias(e) for e in then.args.get("this").expressions]
-                    # The INSERT statement to apply to the target table for targetted rowids
+                    # The INSERT statement to apply to the target table for targeted rowids
                     statement = exp.insert(
                         into=self._target_table(),
                         columns=[c.this for c in columns],
