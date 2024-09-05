@@ -13,16 +13,42 @@ from sqlglot import exp
 # BEGIN
 # CREATE OR REPLACE TEMPORARY TABLE temp_merge_updates_deletes (target_rowid INT, when_id INT, type CHAR(1))
 # CREATE OR REPLACE TEMPORARY TABLE temp_merge_inserts (source_rowid INT, when_id INT)
-# INSERT INTO temp_merge_updates_deletes SELECT rowid, 0, 'D' FROM t1 WHERE EXISTS(SELECT 1 FROM t2 WHERE t1.t1Key = t2.t2Key AND t2.marked = 1) AND NOT EXISTS(SELECT 1 FROM temp_merge_updates_deletes WHERE t1.rowid = target_rowid)
-# INSERT INTO temp_merge_updates_deletes SELECT rowid, 1, 'U' FROM t1 WHERE EXISTS(SELECT 1 FROM t2 WHERE t1.t1Key = t2.t2Key AND t2.isNewStatus = 1) AND NOT EXISTS(SELECT 1 FROM temp_merge_updates_deletes WHERE t1.rowid = target_rowid)
-# INSERT INTO temp_merge_updates_deletes SELECT rowid, 2, 'U' FROM t1 WHERE EXISTS(SELECT 1 FROM t2 WHERE t1.t1Key = t2.t2Key) AND NOT EXISTS(SELECT 1 FROM temp_merge_updates_deletes WHERE t1.rowid = target_rowid)
-# INSERT INTO temp_merge_inserts SELECT rowid, 3 FROM t2 WHERE NOT EXISTS(SELECT 1 FROM t1 WHERE t1.t1Key = t2.t2Key) AND NOT EXISTS(SELECT 1 FROM temp_merge_inserts WHERE t2.rowid = source_rowid)
-# DELETE FROM t1 WHERE t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes WHERE when_id = 0 AND target_rowid = t1.rowid)
-# UPDATE t1 SET val = t2.newVal, status = t2.newStatus FROM t2 WHERE t1.t1Key = t2.t2Key AND t2.isNewStatus = 1 AND t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes WHERE when_id = 1 AND target_rowid = t1.rowid)
-# UPDATE t1 SET val = t2.newVal FROM t2 WHERE t1.t1Key = t2.t2Key AND t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes WHERE when_id = 2 AND target_rowid = t1.rowid)
-# INSERT INTO t1 (t1Key, val, status) SELECT t2.t2Key, t2.newVal, t2.newStatus FROM t2 WHERE t2.rowid IN (SELECT source_rowid FROM temp_merge_inserts WHERE when_id = 3 AND source_rowid = t2.rowid)
+# INSERT INTO temp_merge_updates_deletes SELECT rowid, 0, 'D' FROM t1
+#   WHERE EXISTS(SELECT 1 FROM t2 WHERE t1.t1Key = t2.t2Key AND t2.marked = 1)
+#       AND NOT EXISTS(SELECT 1 FROM temp_merge_updates_deletes WHERE t1.rowid = target_rowid)
+# INSERT INTO temp_merge_updates_deletes SELECT rowid, 1, 'U' FROM t1
+#   WHERE EXISTS(SELECT 1 FROM t2 WHERE t1.t1Key = t2.t2Key AND t2.isNewStatus = 1)
+#       AND NOT EXISTS(SELECT 1 FROM temp_merge_updates_deletes WHERE t1.rowid = target_rowid)
+# INSERT INTO temp_merge_updates_deletes SELECT rowid, 2, 'U' FROM t1
+#   WHERE EXISTS(SELECT 1 FROM t2 WHERE t1.t1Key = t2.t2Key)
+#       AND NOT EXISTS(SELECT 1 FROM temp_merge_updates_deletes WHERE t1.rowid = target_rowid)
+# INSERT INTO temp_merge_inserts SELECT rowid, 3 FROM t2
+#   WHERE NOT EXISTS(SELECT 1 FROM t1 WHERE t1.t1Key = t2.t2Key)
+#       AND NOT EXISTS(SELECT 1 FROM temp_merge_inserts WHERE t2.rowid = source_rowid)
+# DELETE FROM t1
+#   WHERE t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes
+#   WHERE when_id = 0 AND target_rowid = t1.rowid)
+# UPDATE t1 SET val = t2.newVal, status = t2.newStatus FROM t2
+#   WHERE t1.t1Key = t2.t2Key AND t2.isNewStatus = 1
+#       AND t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes
+#       WHERE when_id = 1 AND target_rowid = t1.rowid)
+# UPDATE t1 SET val = t2.newVal FROM t2
+#   WHERE t1.t1Key = t2.t2Key
+#       AND t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes
+#       WHERE when_id = 2 AND target_rowid = t1.rowid)
+# INSERT INTO t1 (t1Key, val, status)
+#   SELECT t2.t2Key, t2.newVal, t2.newStatus FROM t2
+#   WHERE t2.rowid IN (SELECT source_rowid FROM temp_merge_inserts WHERE when_id = 3 AND source_rowid = t2.rowid)
 # COMMIT
-# WITH merge_update_deletes AS (SELECT CAST(COUNT_IF(type = 'U') AS INT) AS "updates", CAST(COUNT_IF(type = 'D') AS INT) AS "deletes" FROM temp_merge_updates_deletes), merge_inserts AS (SELECT COUNT() AS "inserts" FROM temp_merge_inserts) SELECT mi.inserts AS "number of rows inserted", mud.updates AS "number of rows updated", mud.deletes AS "number of rows deleted" FROM merge_update_deletes AS mud, merge_inserts AS mi
+#
+# WITH merge_update_deletes AS (
+#   SELECT CAST(COUNT_IF(type = 'U') AS INT) AS "updates",
+#   CAST(COUNT_IF(type = 'D') AS INT) AS "deletes" FROM temp_merge_updates_deletes),
+#   merge_inserts AS (SELECT COUNT(*) AS "inserts" FROM temp_merge_inserts)
+# SELECT mi.inserts AS "number of rows inserted",
+#   mud.updates AS "number of rows updated",
+#   mud.deletes AS "number of rows deleted"
+# FROM merge_update_deletes AS mud, merge_inserts AS mi
 class MergeTransform:
     TEMP_MERGE_UPDATED_DELETES = "temp_merge_updates_deletes"
     TEMP_MERGE_INSERTS = "temp_merge_inserts"
@@ -120,7 +146,8 @@ from merge_update_deletes mud, merge_inserts mi
             for w_idx, w in enumerate(whens):
                 assert isinstance(w, exp.When), f"Expected When expression, got {w}"
 
-                # Combine the top level ON expression with the AND condition from this specific WHEN into a subquery we use to target rows.
+                # Combine the top level ON expression with the AND condition
+                # from this specific WHEN into a subquery, we use to target rows.
                 # Eg. # MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
                 #           WHEN MATCHED AND t2.marked = 1 THEN DELETE
                 and_condition = w.args.get("condition")
@@ -132,7 +159,8 @@ from merge_update_deletes mud, merge_inserts mi
                 then = w.args.get("then")
                 # Handling WHEN MATCHED AND <Condition> THEN DELETE / UPDATE SET <Updates>
                 if matched:
-                    # Query ensuring rows that already exist in the temp table for previous WHEN clauses are not added again
+                    # Ensuring rows already exist in temporary table for
+                    # previous WHEN clauses are not added again
                     not_in_temp_table_subquery = exp.Not(
                         this=exp.Exists(
                             this=exp.select(1)
@@ -197,7 +225,8 @@ from merge_update_deletes mud, merge_inserts mi
                 # Handling WHEN NOT MATCHED THEN INSERT (<Columns>) VALUES (<Values>)
                 else:
                     assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
-                    # Query ensuring rows that already exist in the temp table for previous WHEN clauses are not added again
+                    # Query ensuring rows already exist in the temporary table for
+                    # previous WHEN clauses are not added again
                     not_in_temp_table_subquery = exp.Not(
                         this=exp.Exists(
                             this=exp.select(1)

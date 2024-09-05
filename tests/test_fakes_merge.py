@@ -1,3 +1,4 @@
+# ruff: noqa: E501
 from __future__ import annotations
 
 import snowflake.connector
@@ -85,7 +86,8 @@ def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnecti
         cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
     )
 
-    # TODO: Check what the python connector actually returns, does include the updates and deletes? Ours currently returns None values for those columns.
+    # TODO: Check what the python connector actually returns, does include the updates and deletes?
+    # Ours currently returns None values for those columns.
     # assert dcur.fetchall() == [{"number of rows inserted": 1}]
 
     dcur.execute("select * from t1 order by t1key")
