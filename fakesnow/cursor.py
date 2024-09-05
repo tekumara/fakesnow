@@ -142,7 +142,6 @@ class FakeSnowflakeCursor:
                 transformed = transforms.SUCCESS_NOP
                 last_execute_result = self._execute(transformed, params)
             else:
-                # TODO: Test this
                 expression = parse_one(command, read="snowflake")
                 for exp in self._split_transform(expression):
                     transformed = self._transform(exp)
