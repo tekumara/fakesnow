@@ -60,15 +60,24 @@ class MergeTransform:
         self._output_expressions = []
 
     def _target_table(self) -> exp.Expression:
-        return self._orig_expr.this
+        target_table = self._orig_expr.this
+        if target_table is None:
+            raise ValueError("Target table expression is None")
+        return target_table
 
     def _source_table(self) -> exp.Expression:
-        return self._orig_expr.args.get("using")
+        source_table = self._orig_expr.args.get("using")
+        if source_table is None:
+            raise ValueError("Source table expression is None")
+        return source_table
 
     # Get the ON expression from the merge operation (Eg. MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key)
     # which is applied to filter the source and target tables.
     def _merge_on_expr(self) -> exp.Expression:
-        return self._orig_expr.args.get("on")
+        on_expr = self._orig_expr.args.get("on")
+        if on_expr is None:
+            raise ValueError("Merge ON expression is None")
+        return on_expr
 
     # Creates temp tables to store the source rows and the modifications to apply to those rows.
     def _create_temp_tables(self) -> None:
@@ -121,7 +130,7 @@ from merge_update_deletes mud, merge_inserts mi
         self._temp_table_inserts.append(
             exp.insert(
                 into=self.TEMP_MERGE_UPDATED_DELETES,
-                expression=exp.select("rowid", when_idx, exp.Literal(this=op_type, is_string=True))
+                expression=exp.select("rowid", exp.Literal.number(when_idx), exp.Literal.string(op_type))
                 .from_(self._target_table())
                 .where(subquery),
             )
@@ -157,13 +166,14 @@ from merge_update_deletes mud, merge_inserts mi
 
                 matched = w.args.get("matched")
                 then = w.args.get("then")
+                assert then is not None, "then is None"
                 # Handling WHEN MATCHED AND <Condition> THEN DELETE / UPDATE SET <Updates>
                 if matched:
                     # Ensuring rows already exist in temporary table for
                     # previous WHEN clauses are not added again
                     not_in_temp_table_subquery = exp.Not(
                         this=exp.Exists(
-                            this=exp.select(1)
+                            this=exp.select(exp.Literal.number(1))
                             .from_(self.TEMP_MERGE_UPDATED_DELETES)
                             .where(
                                 exp.EQ(
@@ -176,7 +186,7 @@ from merge_update_deletes mud, merge_inserts mi
 
                     # Query finding rows that match the original ON condition and this WHEN condition
                     subquery_ignoring_temp_table = exp.Exists(
-                        this=exp.select(1).from_(self._source_table()).where(subquery_on_expression)
+                        this=exp.select(exp.Literal.number(1)).from_(self._source_table()).where(subquery_on_expression)
                     )
                     #  Include both of the above subqueries in the final subquery
                     subquery = exp.And(this=subquery_ignoring_temp_table, expression=not_in_temp_table_subquery)
@@ -187,9 +197,12 @@ from merge_update_deletes mud, merge_inserts mi
                         expressions=[
                             exp.select("target_rowid")
                             .from_(self.TEMP_MERGE_UPDATED_DELETES)
-                            .where(exp.EQ(this="when_id", expression=exp.Literal(this=f"{w_idx}", is_string=False)))
-                            .where(exp.EQ(this="target_rowid",
-                                          expression=exp.Column(this="rowid", table=self._target_table())))
+                            .where(exp.EQ(this="when_id", expression=exp.Literal.number(w_idx)))
+                            .where(
+                                exp.EQ(
+                                    this="target_rowid", expression=exp.Column(this="rowid", table=self._target_table())
+                                )
+                            )
                         ],
                     )
                     if isinstance(then, exp.Update):
@@ -199,9 +212,11 @@ from merge_update_deletes mud, merge_inserts mi
                         # Build the UPDATE statement to apply to the target table for this specific WHEN clause sourcing
                         # its target rows from the temp table that we just inserted into.
                         then.set("this", self._target_table())
+                        then_exprs = then.args.get("expressions")
+                        assert then_exprs is not None, "then_exprs is None"
                         then.set(
                             "expressions",
-                            exp.Set(expressions=[self._remove_table_alias(e) for e in then.args.get("expressions")]),
+                            exp.Set(expressions=[self._remove_table_alias(e) for e in then_exprs]),
                         )
                         then.set("from", exp.From(this=self._source_table()))
                         then.set(
@@ -229,7 +244,7 @@ from merge_update_deletes mud, merge_inserts mi
                     # previous WHEN clauses are not added again
                     not_in_temp_table_subquery = exp.Not(
                         this=exp.Exists(
-                            this=exp.select(1)
+                            this=exp.select(exp.Literal.number(1))
                             .from_(self.TEMP_MERGE_INSERTS)
                             .where(
                                 exp.EQ(
@@ -240,8 +255,9 @@ from merge_update_deletes mud, merge_inserts mi
                         )
                     )
                     # Query finding rows that match the original ON condition and this WHEN condition
-                    subquery_ignoring_temp_table = exp.Exists(this=exp.select(1).from_(self._target_table())
-                                                              .where(self._merge_on_expr()))
+                    subquery_ignoring_temp_table = exp.Exists(
+                        this=exp.select(exp.Literal.number(1)).from_(self._target_table()).where(self._merge_on_expr())
+                    )
                     subquery = exp.And(this=subquery_ignoring_temp_table, expression=not_in_temp_table_subquery)
 
                     not_exists_subquery = exp.Not(this=subquery)
@@ -251,7 +267,8 @@ from merge_update_deletes mud, merge_inserts mi
                         temp_match_where = not_exists_subquery
                     temp_match_expr = exp.insert(
                         into=self.TEMP_MERGE_INSERTS,
-                        expression=exp.select("rowid", w_idx).from_(self._source_table()).where(temp_match_where),
+                        expression=exp.select("rowid", exp.Literal.number(w_idx))
+                                        .from_(self._source_table()).where(temp_match_where)
                     )
                     # Insert into the temp table the rowids of the rows that match the WHEN condition
                     self._temp_table_inserts.append(temp_match_expr)
@@ -262,18 +279,26 @@ from merge_update_deletes mud, merge_inserts mi
                         expressions=[
                             exp.select("source_rowid")
                             .from_(self.TEMP_MERGE_INSERTS)
-                            .where(exp.EQ(this="when_id", expression=exp.Literal(this=f"{w_idx}", is_string=False)))
-                            .where(exp.EQ(this="source_rowid",
-                                          expression=exp.Column(this="rowid", table=self._source_table())))
+                            .where(exp.EQ(this="when_id", expression=exp.Literal.number(w_idx)))
+                            .where(
+                                exp.EQ(
+                                    this="source_rowid", expression=exp.Column(this="rowid", table=self._source_table())
+                                )
+                            )
                         ],
                     )
 
-                    columns = [self._remove_table_alias(e) for e in then.args.get("this").expressions]
+
+                    this_expr = then.args.get("this")
+                    assert this_expr is not None, "this_expr is None"
+                    then_exprs = then.args.get("expression")
+                    assert then_exprs is not None, "then_exprs is None"
+                    columns = [self._remove_table_alias(e) for e in this_expr.expressions]
                     # The INSERT statement to apply to the target table for targeted rowids
                     statement = exp.insert(
                         into=self._target_table(),
                         columns=[c.this for c in columns],
-                        expression=exp.select(*(then.args.get("expression").args.get("expressions")))
+                        expression=exp.select(*(then_exprs.args.get("expressions")))
                         .from_(self._source_table())
                         .where(rowid_in_temp_table_expr),
                     )
