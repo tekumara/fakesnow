@@ -119,7 +119,8 @@ from merge_update_deletes mud, merge_inserts mi
             end_transaction_exp,
             results_exp,
         ]
-        print(*expressions, sep="\n")
+        # Useful for debugging
+        # print(*expressions, sep="\n")
         return expressions
 
     def _insert_temp_merge_operation(self, op_type: str, when_idx: int, subquery: exp.Expression) -> None:
