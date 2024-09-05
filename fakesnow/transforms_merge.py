@@ -268,7 +268,8 @@ from merge_update_deletes mud, merge_inserts mi
                     temp_match_expr = exp.insert(
                         into=self.TEMP_MERGE_INSERTS,
                         expression=exp.select("rowid", exp.Literal.number(w_idx))
-                                        .from_(self._source_table()).where(temp_match_where)
+                        .from_(self._source_table())
+                        .where(temp_match_where),
                     )
                     # Insert into the temp table the rowids of the rows that match the WHEN condition
                     self._temp_table_inserts.append(temp_match_expr)
@@ -287,7 +288,6 @@ from merge_update_deletes mud, merge_inserts mi
                             )
                         ],
                     )
-
 
                     this_expr = then.args.get("this")
                     assert this_expr is not None, "this_expr is None"
