@@ -7,8 +7,8 @@ from typing import ClassVar, Literal, cast
 import sqlglot
 from sqlglot import exp
 
+from fakesnow import transforms_merge
 from fakesnow.instance import USERS_TABLE_FQ_NAME
-from fakesnow.transforms_merge import MergeTransform
 from fakesnow.variables import Variables
 
 MISSING_DATABASE = "missing_database"
@@ -693,7 +693,7 @@ def json_extract_precedence(expression: exp.Expression) -> exp.Expression:
 
 
 def merge(expression: exp.Expression) -> list[exp.Expression]:
-    return MergeTransform(expression).transform()
+    return transforms_merge.merge(expression)
 
 
 def random(expression: exp.Expression) -> exp.Expression:
