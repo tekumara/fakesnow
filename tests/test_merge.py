@@ -4,10 +4,10 @@ from __future__ import annotations
 import snowflake.connector
 import sqlglot
 
-from fakesnow import transforms
+from fakesnow import transforms, transforms_merge
 
 
-def test_merge_transform() -> None:
+def test_transform_merge() -> None:
     assert [
         e.sql(dialect="duckdb")
         for e in transforms.merge(
@@ -33,6 +33,58 @@ def test_merge_transform() -> None:
         "UPDATE t1 SET val = t2.newVal, status = t2.newStatus FROM t2 WHERE t1.t1Key = t2.t2Key AND t2.isNewStatus = 1 AND t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes WHERE when_id = 1 AND target_rowid = t1.rowid)",
         "UPDATE t1 SET val = t2.newVal FROM t2 WHERE t1.t1Key = t2.t2Key AND t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes WHERE when_id = 2 AND target_rowid = t1.rowid)",
         "INSERT INTO t1 (t1Key, val, status) SELECT t2.t2Key, t2.newVal, t2.newStatus FROM t2 WHERE t2.rowid IN (SELECT source_rowid FROM temp_merge_inserts WHERE when_id = 3 AND source_rowid = t2.rowid)",
+        "COMMIT",
+        'WITH merge_update_deletes AS (SELECT CAST(COUNT_IF(type = \'U\') AS INT) AS "updates", CAST(COUNT_IF(type = \'D\') AS INT) AS "deletes" FROM temp_merge_updates_deletes), merge_inserts AS (SELECT COUNT() AS "inserts" FROM temp_merge_inserts) SELECT mi.inserts AS "number of rows inserted", mud.updates AS "number of rows updated", mud.deletes AS "number of rows deleted" FROM merge_update_deletes AS mud, merge_inserts AS mi',
+    ]
+
+
+def test_unalias_table_identifiers() -> None:
+    assert (
+        (
+            transforms_merge._unalias_table_identifiers(  # noqa: SLF001
+                sqlglot.parse_one(
+                    """
+                        merge into dest as dst
+                        using source as src
+                            on dst.a = src.a
+                        when not matched then
+                            insert (a,b)
+                                values (src.a,src.b)
+                        when matched then
+                            update set a = src.a, b = src.b
+                    """
+                )
+            ).sql()
+        )
+        == "MERGE INTO dest USING source ON dest.a = source.a WHEN NOT MATCHED THEN INSERT (a, b) VALUES (source.a, source.b) WHEN MATCHED THEN UPDATE SET a = source.a, b = source.b"
+    )
+
+
+def test_transform_merge_with_as() -> None:
+    assert [
+        e.sql(dialect="duckdb")
+        for e in transforms.merge(
+            sqlglot.parse_one(
+                """
+                merge into test as dst
+                using TMP_TEST_1698864265 as src
+                    on dst.a = src.a
+                when not matched then
+                    insert (a,b)
+                        values (src.a,src.b)
+                when matched then
+                    update set a = src.a, b = src.b
+                """
+            )
+        )
+    ] == [
+        "BEGIN",
+        "CREATE OR REPLACE TEMPORARY TABLE temp_merge_updates_deletes (target_rowid INT, when_id INT, type TEXT(1))",
+        "CREATE OR REPLACE TEMPORARY TABLE temp_merge_inserts (source_rowid INT, when_id INT)",
+        "INSERT INTO temp_merge_inserts SELECT rowid, 0 FROM TMP_TEST_1698864265 AS src WHERE NOT EXISTS(SELECT 1 FROM test AS dst WHERE dst.a = src.a) AND NOT EXISTS(SELECT 1 FROM temp_merge_inserts WHERE TMP_TEST_1698864265 AS src.rowid = source_rowid)",
+        "INSERT INTO temp_merge_updates_deletes SELECT rowid, 1, 'U' FROM test AS dst WHERE EXISTS(SELECT 1 FROM TMP_TEST_1698864265 AS src WHERE dst.a = src.a) AND NOT EXISTS(SELECT 1 FROM temp_merge_updates_deletes WHERE test AS dst.rowid = target_rowid)",
+        "INSERT INTO test AS dst (a, b) SELECT src.a, src.b FROM TMP_TEST_1698864265 AS src WHERE TMP_TEST_1698864265 AS src.rowid IN (SELECT source_rowid FROM temp_merge_inserts WHERE when_id = 0 AND source_rowid = TMP_TEST_1698864265 AS src.rowid)",
+        "UPDATE test AS dst SET a = src.a, b = src.b FROM TMP_TEST_1698864265 AS src WHERE dst.a = src.a AND test AS dst.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes WHERE when_id = 1 AND target_rowid = test AS dst.rowid)",
         "COMMIT",
         'WITH merge_update_deletes AS (SELECT CAST(COUNT_IF(type = \'U\') AS INT) AS "updates", CAST(COUNT_IF(type = \'D\') AS INT) AS "deletes" FROM temp_merge_updates_deletes), merge_inserts AS (SELECT COUNT() AS "inserts" FROM temp_merge_inserts) SELECT mi.inserts AS "number of rows inserted", mud.updates AS "number of rows updated", mud.deletes AS "number of rows deleted" FROM merge_update_deletes AS mud, merge_inserts AS mi',
     ]
