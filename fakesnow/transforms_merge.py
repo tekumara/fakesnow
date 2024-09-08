@@ -92,24 +92,6 @@ def _remove_table_alias(eq_exp: exp.Condition) -> exp.Condition:
     return eq_exp
 
 
-def _unalias_table_identifiers(expression: exp.Expression) -> exp.Expression:
-    """Replace aliased table identifiers with the table name"""
-
-    table_aliases = {a.parent.alias: a.parent.this for a in expression.find_all(exp.TableAlias) if a.parent}
-
-    # unalias columns that reference the table alias
-    for c in expression.find_all(exp.Column):
-        if unaliased := table_aliases.get(c.table):
-            c.args["table"] = unaliased
-
-    # remove table aliases
-    for a in expression.find_all(exp.TableAlias):
-        assert a.parent
-        a.parent.set("alias", None)
-
-    return expression
-
-
 def merge(merge_expr: exp.Expression) -> list[exp.Expression]:
     """
     Create multiple compatible duckdb statements to be functionally equivalent to Snowflake's MERGE INTO.
@@ -125,7 +107,6 @@ def merge(merge_expr: exp.Expression) -> list[exp.Expression]:
     if not isinstance(merge_expr, exp.Merge):
         return [merge_expr]
 
-    merge_expr = _unalias_table_identifiers(merge_expr)
     temp_table_inserts = _create_temp_tables()
     output_expressions = []
 
