@@ -27,25 +27,17 @@ def test_merge_transform() -> None:
     ] == [
         strip("""
             CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
-            SELECT
-                t1.t1Key AS t1_t1Key,
-                t1.val AS t1_val,
-                t1.status AS t1_status,
-                t2.t2Key AS t2_t2Key,
-                t2.marked AS t2_marked,
-                t2.isNewStatus AS t2_isNewStatus,
-                t2.newVal AS t2_newVal,
-                t2.newStatus AS t2_newStatus,
+            SELECT t1.t1Key
                 CASE
-                    WHEN t1.t1Key = t2.t2Key AND t2.marked = 1 THEN 1
-                    WHEN t1.t1Key = t2.t2Key and t2.isNewStatus = 1 THEN 2
-                    WHEN t1.t1Key = t2.t2Key THEN 3
-                    WHEN t1.t1Key IS NULL THEN 4
-                    ELSE 0
+                    WHEN t1.t1Key = t2.t2Key AND t2.marked = 1 THEN 0
+                    WHEN t1.t1Key = t2.t2Key AND t2.isNewStatus = 1 THEN 1
+                    WHEN t1.t1Key = t2.t2Key THEN 2
+                    WHEN t1.t1Key IS NULL THEN 3
+                    ELSE NULL
                 END AS MERGE_OP
                 FROM t1
             FULL OUTER JOIN t2 ON t1.t1Key = t2.t2Key
-            WHERE NOT MERGE_OP IS NULL
+            WHERE MERGE_OP IS NOT NULL
                """)
     ]
 

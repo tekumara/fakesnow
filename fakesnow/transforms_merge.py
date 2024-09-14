@@ -112,7 +112,6 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
 
     whens = merge_expr.expressions
     case_when_clauses = []
-    columns = []
 
     for w_idx, w in enumerate(whens):
         assert isinstance(w, exp.When), f"Expected When expression, got {w}"
@@ -138,45 +137,20 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
                 raise ValueError(f"Expected 'Update' or 'Delete', got {then}")
         else:
             assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
-            case_when_clauses.append(f"WHEN {join_expr.sql()} THEN {w_idx}")
-
-        # Collect all columns from both tables
-        if isinstance(then, exp.Insert):
-            icolumns = then.args.get("this")
-            assert isinstance(icolumns, exp.Tuple), f"Expected Tuple, got {then.args.get('this')}"
-            ivalues = then.args.get("expression")
-            assert isinstance(ivalues, exp.Tuple), f"Expected Tuple, got {then.args.get('expression')}"
-
-            columns.extend([(target_tbl, col) for col in icolumns.expressions])
-            columns.extend([(source_tbl, col) for col in ivalues.args.get("expressions")])
-
-        elif isinstance(then, exp.Update):
-            exprs = then.args.get("expressions")
-            assert exprs
-            for expr in exprs:
-                assert isinstance(expr, exp.EQ), f"Expected EQ expression, got {expr}"
-                columns.extend(
-                    (
-                        (target_tbl, expr.this),
-                        (source_tbl, expr.expression),
-                    )
-                )
-
-    # Remove duplicates and sort
-    columns = sorted(set(columns))
+            case_when_clauses.append(f"WHEN {join_expr.this} IS NULL THEN {w_idx}")
 
     # Construct the final SQL
     sql = f"""
     CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
     SELECT
-        {', '.join(f"{table}.{col} AS {table}_{col}" for table,col in columns)},
+       {join_expr.this}
         CASE
             {' '.join(case_when_clauses)}
             ELSE NULL
         END AS MERGE_OP
     FROM {target_tbl}
     FULL OUTER JOIN {source_tbl} ON {join_expr.sql()}
-    WHERE MERGE_OP IS NOT NULL;
+    WHERE MERGE_OP IS NOT NULL
     """
 
     return sqlglot.parse_one(sql)
