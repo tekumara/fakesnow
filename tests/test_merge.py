@@ -1,40 +1,52 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+import datetime
+
 import snowflake.connector
 import sqlglot
 
 from fakesnow import transforms
+from tests.utils import strip
 
 
 def test_merge_transform() -> None:
     assert [
-        e.sql(dialect="duckdb")
+        strip(e.sql(dialect="duckdb"))
         for e in transforms.merge(
             sqlglot.parse_one(
                 """
                 MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
                     WHEN MATCHED AND t2.marked = 1 THEN DELETE
-                    WHEN MATCHED AND t2.isNewStatus = 1 THEN UPDATE SET val = t2.newVal, status = t2.newStatus
+                    WHEN MATCHED AND t2.isNewStatus = 1 THEN UPDATE SET t1.val = t2.newVal, status = t2.newStatus
                     WHEN MATCHED THEN UPDATE SET val = t2.newVal
                     WHEN NOT MATCHED THEN INSERT (t1Key, val, status) VALUES (t2.t2Key, t2.newVal, t2.newStatus);
                 """
             )
         )
     ] == [
-        "BEGIN",
-        "CREATE OR REPLACE TEMPORARY TABLE temp_merge_updates_deletes (target_rowid INT, when_id INT, type TEXT(1))",
-        "CREATE OR REPLACE TEMPORARY TABLE temp_merge_inserts (source_rowid INT, when_id INT)",
-        "INSERT INTO temp_merge_updates_deletes SELECT rowid, 0, 'D' FROM t1 WHERE EXISTS(SELECT 1 FROM t2 WHERE t1.t1Key = t2.t2Key AND t2.marked = 1) AND NOT EXISTS(SELECT 1 FROM temp_merge_updates_deletes WHERE t1.rowid = target_rowid)",
-        "INSERT INTO temp_merge_updates_deletes SELECT rowid, 1, 'U' FROM t1 WHERE EXISTS(SELECT 1 FROM t2 WHERE t1.t1Key = t2.t2Key AND t2.isNewStatus = 1) AND NOT EXISTS(SELECT 1 FROM temp_merge_updates_deletes WHERE t1.rowid = target_rowid)",
-        "INSERT INTO temp_merge_updates_deletes SELECT rowid, 2, 'U' FROM t1 WHERE EXISTS(SELECT 1 FROM t2 WHERE t1.t1Key = t2.t2Key) AND NOT EXISTS(SELECT 1 FROM temp_merge_updates_deletes WHERE t1.rowid = target_rowid)",
-        "INSERT INTO temp_merge_inserts SELECT rowid, 3 FROM t2 WHERE NOT EXISTS(SELECT 1 FROM t1 WHERE t1.t1Key = t2.t2Key) AND NOT EXISTS(SELECT 1 FROM temp_merge_inserts WHERE t2.rowid = source_rowid)",
-        "DELETE FROM t1 WHERE t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes WHERE when_id = 0 AND target_rowid = t1.rowid)",
-        "UPDATE t1 SET val = t2.newVal, status = t2.newStatus FROM t2 WHERE t1.t1Key = t2.t2Key AND t2.isNewStatus = 1 AND t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes WHERE when_id = 1 AND target_rowid = t1.rowid)",
-        "UPDATE t1 SET val = t2.newVal FROM t2 WHERE t1.t1Key = t2.t2Key AND t1.rowid IN (SELECT target_rowid FROM temp_merge_updates_deletes WHERE when_id = 2 AND target_rowid = t1.rowid)",
-        "INSERT INTO t1 (t1Key, val, status) SELECT t2.t2Key, t2.newVal, t2.newStatus FROM t2 WHERE t2.rowid IN (SELECT source_rowid FROM temp_merge_inserts WHERE when_id = 3 AND source_rowid = t2.rowid)",
-        "COMMIT",
-        'WITH merge_update_deletes AS (SELECT CAST(COUNT_IF(type = \'U\') AS INT) AS "updates", CAST(COUNT_IF(type = \'D\') AS INT) AS "deletes" FROM temp_merge_updates_deletes), merge_inserts AS (SELECT COUNT() AS "inserts" FROM temp_merge_inserts) SELECT mi.inserts AS "number of rows inserted", mud.updates AS "number of rows updated", mud.deletes AS "number of rows deleted" FROM merge_update_deletes AS mud, merge_inserts AS mi',
+        strip("""
+            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            SELECT
+                t1.t1Key AS t1_t1Key,
+                t1.val AS t1_val,
+                t1.status AS t1_status,
+                t2.t2Key AS t2_t2Key,
+                t2.marked AS t2_marked,
+                t2.isNewStatus AS t2_isNewStatus,
+                t2.newVal AS t2_newVal,
+                t2.newStatus AS t2_newStatus,
+                CASE
+                    WHEN t1.t1Key = t2.t2Key AND t2.marked = 1 THEN 1
+                    WHEN t1.t1Key = t2.t2Key and t2.isNewStatus = 1 THEN 2
+                    WHEN t1.t1Key = t2.t2Key THEN 3
+                    WHEN t1.t1Key IS NULL THEN 4
+                    ELSE 0
+                END AS MERGE_OP
+                FROM t1
+            FULL OUTER JOIN t2 ON t1.t1Key = t2.t2Key
+            WHERE NOT MERGE_OP IS NULL
+               """)
     ]
 
 
@@ -129,4 +141,51 @@ def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnecti
     assert res == [
         {"T1KEY": 1, "VAL": "Old Value 1", "STATUS": "Old Status 1"},
         {"T1KEY": 2, "VAL": "New Value 2", "STATUS": "New Status 2"},
+    ]
+
+
+def test_merge_with_aliased_tables(conn: snowflake.connector.SnowflakeConnection):
+    *_, dcur = conn.execute_string(
+        """
+        CREATE OR REPLACE TABLE LINE (
+            ID INT PRIMARY KEY,
+            BATCH_NUMBER INT,
+            ACTIVE_STATUS INT,
+            END_DATE DATE
+        );
+
+        CREATE OR REPLACE TABLE HEADER (
+            ID INT PRIMARY KEY,
+            BATCH_NUMBER INT,
+            ACTIVE_STATUS INT
+        );
+
+        INSERT INTO LINE (ID, BATCH_NUMBER, ACTIVE_STATUS, END_DATE) VALUES
+        (1, 1, 1, DATE '2001-01-01'),
+        (2, 2, 2, DATE '2002-02-02');
+
+        INSERT INTO HEADER (ID, BATCH_NUMBER, ACTIVE_STATUS) VALUES
+        (2, 2, 1),  -- Case: match
+        (3, 3, NULL);  -- Case: no match
+
+        MERGE INTO LINE tgt USING (
+            SELECT BATCH_NUMBER, ID, ACTIVE_STATUS FROM HEADER WHERE ACTIVE_STATUS = 1
+        ) src
+        ON tgt.BATCH_NUMBER = src.BATCH_NUMBER
+        AND tgt.ID = src.ID
+        WHEN MATCHED THEN UPDATE
+            SET tgt.ACTIVE_STATUS = src.ACTIVE_STATUS, tgt.END_DATE = NULL;
+        """,
+        cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
+    )
+
+    # TODO: Check what the python connector actually returns, does include the updates and deletes?
+    # Ours currently returns None values for those columns.
+    # assert dcur.fetchall() == [{"number of rows inserted": 1}]
+
+    dcur.execute("select * from line order by id")
+    res = dcur.fetchall()
+    assert res == [
+        {"ID": 1, "BATCH_NUMBER": 1, "ACTIVE_STATUS": 1, "END_DATE": datetime.date(2001, 1, 1)},
+        {"ID": 2, "BATCH_NUMBER": 2, "ACTIVE_STATUS": 1, "END_DATE": None},
     ]
