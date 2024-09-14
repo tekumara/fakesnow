@@ -102,7 +102,7 @@ def merge(merge_expr: exp.Expression) -> list[exp.Expression]:
 def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     """
     Given a merge statement, produce a temporary table that joins together the target and source tables.
-    The merge_op column identifies which merge clause, if any, applies to the row.
+    The merge_op column identifies which merge clause applies to the row.
     See https://docs.snowflake.com/en/sql-reference/sql/merge.html
     """
     target_tbl = merge_expr.this
@@ -116,19 +116,17 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     for w_idx, w in enumerate(whens):
         assert isinstance(w, exp.When), f"Expected When expression, got {w}"
 
+        predicate = join_expr.copy()
+
         # Combine the top level ON expression with the AND condition
         # from this specific WHEN into a subquery, we use to target rows.
         # Eg. # MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
         #           WHEN MATCHED AND t2.marked = 1 THEN DELETE
-        condition = w.args.get("condition")
-
-        predicate = join_expr.copy()
-        if condition:
+        if (condition := w.args.get("condition")):
             predicate = exp.And(this=predicate, expression=condition)
 
         matched = w.args.get("matched")
         then = w.args.get("then")
-        assert then
 
         if matched:
             if isinstance(then, exp.Update) or (isinstance(then, exp.Var) and then.args.get("this") == "DELETE"):
@@ -139,7 +137,6 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
             assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
             case_when_clauses.append(f"WHEN {join_expr.this} IS NULL THEN {w_idx}")
 
-    # Construct the final SQL
     sql = f"""
     CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
     SELECT
