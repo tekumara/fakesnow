@@ -1,72 +1,14 @@
 # ruff: noqa: E501
 
 import datetime
-import threading
-from collections.abc import Iterator
 from decimal import Decimal
-from time import sleep
-from typing import Callable
 
 import pytest
 import pytz
 import snowflake.connector
-import uvicorn
 from snowflake.connector.cursor import ResultMetadata
 
-import fakesnow.server
 from tests.utils import indent
-
-
-@pytest.fixture(scope="session")
-def unused_port(unused_tcp_port_factory: Callable[[], int]) -> int:
-    # unused_tcp_port_factory is from pytest-asyncio
-    return unused_tcp_port_factory()
-
-
-@pytest.fixture(scope="session")
-def server(unused_tcp_port_factory: Callable[[], int]) -> Iterator[dict]:
-    port = unused_tcp_port_factory()
-    server = uvicorn.Server(uvicorn.Config(fakesnow.server.app, port=port, log_level="info"))
-    thread = threading.Thread(target=server.run, name="Server", daemon=True)
-    thread.start()
-
-    while not server.started:
-        sleep(0.1)
-
-    yield dict(
-        user="fake",
-        password="snow",
-        account="fakesnow",
-        host="localhost",
-        port=port,
-        protocol="http",
-        # disable telemetry
-        session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False},
-    )
-
-    server.should_exit = True
-    # wait for server thread to end
-    thread.join()
-
-
-@pytest.fixture
-def sconn(server: dict) -> Iterator[snowflake.connector.SnowflakeConnection]:
-    with snowflake.connector.connect(
-        **server,
-        database="db1",
-        schema="schema1",
-        # disable infinite retries on error
-        network_timeout=1,
-    ) as c:
-        yield c
-
-
-@pytest.fixture
-def scur(
-    sconn: snowflake.connector.SnowflakeConnection,
-) -> Iterator[snowflake.connector.cursor.SnowflakeCursor]:
-    with sconn.cursor() as cur:
-        yield cur
 
 
 def test_server_types_no_result_set(sconn: snowflake.connector.SnowflakeConnection) -> None:
