@@ -10,7 +10,7 @@ from fakesnow import transforms
 from tests.utils import strip
 
 
-def test_merge_transform() -> None:
+def test_transform_merge() -> None:
     assert [
         e.sql(dialect="duckdb")
         for e in transforms.merge(
@@ -63,11 +63,14 @@ def test_merge_transform() -> None:
     ]
 
 
-def test_merge_transform_many_join_keys() -> None:
+def test_transform_merge_multiple_join_keys() -> None:
     assert [
         e.sql(dialect="duckdb")
         for e in transforms.merge(
             sqlglot.parse_one(
+                # two join keys
+                # no insert values columns
+                # same join key names in target and source
                 """
                 MERGE INTO t1 USING t2 ON t1.id = t2.id AND t1.name = t2.name
                     WHEN MATCHED AND status = 'old' THEN DELETE
@@ -98,6 +101,45 @@ def test_merge_transform_many_join_keys() -> None:
             SELECT t2.id, t2.name, 'new'
             FROM merge_candidates AS t2
             WHERE t2.merge_op = 1"""),
+    ]
+
+
+def test_transform_merge_source_subquery() -> None:
+    assert [
+        e.sql(dialect="duckdb")
+        for e in transforms.merge(
+            sqlglot.parse_one(
+                """
+                MERGE INTO LINE tgt USING (
+                    SELECT BATCH_NUMBER, ID, ACTIVE_STATUS FROM HEADER WHERE ACTIVE_STATUS = 1
+                ) src
+                ON tgt.BATCH_NUMBER = src.BATCH_NUMBER
+                AND tgt.ID = src.ID
+                WHEN MATCHED THEN UPDATE
+                    SET tgt.ACTIVE_STATUS = src.ACTIVE_STATUS, tgt.END_DATE = NULL
+                """
+            )
+        )
+    ] == [
+        strip("""
+            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            SELECT tgt.BATCH_NUMBER, src.ACTIVE_STATUS,
+                CASE
+                    WHEN tgt.BATCH_NUMBER = src.BATCH_NUMBER THEN 0
+                    ELSE NULL
+                END AS MERGE_OP
+                FROM LINE AS tgt
+            FULL OUTER JOIN (
+                    SELECT BATCH_NUMBER, ID, ACTIVE_STATUS FROM HEADER WHERE ACTIVE_STATUS = 1
+                ) AS src ON tgt.BATCH_NUMBER = src.BATCH_NUMBER
+            WHERE NOT MERGE_OP IS NULL
+               """),
+        strip("""
+            UPDATE LINE as tgt
+            SET ACTIVE_STATUS = src.ACTIVE_STATUS, END_DATE = NULL
+            FROM merge_candidates AS src
+            WHERE tgt.BATCH_NUMBER = src.BATCH_NUMBER
+            AND src.merge_op = 0"""),
     ]
 
 
@@ -195,7 +237,44 @@ def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnecti
     ]
 
 
-def test_merge_with_aliased_tables(conn: snowflake.connector.SnowflakeConnection):
+def test_merge_multiple_join_keys(conn: snowflake.connector.SnowflakeConnection):
+    *_, dcur = conn.execute_string(
+        """
+        CREATE OR REPLACE TABLE t1 (
+            id INT,
+            name VARCHAR(50),
+            status VARCHAR(20)
+        );
+
+        CREATE OR REPLACE TABLE t2 (
+            id INT,
+            name VARCHAR(50),
+            status VARCHAR(20)
+        );
+
+        INSERT INTO t1 VALUES
+        (1, 'Apple', 'old'),
+        (1, 'Banana', 'keep');
+
+        INSERT INTO t2 VALUES
+        (1, 'Apple', 'older'),
+        (2, 'Kiwi', 'insert me');
+
+        MERGE INTO t1 USING t2 ON t1.id = t2.id AND t1.name = t2.name
+            WHEN MATCHED AND t1.status = 'old' THEN DELETE
+            WHEN NOT MATCHED THEN INSERT VALUES (t2.id, t2.name, 'new');
+        """,
+        cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
+    )
+
+    assert dcur.fetchall() == [{"number of rows inserted": 1, "number of rows deleted": 1}]
+
+    dcur.execute("select * from t1 order by id")
+    res = dcur.fetchall()
+    assert res == [{"ID": 1, "NAME": "Banana", "STATUS": "keep"}, {"ID": 2, "NAME": "Kiwi", "STATUS": "new"}]
+
+
+def test_merge_with_source_subquery(conn: snowflake.connector.SnowflakeConnection):
     *_, dcur = conn.execute_string(
         """
         CREATE OR REPLACE TABLE LINE (
