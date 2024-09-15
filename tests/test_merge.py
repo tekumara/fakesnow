@@ -37,8 +37,32 @@ def test_merge_transform() -> None:
                 END AS MERGE_OP
                 FROM t1
             FULL OUTER JOIN t2 ON t1.t1Key = t2.t2Key
-            WHERE NOT MERGE_OP IS NULL
-               """)
+            WHERE NOT MERGE_OP IS NULL"""),
+        strip("""
+            DELETE FROM t1
+            USING merge_candidates AS mc
+            WHERE t1.t1Key = mc.t1Key
+            AND mc.merge_op = 0"""),
+        strip("""
+            UPDATE t1
+            SET val = t2.newVal, status = t2.newStatus
+            FROM merge_candidates AS mc
+            JOIN t2 ON mc.t2Key = t2.t2Key
+            WHERE t1.t1Key = mc.t1Key
+            AND mc.merge_op = 1"""),
+        strip("""
+            UPDATE t1
+            SET val = t2.newVal
+            FROM merge_candidates AS mc
+            JOIN t2 ON mc.t2Key = t2.t2Key
+            WHERE t1.t1Key = mc.t1Key
+            AND mc.merge_op = 2"""),
+        strip("""
+            INSERT INTO t1 (t1Key, val, status)
+            SELECT t2.t2Key, t2.newVal, t2.newStatus
+            FROM merge_candidates AS mc
+            JOIN t2 ON mc.t2Key = t2.t2Key
+            WHERE mc.merge_op = 3"""),
     ]
 
 

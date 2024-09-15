@@ -96,7 +96,7 @@ def merge(merge_expr: exp.Expression) -> list[exp.Expression]:
     if not isinstance(merge_expr, exp.Merge):
         return [merge_expr]
 
-    return [_create_merge_candidates(merge_expr)]
+    return [_create_merge_candidates(merge_expr), *_mutations(merge_expr)]
 
 
 def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
@@ -110,8 +110,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     join_expr = merge_expr.args.get("on")
 
     # assuming equality only join predicates means we can assume matched join keys have the same values
-    # this avoids needing to rewrite join keys to avoid name collision,
-    # or use rowids (which requires a transaction for stability)
+    # this avoids needing to rewrite join keys to avoid name collision or use rowids
     assert isinstance(join_expr, exp.Binary) and all(
         isinstance(p, exp.EQ) for p in join_expr.find_all(exp.Predicate)
     ), f"Joins on inequalities not supported: {join_expr}"
@@ -120,7 +119,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     join_keys = sorted(str(k) for k in {c.this for c in join_expr.find_all(exp.Column)})
 
     whens = merge_expr.expressions
-    case_when_clauses = []
+    case_when_clauses: list[str] = []
 
     for w_idx, w in enumerate(whens):
         assert isinstance(w, exp.When), f"Expected When expression, got {w}"
@@ -141,7 +140,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
             if isinstance(then, exp.Update) or (isinstance(then, exp.Var) and then.args.get("this") == "DELETE"):
                 case_when_clauses.append(f"WHEN {predicate.sql()} THEN {w_idx}")
             else:
-                raise ValueError(f"Expected 'Update' or 'Delete', got {then}")
+                raise AssertionError(f"Expected 'Update' or 'Delete', got {then}")
         else:
             assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
             case_when_clauses.append(f"WHEN {target_tbl}.rowid is NULL THEN {w_idx}")
@@ -160,3 +159,70 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     """
 
     return sqlglot.parse_one(sql)
+
+
+def _mutations(merge_expr: exp.Merge) -> list[exp.Expression]:
+    """
+    Given a merge statement, produce a list of delete, update and insert statements that use the
+    merge candidate and source table to update the target target.
+    """
+    target_tbl = merge_expr.this
+    source_tbl = merge_expr.args.get("using")
+    join_expr = merge_expr.args.get("on")
+
+    # assuming equality only join predicates means we can assume matched join keys have the same values
+    # this avoids needing to rewrite join keys to avoid name collision or use rowids
+    assert isinstance(join_expr, exp.Binary) and all(
+        isinstance(p, exp.EQ) for p in join_expr.find_all(exp.Predicate)
+    ), f"Joins on inequalities not supported: {join_expr}"
+
+    # deduped and sorted key names without table identifiers
+    join_keys = sorted(str(k) for k in {c.this for c in join_expr.find_all(exp.Column)})
+
+    statements: list[exp.Expression] = []
+
+    whens = merge_expr.expressions
+    for w_idx, w in enumerate(whens):
+        assert isinstance(w, exp.When), f"Expected When expression, got {w}"
+
+        matched = w.args.get("matched")
+        then = w.args.get("then")
+
+        if matched:
+            if isinstance(then, exp.Var) and then.args.get("this") == "DELETE":
+                delete_sql = f"""
+                DELETE FROM {target_tbl}
+                USING merge_candidates AS mc
+                WHERE {' AND '.join([f'{target_tbl}.{k} = mc.{k}' for k in join_keys])}
+                AND mc.merge_op = {w_idx}
+                """
+                statements.append(sqlglot.parse_one(delete_sql))
+            elif isinstance(then, exp.Update):
+                set_clauses = ", ".join(
+                    [f"{e.alias or e.this} = {e.expression.sql()}" for e in then.args.get("expressions", [])]
+                )
+                update_sql = f"""
+                UPDATE {target_tbl}
+                SET {set_clauses}
+                FROM merge_candidates AS mc
+                JOIN {source_tbl} ON {' AND '.join([f'mc.{k} = {source_tbl}.{k}' for k in join_keys])}
+                WHERE {' AND '.join([f'{target_tbl}.{k} = mc.{k}' for k in join_keys])}
+                AND mc.merge_op = {w_idx}
+                """
+                statements.append(sqlglot.parse_one(update_sql))
+            else:
+                raise AssertionError(f"Expected 'Update' or 'Delete', got {then}")
+        else:
+            assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
+            columns = ", ".join(then.args.get("columns", []))
+            values = ", ".join([v.sql() for v in then.args.get("expressions", [])])
+            insert_sql = f"""
+            INSERT INTO {target_tbl} ({columns})
+            SELECT {values}
+            FROM merge_candidates AS mc
+            JOIN {source_tbl} ON {' AND '.join([f'mc.{k} = {source_tbl}.{k}' for k in join_keys])}
+            WHERE mc.merge_op = {w_idx}
+            """
+            statements.append(sqlglot.parse_one(insert_sql))
+
+    return statements
