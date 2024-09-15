@@ -7,6 +7,7 @@ from typing import ClassVar, Literal, cast
 import sqlglot
 from sqlglot import exp
 
+from fakesnow import transforms_merge
 from fakesnow.instance import USERS_TABLE_FQ_NAME
 from fakesnow.variables import Variables
 
@@ -689,6 +690,10 @@ def json_extract_precedence(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, (exp.JSONExtract, exp.JSONExtractScalar)):
         return exp.Paren(this=expression)
     return expression
+
+
+def merge(expression: exp.Expression) -> list[exp.Expression]:
+    return transforms_merge.merge(expression)
 
 
 def random(expression: exp.Expression) -> exp.Expression:
