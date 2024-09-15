@@ -18,16 +18,16 @@ def test_merge_transform() -> None:
                 """
                 MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
                     WHEN MATCHED AND t2.marked = 1 THEN DELETE
-                    WHEN MATCHED AND t2.isNewStatus = 1 THEN UPDATE SET t1.val = t2.newVal, status = t2.newStatus
+                    WHEN MATCHED AND t2.isNewStatus = 1 THEN UPDATE SET t1.val = t2.newVal, status = 'new'
                     WHEN MATCHED THEN UPDATE SET val = t2.newVal
-                    WHEN NOT MATCHED THEN INSERT (t1Key, val, status) VALUES (t2.t2Key, t2.newVal, t2.newStatus);
+                    WHEN NOT MATCHED THEN INSERT (t1Key, val, status) VALUES (t2.t2Key, 'newVal', t2.newStatus);
                 """
             )
         )
     ] == [
         strip("""
             CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
-            SELECT t1Key, t2Key,
+            SELECT t1Key, t2Key, t2.newStatus, t2.newVal, t2.t2Key,
                 CASE
                     WHEN t1.t1Key = t2.t2Key AND t2.marked = 1 THEN 0
                     WHEN t1.t1Key = t2.t2Key AND t2.isNewStatus = 1 THEN 1
@@ -40,29 +40,26 @@ def test_merge_transform() -> None:
             WHERE NOT MERGE_OP IS NULL"""),
         strip("""
             DELETE FROM t1
-            USING merge_candidates AS mc
-            WHERE t1.t1Key = mc.t1Key
-            AND mc.merge_op = 0"""),
+            USING merge_candidates AS t2
+            WHERE t1.t1Key = t2.t2Key
+            AND t2.merge_op = 0"""),
         strip("""
             UPDATE t1
-            SET val = t2.newVal, status = t2.newStatus
-            FROM merge_candidates AS mc
-            JOIN t2 ON mc.t2Key = t2.t2Key
-            WHERE t1.t1Key = mc.t1Key
-            AND mc.merge_op = 1"""),
+            SET t1.val = t2.newVal, status = 'new'
+            FROM merge_candidates AS t2
+            WHERE t1.t1Key = t2.t2Key
+            AND t2.merge_op = 1"""),
         strip("""
             UPDATE t1
             SET val = t2.newVal
-            FROM merge_candidates AS mc
-            JOIN t2 ON mc.t2Key = t2.t2Key
-            WHERE t1.t1Key = mc.t1Key
-            AND mc.merge_op = 2"""),
+            FROM merge_candidates AS t2
+            WHERE t1.t1Key = t2.t2Key
+            AND t2.merge_op = 2"""),
         strip("""
             INSERT INTO t1 (t1Key, val, status)
-            SELECT t2.t2Key, t2.newVal, t2.newStatus
-            FROM merge_candidates AS mc
-            JOIN t2 ON mc.t2Key = t2.t2Key
-            WHERE mc.merge_op = 3"""),
+            SELECT t2.t2Key, 'newVal', t2.newStatus
+            FROM merge_candidates AS t2
+            WHERE t2.merge_op = 3"""),
     ]
 
 
@@ -74,14 +71,14 @@ def test_merge_transform_many_join_keys() -> None:
                 """
                 MERGE INTO t1 USING t2 ON t1.id = t2.id AND t1.name = t2.name
                     WHEN MATCHED AND status = 'old' THEN DELETE
-                    WHEN NOT MATCHED THEN INSERT (id, name, status) VALUES (t2.id, t2.name, 'new');
+                    WHEN NOT MATCHED THEN INSERT VALUES (t2.id, t2.name, 'new');
                 """
             )
         )
     ] == [
         strip("""
             CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
-            SELECT id, name,
+            SELECT id, name, t2.id, t2.name,
                 CASE
                     WHEN t1.id = t2.id AND t1.name = t2.name AND status = 'old' THEN 0
                     WHEN t1.rowid IS NULL THEN 1
@@ -90,7 +87,17 @@ def test_merge_transform_many_join_keys() -> None:
                 FROM t1
             FULL OUTER JOIN t2 ON t1.id = t2.id AND t1.name = t2.name
             WHERE NOT MERGE_OP IS NULL
-               """)
+               """),
+        strip("""
+            DELETE FROM t1
+            USING merge_candidates AS t2
+            WHERE t1.id = t2.id AND t1.name = t2.name
+            AND t2.merge_op = 0"""),
+        strip("""
+            INSERT INTO t1
+            SELECT t2.id, t2.name, 'new'
+            FROM merge_candidates AS t2
+            WHERE t2.merge_op = 1"""),
     ]
 
 
