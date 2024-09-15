@@ -108,15 +108,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     target_tbl = merge_expr.this
     source_tbl = merge_expr.args.get("using")
     join_expr = merge_expr.args.get("on")
-
-    # assuming equality only join predicates means we can assume matched join keys have the same values
-    # this avoids needing to rewrite join keys to avoid name collision or use rowids
-    assert isinstance(join_expr, exp.Binary) and all(
-        isinstance(p, exp.EQ) for p in join_expr.find_all(exp.Predicate)
-    ), f"Joins on inequalities not supported: {join_expr}"
-
-    # deduped and sorted key names without table identifiers
-    join_keys = sorted(str(k) for k in {c.this for c in join_expr.find_all(exp.Column)})
+    assert isinstance(join_expr, exp.Binary)
 
     whens = merge_expr.expressions
     case_when_clauses: list[str] = []
@@ -129,8 +121,8 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
 
         # Combine the top level ON expression with the AND condition
         # from this specific WHEN into a subquery, we use to target rows.
-        # Eg. # MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
-        #           WHEN MATCHED AND t2.marked = 1 THEN DELETE
+        # Eg. MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
+        #       WHEN MATCHED AND t2.marked = 1 THEN DELETE
         if condition := w.args.get("condition"):
             predicate = exp.And(this=predicate, expression=condition)
 
@@ -154,7 +146,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     sql = f"""
     CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
     SELECT
-        {', '.join(join_keys + sorted(values))},
+        {', '.join(sorted(values))},
         CASE
             {' '.join(case_when_clauses)}
             ELSE NULL

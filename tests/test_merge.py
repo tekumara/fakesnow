@@ -27,7 +27,7 @@ def test_transform_merge() -> None:
     ] == [
         strip("""
             CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
-            SELECT t1Key, t2Key, t2.newStatus, t2.newVal, t2.t2Key,
+            SELECT t2.newStatus, t2.newVal, t2.t2Key,
                 CASE
                     WHEN t1.t1Key = t2.t2Key AND t2.marked = 1 THEN 0
                     WHEN t1.t1Key = t2.t2Key AND t2.isNewStatus = 1 THEN 1
@@ -63,17 +63,17 @@ def test_transform_merge() -> None:
     ]
 
 
-def test_transform_merge_multiple_join_keys() -> None:
+def test_transform_merge_complex_join_keys() -> None:
     assert [
         e.sql(dialect="duckdb")
         for e in transforms.merge(
             sqlglot.parse_one(
                 # two join keys
-                # no insert values columns
                 # same join key names in target and source
+                # no insert values columns
                 """
                 MERGE INTO t1 USING t2 ON t1.id = t2.id AND t1.name = t2.name
-                    WHEN MATCHED AND status = 'old' THEN DELETE
+                    WHEN MATCHED AND t1.status = 'old' THEN DELETE
                     WHEN NOT MATCHED THEN INSERT VALUES (t2.id, t2.name, 'new');
                 """
             )
@@ -81,9 +81,9 @@ def test_transform_merge_multiple_join_keys() -> None:
     ] == [
         strip("""
             CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
-            SELECT id, name, t2.id, t2.name,
+            SELECT t2.id, t2.name,
                 CASE
-                    WHEN t1.id = t2.id AND t1.name = t2.name AND status = 'old' THEN 0
+                    WHEN t1.id = t2.id AND t1.name = t2.name AND t1.status = 'old' THEN 0
                     WHEN t1.rowid IS NULL THEN 1
                     ELSE NULL
                 END AS MERGE_OP
@@ -123,7 +123,7 @@ def test_transform_merge_source_subquery() -> None:
     ] == [
         strip("""
             CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
-            SELECT tgt.BATCH_NUMBER, src.ACTIVE_STATUS,
+            SELECT src.ACTIVE_STATUS, src.BATCH_NUMBER,
                 CASE
                     WHEN tgt.BATCH_NUMBER = src.BATCH_NUMBER THEN 0
                     ELSE NULL
@@ -237,7 +237,7 @@ def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnecti
     ]
 
 
-def test_merge_multiple_join_keys(conn: snowflake.connector.SnowflakeConnection):
+def test_merge_complex_join_keys(conn: snowflake.connector.SnowflakeConnection):
     *_, dcur = conn.execute_string(
         """
         CREATE OR REPLACE TABLE t1 (
