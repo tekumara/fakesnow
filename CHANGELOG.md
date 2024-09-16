@@ -2,6 +2,25 @@
 
 # Changelog
 
+## [0.9.25](https://github.com/tekumara/fakesnow/compare/v0.9.24...v0.9.25) (2024-09-16)
+
+
+### Features
+
+* Adds MERGE INTO transform ([#109](https://github.com/tekumara/fakesnow/issues/109)) ([d5e14a7](https://github.com/tekumara/fakesnow/commit/d5e14a79b576bcd515c20704b4b3c701d68229fc))
+* close duckdb connection ([223f8e2](https://github.com/tekumara/fakesnow/commit/223f8e21898cdc610d3003582e55b0cbaec9d1e7))
+* **server:** handle snowflake ProgrammingError ([9455a43](https://github.com/tekumara/fakesnow/commit/9455a438d7392061dd87954a5968986aa21ea87b))
+* **server:** support empty result set ([b967b69](https://github.com/tekumara/fakesnow/commit/b967b69809c0d5421caf122ad78437f39a842fd4))
+* **server:** support FAKESNOW_DB_PATH ([af79f77](https://github.com/tekumara/fakesnow/commit/af79f7728a1af2396ad8d4c88a1235112185e3c8))
+* **server:** support time & timestamp types ([1606a3e](https://github.com/tekumara/fakesnow/commit/1606a3e4570b24057a3e21e01d5b50e06c4e530b))
+* support MERGE with multiple join columns and source subqueries  ([#136](https://github.com/tekumara/fakesnow/issues/136)) ([9b5a7a0](https://github.com/tekumara/fakesnow/commit/9b5a7a08ef2c7225f1f5324dd667b5518015026e)), closes [#24](https://github.com/tekumara/fakesnow/issues/24)
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.374 to 1.1.378 ([#133](https://github.com/tekumara/fakesnow/issues/133)) ([593a420](https://github.com/tekumara/fakesnow/commit/593a4205a0364149d18bc8b1aa53a71fceacce45))
+* **deps:** update ruff requirement from ~=0.5.1 to ~=0.6.3 ([#130](https://github.com/tekumara/fakesnow/issues/130)) ([6b37d8b](https://github.com/tekumara/fakesnow/commit/6b37d8bb968b9c5b2e51e8e6b76f9f517b2de532))
+
 ## [0.9.24](https://github.com/tekumara/fakesnow/compare/v0.9.23...v0.9.24) (2024-08-21)
 
 
