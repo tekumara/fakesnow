@@ -37,7 +37,7 @@ def alias_in_join(expression: exp.Expression) -> exp.Expression:
 def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
     """Turn alter table cluster by into a no-op"""
     if (
-        isinstance(expression, exp.AlterTable)
+        isinstance(expression, exp.Alter)
         and (actions := expression.args.get("actions"))
         and len(actions) == 1
         and (isinstance(actions[0], exp.Cluster))
@@ -356,7 +356,7 @@ def extract_comment_on_columns(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression, with any comment stored in the new 'table_comment' arg.
     """
 
-    if isinstance(expression, exp.AlterTable) and (actions := expression.args.get("actions")):
+    if isinstance(expression, exp.Alter) and (actions := expression.args.get("actions")):
         new_actions: list[exp.Expression] = []
         col_comments: list[tuple[str, str]] = []
         for a in actions:
@@ -410,7 +410,7 @@ def extract_comment_on_table(expression: exp.Expression) -> exp.Expression:
         new.args["table_comment"] = (table, cexp.this)
         return new
     elif (
-        isinstance(expression, exp.AlterTable)
+        isinstance(expression, exp.Alter)
         and (sexp := expression.find(exp.AlterSet))
         and (scp := sexp.find(exp.SchemaCommentProperty))
         and isinstance(scp.this, exp.Literal)
@@ -436,7 +436,7 @@ def extract_text_length(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The original expression, with any text lengths stored in the new 'text_lengths' arg.
     """
 
-    if isinstance(expression, (exp.Create, exp.AlterTable)):
+    if isinstance(expression, (exp.Create, exp.Alter)):
         text_lengths = []
 
         # exp.Select is for a ctas, exp.Schema is a plain definition
@@ -707,8 +707,8 @@ def random(expression: exp.Expression) -> exp.Expression:
         new_rand = exp.Cast(
             this=exp.Paren(
                 this=exp.Mul(
-                    this=exp.Paren(this=exp.Sub(this=exp.Rand(), expression=exp.Literal(this=0.5, is_string=False))),
-                    expression=exp.Literal(this=9223372036854775807, is_string=False),
+                    this=exp.Paren(this=exp.Sub(this=exp.Rand(), expression=exp.Literal(this="0.5", is_string=False))),
+                    expression=exp.Literal(this="9223372036854775807", is_string=False),
                 )
             ),
             to=exp.DataType(this=exp.DataType.Type.BIGINT, nested=False, prefix=False),
@@ -809,31 +809,24 @@ def regex_substr(expression: exp.Expression) -> exp.Expression:
         pattern.args["this"] = pattern.this.replace("\\\\", "\\")
 
         # number of characters from the beginning of the string where the function starts searching for matches
-        try:
-            position = expression.args["position"]
-        except KeyError:
-            position = exp.Literal(this="1", is_string=False)
+        position = expression.args["position"] or exp.Literal(this="1", is_string=False)
 
         # which occurrence of the pattern to match
-        try:
-            occurrence = int(expression.args["occurrence"].this)
-        except KeyError:
-            occurrence = 1
+        occurrence = expression.args["occurrence"]
+        occurrence = int(occurrence.this) if occurrence else 1
 
         # the duckdb dialect increments bracket (ie: index) expressions by 1 because duckdb is 1-indexed,
         # so we need to compensate by subtracting 1
         occurrence = exp.Literal(this=str(occurrence - 1), is_string=False)
 
-        try:
-            regex_parameters_value = str(expression.args["parameters"].this)
+        if parameters := expression.args["parameters"]:
             # 'e' parameter doesn't make sense for duckdb
-            regex_parameters = exp.Literal(this=regex_parameters_value.replace("e", ""), is_string=True)
-        except KeyError:
+            regex_parameters = exp.Literal(this=parameters.this.replace("e", ""), is_string=True)
+        else:
             regex_parameters = exp.Literal(is_string=True)
 
-        try:
-            group_num = expression.args["group"]
-        except KeyError:
+        group_num = expression.args["group"]
+        if not group_num:
             if isinstance(regex_parameters.this, str) and "e" in regex_parameters.this:
                 group_num = exp.Literal(this="1", is_string=False)
             else:
@@ -1023,7 +1016,7 @@ def tag(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression.
     """
 
-    if isinstance(expression, exp.AlterTable) and (actions := expression.args.get("actions")):
+    if isinstance(expression, exp.Alter) and (actions := expression.args.get("actions")):
         for a in actions:
             if isinstance(a, exp.AlterSet) and a.args.get("tag"):
                 return SUCCESS_NOP
