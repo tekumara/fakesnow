@@ -45,7 +45,7 @@ def test_transform_merge() -> None:
             AND t2.merge_op = 0"""),
         strip("""
             UPDATE t1
-            SET t1.val = t2.newVal, status = 'new'
+            SET val = t2.newVal, status = 'new'
             FROM merge_candidates AS t2
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 1"""),
@@ -154,12 +154,13 @@ def test_transform_merge_source_subquery() -> None:
         e.sql(dialect="duckdb")
         for e in transforms.merge(
             sqlglot.parse_one(
+                # source is a subquery
+                # join key is not used in set clause
                 """
                 MERGE INTO LINE tgt USING (
                     SELECT BATCH_NUMBER, ID, ACTIVE_STATUS FROM HEADER WHERE ACTIVE_STATUS = 1
                 ) src
-                ON tgt.BATCH_NUMBER = src.BATCH_NUMBER
-                AND tgt.ID = src.ID
+                ON tgt.BATCH_NUMBER = src.BATCH_NUMBER AND tgt.ID = src.ID
                 WHEN MATCHED THEN UPDATE
                     SET tgt.ACTIVE_STATUS = src.ACTIVE_STATUS, tgt.END_DATE = NULL
                 """
@@ -168,23 +169,26 @@ def test_transform_merge_source_subquery() -> None:
     ] == [
         strip("""
             CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
-            SELECT src.ACTIVE_STATUS, src.BATCH_NUMBER,
+            SELECT src.ACTIVE_STATUS, src.BATCH_NUMBER, src.ID,
                 CASE
-                    WHEN tgt.BATCH_NUMBER = src.BATCH_NUMBER THEN 0
+                    WHEN tgt.BATCH_NUMBER = src.BATCH_NUMBER AND tgt.ID = src.ID THEN 0
                     ELSE NULL
                 END AS MERGE_OP
                 FROM LINE AS tgt
-            FULL OUTER JOIN (
-                    SELECT BATCH_NUMBER, ID, ACTIVE_STATUS FROM HEADER WHERE ACTIVE_STATUS = 1
-                ) AS src ON tgt.BATCH_NUMBER = src.BATCH_NUMBER
+            FULL OUTER JOIN (SELECT BATCH_NUMBER, ID, ACTIVE_STATUS FROM HEADER WHERE ACTIVE_STATUS = 1)
+              AS src ON tgt.BATCH_NUMBER = src.BATCH_NUMBER AND tgt.ID = src.ID
             WHERE NOT MERGE_OP IS NULL
                """),
         strip("""
-            UPDATE LINE as tgt
+            UPDATE LINE AS tgt
             SET ACTIVE_STATUS = src.ACTIVE_STATUS, END_DATE = NULL
             FROM merge_candidates AS src
-            WHERE tgt.BATCH_NUMBER = src.BATCH_NUMBER
+            WHERE tgt.BATCH_NUMBER = src.BATCH_NUMBER AND tgt.ID = src.ID
             AND src.merge_op = 0"""),
+        strip("""
+            SELECT
+              COUNT_IF(merge_op IN (0)) AS "number of rows updated"
+            FROM merge_candidates"""),
     ]
 
 
@@ -346,7 +350,7 @@ def test_merge_with_source_subquery(conn: snowflake.connector.SnowflakeConnectio
         MERGE INTO LINE tgt USING (
             SELECT BATCH_NUMBER, ID, ACTIVE_STATUS FROM HEADER WHERE ACTIVE_STATUS = 1
         ) src
-        ON tgt.BATCH_NUMBER = src.BATCH_NUMBER
+        ON tgt.BATCH_NUMBER = src.BATCH_NUMBER AND tgt.ID = src.ID
         AND tgt.ID = src.ID
         WHEN MATCHED THEN UPDATE
             SET tgt.ACTIVE_STATUS = src.ACTIVE_STATUS, tgt.END_DATE = NULL;

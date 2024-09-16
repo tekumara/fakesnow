@@ -1,6 +1,8 @@
 import sqlglot
 from sqlglot import exp
 
+from fakesnow import checks
+
 # Implements snowflake's MERGE INTO functionality in duckdb (https://docs.snowflake.com/en/sql-reference/sql/merge).
 
 
@@ -17,12 +19,33 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     The merge_op column identifies which merge clause applies to the row.
     """
     target_tbl = merge_expr.this
-    source_tbl = merge_expr.args.get("using")
+
+    source = merge_expr.args.get("using")
+    assert isinstance(source, exp.Expression)
+    source_id = (alias := source.args.get("alias")) and alias.this if isinstance(source, exp.Subquery) else source.this
+    assert isinstance(source_id, exp.Identifier)
+
     join_expr = merge_expr.args.get("on")
     assert isinstance(join_expr, exp.Binary)
 
     case_when_clauses: list[str] = []
     values: set[str] = set()
+
+    # extract keys that reference the source table from the join expression
+    # so they can be used by the mutation statements for joining
+    # will include the source table identifier
+    values.update(
+        map(
+            str,
+            {
+                c
+                for c in join_expr.find_all(exp.Column)
+                if (table := c.args.get("table"))
+                and isinstance(table, exp.Identifier)
+                and checks.equal(table, source_id)
+            },
+        )
+    )
 
     # Iterate through the WHEN clauses to build up the CASE WHEN clauses
     for w_idx, w in enumerate(merge_expr.expressions):
@@ -66,7 +89,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
             ELSE NULL
         END AS MERGE_OP
     FROM {target_tbl}
-    FULL OUTER JOIN {source_tbl} ON {join_expr.sql()}
+    FULL OUTER JOIN {source} ON {join_expr.sql()}
     WHERE MERGE_OP IS NOT NULL
     """
 
@@ -79,7 +102,8 @@ def _mutations(merge_expr: exp.Merge) -> list[exp.Expression]:
     merge_candidates and source table to update the target target.
     """
     target_tbl = merge_expr.this
-    source_tbl = merge_expr.args.get("using")
+    source = merge_expr.args.get("using")
+    source_tbl = source.alias if isinstance(source, exp.Subquery) else source
     join_expr = merge_expr.args.get("on")
 
     statements: list[exp.Expression] = []
@@ -101,8 +125,10 @@ def _mutations(merge_expr: exp.Merge) -> list[exp.Expression]:
                 """
                 statements.append(sqlglot.parse_one(delete_sql))
             elif isinstance(then, exp.Update):
+                # when the update statement has a table alias, duckdb doesn't support the alias in the set
+                # column name, so we use e.this.this to get just the column name without its table prefix
                 set_clauses = ", ".join(
-                    [f"{e.alias or e.this} = {e.expression.sql()}" for e in then.args.get("expressions", [])]
+                    [f"{e.this.this} = {e.expression.sql()}" for e in then.args.get("expressions", [])]
                 )
                 update_sql = f"""
                     UPDATE {target_tbl}
