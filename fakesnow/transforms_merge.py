@@ -29,31 +29,33 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
         assert isinstance(w, exp.When), f"Expected When expression, got {w}"
 
         predicate = join_expr.copy()
-
-        # Combine the top level ON expression with the AND condition
-        # from this specific WHEN into a subquery, we use to target rows.
-        # Eg. MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
-        #       WHEN MATCHED AND t2.marked = 1 THEN DELETE
-        if condition := w.args.get("condition"):
-            predicate = exp.And(this=predicate, expression=condition)
-
         matched = w.args.get("matched")
         then = w.args.get("then")
+        condition = w.args.get("condition")
 
         if matched:
+            # matchedClause see https://docs.snowflake.com/en/sql-reference/sql/merge#matchedclause-for-updates-or-deletes
+            if condition:
+                # Combine the top level ON expression with the AND condition
+                # from this specific WHEN into a subquery, we use to target rows.
+                # Eg. MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
+                #       WHEN MATCHED AND t2.marked = 1 THEN DELETE
+                predicate = exp.And(this=predicate, expression=condition)
+
             if isinstance(then, exp.Update):
-                case_when_clauses.append(f"WHEN {predicate.sql()} THEN {w_idx}")
+                case_when_clauses.append(f"WHEN {predicate} THEN {w_idx}")
                 values.update([str(c.expression) for c in then.expressions if isinstance(c.expression, exp.Column)])
             elif isinstance(then, exp.Var) and then.args.get("this") == "DELETE":
-                case_when_clauses.append(f"WHEN {predicate.sql()} THEN {w_idx}")
+                case_when_clauses.append(f"WHEN {predicate} THEN {w_idx}")
             else:
                 raise AssertionError(f"Expected 'Update' or 'Delete', got {then}")
         else:
+            # notMatchedClause see https://docs.snowflake.com/en/sql-reference/sql/merge#notmatchedclause-for-inserts
             assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
             insert_values = then.expression.expressions
             values.update([str(c) for c in insert_values if isinstance(c, exp.Column)])
-            cond = f"AND {condition}" if condition else ""
-            case_when_clauses.append(f"WHEN {target_tbl}.rowid is NULL {cond} THEN {w_idx}")
+            predicate = f"AND {condition}" if condition else ""
+            case_when_clauses.append(f"WHEN {target_tbl}.rowid is NULL {predicate} THEN {w_idx}")
 
     sql = f"""
     CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
