@@ -131,7 +131,6 @@ class FakeSnowflakeCursor:
     ) -> FakeSnowflakeCursor:
         try:
             self._sqlstate = None
-            last_execute_result = None
 
             if os.environ.get("FAKESNOW_DEBUG") == "snowflake":
                 print(f"{command};{params=}" if params else f"{command};", file=sys.stderr)
@@ -140,15 +139,15 @@ class FakeSnowflakeCursor:
             command, params = self._rewrite_with_params(command, params)
             if self._conn.nop_regexes and any(re.match(p, command, re.IGNORECASE) for p in self._conn.nop_regexes):
                 transformed = transforms.SUCCESS_NOP
-                last_execute_result = self._execute(transformed, params)
-            else:
-                expression = parse_one(command, read="snowflake")
-                for exp in self._split_transform(expression):
-                    transformed = self._transform(exp)
-                    last_execute_result = self._execute(transformed, params)
+                self._execute(transformed, params)
+                return self
 
-            assert last_execute_result is not None
-            return last_execute_result
+            expression = parse_one(command, read="snowflake")
+            for exp in self._transform_explode(expression):
+                transformed = self._transform(exp)
+                self._execute(transformed, params)
+
+            return self
         except snowflake.connector.errors.ProgrammingError as e:
             self._sqlstate = e.sqlstate
             raise e
@@ -213,14 +212,12 @@ class FakeSnowflakeCursor:
             .transform(transforms.alter_table_strip_cluster_by)
         )
 
-    def _split_transform(self, expression: exp.Expression) -> list[exp.Expression]:
+    def _transform_explode(self, expression: exp.Expression) -> list[exp.Expression]:
         # Applies transformations that require splitting the expression into multiple expressions
         # Split transforms have limited support at the moment.
         return transforms.merge(expression)
 
-    def _execute(
-        self, transformed: exp.Expression, params: Sequence[Any] | dict[Any, Any] | None = None
-    ) -> FakeSnowflakeCursor:
+    def _execute(self, transformed: exp.Expression, params: Sequence[Any] | dict[Any, Any] | None = None) -> None:
         self._arrow_table = None
         self._arrow_table_fetch_index = None
         self._rowcount = None
@@ -355,8 +352,6 @@ class FakeSnowflakeCursor:
 
         self._last_sql = result_sql or sql
         self._last_params = params
-
-        return self
 
     def _log_sql(self, sql: str, params: Sequence[Any] | dict[Any, Any] | None = None) -> None:
         if (fs_debug := os.environ.get("FAKESNOW_DEBUG")) and fs_debug != "snowflake":

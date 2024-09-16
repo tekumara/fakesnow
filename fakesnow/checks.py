@@ -68,3 +68,11 @@ def is_unqualified_table_expression(expression: exp.Expression) -> tuple[bool, b
         no_schema = not node.args.get("db")
 
     return no_database, no_schema
+
+
+def equal(left: exp.Identifier, right: exp.Identifier) -> bool:
+    # as per https://docs.snowflake.com/en/sql-reference/identifiers-syntax#label-identifier-casing
+    lid = left.this if left.quoted else left.this.upper()
+    rid = right.this if right.quoted else right.this.upper()
+
+    return lid == rid
