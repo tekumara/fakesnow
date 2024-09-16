@@ -69,6 +69,40 @@ def test_transform_merge() -> None:
     ]
 
 
+def test_transform_merge_not_matched_condition() -> None:
+    assert [
+        e.sql(dialect="duckdb")
+        for e in transforms.merge(
+            sqlglot.parse_one(
+                """
+                MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
+                    WHEN NOT MATCHED AND t2.insertable = 1 THEN INSERT (t1Key, val, status) VALUES (t2.t2Key, t2.newVal, t2.newStatus);
+                """
+            )
+        )
+    ] == [
+        strip("""
+            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            SELECT t2.newStatus, t2.newVal, t2.t2Key,
+                CASE
+                    WHEN t1.rowid IS NULL AND t2.insertable = 1 THEN 0
+                    ELSE NULL
+                END AS MERGE_OP
+                FROM t1
+            FULL OUTER JOIN t2 ON t1.t1Key = t2.t2Key
+            WHERE NOT MERGE_OP IS NULL"""),
+        strip("""
+            INSERT INTO t1 (t1Key, val, status)
+            SELECT t2.t2Key, t2.newVal, t2.newStatus
+            FROM merge_candidates AS t2
+            WHERE t2.merge_op = 0"""),
+        strip("""
+            SELECT
+              COUNT_IF(merge_op IN (0)) AS "number of rows inserted"
+            FROM merge_candidates"""),
+    ]
+
+
 def test_transform_merge_complex_join_keys() -> None:
     assert [
         e.sql(dialect="duckdb")

@@ -52,7 +52,8 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
             assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
             insert_values = then.expression.expressions
             values.update([str(c) for c in insert_values if isinstance(c, exp.Column)])
-            case_when_clauses.append(f"WHEN {target_tbl}.rowid is NULL THEN {w_idx}")
+            cond = f"AND {condition}" if condition else ""
+            case_when_clauses.append(f"WHEN {target_tbl}.rowid is NULL {cond} THEN {w_idx}")
 
     sql = f"""
     CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
@@ -136,8 +137,8 @@ def _counts(merge_expr: exp.Merge) -> exp.Expression:
     - "number of rows updated"
     - "number of rows deleted"
 
-    Only columns relevant to the merge operation are included, eg: if no rows are deleted, the "number of rows deleted" column
-    is not included.
+    Only columns relevant to the merge operation are included, eg: if no rows are deleted, the "number of rows deleted"
+    column is not included.
     """
 
     # Initialize dictionaries to store operation types and their corresponding indices
