@@ -3,118 +3,29 @@ from sqlglot import exp
 
 # Implements snowflake's MERGE INTO functionality in duckdb (https://docs.snowflake.com/en/sql-reference/sql/merge).
 
-TEMP_MERGE_UPDATED_DELETES = "temp_merge_updates_deletes"
-TEMP_MERGE_INSERTS = "temp_merge_inserts"
-
-
-def _target_table(merge_expr: exp.Expression) -> exp.Expression:
-    target_table = merge_expr.this
-    if target_table is None:
-        raise ValueError("Target table expression is None")
-    return target_table
-
-
-def _source_table(merge_expr: exp.Expression) -> exp.Expression:
-    source_table = merge_expr.args.get("using")
-    if source_table is None:
-        raise ValueError("Source table expression is None")
-    return source_table
-
-
-def _merge_on_expr(merge_expr: exp.Expression) -> exp.Expression:
-    # Get the ON expression from the merge operation (Eg. MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key)
-    # which is applied to filter the source and target tables.
-    on_expr = merge_expr.args.get("on")
-    if on_expr is None:
-        raise ValueError("Merge ON expression is None")
-    return on_expr
-
-
-def _create_temp_tables() -> list[exp.Expression]:
-    # Creates temp tables to store the source rows and the modifications to apply to those rows.
-    return [
-        # Create temp table for update and delete operations
-        sqlglot.parse_one(
-            f"CREATE OR REPLACE TEMP TABLE {TEMP_MERGE_UPDATED_DELETES} "
-            + "(target_rowid INTEGER, when_id INTEGER, type CHAR(1))"
-        ),
-        # Create temp table for insert operations
-        sqlglot.parse_one(f"CREATE OR REPLACE TEMP TABLE {TEMP_MERGE_INSERTS} (source_rowid INTEGER, when_id INTEGER)"),
-    ]
-
-
-def _generate_final_expression_set(
-    temp_table_inserts: list[exp.Expression], output_expressions: list[exp.Expression]
-) -> list[exp.Expression]:
-    # Collects all of the operations together to be executed in a single transaction.
-    # Operate in a transaction to freeze rowids https://duckdb.org/docs/sql/statements/select#row-ids
-    begin_transaction_exp = sqlglot.parse_one("BEGIN TRANSACTION")
-    end_transaction_exp = sqlglot.parse_one("COMMIT")
-
-    # Add modifications results outcome query
-    results_exp = sqlglot.parse_one(f"""
-    WITH merge_update_deletes AS (
-        select count_if(type == 'U')::int AS "updates", count_if(type == 'D')::int as "deletes"
-        from {TEMP_MERGE_UPDATED_DELETES}
-    ), merge_inserts AS (select count() AS "inserts" from {TEMP_MERGE_INSERTS})
-    SELECT mi.inserts as "number of rows inserted",
-        mud.updates as "number of rows updated",
-        mud.deletes as "number of rows deleted"
-    from merge_update_deletes mud, merge_inserts mi
-    """)
-
-    return [
-        begin_transaction_exp,
-        *temp_table_inserts,
-        *output_expressions,
-        end_transaction_exp,
-        results_exp,
-    ]
-
-
-def _insert_temp_merge_operation(
-    op_type: str, when_idx: int, subquery: exp.Expression, target_table: exp.Expression
-) -> exp.Expression:
-    assert op_type in {
-        "U",
-        "D",
-    }, f"Expected 'U' or 'D', got merge op_type: {op_type}"  # Updates/Deletes
-    return exp.insert(
-        into=TEMP_MERGE_UPDATED_DELETES,
-        expression=exp.select("rowid", exp.Literal.number(when_idx), exp.Literal.string(op_type))
-        .from_(target_table)
-        .where(subquery),
-    )
-
-
-def _remove_table_alias(eq_exp: exp.Condition) -> exp.Condition:
-    eq_exp.set("table", None)
-    return eq_exp
-
 
 def merge(merge_expr: exp.Expression) -> list[exp.Expression]:
     if not isinstance(merge_expr, exp.Merge):
         return [merge_expr]
 
-    return [_create_merge_candidates(merge_expr), *_mutations(merge_expr)]
+    return [_create_merge_candidates(merge_expr), *_mutations(merge_expr), _counts(merge_expr)]
 
 
 def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     """
     Given a merge statement, produce a temporary table that joins together the target and source tables.
     The merge_op column identifies which merge clause applies to the row.
-    See https://docs.snowflake.com/en/sql-reference/sql/merge.html
     """
     target_tbl = merge_expr.this
     source_tbl = merge_expr.args.get("using")
     join_expr = merge_expr.args.get("on")
     assert isinstance(join_expr, exp.Binary)
 
-    whens = merge_expr.expressions
     case_when_clauses: list[str] = []
     values: set[str] = set()
 
-    for w_idx, w in enumerate(whens):
+    # Iterate through the WHEN clauses to build up the CASE WHEN clauses
+    for w_idx, w in enumerate(merge_expr.expressions):
         assert isinstance(w, exp.When), f"Expected When expression, got {w}"
 
         predicate = join_expr.copy()
@@ -162,7 +73,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
 def _mutations(merge_expr: exp.Merge) -> list[exp.Expression]:
     """
     Given a merge statement, produce a list of delete, update and insert statements that use the
-    merge candidate and source table to update the target target.
+    merge_candidates and source table to update the target target.
     """
     target_tbl = merge_expr.this
     source_tbl = merge_expr.args.get("using")
@@ -170,8 +81,8 @@ def _mutations(merge_expr: exp.Merge) -> list[exp.Expression]:
 
     statements: list[exp.Expression] = []
 
-    whens = merge_expr.expressions
-    for w_idx, w in enumerate(whens):
+    # Iterate through the WHEN clauses to generate delete/update/insert statements
+    for w_idx, w in enumerate(merge_expr.expressions):
         assert isinstance(w, exp.When), f"Expected When expression, got {w}"
 
         matched = w.args.get("matched")
@@ -204,7 +115,7 @@ def _mutations(merge_expr: exp.Merge) -> list[exp.Expression]:
             assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
             cols = [str(c) for c in then.this.expressions] if then.this else []
             columns = f"({', '.join(cols)})" if cols else ""
-            values = ", ".join([str(c) for (c) in then.expression.expressions])
+            values = ", ".join(map(str, then.expression.expressions))
             insert_sql = f"""
                 INSERT INTO {target_tbl} {columns}
                 SELECT {values}
@@ -214,3 +125,50 @@ def _mutations(merge_expr: exp.Merge) -> list[exp.Expression]:
             statements.append(sqlglot.parse_one(insert_sql))
 
     return statements
+
+
+def _counts(merge_expr: exp.Merge) -> exp.Expression:
+    """
+    Given a merge statement, derive the a SQL statement which produces the following columns using the merge_candidates
+    table:
+
+    - "number of rows inserted"
+    - "number of rows updated"
+    - "number of rows deleted"
+
+    Only columns relevant to the merge operation are included, eg: if no rows are deleted, the "number of rows deleted" column
+    is not included.
+    """
+
+    # Initialize dictionaries to store operation types and their corresponding indices
+    operations = {"inserted": [], "updated": [], "deleted": []}
+
+    # Iterate through the WHEN clauses to categorize operations
+    for w_idx, w in enumerate(merge_expr.expressions):
+        assert isinstance(w, exp.When), f"Expected When expression, got {w}"
+
+        matched = w.args.get("matched")
+        then = w.args.get("then")
+
+        if matched:
+            if isinstance(then, exp.Update):
+                operations["updated"].append(w_idx)
+            elif isinstance(then, exp.Var) and then.args.get("this") == "DELETE":
+                operations["deleted"].append(w_idx)
+            else:
+                raise AssertionError(f"Expected 'Update' or 'Delete', got {then}")
+        else:
+            assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
+            operations["inserted"].append(w_idx)
+
+    count_statements = [
+        f"""COUNT_IF(merge_op in ({','.join(map(str, indices))})) as \"number of rows {op}\""""
+        for op, indices in operations.items()
+        if indices
+    ]
+    sql = f"""
+    SELECT {', '.join(count_statements)}
+    FROM merge_candidates
+    """
+
+    return sqlglot.parse_one(sql)

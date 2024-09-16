@@ -60,6 +60,12 @@ def test_transform_merge() -> None:
             SELECT t2.t2Key, 'newVal', t2.newStatus
             FROM merge_candidates AS t2
             WHERE t2.merge_op = 3"""),
+        strip("""
+            SELECT
+              COUNT_IF(merge_op IN (3)) AS "number of rows inserted",
+              COUNT_IF(merge_op IN (1, 2)) AS "number of rows updated",
+              COUNT_IF(merge_op IN (0)) AS "number of rows deleted"
+            FROM merge_candidates"""),
     ]
 
 
@@ -101,6 +107,11 @@ def test_transform_merge_complex_join_keys() -> None:
             SELECT t2.id, t2.name, 'new'
             FROM merge_candidates AS t2
             WHERE t2.merge_op = 1"""),
+        strip("""
+            SELECT
+              COUNT_IF(merge_op IN (1)) AS "number of rows inserted",
+              COUNT_IF(merge_op IN (0)) AS "number of rows deleted"
+            FROM merge_candidates"""),
     ]
 
 
