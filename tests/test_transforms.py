@@ -71,7 +71,7 @@ def test_alias_in_join() -> None:
         """)
         .transform(alias_in_join)
         .sql()
-        == "SELECT T.COL, SUBSTR(T.COL, 4) AS ALIAS, J.ANOTHER FROM TEST AS T LEFT JOIN JOINED AS J ON SUBSTR(T.COL, 4) = J.COL"  # noqa: E501
+        == "SELECT T.COL, SUBSTRING(T.COL, 4) AS ALIAS, J.ANOTHER FROM TEST AS T LEFT JOIN JOINED AS J ON SUBSTRING(T.COL, 4) = J.COL"  # noqa: E501
     )
 
 
