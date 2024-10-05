@@ -2,6 +2,15 @@
 
 # Changelog
 
+## [0.9.26](https://github.com/tekumara/fakesnow/compare/v0.9.25...v0.9.26) (2024-10-05)
+
+
+### Chores
+
+* bump sqlglot 25.22.0 ([3c1f244](https://github.com/tekumara/fakesnow/commit/3c1f244144911aa106ebe5260797686fa25035f7))
+* **deps-dev:** bump pyright from 1.1.378 to 1.1.382 ([#142](https://github.com/tekumara/fakesnow/issues/142)) ([a3898ce](https://github.com/tekumara/fakesnow/commit/a3898ce3bfe17424820519f256e8e759a674ef92))
+* **deps:** update sqlglot requirement from ~=25.22.0 to ~=25.24.1 ([#141](https://github.com/tekumara/fakesnow/issues/141)) ([8e7c343](https://github.com/tekumara/fakesnow/commit/8e7c343fbb6bce08ce32839d38ba337001006619))
+
 ## [0.9.25](https://github.com/tekumara/fakesnow/compare/v0.9.24...v0.9.25) (2024-09-16)
 
 
