@@ -1522,3 +1522,24 @@ def test_json_extract_cast_as_varchar(dcur: snowflake.connector.cursor.DictCurso
 
     dcur.execute("SELECT j:str::number as j_str_number, j:num::number as j_num_number FROM example")
     assert dcur.fetchall() == [{"J_STR_NUMBER": 100, "J_NUM_NUMBER": 200}]
+
+
+def test_truncate(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("CREATE TABLE example (i INTEGER)")
+    dcur.execute("""INSERT INTO example VALUES (1)""")
+
+    dcur.execute("TRUNCATE TABLE example")
+    assert dcur.description == [
+        ResultMetadata(
+            name="status",
+            type_code=2,
+            display_size=None,
+            internal_size=16777216,
+            precision=None,
+            scale=None,
+            is_nullable=True,
+        )
+    ]
+
+    dcur.execute("SELECT i FROM example")
+    assert dcur.fetchall() == []
