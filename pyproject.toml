@@ -32,7 +32,7 @@ dev = [
     "pyarrow-stubs==10.0.1.9",
     "pytest~=8.0",
     "pytest-asyncio",
-    "ruff~=0.6.3",
+    "ruff~=0.7.2",
     "twine~=5.0",
     "snowflake-sqlalchemy~=1.5.0",
 ]
