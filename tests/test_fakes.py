@@ -713,6 +713,17 @@ def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1, '"banana"'), (2, '"coconut"'), (2, '"durian"')]
 
 
+def test_flatten_index(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute(
+        """
+        select id, f.value::varchar as v, f.index as i
+        from (select column1 as id, column2 as col from (values (1, 's1,s3,s2'), (2, 's2,s1'))) as t
+        , lateral flatten(input => split(t.col, ',')) as f order by id;
+        """
+    )
+    assert cur.fetchall() == [(1, "s1", 0), (1, "s3", 1), (1, "s2", 2), (2, "s2", 0), (2, "s1", 1)]
+
+
 def test_flatten_value_cast_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute(
         """

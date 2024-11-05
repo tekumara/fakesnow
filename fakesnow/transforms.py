@@ -471,7 +471,6 @@ def flatten(expression: exp.Expression) -> exp.Expression:
 
     See https://docs.snowflake.com/en/sql-reference/functions/flatten
 
-    TODO: return index.
     TODO: support objects.
     """
     if (
@@ -483,20 +482,34 @@ def flatten(expression: exp.Expression) -> exp.Expression:
     ):
         explode_expression = expression.this.this.expression
 
-        return exp.Lateral(
-            this=exp.Unnest(
+        value = exp.Cast(
+            this=explode_expression,
+            to=exp.DataType(
+                this=exp.DataType.Type.ARRAY,
+                expressions=[exp.DataType(this=exp.DataType.Type.JSON, nested=False, prefix=False)],
+                nested=True,
+            ),
+        )
+
+        return exp.Subquery(
+            this=exp.Select(
                 expressions=[
-                    exp.Cast(
-                        this=explode_expression,
-                        to=exp.DataType(
-                            this=exp.DataType.Type.ARRAY,
-                            expressions=[exp.DataType(this=exp.DataType.Type.JSON, nested=False, prefix=False)],
-                            nested=True,
+                    exp.Unnest(
+                        expressions=[value],
+                        alias=exp.Identifier(this="VALUE", quoted=False),
+                    ),
+                    exp.Alias(
+                        this=exp.Sub(
+                            this=exp.Anonymous(
+                                this="generate_subscripts", expressions=[value, exp.Literal(this="1", is_string=False)]
+                            ),
+                            expression=exp.Literal(this="1", is_string=False),
                         ),
-                    )
+                        alias=exp.Identifier(this="INDEX", quoted=False),
+                    ),
                 ],
             ),
-            alias=exp.TableAlias(this=alias.this, columns=[exp.Identifier(this="VALUE", quoted=False)]),
+            alias=exp.TableAlias(this=alias.this),
         )
 
     return expression

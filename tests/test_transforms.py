@@ -433,13 +433,15 @@ def test_flatten() -> None:
                 flat.value -> '$.fruit'
             FROM
                 (SELECT
-                        1,
-                        JSON('[{"fruit":"banana"}]')
-                    UNION
-                    SELECT
-                        2,
-                        JSON('[{"fruit":"coconut"}, {"fruit":"durian"}]')) AS t(id, fruits),
-                LATERAL UNNEST(CAST(t.fruits AS JSON[])) AS flat(VALUE)
+                    1,
+                    JSON('[{"fruit":"banana"}]')
+                UNION
+                SELECT
+                    2,
+                    JSON('[{"fruit":"coconut"}, {"fruit":"durian"}]')) AS t(id, fruits),
+                (SELECT
+                        UNNEST(CAST(t.fruits AS JSON[])) AS VALUE,
+                        GENERATE_SUBSCRIPTS(CAST(t.fruits AS JSON[]), 1) - 1 AS INDEX) AS flat
             """)
 
 
