@@ -1100,16 +1100,16 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
     objects = [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "EXAMPLE",
-            "kind": "TABLE",
             "database_name": "DB1",
+            "kind": "TABLE",
+            "name": "EXAMPLE",
             "schema_name": "SCHEMA1",
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "VIEW1",
-            "kind": "VIEW",
             "database_name": "DB1",
+            "kind": "VIEW",
+            "name": "VIEW1",
             "schema_name": "SCHEMA1",
         },
     ]
@@ -1120,16 +1120,16 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
         *objects,
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "databases",
-            "kind": "VIEW",
             "database_name": "DB1",
+            "kind": "VIEW",
+            "name": "databases",
             "schema_name": "information_schema",
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "views",
-            "kind": "VIEW",
             "database_name": "DB1",
+            "kind": "VIEW",
+            "name": "views",
             "schema_name": "information_schema",
         },
     ]
@@ -1159,16 +1159,16 @@ def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.fetchall() == [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "SCHEMA1",
-            "kind": None,
             "database_name": "DB1",
+            "kind": None,
+            "name": "SCHEMA1",
             "schema_name": None,
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "information_schema",
-            "kind": None,
             "database_name": "DB1",
+            "kind": None,
+            "name": "information_schema",
             "schema_name": None,
         },
     ]
@@ -1182,9 +1182,9 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     objects = [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "EXAMPLE",
-            "kind": "TABLE",
             "database_name": "DB1",
+            "kind": "TABLE",
+            "name": "EXAMPLE",
             "schema_name": "SCHEMA1",
         },
     ]
