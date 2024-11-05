@@ -10,7 +10,7 @@ def test_engine(snowflake_engine: Engine):
     with snowflake_engine.connect() as conn:
         conn.execute(TextClause("CREATE VIEW foo AS SELECT * FROM information_schema.databases"))
 
-        result = conn.execute("SELECT database_name FROM foo")
+        result = conn.execute(TextClause("SELECT database_name FROM foo"))
         assert result
         assert result.fetchall() == [("DB1",)]
 
