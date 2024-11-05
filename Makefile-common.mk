@@ -20,7 +20,7 @@ $(python): $(if $(value CI),|,) .python-version
 	$(pip) install --upgrade pip~=24.0
 
 $(venv): $(if $(value CI),|,) pyproject.toml $(python)
-	$(pip) install -e '.[dev$(if $(value CI),,,notebook)]'
+	$(pip) install -e '.[dev,server$(if $(value CI),,,notebook)]'
 	touch $(venv)
 
 node_modules: package.json

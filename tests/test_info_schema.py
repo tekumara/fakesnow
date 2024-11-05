@@ -39,6 +39,46 @@ def test_info_schema_columns_describe(cur: snowflake.connector.cursor.SnowflakeC
     assert cur.description == expected_metadata
 
 
+def test_describe_view_columns(dcur: snowflake.connector.cursor.DictCursor):
+    cols = [
+        "name",
+        "type",
+        "kind",
+        "null?",
+        "default",
+        "primary key",
+        "unique key",
+        "check",
+        "expression",
+        "comment",
+        "policy name",
+        "privacy domain",
+    ]
+    dcur.execute("describe view information_schema.columns")
+    result: list[dict] = dcur.fetchall()  # type: ignore
+    assert list(result[0].keys()) == cols
+    names = [r["name"] for r in result]
+    # should contain snowflake-specific columns (from _FS_COLUMNS_SNOWFLAKE)
+    assert "comment" in names
+    # fmt: off
+    assert dcur.description[:-1] == [
+        ResultMetadata(name='name', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='type', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='kind', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='null?', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='default', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='primary key', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='unique key', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='check', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='expression', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='comment', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='policy name', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        # TODO: ignore the following, see https://github.com/tekumara/fakesnow/issues/26
+        # ResultMetadata(name='privacy domain', type_code=9, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)
+    ]
+    # fmt: on
+
+
 def test_info_schema_columns_numeric(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-numeric
     cur.execute(
@@ -211,3 +251,16 @@ def test_info_schema_show_primary_keys_from_table(cur: snowflake.connector.curso
 
     pk_columns = [result[4] for result in pk_result]
     assert pk_columns == ["ID", "VERSION"]
+
+
+def test_type_column_is_not_null(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    for table in [
+        "information_schema.databases",
+        "information_schema.views",
+        "information_schema.columns",
+    ]:
+        cur.execute(f"DESCRIBE VIEW {table}")
+        result = cur.fetchall()
+        data_types = [dt for (_, dt, *_) in result]
+        nulls = [dt for dt in data_types if "NULL" in dt]
+        assert not nulls

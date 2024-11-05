@@ -162,6 +162,8 @@ def test_clone(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_close_conn(conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor):
+    assert not conn.is_closed()
+
     conn.close()
     with pytest.raises(snowflake.connector.errors.DatabaseError) as excinfo:
         conn.execute_string("select 1")
@@ -169,6 +171,8 @@ def test_close_conn(conn: snowflake.connector.SnowflakeConnection, cur: snowflak
     # actual snowflake error message is:
     # 250002 (08003): Connection is closed
     assert "250002 (08003)" in str(excinfo.value)
+
+    assert conn.is_closed()
 
 
 def test_close_cur(conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -296,6 +300,7 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     # fmt: off
     expected_metadata = [
         ResultMetadata(name='XBOOLEAN', type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
+        # TODO: is_nullable should be False for non-boolean columns
         ResultMetadata(name='XDOUBLE', type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XFLOAT', type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XNUMBER82', type_code=0, display_size=None, internal_size=None, precision=8, scale=2, is_nullable=True),
@@ -308,7 +313,7 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         ResultMetadata(name='XSMALLINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
         ResultMetadata(name='XTINYINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
         ResultMetadata(name='XBYTEINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
-        # TODO: store actual size
+        # TODO: store actual size, ie: internal_size=20
         ResultMetadata(name='XVARCHAR20', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XVARCHAR', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XTEXT', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
@@ -434,6 +439,52 @@ def test_describe_table(dcur: snowflake.connector.cursor.DictCursor):
     # 002003 (42S02): SQL compilation error:
     # Table 'THIS_DOES_NOT_EXIST' does not exist or not authorized.
     assert "002003 (42S02): Catalog Error: Table with name THIS_DOES_NOT_EXIST does not exist!" in str(excinfo.value)
+
+
+def test_describe_view(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute(
+        """
+        create or replace table example (
+            XVARCHAR VARCHAR
+            -- ,XVARCHAR20 VARCHAR(20) -- TODO: preserve varchar size
+        )
+        """
+    )
+
+    common = {
+        "kind": "COLUMN",
+        "null?": "Y",
+        "default": None,
+        "primary key": "N",
+        "unique key": "N",
+        "check": None,
+        "expression": None,
+        "comment": None,
+        "policy name": None,
+        "privacy domain": None,
+    }
+    expected = [
+        {"name": "XVARCHAR", "type": "VARCHAR(16777216)", **common},
+        # TODO: preserve varchar size
+        # {"name": "XVARCHAR20", "type": "VARCHAR(20)", **common},
+    ]
+
+    dcur.execute("create view v1 as select * from example")
+    assert dcur.execute("describe view v1").fetchall() == expected
+    assert [r.name for r in dcur.description] == [
+        "name",
+        "type",
+        "kind",
+        "null?",
+        "default",
+        "primary key",
+        "unique key",
+        "check",
+        "expression",
+        "comment",
+        "policy name",
+        "privacy domain",
+    ]
 
 
 ## descriptions are needed for ipython-sql/jupysql which describes every statement
@@ -605,9 +656,10 @@ def test_fetchmany(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("insert into customers values (3, 'Jeremy', 'K')")
         cur.execute("select id, first_name, last_name from customers")
 
+        # mimic jupysql fetchmany behaviour
         assert cur.fetchmany(2) == [(1, "Jenny", "P"), (2, "Jasper", "M")]
-        assert cur.fetchmany(2) == [(3, "Jeremy", "K")]
-        assert cur.fetchmany(2) == []
+        assert cur.fetchmany(5) == [(3, "Jeremy", "K")]
+        assert cur.fetchmany(5) == []
 
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("select id, first_name, last_name from customers")
@@ -615,10 +667,10 @@ def test_fetchmany(conn: snowflake.connector.SnowflakeConnection):
             {"ID": 1, "FIRST_NAME": "Jenny", "LAST_NAME": "P"},
             {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
         ]
-        assert cur.fetchmany(2) == [
+        assert cur.fetchmany(5) == [
             {"ID": 3, "FIRST_NAME": "Jeremy", "LAST_NAME": "K"},
         ]
-        assert cur.fetchmany(2) == []
+        assert cur.fetchmany(5) == []
 
 
 def test_fetch_pandas_all(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -659,6 +711,17 @@ def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
         # within an id the order of fruits should match the json array
     )
     assert cur.fetchall() == [(1, '"banana"'), (2, '"coconut"'), (2, '"durian"')]
+
+
+def test_flatten_index(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute(
+        """
+        select id, f.value::varchar as v, f.index as i
+        from (select column1 as id, column2 as col from (values (1, 's1,s3,s2'), (2, 's2,s1'))) as t
+        , lateral flatten(input => split(t.col, ',')) as f order by id;
+        """
+    )
+    assert cur.fetchall() == [(1, "s1", 0), (1, "s3", 1), (1, "s2", 2), (2, "s2", 0), (2, "s1", 1)]
 
 
 def test_flatten_value_cast_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -1037,16 +1100,16 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
     objects = [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "EXAMPLE",
-            "kind": "TABLE",
             "database_name": "DB1",
+            "kind": "TABLE",
+            "name": "EXAMPLE",
             "schema_name": "SCHEMA1",
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "VIEW1",
-            "kind": "VIEW",
             "database_name": "DB1",
+            "kind": "VIEW",
+            "name": "VIEW1",
             "schema_name": "SCHEMA1",
         },
     ]
@@ -1057,16 +1120,16 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
         *objects,
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "databases",
-            "kind": "VIEW",
             "database_name": "DB1",
+            "kind": "VIEW",
+            "name": "databases",
             "schema_name": "information_schema",
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "views",
-            "kind": "VIEW",
             "database_name": "DB1",
+            "kind": "VIEW",
+            "name": "views",
             "schema_name": "information_schema",
         },
     ]
@@ -1096,16 +1159,16 @@ def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.fetchall() == [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "SCHEMA1",
-            "kind": None,
             "database_name": "DB1",
+            "kind": None,
+            "name": "SCHEMA1",
             "schema_name": None,
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "information_schema",
-            "kind": None,
             "database_name": "DB1",
+            "kind": None,
+            "name": "information_schema",
             "schema_name": None,
         },
     ]
@@ -1119,9 +1182,9 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     objects = [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "EXAMPLE",
-            "kind": "TABLE",
             "database_name": "DB1",
+            "kind": "TABLE",
+            "name": "EXAMPLE",
             "schema_name": "SCHEMA1",
         },
     ]

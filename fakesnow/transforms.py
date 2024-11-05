@@ -7,6 +7,7 @@ from typing import ClassVar, Literal, cast
 import sqlglot
 from sqlglot import exp
 
+from fakesnow import transforms_merge
 from fakesnow.instance import USERS_TABLE_FQ_NAME
 from fakesnow.variables import Variables
 
@@ -36,7 +37,7 @@ def alias_in_join(expression: exp.Expression) -> exp.Expression:
 def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
     """Turn alter table cluster by into a no-op"""
     if (
-        isinstance(expression, exp.AlterTable)
+        isinstance(expression, exp.Alter)
         and (actions := expression.args.get("actions"))
         and len(actions) == 1
         and (isinstance(actions[0], exp.Cluster))
@@ -159,14 +160,33 @@ SELECT
     column_default AS "default",
     'N' AS "primary key",
     'N' AS "unique key",
-    NULL AS "check",
-    NULL AS "expression",
-    NULL AS "comment",
-    NULL AS "policy name",
-    NULL AS "privacy domain",
+    NULL::VARCHAR AS "check",
+    NULL::VARCHAR AS "expression",
+    NULL::VARCHAR AS "comment",
+    NULL::VARCHAR AS "policy name",
+    NULL::JSON AS "privacy domain",
 FROM information_schema._fs_columns_snowflake
 WHERE table_catalog = '${catalog}' AND table_schema = '${schema}' AND table_name = '${table}'
 ORDER BY ordinal_position
+"""
+)
+
+SQL_DESCRIBE_INFO_SCHEMA = Template(
+    """
+SELECT
+    column_name AS "name",
+    column_type as "type",
+    'COLUMN' AS "kind",
+    CASE WHEN "null" = 'YES' THEN 'Y' ELSE 'N' END AS "null?",
+    NULL::VARCHAR AS "default",
+    'N' AS "primary key",
+    'N' AS "unique key",
+    NULL::VARCHAR AS "check",
+    NULL::VARCHAR AS "expression",
+    NULL::VARCHAR AS "comment",
+    NULL::VARCHAR AS "policy name",
+    NULL::JSON AS "privacy domain",
+FROM (DESCRIBE information_schema.${view})
 """
 )
 
@@ -174,7 +194,7 @@ ORDER BY ordinal_position
 def describe_table(
     expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
 ) -> exp.Expression:
-    """Redirect to the information_schema._fs_describe_table to match snowflake.
+    """Redirect to the information_schema._fs_columns_snowflake to match snowflake.
 
     See https://docs.snowflake.com/en/sql-reference/sql/desc-table
     """
@@ -183,11 +203,15 @@ def describe_table(
         isinstance(expression, exp.Describe)
         and (kind := expression.args.get("kind"))
         and isinstance(kind, str)
-        and kind.upper() == "TABLE"
+        and kind.upper() in ("TABLE", "VIEW")
         and (table := expression.find(exp.Table))
     ):
         catalog = table.catalog or current_database
         schema = table.db or current_schema
+
+        if schema and schema.upper() == "INFORMATION_SCHEMA":
+            # information schema views don't exist in _fs_columns_snowflake
+            return sqlglot.parse_one(SQL_DESCRIBE_INFO_SCHEMA.substitute(view=table.name), read="duckdb")
 
         return sqlglot.parse_one(
             SQL_DESCRIBE_TABLE.substitute(catalog=catalog, schema=schema, table=table.name),
@@ -332,7 +356,7 @@ def extract_comment_on_columns(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression, with any comment stored in the new 'table_comment' arg.
     """
 
-    if isinstance(expression, exp.AlterTable) and (actions := expression.args.get("actions")):
+    if isinstance(expression, exp.Alter) and (actions := expression.args.get("actions")):
         new_actions: list[exp.Expression] = []
         col_comments: list[tuple[str, str]] = []
         for a in actions:
@@ -386,7 +410,7 @@ def extract_comment_on_table(expression: exp.Expression) -> exp.Expression:
         new.args["table_comment"] = (table, cexp.this)
         return new
     elif (
-        isinstance(expression, exp.AlterTable)
+        isinstance(expression, exp.Alter)
         and (sexp := expression.find(exp.AlterSet))
         and (scp := sexp.find(exp.SchemaCommentProperty))
         and isinstance(scp.this, exp.Literal)
@@ -412,7 +436,7 @@ def extract_text_length(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The original expression, with any text lengths stored in the new 'text_lengths' arg.
     """
 
-    if isinstance(expression, (exp.Create, exp.AlterTable)):
+    if isinstance(expression, (exp.Create, exp.Alter)):
         text_lengths = []
 
         # exp.Select is for a ctas, exp.Schema is a plain definition
@@ -447,7 +471,6 @@ def flatten(expression: exp.Expression) -> exp.Expression:
 
     See https://docs.snowflake.com/en/sql-reference/functions/flatten
 
-    TODO: return index.
     TODO: support objects.
     """
     if (
@@ -459,20 +482,34 @@ def flatten(expression: exp.Expression) -> exp.Expression:
     ):
         explode_expression = expression.this.this.expression
 
-        return exp.Lateral(
-            this=exp.Unnest(
+        value = exp.Cast(
+            this=explode_expression,
+            to=exp.DataType(
+                this=exp.DataType.Type.ARRAY,
+                expressions=[exp.DataType(this=exp.DataType.Type.JSON, nested=False, prefix=False)],
+                nested=True,
+            ),
+        )
+
+        return exp.Subquery(
+            this=exp.Select(
                 expressions=[
-                    exp.Cast(
-                        this=explode_expression,
-                        to=exp.DataType(
-                            this=exp.DataType.Type.ARRAY,
-                            expressions=[exp.DataType(this=exp.DataType.Type.JSON, nested=False, prefix=False)],
-                            nested=True,
+                    exp.Unnest(
+                        expressions=[value],
+                        alias=exp.Identifier(this="VALUE", quoted=False),
+                    ),
+                    exp.Alias(
+                        this=exp.Sub(
+                            this=exp.Anonymous(
+                                this="generate_subscripts", expressions=[value, exp.Literal(this="1", is_string=False)]
+                            ),
+                            expression=exp.Literal(this="1", is_string=False),
                         ),
-                    )
+                        alias=exp.Identifier(this="INDEX", quoted=False),
+                    ),
                 ],
             ),
-            alias=exp.TableAlias(this=alias.this, columns=[exp.Identifier(this="VALUE", quoted=False)]),
+            alias=exp.TableAlias(this=alias.this),
         )
 
     return expression
@@ -563,12 +600,13 @@ def information_schema_fs_columns_snowflake(expression: exp.Expression) -> exp.E
     """
 
     if (
-        isinstance(expression, exp.Select)
-        and (tbl_exp := expression.find(exp.Table))
-        and tbl_exp.name.upper() == "COLUMNS"
-        and tbl_exp.db.upper() == "INFORMATION_SCHEMA"
+        isinstance(expression, exp.Table)
+        and expression.db
+        and expression.db.upper() == "INFORMATION_SCHEMA"
+        and expression.name
+        and expression.name.upper() == "COLUMNS"
     ):
-        tbl_exp.set("this", exp.Identifier(this="_FS_COLUMNS_SNOWFLAKE", quoted=False))
+        expression.set("this", exp.Identifier(this="_FS_COLUMNS_SNOWFLAKE", quoted=False))
 
     return expression
 
@@ -667,6 +705,10 @@ def json_extract_precedence(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def merge(expression: exp.Expression) -> list[exp.Expression]:
+    return transforms_merge.merge(expression)
+
+
 def random(expression: exp.Expression) -> exp.Expression:
     """Convert random() and random(seed).
 
@@ -678,8 +720,8 @@ def random(expression: exp.Expression) -> exp.Expression:
         new_rand = exp.Cast(
             this=exp.Paren(
                 this=exp.Mul(
-                    this=exp.Paren(this=exp.Sub(this=exp.Rand(), expression=exp.Literal(this=0.5, is_string=False))),
-                    expression=exp.Literal(this=9223372036854775807, is_string=False),
+                    this=exp.Paren(this=exp.Sub(this=exp.Rand(), expression=exp.Literal(this="0.5", is_string=False))),
+                    expression=exp.Literal(this="9223372036854775807", is_string=False),
                 )
             ),
             to=exp.DataType(this=exp.DataType.Type.BIGINT, nested=False, prefix=False),
@@ -780,31 +822,24 @@ def regex_substr(expression: exp.Expression) -> exp.Expression:
         pattern.args["this"] = pattern.this.replace("\\\\", "\\")
 
         # number of characters from the beginning of the string where the function starts searching for matches
-        try:
-            position = expression.args["position"]
-        except KeyError:
-            position = exp.Literal(this="1", is_string=False)
+        position = expression.args["position"] or exp.Literal(this="1", is_string=False)
 
         # which occurrence of the pattern to match
-        try:
-            occurrence = int(expression.args["occurrence"].this)
-        except KeyError:
-            occurrence = 1
+        occurrence = expression.args["occurrence"]
+        occurrence = int(occurrence.this) if occurrence else 1
 
         # the duckdb dialect increments bracket (ie: index) expressions by 1 because duckdb is 1-indexed,
         # so we need to compensate by subtracting 1
         occurrence = exp.Literal(this=str(occurrence - 1), is_string=False)
 
-        try:
-            regex_parameters_value = str(expression.args["parameters"].this)
+        if parameters := expression.args["parameters"]:
             # 'e' parameter doesn't make sense for duckdb
-            regex_parameters = exp.Literal(this=regex_parameters_value.replace("e", ""), is_string=True)
-        except KeyError:
+            regex_parameters = exp.Literal(this=parameters.this.replace("e", ""), is_string=True)
+        else:
             regex_parameters = exp.Literal(is_string=True)
 
-        try:
-            group_num = expression.args["group"]
-        except KeyError:
+        group_num = expression.args["group"]
+        if not group_num:
             if isinstance(regex_parameters.this, str) and "e" in regex_parameters.this:
                 group_num = exp.Literal(this="1", is_string=False)
             else:
@@ -994,7 +1029,7 @@ def tag(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression.
     """
 
-    if isinstance(expression, exp.AlterTable) and (actions := expression.args.get("actions")):
+    if isinstance(expression, exp.Alter) and (actions := expression.args.get("actions")):
         for a in actions:
             if isinstance(a, exp.AlterSet) and a.args.get("tag"):
                 return SUCCESS_NOP

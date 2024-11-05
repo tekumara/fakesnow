@@ -1,7 +1,7 @@
 [project]
 name = "fakesnow"
 description = "Fake Snowflake Connector for Python. Run, mock and test Snowflake DB locally."
-version = "0.9.20"
+version = "0.9.25"
 readme = "README.md"
 license = { file = "LICENSE" }
 classifiers = ["License :: OSI Approved :: MIT License"]
@@ -11,7 +11,7 @@ dependencies = [
     "duckdb~=1.0.0",
     "pyarrow",
     "snowflake-connector-python",
-    "sqlglot~=25.5.1",
+    "sqlglot~=25.24.1",
 ]
 
 [project.urls]
@@ -23,15 +23,16 @@ fakesnow = "fakesnow.cli:main"
 [project.optional-dependencies]
 dev = [
     "build~=1.0",
+    "dirty-equals",
     # to fix https://github.com/pandas-dev/pandas/issues/56995
     "pandas-stubs",
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
-    "pre-commit~=3.4",
-    "pyarrow-stubs",
+    "pre-commit~=4.0",
+    "pyarrow-stubs==10.0.1.9",
     "pytest~=8.0",
     "pytest-asyncio",
-    "ruff~=0.5.1",
+    "ruff~=0.7.2",
     "twine~=5.0",
     "snowflake-sqlalchemy~=1.6.1",
 ]
@@ -62,6 +63,9 @@ reportUnnecessaryTypeIgnoreComment = true
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
+# error on unhandled exceptions in background threads
+# useful for catching errors in server or snowflake connector threads
+filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
 
 [tool.ruff]
 line-length = 120

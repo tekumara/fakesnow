@@ -56,6 +56,7 @@ from fakesnow.transforms import (
     upper_case_unquoted_identifiers,
     values_columns,
 )
+from tests.utils import strip
 
 
 def test_alias_in_join() -> None:
@@ -71,7 +72,7 @@ def test_alias_in_join() -> None:
         """)
         .transform(alias_in_join)
         .sql()
-        == "SELECT T.COL, SUBSTR(T.COL, 4) AS ALIAS, J.ANOTHER FROM TEST AS T LEFT JOIN JOINED AS J ON SUBSTR(T.COL, 4) = J.COL"  # noqa: E501
+        == "SELECT T.COL, SUBSTRING(T.COL, 4) AS ALIAS, J.ANOTHER FROM TEST AS T LEFT JOIN JOINED AS J ON SUBSTRING(T.COL, 4) = J.COL"  # noqa: E501
     )
 
 
@@ -416,9 +417,8 @@ def test_extract_text_length() -> None:
 
 
 def test_flatten() -> None:
-    assert (
-        sqlglot.parse_one(
-            """
+    assert sqlglot.parse_one(
+        """
             select t.id, flat.value:fruit from
             (
                 select 1, parse_json('[{"fruit":"banana"}]')
@@ -426,28 +426,41 @@ def test_flatten() -> None:
                 select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
             ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
             """,
-            read="snowflake",
-        )
-        .transform(flatten)
-        .sql(dialect="duckdb")
-        == """SELECT t.id, flat.value -> '$.fruit' FROM (SELECT 1, JSON('[{"fruit":"banana"}]') UNION SELECT 2, JSON('[{"fruit":"coconut"}, {"fruit":"durian"}]')) AS t(id, fruits), LATERAL UNNEST(CAST(t.fruits AS JSON[])) AS flat(VALUE)"""  # noqa: E501
-    )
+        read="snowflake",
+    ).transform(flatten).sql(dialect="duckdb") == strip("""
+            SELECT
+                t.id,
+                flat.value -> '$.fruit'
+            FROM
+                (SELECT
+                    1,
+                    JSON('[{"fruit":"banana"}]')
+                UNION
+                SELECT
+                    2,
+                    JSON('[{"fruit":"coconut"}, {"fruit":"durian"}]')) AS t(id, fruits),
+                (SELECT
+                        UNNEST(CAST(t.fruits AS JSON[])) AS VALUE,
+                        GENERATE_SUBSCRIPTS(CAST(t.fruits AS JSON[]), 1) - 1 AS INDEX) AS flat
+            """)
 
 
 def test_flatten_value_cast_as_varchar() -> None:
-    assert (
-        sqlglot.parse_one(
-            """
+    assert sqlglot.parse_one(
+        """
             SELECT ID , F.VALUE::varchar as V
             FROM TEST AS T
             , LATERAL FLATTEN(input => SPLIT(T.COL, ',')) AS F;
             """,
-            read="snowflake",
-        )
-        .transform(flatten_value_cast_as_varchar)
-        .sql(dialect="duckdb")
-        == """SELECT ID, F.VALUE ->> '$' AS V FROM TEST AS T, LATERAL UNNEST(input => STR_SPLIT(T.COL, ',')) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)"""  # noqa: E501
-    )
+        read="snowflake",
+    ).transform(flatten_value_cast_as_varchar).sql(dialect="duckdb") == strip("""
+            SELECT
+                ID,
+                F.VALUE ->> '$' AS V
+            FROM
+                TEST AS T,
+                LATERAL UNNEST(input => STR_SPLIT(T.COL, ',')) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)
+            """)
 
 
 def test_float_to_double() -> None:
