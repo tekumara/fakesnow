@@ -20,6 +20,7 @@ $(python): $(if $(value CI),|,) .python-version
 	$(pip) install --upgrade pip~=24.0
 
 $(venv): $(if $(value CI),|,) pyproject.toml $(python)
+# TODO use uv sync
 	$(pip) install -e '.[dev,server$(if $(value CI),,,notebook)]'
 	touch $(venv)
 
