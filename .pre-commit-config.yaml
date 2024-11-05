@@ -1,5 +1,5 @@
 # unless otherwise specified, hooks run on push only
-default_stages: [push]
+default_stages: [pre-push]
 repos:
   - repo: https://github.com/crate-ci/typos
     rev: v1.23.2
