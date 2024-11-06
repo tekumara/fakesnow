@@ -635,6 +635,20 @@ def information_schema_fs_tables_ext(expression: exp.Expression) -> exp.Expressi
     return expression
 
 
+def information_schema_fs_views(expression: exp.Expression) -> exp.Expression:
+    """Use information_schema._fs_views to return Snowflake's version instead of duckdb's."""
+
+    if (
+        isinstance(expression, exp.Select)
+        and (tbl_exp := expression.find(exp.Table))
+        and tbl_exp.name.upper() == "VIEWS"
+        and tbl_exp.db.upper() == "INFORMATION_SCHEMA"
+    ):
+        tbl_exp.set("this", exp.Identifier(this="_FS_VIEWS", quoted=False))
+
+    return expression
+
+
 def integer_precision(expression: exp.Expression) -> exp.Expression:
     """Convert integers to bigint.
 
