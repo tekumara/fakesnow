@@ -1,4 +1,4 @@
-MAKEFLAGS += --warn-undefined-variables
+MAKEFLAGS += --warn-undefined-variables --check-symlink-times
 SHELL = /bin/bash -o pipefail
 .DEFAULT_GOAL := help
 .PHONY: help clean install format check pyright test dist hooks install-hooks
@@ -11,7 +11,8 @@ venv ?= .venv
 # this is a symlink so we set the --check-symlink-times makeflag above
 python := $(venv)/bin/python
 # use uv if present, else fall back to pip
-pip = $(shell command -v uv >/dev/null && echo "uv pip" || echo "$(venv)/bin/pip")
+# set VIRTUAL_ENV to avoid uv installing into a different activated venv
+pip = $(shell command -v uv >/dev/null && echo "VIRTUAL_ENV=$(venv) uv pip" || echo "$(venv)/bin/pip")
 
 $(python): $(if $(value CI),|,) .python-version
 # create venv using system python even when another venv is active
@@ -53,9 +54,9 @@ test: $(venv)
 
 ## build python distribution
 dist: $(venv)
-	# start with a clean slate (see setuptools/#2347)
-	rm -rf dist *.egg-info
-	$(venv)/bin/python -m build --sdist --wheel
+# start with a clean slate (see setuptools/#2347)
+	rm -rf build dist *.egg-info
+	$(venv)/bin/python -m build --wheel
 
 ## publish to pypi
 publish: $(venv)
