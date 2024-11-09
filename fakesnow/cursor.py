@@ -168,6 +168,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.extract_comment_on_columns)
             .transform(transforms.information_schema_fs_columns_snowflake)
             .transform(transforms.information_schema_fs_tables_ext)
+            .transform(transforms.information_schema_fs_views)
             .transform(transforms.drop_schema_cascade)
             .transform(transforms.tag)
             .transform(transforms.semi_structured_types)

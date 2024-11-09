@@ -44,7 +44,7 @@ def dcur(conn: snowflake.connector.SnowflakeConnection) -> Iterator[snowflake.co
 
 @pytest.fixture
 def snowflake_engine(_fakesnow: None) -> Engine:
-    return create_engine("snowflake://user:password@account/db1/schema1")  # type: ignore
+    return create_engine("snowflake://user:password@account/db1/schema1")
 
 
 @pytest.fixture(scope="session")
