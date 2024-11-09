@@ -1526,7 +1526,7 @@ def test_json_extract_cast_as_varchar(dcur: snowflake.connector.cursor.DictCurso
 
 def test_truncate(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("CREATE TABLE example (i INTEGER)")
-    dcur.execute("""INSERT INTO example VALUES (1)""")
+    dcur.execute("INSERT INTO example VALUES (1)")
 
     dcur.execute("TRUNCATE TABLE example")
     assert dcur.fetchall() == [{"status": "Statement executed successfully."}]

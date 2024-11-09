@@ -294,6 +294,9 @@ class FakeSnowflakeCursor:
             (affected_count,) = self._duck_conn.fetchall()[0]
             result_sql = SQL_DELETED_ROWS.substitute(count=affected_count)
 
+        elif cmd == "TRUNCATETABLE":
+            result_sql = SQL_SUCCESS
+
         elif cmd in ("DESCRIBE TABLE", "DESCRIBE VIEW"):
             # DESCRIBE TABLE/VIEW has already been run above to detect and error if the table exists
             # We now rerun DESCRIBE TABLE/VIEW but transformed with columns to match Snowflake
