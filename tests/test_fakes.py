@@ -1529,17 +1529,7 @@ def test_truncate(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("""INSERT INTO example VALUES (1)""")
 
     dcur.execute("TRUNCATE TABLE example")
-    assert dcur.description == [
-        ResultMetadata(
-            name="status",
-            type_code=2,
-            display_size=None,
-            internal_size=16777216,
-            precision=None,
-            scale=None,
-            is_nullable=True,
-        )
-    ]
+    assert dcur.fetchall() == [{"status": "Statement executed successfully."}]
 
     dcur.execute("SELECT i FROM example")
     assert dcur.fetchall() == []
