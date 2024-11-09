@@ -1,0 +1,20 @@
+name: Dependabot Auto-merge
+on:
+  pull_request:
+    types: [opened]
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  dependabot:
+    runs-on: ubuntu-latest
+    if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'tekumara/fakesnow'
+    steps:
+      - name: Enable auto-merge for Dependabot PRs
+        # don't include verbose dependabot PR description as body when merging
+        run: gh pr merge --auto --squash "$PR_URL" --body ""
+        env:
+          PR_URL: ${{github.event.pull_request.html_url}}
+          GH_TOKEN: ${{secrets.GITHUB_TOKEN}}

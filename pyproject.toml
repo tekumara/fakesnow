@@ -8,7 +8,7 @@ classifiers = ["License :: OSI Approved :: MIT License"]
 keywords = ["snowflake", "snowflakedb", "fake", "local", "mock", "testing"]
 requires-python = ">=3.9"
 dependencies = [
-    "duckdb~=1.0.0",
+    "duckdb~=1.1.3",
     "pyarrow",
     "snowflake-connector-python",
     "sqlglot~=25.24.1",
@@ -28,13 +28,13 @@ dev = [
     "pandas-stubs",
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
-    "pre-commit~=3.4",
+    "pre-commit~=4.0",
     "pyarrow-stubs==10.0.1.9",
     "pytest~=8.0",
     "pytest-asyncio",
-    "ruff~=0.6.3",
+    "ruff~=0.7.2",
     "twine~=5.0",
-    "snowflake-sqlalchemy~=1.5.0",
+    "snowflake-sqlalchemy~=1.6.1",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
 notebook = ["duckdb-engine", "ipykernel", "jupysql"]
@@ -92,7 +92,9 @@ select = [
     "SIM",  # flake8-simplify
     "S113", # request-without-timeout
     "A",    # flake8-builtins
+    "ASYNC", # flake8-async
 ]
+
 ignore = [
     # allow untyped self and cls args
     "ANN101",

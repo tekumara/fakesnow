@@ -7,6 +7,7 @@ import json
 import re
 import tempfile
 from decimal import Decimal
+from typing import cast
 
 import pandas as pd
 import pytest
@@ -713,6 +714,17 @@ def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1, '"banana"'), (2, '"coconut"'), (2, '"durian"')]
 
 
+def test_flatten_index(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute(
+        """
+        select id, f.value::varchar as v, f.index as i
+        from (select column1 as id, column2 as col from (values (1, 's1,s3,s2'), (2, 's2,s1'))) as t
+        , lateral flatten(input => split(t.col, ',')) as f order by id;
+        """
+    )
+    assert cur.fetchall() == [(1, "s1", 0), (1, "s3", 1), (1, "s2", 2), (2, "s2", 0), (2, "s1", 1)]
+
+
 def test_flatten_value_cast_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute(
         """
@@ -1084,44 +1096,33 @@ def test_show_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
 def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("create table example(x int)")
-    dcur.execute("create view view1 as select * from example")
-    dcur.execute("show terse objects in db1.schema1")
+    dcur.execute("create schema schema2")
+    dcur.execute("create view schema2.view1 as select * from schema1.example")
+
     objects = [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "EXAMPLE",
-            "kind": "TABLE",
             "database_name": "DB1",
+            "kind": "TABLE",
+            "name": "EXAMPLE",
             "schema_name": "SCHEMA1",
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "VIEW1",
-            "kind": "VIEW",
             "database_name": "DB1",
-            "schema_name": "SCHEMA1",
+            "kind": "VIEW",
+            "name": "VIEW1",
+            "schema_name": "SCHEMA2",
         },
     ]
-    assert dcur.fetchall() == objects
+
+    dcur.execute("show terse objects in db1.schema1")
+    assert dcur.fetchall() == [objects[0]]
 
     dcur.execute("show terse objects in database")
-    assert dcur.fetchall() == [
-        *objects,
-        {
-            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "databases",
-            "kind": "VIEW",
-            "database_name": "DB1",
-            "schema_name": "information_schema",
-        },
-        {
-            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "views",
-            "kind": "VIEW",
-            "database_name": "DB1",
-            "schema_name": "information_schema",
-        },
-    ]
+    rows: list[dict] = cast(list[dict], dcur.fetchall())
+    assert [r for r in rows if r["schema_name"] != "information_schema"] == objects
+
     assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
 
     dcur.execute("show objects").fetchall()
@@ -1148,16 +1149,16 @@ def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.fetchall() == [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "SCHEMA1",
-            "kind": None,
             "database_name": "DB1",
+            "kind": None,
+            "name": "SCHEMA1",
             "schema_name": None,
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "information_schema",
-            "kind": None,
             "database_name": "DB1",
+            "kind": None,
+            "name": "information_schema",
             "schema_name": None,
         },
     ]
@@ -1171,9 +1172,9 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     objects = [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "EXAMPLE",
-            "kind": "TABLE",
             "database_name": "DB1",
+            "kind": "TABLE",
+            "name": "EXAMPLE",
             "schema_name": "SCHEMA1",
         },
     ]

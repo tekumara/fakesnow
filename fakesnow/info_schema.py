@@ -102,7 +102,7 @@ where catalog_name not in ('memory', 'system', 'temp', '_fs_global')
 # replicates https://docs.snowflake.com/sql-reference/info-schema/views
 SQL_CREATE_INFORMATION_SCHEMA_VIEWS_VIEW = Template(
     """
-create view if not exists ${catalog}.information_schema.views AS
+create view if not exists ${catalog}.information_schema._fs_views AS
 select
     database_name as table_catalog,
     schema_name as table_schema,
