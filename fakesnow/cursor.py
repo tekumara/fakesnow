@@ -117,14 +117,8 @@ class FakeSnowflakeCursor:
     def _describe_last_sql(self) -> list:
         # use a separate cursor to avoid consuming the result set on this cursor
         with self._conn.cursor() as cur:
-            assert self._last_sql
-            last_sql = self._last_sql
-            if last_sql.startswith("TRUNCATE TABLE"):
-                last_sql = SQL_SUCCESS
-
             # TODO: can we replace with self._duck_conn.description?
-            statement = f"DESCRIBE {last_sql}"
-            expression = sqlglot.parse_one(statement, read="duckdb")
+            expression = sqlglot.parse_one(f"DESCRIBE {self._last_sql}", read="duckdb")
             cur._execute(expression, self._last_params)  # noqa: SLF001
             return cur.fetchall()
 
