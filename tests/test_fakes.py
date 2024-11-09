@@ -7,6 +7,7 @@ import json
 import re
 import tempfile
 from decimal import Decimal
+from typing import cast
 
 import pandas as pd
 import pytest
@@ -1095,8 +1096,9 @@ def test_show_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
 def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("create table example(x int)")
-    dcur.execute("create view view1 as select * from example")
-    dcur.execute("show terse objects in db1.schema1")
+    dcur.execute("create schema schema2")
+    dcur.execute("create view schema2.view1 as select * from schema1.example")
+
     objects = [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
@@ -1110,22 +1112,17 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "database_name": "DB1",
             "kind": "VIEW",
             "name": "VIEW1",
-            "schema_name": "SCHEMA1",
+            "schema_name": "SCHEMA2",
         },
     ]
-    assert dcur.fetchall() == objects
+
+    dcur.execute("show terse objects in db1.schema1")
+    assert dcur.fetchall() == [objects[0]]
 
     dcur.execute("show terse objects in database")
-    assert dcur.fetchall() == [
-        *objects,
-        {
-            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "database_name": "DB1",
-            "kind": "VIEW",
-            "name": "databases",
-            "schema_name": "information_schema",
-        },
-    ]
+    rows: list[dict] = cast(list[dict], dcur.fetchall())
+    assert [r for r in rows if r["schema_name"] != "information_schema"] == objects
+
     assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
 
     dcur.execute("show objects").fetchall()
