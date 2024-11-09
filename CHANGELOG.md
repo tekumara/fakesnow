@@ -2,6 +2,27 @@
 
 # Changelog
 
+## [0.9.26](https://github.com/tekumara/fakesnow/compare/v0.9.25...v0.9.26) (2024-11-09)
+
+
+### Features
+
+* flatten returns an index column ([f603d0c](https://github.com/tekumara/fakesnow/commit/f603d0c7bf35c6c3a743bbbbde87cdd0e7654f71)), closes [#143](https://github.com/tekumara/fakesnow/issues/143)
+* Support TRUNCATE TABLE description ([#144](https://github.com/tekumara/fakesnow/issues/144)) ([234bbaf](https://github.com/tekumara/fakesnow/commit/234bbaf1e4ff0f9447e3f61d07d91041ef539f45))
+
+
+### Chores
+
+* bump sqlglot 25.22.0 ([3c1f244](https://github.com/tekumara/fakesnow/commit/3c1f244144911aa106ebe5260797686fa25035f7))
+* cruft update ([5d09f8b](https://github.com/tekumara/fakesnow/commit/5d09f8bdd9a256d85fe0624df1cf6c6e6f1dcbf4))
+* **deps-dev:** bump pyright from 1.1.378 to 1.1.382 ([#142](https://github.com/tekumara/fakesnow/issues/142)) ([a3898ce](https://github.com/tekumara/fakesnow/commit/a3898ce3bfe17424820519f256e8e759a674ef92))
+* **deps-dev:** bump pyright from 1.1.382 to 1.1.387 ([#145](https://github.com/tekumara/fakesnow/issues/145)) ([d6058d7](https://github.com/tekumara/fakesnow/commit/d6058d7c089e54f27bd807d9c8a5f6237efb57f8))
+* **deps:** update duckdb requirement from ~=1.0.0 to ~=1.1.3 ([#150](https://github.com/tekumara/fakesnow/issues/150)) ([ecd4d46](https://github.com/tekumara/fakesnow/commit/ecd4d4629f2110ee2d4799b64fb3ab00ddcdf7ac))
+* **deps:** update pre-commit requirement from ~=3.4 to ~=4.0 ([#147](https://github.com/tekumara/fakesnow/issues/147)) ([5a1f866](https://github.com/tekumara/fakesnow/commit/5a1f8665682c5bdc41f6695d3642bfa543f50a07))
+* **deps:** update ruff requirement from ~=0.6.3 to ~=0.7.2 ([#146](https://github.com/tekumara/fakesnow/issues/146)) ([e9ae13a](https://github.com/tekumara/fakesnow/commit/e9ae13a2cb157ed32dbc4a9364bfbb1c3646c5a1))
+* **deps:** update snowflake-sqlalchemy requirement from ~=1.5.0 to ~=1.6.1 ([#119](https://github.com/tekumara/fakesnow/issues/119)) ([89a315a](https://github.com/tekumara/fakesnow/commit/89a315a1b35120cd8221322fee74c075241df3d4))
+* **deps:** update sqlglot requirement from ~=25.22.0 to ~=25.24.1 ([#141](https://github.com/tekumara/fakesnow/issues/141)) ([8e7c343](https://github.com/tekumara/fakesnow/commit/8e7c343fbb6bce08ce32839d38ba337001006619))
+
 ## [0.9.25](https://github.com/tekumara/fakesnow/compare/v0.9.24...v0.9.25) (2024-09-16)
 
 
