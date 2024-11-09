@@ -1,5 +1,7 @@
 name: Dependabot Auto-merge
-on: pull_request
+on:
+  pull_request:
+    types: [opened]
 
 permissions:
   contents: write
@@ -10,14 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     if: github.event.pull_request.user.login == 'dependabot[bot]' && github.repository == 'tekumara/fakesnow'
     steps:
-      - name: Dependabot metadata
-        id: dependabot-metadata
-        uses: dependabot/fetch-metadata@v2
       - name: Enable auto-merge for Dependabot PRs
-        # outputs will only be populated if the target Pull Request was opened by Dependabot
-        # and contains only Dependabot-created commits, this avoids re-enabling auto-merge
-        # when its been manually disabled and there are non-dependabot commits on the PR
-        if: ${{steps.dependabot-metadata.outputs}}
         # don't include verbose dependabot PR description as body when merging
         run: gh pr merge --auto --squash "$PR_URL" --body ""
         env:
