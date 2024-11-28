@@ -42,7 +42,7 @@ notebook = ["duckdb-engine", "ipykernel", "jupysql"]
 server = ["starlette", "uvicorn"]
 
 [build-system]
-requires = ["setuptools~=69.1", "wheel~=0.42"]
+requires = ["setuptools~=75.6", "wheel~=0.42"]
 
 [tool.setuptools.packages.find]
 where = ["."]
