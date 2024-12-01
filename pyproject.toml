@@ -33,7 +33,7 @@ dev = [
     "pytest~=8.0",
     "pytest-asyncio",
     "ruff~=0.7.2",
-    "twine~=5.0",
+    "twine~=6.0",
     "snowflake-sqlalchemy~=1.7.0",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
