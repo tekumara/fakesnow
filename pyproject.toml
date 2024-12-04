@@ -32,7 +32,7 @@ dev = [
     "pyarrow-stubs==10.0.1.9",
     "pytest~=8.0",
     "pytest-asyncio",
-    "ruff~=0.7.2",
+    "ruff~=0.8.1",
     "twine~=6.0",
     "snowflake-sqlalchemy~=1.7.0",
 ]
@@ -96,9 +96,6 @@ select = [
 ]
 
 ignore = [
-    # allow untyped self and cls args
-    "ANN101",
-    "ANN102",
     # allow no return type from dunder methods
     "ANN204",
     # allow == True because pandas dataframes overload equality
