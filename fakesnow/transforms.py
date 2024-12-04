@@ -658,8 +658,7 @@ def integer_precision(expression: exp.Expression) -> exp.Expression:
     if (
         isinstance(expression, exp.DataType)
         and (expression.this == exp.DataType.Type.DECIMAL and not expression.expressions)
-        or expression.this in (exp.DataType.Type.INT, exp.DataType.Type.SMALLINT, exp.DataType.Type.TINYINT)
-    ):
+    ) or expression.this in (exp.DataType.Type.INT, exp.DataType.Type.SMALLINT, exp.DataType.Type.TINYINT):
         return exp.DataType(
             this=exp.DataType.Type.BIGINT,
             nested=False,
