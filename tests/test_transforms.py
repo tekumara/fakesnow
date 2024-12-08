@@ -472,8 +472,7 @@ def test_flatten_value_cast_as_varchar() -> None:
                 ID,
                 F.VALUE ->> '$' AS V
             FROM
-                TEST AS T,
-                LATERAL UNNEST(input => STR_SPLIT(T.COL, ',')) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)
+                TEST AS T,  CROSS JOIN UNNEST(input => STR_SPLIT(T.COL, ',')) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)
             """)
 
 
