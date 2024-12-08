@@ -1,9 +1,9 @@
+# ruff: noqa: E501
+# pyright: reportOptionalMemberAccess=false
+
 from __future__ import annotations
 
 import concurrent.futures
-
-# ruff: noqa: E501
-# pyright: reportOptionalMemberAccess=false
 import tempfile
 
 import pytest
