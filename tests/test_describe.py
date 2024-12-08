@@ -253,7 +253,6 @@ def test_description_create_drop_view(dcur: snowflake.connector.cursor.DictCurso
     assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
-
 def test_description_delete(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create table example (x int)")
     dcur.execute("insert into example values (1), (2), (3)")
@@ -273,6 +272,14 @@ def test_description_insert(dcur: snowflake.connector.cursor.DictCursor):
     assert dcur.fetchall() == [{"number of rows inserted": 2}]
     # TODO: Snowflake is actually precision=19, is_nullable=False
     assert dcur.description == [ResultMetadata(name='number of rows inserted', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)]  # fmt: skip
+
+
+def test_description_int128(dcur: snowflake.connector.cursor.DictCursor):
+    # duckdb count_if returns int128 / hugeint
+    dcur.execute("SELECT COUNT_IF(TRUE) FROM (SELECT * FROM (VALUES (1), (2)))")
+
+    # TODO: Snowflake is actually name=COUNT_IF(TRUE), precision=13
+    assert dcur.description == [ResultMetadata(name="count_if(CAST('t' AS BOOLEAN))", type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)]  # fmt: skip
 
 
 def test_description_select(dcur: snowflake.connector.cursor.DictCursor):
@@ -298,4 +305,3 @@ def test_description_update(dcur: snowflake.connector.cursor.DictCursor):
         ResultMetadata(name='number of multi-joined rows updated', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)
     ]
     # fmt: on
-

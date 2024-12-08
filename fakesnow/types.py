@@ -25,6 +25,7 @@ duckdb_to_sf_type = {
     "DATE": "date",
     "DECIMAL": "fixed",
     "DOUBLE": "real",
+    "HUGEINT": "fixed",
     "INTEGER": "fixed",
     "JSON": "variant",
     "TIME": "time",
