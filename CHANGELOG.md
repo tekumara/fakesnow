@@ -2,6 +2,23 @@
 
 # Changelog
 
+## [0.9.27](https://github.com/tekumara/fakesnow/compare/v0.9.26...v0.9.27) (2024-12-08)
+
+
+### Bug Fixes
+
+* aliased column with table identifier used in join ([26794da](https://github.com/tekumara/fakesnow/commit/26794da2de361ccf60eb284309e2a814ed6b6145)), closes [#159](https://github.com/tekumara/fakesnow/issues/159)
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.387 to 1.1.389 ([#158](https://github.com/tekumara/fakesnow/issues/158)) ([113c44c](https://github.com/tekumara/fakesnow/commit/113c44c5625b73bc62211a8c77d6992df4b81834))
+* **deps:** update ruff requirement from ~=0.7.2 to ~=0.8.1 ([#157](https://github.com/tekumara/fakesnow/issues/157)) ([341dfed](https://github.com/tekumara/fakesnow/commit/341dfed78bd210d7d3c3346c773715b9981c4f15))
+* **deps:** update setuptools requirement from ~=69.1 to ~=75.6 ([#155](https://github.com/tekumara/fakesnow/issues/155)) ([04d0a91](https://github.com/tekumara/fakesnow/commit/04d0a91db7bed425bc3d72b99759c47703b836e0))
+* **deps:** update snowflake-sqlalchemy requirement from ~=1.6.1 to ~=1.7.0 ([#153](https://github.com/tekumara/fakesnow/issues/153)) ([10a4d31](https://github.com/tekumara/fakesnow/commit/10a4d31ee2a2134a9efba0cb1fcb5f6c8a8fb24e))
+* **deps:** update sqlglot requirement from ~=25.24.1 to ~=25.34.0 ([#161](https://github.com/tekumara/fakesnow/issues/161)) ([58fb469](https://github.com/tekumara/fakesnow/commit/58fb469b7a60705fbc9a979b4c7df95ac4315750))
+* **deps:** update twine requirement from ~=5.0 to ~=6.0 ([#156](https://github.com/tekumara/fakesnow/issues/156)) ([aef5a2b](https://github.com/tekumara/fakesnow/commit/aef5a2ba44cef0e2b602358e9e790357522b710f))
+
 ## [0.9.26](https://github.com/tekumara/fakesnow/compare/v0.9.25...v0.9.26) (2024-11-09)
 
 
