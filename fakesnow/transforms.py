@@ -28,6 +28,8 @@ def alias_in_join(expression: exp.Expression) -> exp.Expression:
                 and (col := on.this)
                 and (isinstance(col, exp.Column))
                 and (alias := aliases.get(col.this))
+                # don't rewrite col with table identifier
+                and not col.table
             ):
                 col.args["this"] = alias.this
 

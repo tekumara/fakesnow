@@ -75,6 +75,20 @@ def test_alias_in_join() -> None:
         == "SELECT T.COL, SUBSTRING(T.COL, 4) AS ALIAS, J.ANOTHER FROM TEST AS T LEFT JOIN JOINED AS J ON SUBSTRING(T.COL, 4) = J.COL"  # noqa: E501
     )
 
+    # aliased column has table identifier
+    assert (
+        sqlglot.parse_one("""
+            SELECT
+                R.MY_DATE AS R_DATE /* aliased column has table identifier */
+            FROM REVENUES AS R
+            LEFT JOIN FXRATES AS F
+            ON R.R_DATE = F.MY_DATE;
+        """)
+        .transform(alias_in_join)
+        .sql()
+        == "SELECT R.MY_DATE AS R_DATE /* aliased column has table identifier */ FROM REVENUES AS R LEFT JOIN FXRATES AS F ON R.R_DATE = F.MY_DATE"  # noqa: E501
+    )
+
 
 def test_alter_table_strip_cluster_by() -> None:
     assert (
