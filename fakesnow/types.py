@@ -32,6 +32,7 @@ duckdb_to_sf_type = {
     "TIMESTAMP WITH TIME ZONE": "timestamp_tz",
     "TIMESTAMP_NS": "timestamp_ntz",
     "TIMESTAMP": "timestamp_ntz",
+    "UBIGINT": "fixed",
     "VARCHAR": "text",
 }
 

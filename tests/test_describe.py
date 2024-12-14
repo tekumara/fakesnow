@@ -282,6 +282,14 @@ def test_description_int128(dcur: snowflake.connector.cursor.DictCursor):
     assert dcur.description == [ResultMetadata(name="count_if(CAST('t' AS BOOLEAN))", type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)]  # fmt: skip
 
 
+
+def test_description_uint64(cur: snowflake.connector.cursor.DictCursor):
+    cur.execute("""select array_size(parse_json('["a","b"]')) as c""")
+
+    # TODO: Snowflake is actually precision=9
+    assert cur.description == [ResultMetadata(name='C', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)]
+
+
 def test_description_select(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("SELECT DATEDIFF( DAY, '2023-04-02'::DATE, '2023-04-05'::DATE) as days")
     assert dcur.fetchall() == [{"DAYS": 3}]
