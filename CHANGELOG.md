@@ -2,6 +2,21 @@
 
 # Changelog
 
+## [0.9.28](https://github.com/tekumara/fakesnow/compare/v0.9.27...v0.9.28) (2024-12-15)
+
+
+### Features
+
+* sqlid as a uuid with server support ([cd988d8](https://github.com/tekumara/fakesnow/commit/cd988d8c35ab2064219d218376fd1d65025641b0))
+
+
+### Bug Fixes
+
+* **server:** rowcount ([58e15c5](https://github.com/tekumara/fakesnow/commit/58e15c5f3e1e274164d343b511e4b10bf0ff6a9f))
+* **server:** support duckdb uint64 ([7a6f9a3](https://github.com/tekumara/fakesnow/commit/7a6f9a3897e66b79b060624a400c609a7bc04595))
+* support duckdb int128 description ([feffa8c](https://github.com/tekumara/fakesnow/commit/feffa8c2e87e486ef87a393dec24c76b1b9c67c4))
+* support duckdb uint64 description ([62ef477](https://github.com/tekumara/fakesnow/commit/62ef477b79326611ad4664922c9aad9d6078a732))
+
 ## [0.9.27](https://github.com/tekumara/fakesnow/compare/v0.9.26...v0.9.27) (2024-12-08)
 
 
