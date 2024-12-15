@@ -87,7 +87,7 @@ async def query_request(request: Request) -> JSONResponse:
                 "data": {
                     "rowtype": rowtype,
                     "rowsetBase64": rowset_b64,
-                    "total": 1,
+                    "total": cur._rowcount,  # noqa: SLF001
                     "queryId": cur.sfqid,
                     "queryResultFormat": "arrow",
                 },

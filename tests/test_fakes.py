@@ -1210,7 +1210,7 @@ def test_variables(conn: snowflake.connector.SnowflakeConnection):
 
 def test_values(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("select * from VALUES ('Amsterdam', 1), ('London', 2)")
+        cur.execute("select * from values ('Amsterdam', 1), ('London', 2)")
 
         assert cur.fetchall() == [
             {"COLUMN1": "Amsterdam", "COLUMN2": 1},

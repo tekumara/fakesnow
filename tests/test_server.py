@@ -12,6 +12,13 @@ from snowflake.connector.cursor import ResultMetadata
 from tests.utils import indent
 
 
+def test_server_rowcount(scur: snowflake.connector.cursor.SnowflakeCursor):
+    cur = scur
+
+    cur.execute("select * from values ('Salted'), ('Caramel')")
+    assert cur.rowcount == 2
+
+
 def test_server_sfid(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     cur = scur
     assert not cur.sfqid
