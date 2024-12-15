@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 import re
 import sys
+import uuid
 from collections.abc import Iterator, Sequence
 from string import Template
 from types import TracebackType
@@ -71,6 +72,7 @@ class FakeSnowflakeCursor:
         self._arrow_table = None
         self._arrow_table_fetch_index = None
         self._rowcount = None
+        self._sfqid = None
         self._converter = snowflake.connector.converter.SnowflakeConverter()
 
     def __enter__(self) -> Self:
@@ -222,6 +224,7 @@ class FakeSnowflakeCursor:
         self._arrow_table = None
         self._arrow_table_fetch_index = None
         self._rowcount = None
+        self._sfqid = None
 
         cmd = expr.key_command(transformed)
 
@@ -353,6 +356,7 @@ class FakeSnowflakeCursor:
 
         self._arrow_table = self._duck_conn.fetch_arrow_table()
         self._rowcount = affected_count or self._arrow_table.num_rows
+        self._sfqid = str(uuid.uuid4())
 
         self._last_sql = result_sql or sql
         self._last_params = params
@@ -423,7 +427,7 @@ class FakeSnowflakeCursor:
 
     @property
     def sfqid(self) -> str | None:
-        return "fakesnow"
+        return self._sfqid
 
     @property
     def sqlstate(self) -> str | None:

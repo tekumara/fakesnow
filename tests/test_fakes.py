@@ -16,6 +16,7 @@ import pytz
 import snowflake.connector
 import snowflake.connector.cursor
 import snowflake.connector.pandas_tools
+from dirty_equals import IsUUID
 from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
 from snowflake.connector.errors import ProgrammingError
@@ -992,7 +993,9 @@ def test_sqlstate(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_sfqid(cur: snowflake.connector.cursor.SnowflakeCursor):
-    assert cur.sfqid == "fakesnow"
+    assert not cur.sfqid
+    cur.execute("select 1")
+    assert cur.sfqid == IsUUID()
 
 
 def test_string_constant(cur: snowflake.connector.cursor.SnowflakeCursor):

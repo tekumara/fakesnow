@@ -88,6 +88,7 @@ async def query_request(request: Request) -> JSONResponse:
                     "rowtype": rowtype,
                     "rowsetBase64": rowset_b64,
                     "total": 1,
+                    "queryId": cur.sfqid,
                     "queryResultFormat": "arrow",
                 },
                 "success": True,

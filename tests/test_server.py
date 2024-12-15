@@ -6,9 +6,17 @@ from decimal import Decimal
 import pytest
 import pytz
 import snowflake.connector
+from dirty_equals import IsUUID
 from snowflake.connector.cursor import ResultMetadata
 
 from tests.utils import indent
+
+
+def test_server_sfid(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur = scur
+    assert not cur.sfqid
+    cur.execute("select 1")
+    assert cur.sfqid == IsUUID()
 
 
 def test_server_types_no_result_set(sconn: snowflake.connector.SnowflakeConnection) -> None:
