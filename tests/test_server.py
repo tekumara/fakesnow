@@ -62,10 +62,11 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
         # TODO: match columns names without using AS
         """
         select
-                true, 1::int, 2.0::float, to_decimal('12.3456', 10,2),
-                'hello', 'hello'::varchar(20),
-                to_date('2018-04-15'), to_time('04:15:29.123456'), to_timestamp_tz('2013-04-05 01:02:03.123456'), to_timestamp_ntz('2013-04-05 01:02:03.123456'),
-                /* X'41424320E29D84', ARRAY_CONSTRUCT('foo'), */ OBJECT_CONSTRUCT('k','v1'), 1.23::VARIANT
+            true, 1::int, 2.0::float, to_decimal('12.3456', 10,2),
+            'hello', 'hello'::varchar(20),
+            to_date('2018-04-15'), to_time('04:15:29.123456'), to_timestamp_tz('2013-04-05 01:02:03.123456'), to_timestamp_ntz('2013-04-05 01:02:03.123456'),
+            /* X'41424320E29D84', ARRAY_CONSTRUCT('foo'), */ OBJECT_CONSTRUCT('k','v1'), 1.23::VARIANT
+            ,array_size(parse_json('["a","b"]')) /* duckdb uint64 */
         """
     )
     assert indent(cur.fetchall()) == [
@@ -85,6 +86,7 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
             # '[\n  "foo"\n]',
             '{\n  "k": "v1"\n}',
             "1.23",
+            2,
         )
     ]
 

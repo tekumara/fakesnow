@@ -27,6 +27,10 @@ def to_sf_schema(schema: pa.Schema, rowtype: list[ColumnInfo]) -> pa.Schema:
             field = field.with_type(pa.struct(fields))
         elif isinstance(field.type, pa.Time64Type):
             field = field.with_type(pa.int64())
+        elif pa.types.is_uint64(field.type):
+            # snowflake-python-connector expects signed ints
+            # see https://github.com/snowflakedb/snowflake-connector-python/blob/5d7064c7f3f756792c1f6252bf5c9d807e4307e8/src/snowflake/connector/nanoarrow_cpp/ArrowIterator/CArrowChunkIterator.cpp#L187
+            field = field.with_type(pa.int64())
 
         return field.with_metadata(
             {
