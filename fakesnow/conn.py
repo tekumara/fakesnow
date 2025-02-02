@@ -114,6 +114,10 @@ class FakeSnowflakeConnection:
     ) -> None:
         pass
 
+    def autocommit(self, _mode: bool) -> None:
+        # autcommit is always on in duckdb
+        pass
+
     def close(self, retry: bool = True) -> None:
         self._duck_conn.close()
         self._is_closed = True
