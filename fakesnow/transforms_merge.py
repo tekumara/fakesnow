@@ -48,7 +48,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     )
 
     # Iterate through the WHEN clauses to build up the CASE WHEN clauses
-    for w_idx, w in enumerate(merge_expr.expressions):
+    for w_idx, w in enumerate(merge_expr.args["whens"]):
         assert isinstance(w, exp.When), f"Expected When expression, got {w}"
 
         predicate = join_expr.copy()
@@ -109,7 +109,7 @@ def _mutations(merge_expr: exp.Merge) -> list[exp.Expression]:
     statements: list[exp.Expression] = []
 
     # Iterate through the WHEN clauses to generate delete/update/insert statements
-    for w_idx, w in enumerate(merge_expr.expressions):
+    for w_idx, w in enumerate(merge_expr.args["whens"]):
         assert isinstance(w, exp.When), f"Expected When expression, got {w}"
 
         matched = w.args.get("matched")
@@ -173,7 +173,7 @@ def _counts(merge_expr: exp.Merge) -> exp.Expression:
     operations = {"inserted": [], "updated": [], "deleted": []}
 
     # Iterate through the WHEN clauses to categorize operations
-    for w_idx, w in enumerate(merge_expr.expressions):
+    for w_idx, w in enumerate(merge_expr.args["whens"]):
         assert isinstance(w, exp.When), f"Expected When expression, got {w}"
 
         matched = w.args.get("matched")
