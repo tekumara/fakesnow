@@ -14,9 +14,9 @@ def test_patch_snowflake_connector_connect(_fakesnow_no_auto_create: None) -> No
 
 
 def test_patch_snowflake_connector_pandas_tools_write_pandas(_fakesnow_no_auto_create: None) -> None:
-    assert isinstance(
-        snowflake.connector.pandas_tools.write_pandas, MagicMock
-    ), "snowflake.connector.pandas_tools.write_pandas is not mocked"
+    assert isinstance(snowflake.connector.pandas_tools.write_pandas, MagicMock), (
+        "snowflake.connector.pandas_tools.write_pandas is not mocked"
+    )
 
 
 def test_patch_this_modules_connect() -> None:

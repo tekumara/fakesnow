@@ -5,7 +5,7 @@ from typing import cast
 import pyarrow as pa
 import pyarrow.compute as pc
 
-from fakesnow.types import ColumnInfo
+from fakesnow.rowtype import ColumnInfo
 
 
 def to_sf_schema(schema: pa.Schema, rowtype: list[ColumnInfo]) -> pa.Schema:

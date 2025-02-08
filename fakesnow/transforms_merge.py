@@ -83,9 +83,9 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     sql = f"""
     CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
     SELECT
-        {', '.join(sorted(values))},
+        {", ".join(sorted(values))},
         CASE
-            {' '.join(case_when_clauses)}
+            {" ".join(case_when_clauses)}
             ELSE NULL
         END AS MERGE_OP
     FROM {target_tbl}
@@ -191,12 +191,12 @@ def _counts(merge_expr: exp.Merge) -> exp.Expression:
             operations["inserted"].append(w_idx)
 
     count_statements = [
-        f"""COUNT_IF(merge_op in ({','.join(map(str, indices))})) as \"number of rows {op}\""""
+        f"""COUNT_IF(merge_op in ({",".join(map(str, indices))})) as \"number of rows {op}\""""
         for op, indices in operations.items()
         if indices
     ]
     sql = f"""
-    SELECT {', '.join(count_statements)}
+    SELECT {", ".join(count_statements)}
     FROM merge_candidates
     """
 

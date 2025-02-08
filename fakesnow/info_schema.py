@@ -146,7 +146,7 @@ def insert_table_comment_sql(catalog: str, schema: str, table: str, comment: str
 
 def insert_text_lengths_sql(catalog: str, schema: str, table: str, text_lengths: list[tuple[str, int]]) -> str:
     values = ", ".join(
-        f"('{catalog}', '{schema}', '{table}', '{col_name}', {size}, {min(size*4,16777216)})"
+        f"('{catalog}', '{schema}', '{table}', '{col_name}', {size}, {min(size * 4, 16777216)})"
         for (col_name, size) in text_lengths
     )
 

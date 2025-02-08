@@ -24,7 +24,7 @@ import fakesnow.checks as checks
 import fakesnow.expr as expr
 import fakesnow.info_schema as info_schema
 import fakesnow.transforms as transforms
-from fakesnow.types import describe_as_result_metadata
+from fakesnow.rowtype import describe_as_result_metadata
 
 if TYPE_CHECKING:
     # don't require pandas at import time

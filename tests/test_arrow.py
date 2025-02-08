@@ -8,7 +8,7 @@ import pyarrow as pa
 import pytz
 
 from fakesnow.arrow import timestamp_to_sf_struct, to_ipc, to_sf_schema
-from fakesnow.types import ColumnInfo, describe_as_rowtype
+from fakesnow.rowtype import ColumnInfo, describe_as_rowtype
 
 
 def rowtype(types: list[str]) -> list[ColumnInfo]:

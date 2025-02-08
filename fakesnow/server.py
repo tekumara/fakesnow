@@ -17,7 +17,7 @@ from starlette.routing import Route
 from fakesnow.arrow import to_ipc, to_sf
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
-from fakesnow.types import describe_as_rowtype
+from fakesnow.rowtype import describe_as_rowtype
 
 shared_fs = FakeSnow()
 sessions: dict[str, FakeSnowflakeConnection] = {}
