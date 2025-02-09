@@ -10,7 +10,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Any, cast
 
 import duckdb
-import pyarrow
+import pyarrow  # needed by fetch_arrow_table()
 import snowflake.connector.converter
 import snowflake.connector.errors
 import sqlglot

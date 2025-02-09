@@ -4,13 +4,13 @@ import json
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal, Optional
 
-import numpy as np
 from duckdb import DuckDBPyConnection
 
 from fakesnow.conn import FakeSnowflakeConnection
 
 if TYPE_CHECKING:
-    # don't require pandas at import time
+    # don't require pandas or numpy at import time
+    import numpy as np
     import pandas as pd
 
 
