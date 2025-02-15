@@ -145,6 +145,8 @@ class FakeSnowflakeCursor:
                 return self
 
             expression = parse_one(command, read="snowflake")
+            self.check_db_and_schema(expression)
+
             for exp in self._transform_explode(expression):
                 transformed = self._transform(exp)
                 self._execute(transformed, params)
@@ -153,6 +155,24 @@ class FakeSnowflakeCursor:
         except snowflake.connector.errors.ProgrammingError as e:
             self._sqlstate = e.sqlstate
             raise e
+
+    def check_db_and_schema(self, expression: exp.Expression) -> None:
+        no_database, no_schema = checks.is_unqualified_table_expression(expression)
+
+        if no_database and not self._conn.database_set:
+            cmd = expr.key_command(expression)
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
+                errno=90105,
+                sqlstate="22000",
+            )
+        elif no_schema and not self._conn.schema_set:
+            cmd = expr.key_command(expression)
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"Cannot perform {cmd}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
+                errno=90106,
+                sqlstate="22000",
+            )
 
     def _transform(self, expression: exp.Expression) -> exp.Expression:
         return (
@@ -227,21 +247,6 @@ class FakeSnowflakeCursor:
         self._sfqid = None
 
         cmd = expr.key_command(transformed)
-
-        no_database, no_schema = checks.is_unqualified_table_expression(transformed)
-
-        if no_database and not self._conn.database_set:
-            raise snowflake.connector.errors.ProgrammingError(
-                msg=f"Cannot perform {cmd}. This session does not have a current database. Call 'USE DATABASE', or use a qualified name.",  # noqa: E501
-                errno=90105,
-                sqlstate="22000",
-            )
-        elif no_schema and not self._conn.schema_set:
-            raise snowflake.connector.errors.ProgrammingError(
-                msg=f"Cannot perform {cmd}. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name.",  # noqa: E501
-                errno=90106,
-                sqlstate="22000",
-            )
 
         sql = transformed.sql(dialect="duckdb")
 

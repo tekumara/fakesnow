@@ -11,7 +11,6 @@ from fakesnow import transforms_merge
 from fakesnow.instance import USERS_TABLE_FQ_NAME
 from fakesnow.variables import Variables
 
-MISSING_DATABASE = "missing_database"
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.' as status")
 
 
@@ -921,7 +920,10 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
                 db_name = db.name
             else:
                 # isn't qualified with a database
-                db_name = current_database or MISSING_DATABASE
+                db_name = current_database
+
+            # assertion always true because check_db_schema is called before this
+            assert db_name
 
             schema = expression.this.name
             return exp.Command(

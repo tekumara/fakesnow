@@ -758,11 +758,6 @@ def test_use() -> None:
     )
 
     assert (
-        sqlglot.parse_one("USE SCHEMA foo").transform(set_schema, current_database=None).sql()
-        == "SET schema = 'missing_database.foo'"
-    )
-
-    assert (
         sqlglot.parse_one("use schema bar").transform(set_schema, current_database="foo").sql()
         == "SET schema = 'foo.bar'"
     )
