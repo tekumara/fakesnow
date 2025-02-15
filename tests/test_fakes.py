@@ -120,24 +120,17 @@ def test_array_agg_within_group(dcur: snowflake.connector.cursor.DictCursor):
     ]
 
 
-def test_binding_default_paramstyle(conn: snowflake.connector.SnowflakeConnection):
+def test_binding_pyformat(conn: snowflake.connector.SnowflakeConnection):
+    # check pyformat is the default paramstyle
     assert snowflake.connector.paramstyle == "pyformat"
     with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
         cur.execute("insert into customers values (%s, %s, %s)", (1, "Jenny", True))
-        cur.execute("select * from customers")
-        assert cur.fetchall() == [(1, "Jenny", True)]
-
-
-def test_binding_default_paramstyle_dict(conn: snowflake.connector.SnowflakeConnection):
-    assert snowflake.connector.paramstyle == "pyformat"
-    with conn.cursor() as cur:
-        cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
         cur.execute(
-            "insert into customers values (%(id)s, %(name)s, %(active)s)", {"id": 1, "name": "Jenny", "active": True}
+            "insert into customers values (%(id)s, %(name)s, %(active)s)", {"id": 2, "name": "Jasper", "active": False}
         )
         cur.execute("select * from customers")
-        assert cur.fetchall() == [(1, "Jenny", True)]
+        assert cur.fetchall() == [(1, "Jenny", True), (2, "Jasper", False)]
 
 
 def test_binding_qmark(_fakesnow: None):
@@ -152,6 +145,19 @@ def test_binding_qmark(_fakesnow: None):
         # this has no effect after connection created, so qmark style still works
         snowflake.connector.paramstyle = "pyformat"
         cur.execute("select * from customers where id = ?", (1,))
+
+
+def test_binding_conn_kwarg(_fakesnow: None):
+    assert snowflake.connector.paramstyle == "pyformat"
+
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
+        cur.execute("insert into customers values (?, ?, ?)", (1, "Jenny", True))
+        cur.execute("select * from customers")
+        assert cur.fetchall() == [(1, "Jenny", True)]
 
 
 def test_clone(cur: snowflake.connector.cursor.SnowflakeCursor):

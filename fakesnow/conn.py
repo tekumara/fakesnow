@@ -48,7 +48,7 @@ class FakeSnowflakeConnection:
         self.schema_set = False
         self.db_path = Path(db_path) if db_path else None
         self.nop_regexes = nop_regexes
-        self._paramstyle = snowflake.connector.paramstyle
+        self._paramstyle = kwargs.get("paramstyle", snowflake.connector.paramstyle)
         self.variables = Variables()
 
         # create database if needed
