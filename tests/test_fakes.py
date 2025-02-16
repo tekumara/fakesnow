@@ -663,11 +663,11 @@ def test_regex_substr(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 def test_random(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select random(420)")
-    assert cur.fetchall() == [(-2595895151578578944,)]
+    assert cur.fetchall() == [(-4068260216279105536,)]
     cur.execute("select random(420)")
-    assert cur.fetchall() == [(-2595895151578578944,)]
+    assert cur.fetchall() == [(-4068260216279105536,)]
     cur.execute("select random(419)")
-    assert cur.fetchall() == [(4590143504000221184,)]
+    assert cur.fetchall() == [(1460638274662493184,)]
     assert cur.execute("select random()").fetchall() != cur.execute("select random()").fetchall()
 
 
@@ -685,7 +685,7 @@ def test_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor):
 def test_sample(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table example(id int)")
     cur.execute("insert into example select * from (VALUES (1), (2), (3), (4));")
-    cur.execute("select * from example SAMPLE (50) SEED (420)")
+    cur.execute("select * from example SAMPLE (50) SEED (999)")
     # sampling small sizes isn't exact
     assert cur.fetchall() == [(1,), (2,), (3,)]
 

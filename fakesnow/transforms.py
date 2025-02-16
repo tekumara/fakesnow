@@ -1015,13 +1015,16 @@ def show_objects_tables(expression: exp.Expression, current_database: str | None
 SQL_SHOW_SCHEMAS = """
 select
     to_timestamp(0)::timestamptz as 'created_on',
-    schema_name as 'name',
+    case
+        when schema_name = '_fs_information_schema' then 'information_schema'
+        else schema_name
+    end as 'name',
     NULL as 'kind',
     catalog_name as 'database_name',
     NULL as 'schema_name'
 from information_schema.schemata
 where not catalog_name in ('memory', 'system', 'temp')
-  and not schema_name in ('main', 'pg_catalog', '_fs_information_schema')
+  and not schema_name in ('main', 'pg_catalog')
 """
 
 

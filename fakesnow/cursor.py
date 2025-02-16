@@ -284,7 +284,7 @@ class FakeSnowflakeCursor:
             self._conn.database_set = True
 
         elif set_schema := transformed.args.get("set_schema"):
-            self._conn.schema = set_schema
+            self._conn._schema = set_schema  # noqa: SLF001
             self._conn.schema_set = True
 
         elif create_db_name := transformed.args.get("create_db_name"):
@@ -334,10 +334,10 @@ class FakeSnowflakeCursor:
                 # if dropping the current database/schema then reset conn metadata
                 if cmd == "DROP DATABASE" and ident == self._conn.database:
                     self._conn.database = None
-                    self._conn.schema = None
+                    self._conn._schema = None  # noqa: SLF001
 
                 elif cmd == "DROP SCHEMA" and ident == self._conn.schema:
-                    self._conn.schema = None
+                    self._conn._schema = None  # noqa: SLF001
 
         if table_comment := cast(tuple[exp.Table, str], transformed.args.get("table_comment")):
             # record table comment

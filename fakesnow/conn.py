@@ -42,7 +42,9 @@ class FakeSnowflakeConnection:
         # information_schema.schemata below we use upper-case to match any existing duckdb
         # catalog or schemas like "information_schema"
         self.database = database and database.upper()
-        self.schema = schema and schema.upper()
+        self._schema = schema and (
+            "_FS_INFORMATION_SCHEMA" if schema.upper() == "INFORMATION_SCHEMA" else schema.upper()
+        )
 
         self.database_set = False
         self.schema_set = False
@@ -69,24 +71,24 @@ class FakeSnowflakeConnection:
         if (
             create_schema
             and self.database
-            and self.schema
+            and self._schema
             and not duck_conn.execute(
                 f"""select * from information_schema.schemata
-                where upper(catalog_name) = '{self.database}' and upper(schema_name) = '{self.schema}'"""
+                where upper(catalog_name) = '{self.database}' and upper(schema_name) = '{self._schema}'"""
             ).fetchone()
         ):
-            duck_conn.execute(f"CREATE SCHEMA {self.database}.{self.schema}")
+            duck_conn.execute(f"CREATE SCHEMA {self.database}.{self._schema}")
 
         # set database and schema if both exist
         if (
             self.database
-            and self.schema
+            and self._schema
             and duck_conn.execute(
                 f"""select * from information_schema.schemata
-                where upper(catalog_name) = '{self.database}' and upper(schema_name) = '{self.schema}'"""
+                where upper(catalog_name) = '{self.database}' and upper(schema_name) = '{self._schema}'"""
             ).fetchone()
         ):
-            duck_conn.execute(f"SET schema='{self.database}.{self.schema}'")
+            duck_conn.execute(f"SET schema='{self.database}.{self._schema}'")
             self.database_set = True
             self.schema_set = True
         # set database if only that exists
@@ -149,3 +151,7 @@ class FakeSnowflakeConnection:
 
     def rollback(self) -> None:
         self.cursor().execute("ROLLBACK")
+
+    @property
+    def schema(self) -> str | None:
+        return "INFORMATION_SCHEMA" if self._schema == "_FS_INFORMATION_SCHEMA" else self._schema
