@@ -78,6 +78,7 @@ def test_describe_view_columns(dcur: snowflake.connector.cursor.DictCursor):
     ]
     # fmt: on
 
+
 def test_info_schema_columns(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("CREATE TABLE foo (id INTEGER, name VARCHAR)")
@@ -86,7 +87,9 @@ def test_info_schema_columns(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("CREATE SCHEMA db2.schema2")
         cur.execute("CREATE TABLE db2.schema2.bar (id INTEGER)")
 
-        cur.execute("SELECT table_catalog, table_schema, table_name, column_name FROM information_schema.columns where column_name = 'ID'")
+        cur.execute(
+            "SELECT table_catalog, table_schema, table_name, column_name FROM information_schema.columns where column_name = 'ID'"
+        )
 
         assert cur.fetchall() == [
             {
@@ -96,7 +99,6 @@ def test_info_schema_columns(conn: snowflake.connector.SnowflakeConnection):
                 "column_name": "ID",
             }
         ]
-
 
 
 def test_info_schema_columns_numeric(cur: snowflake.connector.cursor.SnowflakeCursor):

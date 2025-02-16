@@ -8,7 +8,7 @@ import sqlglot
 from sqlglot import exp
 
 from fakesnow import transforms_merge
-from fakesnow.instance import GLOBAL_DATABASE_NAME, USERS_TABLE_FQ_NAME
+from fakesnow.instance import USERS_TABLE_FQ_NAME
 from fakesnow.variables import Variables
 
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.' as status")
@@ -166,7 +166,7 @@ SELECT
     NULL::VARCHAR AS "comment",
     NULL::VARCHAR AS "policy name",
     NULL::JSON AS "privacy domain",
-FROM _fs_global.main._fs_columns_snowflake
+FROM _fs_information_schema._fs_columns_snowflake
 WHERE table_catalog = '${catalog}' AND table_schema = '${schema}' AND table_name = '${table}'
 ORDER BY ordinal_position
 """
@@ -214,12 +214,12 @@ def describe_table(
         if schema and schema.upper() == "INFORMATION_SCHEMA":
             # information schema views don't exist in _fs_columns_snowflake
             return sqlglot.parse_one(
-                SQL_DESCRIBE_INFO_SCHEMA.substitute(view=f"information_schema.{table.name}"), read="duckdb"
+                SQL_DESCRIBE_INFO_SCHEMA.substitute(view=f"system.information_schema.{table.name}"), read="duckdb"
             )
         elif table.name.upper() == "_FS_COLUMNS_SNOWFLAKE":
             # information schema views don't exist in _fs_columns_snowflake
             return sqlglot.parse_one(
-                SQL_DESCRIBE_INFO_SCHEMA.substitute(view="_fs_global.main._FS_COLUMNS_SNOWFLAKE"), read="duckdb"
+                SQL_DESCRIBE_INFO_SCHEMA.substitute(view="_fs_information_schema._FS_COLUMNS_SNOWFLAKE"), read="duckdb"
             )
 
         return sqlglot.parse_one(
@@ -602,43 +602,22 @@ def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def information_schema_fs_columns_snowflake(
-    expression: exp.Expression,
-    current_database: str | None = None,
-) -> exp.Expression:
-    """Redirect to the information_schema._fs_columns_snowflake view which has metadata that matches snowflake.
+def information_schema_fs_columns_snowflake(expression: exp.Expression) -> exp.Expression:
+    """Redirect to the _FS_COLUMNS_SNOWFLAKE view which has metadata that matches snowflake.
 
     Because duckdb doesn't store character_maximum_length or character_octet_length.
     """
 
-    if (tbl := expression.find(exp.Table)) and tbl.db.upper() == "INFORMATION_SCHEMA" and tbl.name.upper() == "COLUMNS":
-        if isinstance(expression, exp.Select):
-            # database
-            catalog = tbl.catalog or current_database
+    if (
+        isinstance(expression, exp.Table)
+        and expression.db
+        and expression.db.upper() == "INFORMATION_SCHEMA"
+        and expression.name
+        and expression.name.upper() == "COLUMNS"
+    ):
+        expression.set("this", exp.Identifier(this="_FS_COLUMNS_SNOWFLAKE", quoted=False))
+        expression.set("db", exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False))
 
-            # assertion always true because check_db_schema is called before this
-            assert catalog
-
-            # TODO: schema?
-
-            from_table: exp.Table = expression.args["from"].this
-            from_table.args["this"] = exp.Identifier(this="_FS_COLUMNS_SNOWFLAKE", quoted=False)
-            from_table.args["db"] = exp.Identifier(this="MAIN", quoted=False)
-            from_table.args["catalog"] = exp.Identifier(this=GLOBAL_DATABASE_NAME, quoted=False)
-
-            expression.where(
-                exp.EQ(
-                    this=exp.Column(this="TABLE_CATALOG", quoted=False),
-                    expression=exp.Literal(this=catalog, is_string=True),
-                ),
-                copy=False,
-            )
-        elif isinstance(expression, exp.Describe):
-            expression.args["this"] = exp.Table(
-                this=exp.Identifier(this="_FS_COLUMNS_SNOWFLAKE", quoted=False),
-                db=exp.Identifier(this="MAIN", quoted=False),
-                catalog=exp.Identifier(this=GLOBAL_DATABASE_NAME, quoted=False),
-            )
     return expression
 
 
@@ -656,17 +635,15 @@ def information_schema_databases(
     ):
         return exp.Table(
             this=exp.Identifier(this="DATABASES", quoted=False),
-            db=exp.Identifier(this="MAIN", quoted=False),
-            catalog=exp.Identifier(this=GLOBAL_DATABASE_NAME, quoted=False),
+            db=exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False),
         )
     return expression
 
 
-def information_schema_fs_tables_ext(
+def information_schema_fs_tables(
     expression: exp.Expression,
-    current_database: str | None = None,
 ) -> exp.Expression:
-    """Join to information_schema._fs_tables_ext to access additional metadata columns (eg: comment)."""
+    """Use _FS_TABLES to access additional metadata columns (eg: comment)."""
 
     if (
         isinstance(expression, exp.Select)
@@ -674,35 +651,14 @@ def information_schema_fs_tables_ext(
         and tbl.db.upper() == "INFORMATION_SCHEMA"
         and tbl.name.upper() == "TABLES"
     ):
-        # database
-        catalog = tbl.catalog or current_database
-        assert catalog
-
-        # TODO: schema?
-
-        return expression.join(
-            f"{GLOBAL_DATABASE_NAME}.main._fs_tables_ext",
-            on=(
-                """
-                tables.table_catalog = _fs_tables_ext.ext_table_catalog AND
-                tables.table_schema = _fs_tables_ext.ext_table_schema AND
-                tables.table_name = _fs_tables_ext.ext_table_name
-                """
-            ),
-            join_type="left",
-        ).where(
-            exp.EQ(
-                this=exp.Column(this="TABLE_CATALOG", quoted=False),
-                expression=exp.Literal(this=catalog, is_string=True),
-            ),
-            copy=False,
-        )
+        tbl.set("this", exp.Identifier(this="_FS_TABLES", quoted=False))
+        tbl.set("db", exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False))
 
     return expression
 
 
-def information_schema_fs_views(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
-    """Use information_schema._fs_views to return Snowflake's version instead of duckdb's."""
+def information_schema_fs_views(expression: exp.Expression) -> exp.Expression:
+    """Use _FS_VIEWS to return Snowflake's version instead of duckdb's."""
 
     if (
         isinstance(expression, exp.Select)
@@ -710,28 +666,9 @@ def information_schema_fs_views(expression: exp.Expression, current_database: st
         and tbl.db.upper() == "INFORMATION_SCHEMA"
         and tbl.name.upper() == "VIEWS"
     ):
-        # database
-        catalog = tbl.catalog or current_database
-        assert catalog
+        tbl.set("this", exp.Identifier(this="_FS_VIEWS", quoted=False))
+        tbl.set("db", exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False))
 
-        # TODO: schema?
-
-        expression.from_(
-            exp.Table(
-                this=exp.Identifier(this="_FS_VIEWS", quoted=False),
-                db=exp.Identifier(this="MAIN", quoted=False),
-                catalog=exp.Identifier(this=GLOBAL_DATABASE_NAME, quoted=False),
-            ),
-            copy=False,
-        )
-
-        expression.where(
-            exp.EQ(
-                this=exp.Column(this="TABLE_CATALOG", quoted=False),
-                expression=exp.Literal(this=catalog, is_string=True),
-            ),
-            copy=False,
-        )
     return expression
 
 
@@ -1047,7 +984,7 @@ def show_objects_tables(expression: exp.Expression, current_database: str | None
         schema = None
 
     tables_only = "table_type = 'BASE TABLE' and " if show == "TABLES" else ""
-    exclude_fakesnow_tables = "not (table_schema == 'information_schema' and table_name like '_fs_%%')"
+    exclude_fakesnow_tables = "not (table_schema == '_fs_information_schema')"
     # without a database will show everything in the "account"
     table_catalog = f" and table_catalog = '{catalog}'" if catalog else ""
     schema = f" and table_schema = '{schema}'" if schema else ""
@@ -1083,7 +1020,8 @@ select
     catalog_name as 'database_name',
     NULL as 'schema_name'
 from information_schema.schemata
-where catalog_name not in ('memory', 'system', 'temp') and schema_name not in ('main', 'pg_catalog')
+where not catalog_name in ('memory', 'system', 'temp')
+  and not schema_name in ('main', 'pg_catalog', '_fs_information_schema')
 """
 
 

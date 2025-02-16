@@ -73,7 +73,7 @@ class FakeSnow:
         self.duck_conn.execute(f"ATTACH IF NOT EXISTS ':memory:' AS {GLOBAL_DATABASE_NAME}")
         self.duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_USERS_TABLE_EXT)
         # create the info schema extensions
-        self.duck_conn.execute(info_schema.creation_sql(GLOBAL_DATABASE_NAME))
+        self.duck_conn.execute(info_schema.fs_global_creation_sql(GLOBAL_DATABASE_NAME))
 
     def connect(
         self, database: str | None = None, schema: str | None = None, **kwargs: Any

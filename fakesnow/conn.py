@@ -62,6 +62,7 @@ class FakeSnowflakeConnection:
         ):
             db_file = f"{self.db_path / self.database}.db" if self.db_path else ":memory:"
             duck_conn.execute(f"ATTACH DATABASE '{db_file}' AS {self.database}")
+            duck_conn.execute(info_schema.creation_sql(self.database))
             duck_conn.execute(macros.creation_sql(self.database))
 
         # create schema if needed
