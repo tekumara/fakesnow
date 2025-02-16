@@ -2,6 +2,25 @@
 
 # Changelog
 
+## [0.9.29](https://github.com/tekumara/fakesnow/compare/v0.9.28...v0.9.29) (2025-02-16)
+
+
+### Features
+
+* **server:** support non-gzipped requests ([e24366a](https://github.com/tekumara/fakesnow/commit/e24366ae1405a58d6b2969f066e6d5e0167c9a57))
+* support paramstyle as connection argument ([f7d0215](https://github.com/tekumara/fakesnow/commit/f7d02156d36c7e014362473f1e1550e2bf2546ef))
+
+
+### Bug Fixes
+
+* info schema with current database objects only ([f5b3903](https://github.com/tekumara/fakesnow/commit/f5b3903f258fe665d1ea513aff20568ddd18f324))
+
+
+### Chores
+
+* **deps:** bump duckdb 1.2.0 ([17eb5d5](https://github.com/tekumara/fakesnow/commit/17eb5d56657fc9beea93638a79c28b1f1aa2a9ae))
+* **deps:** update sqlglot requirement from ~=26.3.9 to ~=26.6.0 ([#171](https://github.com/tekumara/fakesnow/issues/171)) ([74b8817](https://github.com/tekumara/fakesnow/commit/74b8817de862bfe42f23122defbc73247320f00a))
+
 ## [0.9.28](https://github.com/tekumara/fakesnow/compare/v0.9.27...v0.9.28) (2025-02-09)
 
 
