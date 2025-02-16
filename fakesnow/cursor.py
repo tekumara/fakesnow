@@ -182,9 +182,10 @@ class FakeSnowflakeCursor:
             .transform(transforms.create_database, db_path=self._conn.db_path)
             .transform(transforms.extract_comment_on_table)
             .transform(transforms.extract_comment_on_columns)
-            .transform(transforms.information_schema_fs_columns_snowflake)
-            .transform(transforms.information_schema_fs_tables_ext)
-            .transform(transforms.information_schema_fs_views)
+            .transform(transforms.information_schema_fs_columns_snowflake, current_database=self._conn.database)
+            .transform(transforms.information_schema_databases, current_schema=self._conn.schema)
+            .transform(transforms.information_schema_fs_tables_ext, current_database=self._conn.database)
+            .transform(transforms.information_schema_fs_views, current_database=self._conn.database)
             .transform(transforms.drop_schema_cascade)
             .transform(transforms.tag)
             .transform(transforms.semi_structured_types)
@@ -287,8 +288,6 @@ class FakeSnowflakeCursor:
             self._conn.schema_set = True
 
         elif create_db_name := transformed.args.get("create_db_name"):
-            # we created a new database, so create the info schema extensions
-            self._duck_conn.execute(info_schema.creation_sql(create_db_name))
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
         elif cmd == "INSERT":

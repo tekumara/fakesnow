@@ -78,6 +78,26 @@ def test_describe_view_columns(dcur: snowflake.connector.cursor.DictCursor):
     ]
     # fmt: on
 
+def test_info_schema_columns(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("CREATE TABLE foo (id INTEGER, name VARCHAR)")
+        cur.execute("CREATE DATABASE db2")
+        # should not be returned
+        cur.execute("CREATE SCHEMA db2.schema2")
+        cur.execute("CREATE TABLE db2.schema2.bar (id INTEGER)")
+
+        cur.execute("SELECT table_catalog, table_schema, table_name, column_name FROM information_schema.columns where column_name = 'ID'")
+
+        assert cur.fetchall() == [
+            {
+                "table_catalog": "DB1",
+                "table_schema": "SCHEMA1",
+                "table_name": "FOO",
+                "column_name": "ID",
+            }
+        ]
+
+
 
 def test_info_schema_columns_numeric(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-numeric
@@ -202,16 +222,40 @@ def test_info_schema_databases(conn: snowflake.connector.SnowflakeConnection):
         ]
 
 
+def test_info_schema_tables(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("CREATE TABLE foo (id INTEGER)")
+        cur.execute("CREATE DATABASE db2")
+        # should not be returned
+        cur.execute("CREATE SCHEMA db2.schema2")
+        cur.execute("CREATE TABLE db2.schema2.bar (name VARCHAR)")
+
+        cur.execute("SELECT table_catalog, table_schema, table_name FROM information_schema.tables")
+
+        assert cur.fetchall() == [
+            {
+                "table_catalog": "DB1",
+                "table_schema": "SCHEMA1",
+                "table_name": "FOO",
+            }
+        ]
+
+
 def test_info_schema_views_empty(cur: snowflake.connector.cursor.SnowflakeCursor):
     result = cur.execute("SELECT * FROM information_schema.views")
     assert result
     assert result.fetchall() == []
 
 
-def test_info_schema_views_with_views(conn: snowflake.connector.SnowflakeConnection):
+def test_info_schema_views(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("CREATE TABLE foo (id INTEGER, name VARCHAR)")
         cur.execute("CREATE VIEW bar AS SELECT * FROM foo WHERE id > 5")
+        cur.execute("CREATE DATABASE db2")
+        # should not be returned
+        cur.execute("CREATE SCHEMA db2.schema2")
+        cur.execute("CREATE TABLE db2.schema2.foo (id INTEGER, name VARCHAR)")
+        cur.execute("CREATE VIEW db2.schema2.baz AS SELECT * FROM db2.schema2.foo WHERE id > 5")
 
         cur.execute("SELECT * FROM information_schema.views")
 

@@ -523,16 +523,24 @@ def test_integer_precision() -> None:
 def test_information_schema_fs_columns_snowflake() -> None:
     assert (
         sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.COLUMNS")
-        .transform(information_schema_fs_columns_snowflake)
+        .transform(information_schema_fs_columns_snowflake, current_database="marts")
         .sql()
-        == "SELECT * FROM INFORMATION_SCHEMA._FS_COLUMNS_SNOWFLAKE"
+        == "SELECT * FROM _fs_global.MAIN._FS_COLUMNS_SNOWFLAKE WHERE TABLE_CATALOG = 'marts'"
+    )
+    assert (
+        sqlglot.parse_one("SELECT * FROM DB1.INFORMATION_SCHEMA.COLUMNS")
+        .transform(information_schema_fs_columns_snowflake, current_database="marts")
+        .sql()
+        == "SELECT * FROM _fs_global.MAIN._FS_COLUMNS_SNOWFLAKE WHERE TABLE_CATALOG = 'DB1'"
     )
 
 
 def test_information_schema_fs_tables_ext() -> None:
     assert (
-        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(information_schema_fs_tables_ext).sql()
-        == "SELECT * FROM INFORMATION_SCHEMA.TABLES LEFT JOIN information_schema._fs_tables_ext ON tables.table_catalog = _fs_tables_ext.ext_table_catalog AND tables.table_schema = _fs_tables_ext.ext_table_schema AND tables.table_name = _fs_tables_ext.ext_table_name"  # noqa: E501
+        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES")
+        .transform(information_schema_fs_tables_ext, current_database="marts")
+        .sql()
+        == "SELECT * FROM INFORMATION_SCHEMA.TABLES LEFT JOIN _fs_global.main._fs_tables_ext ON tables.table_catalog = _fs_tables_ext.ext_table_catalog AND tables.table_schema = _fs_tables_ext.ext_table_schema AND tables.table_name = _fs_tables_ext.ext_table_name WHERE TABLE_CATALOG = 'marts'"  # noqa: E501
     )
 
 

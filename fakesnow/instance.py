@@ -6,6 +6,7 @@ from typing import Any
 import duckdb
 
 import fakesnow.fakes as fakes
+from fakesnow import info_schema
 
 GLOBAL_DATABASE_NAME = "_fs_global"
 USERS_TABLE_FQ_NAME = f"{GLOBAL_DATABASE_NAME}._fs_users_ext"
@@ -71,6 +72,8 @@ class FakeSnow:
         # create a "global" database for storing objects which span databases.
         self.duck_conn.execute(f"ATTACH IF NOT EXISTS ':memory:' AS {GLOBAL_DATABASE_NAME}")
         self.duck_conn.execute(SQL_CREATE_INFORMATION_SCHEMA_USERS_TABLE_EXT)
+        # create the info schema extensions
+        self.duck_conn.execute(info_schema.creation_sql(GLOBAL_DATABASE_NAME))
 
     def connect(
         self, database: str | None = None, schema: str | None = None, **kwargs: Any

@@ -4,10 +4,12 @@ from __future__ import annotations
 
 from string import Template
 
+from fakesnow.instance import GLOBAL_DATABASE_NAME
+
 # use ext prefix in columns to disambiguate when joining with information_schema.tables
 SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT = Template(
     """
-create table if not exists ${catalog}.information_schema._fs_tables_ext (
+create table if not exists ${catalog}.main._fs_tables_ext (
     ext_table_catalog varchar,
     ext_table_schema varchar,
     ext_table_name varchar,
@@ -19,7 +21,7 @@ create table if not exists ${catalog}.information_schema._fs_tables_ext (
 
 SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_EXT = Template(
     """
-create table if not exists ${catalog}.information_schema._fs_columns_ext (
+create table if not exists ${catalog}.main._fs_columns_ext (
     ext_table_catalog varchar,
     ext_table_schema varchar,
     ext_table_name varchar,
@@ -35,7 +37,7 @@ create table if not exists ${catalog}.information_schema._fs_columns_ext (
 # snowflake integers are 38 digits, base 10, See https://docs.snowflake.com/en/sql-reference/data-types-numeric
 SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW = Template(
     """
-create view if not exists ${catalog}.information_schema._fs_columns_snowflake AS
+create view if not exists ${catalog}.main._fs_columns_snowflake AS
 select
     columns.table_catalog AS table_catalog,
     columns.table_schema AS table_schema,
@@ -64,8 +66,8 @@ collation_name, is_identity, identity_generation, identity_cycle,
     ddb_columns.comment as comment,
     null::VARCHAR as identity_start,
     null::VARCHAR as identity_increment,
-from ${catalog}.information_schema.columns columns
-left join ${catalog}.information_schema._fs_columns_ext ext
+from system.information_schema.columns columns
+left join ${catalog}.main._fs_columns_ext ext
   on ext_table_catalog = columns.table_catalog
  AND ext_table_schema = columns.table_schema
  AND ext_table_name = columns.table_name
@@ -82,7 +84,7 @@ LEFT JOIN duckdb_columns ddb_columns
 # replicates https://docs.snowflake.com/sql-reference/info-schema/databases
 SQL_CREATE_INFORMATION_SCHEMA_DATABASES_VIEW = Template(
     """
-create view if not exists ${catalog}.information_schema.databases AS
+create view if not exists ${catalog}.main.databases AS
 select
     catalog_name as database_name,
     'SYSADMIN' as database_owner,
@@ -92,7 +94,7 @@ select
     to_timestamp(0)::timestamptz as last_altered,
     1 as retention_time,
     'STANDARD' as type
-from information_schema.schemata
+from system.information_schema.schemata
 where catalog_name not in ('memory', 'system', 'temp', '_fs_global')
   and schema_name = 'information_schema'
 """
@@ -102,7 +104,7 @@ where catalog_name not in ('memory', 'system', 'temp', '_fs_global')
 # replicates https://docs.snowflake.com/sql-reference/info-schema/views
 SQL_CREATE_INFORMATION_SCHEMA_VIEWS_VIEW = Template(
     """
-create view if not exists ${catalog}.information_schema._fs_views AS
+create view if not exists ${catalog}.main._fs_views AS
 select
     database_name as table_catalog,
     schema_name as table_schema,
@@ -119,7 +121,7 @@ select
     'SYSADMIN' as last_ddl_by,
     null::VARCHAR as comment
 from duckdb_views
-where database_name = '${catalog}'
+where database_name != '_fs_global'
   and schema_name != 'information_schema'
 """
 )
@@ -137,7 +139,7 @@ def creation_sql(catalog: str) -> str:
 
 def insert_table_comment_sql(catalog: str, schema: str, table: str, comment: str) -> str:
     return f"""
-        INSERT INTO {catalog}.information_schema._fs_tables_ext
+        INSERT INTO {GLOBAL_DATABASE_NAME}.main._fs_tables_ext
         values ('{catalog}', '{schema}', '{table}', '{comment}')
         ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name)
         DO UPDATE SET comment = excluded.comment
@@ -151,7 +153,7 @@ def insert_text_lengths_sql(catalog: str, schema: str, table: str, text_lengths:
     )
 
     return f"""
-        INSERT INTO {catalog}.information_schema._fs_columns_ext
+        INSERT INTO {GLOBAL_DATABASE_NAME}.main._fs_columns_ext
         values {values}
         ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name, ext_column_name)
         DO UPDATE SET ext_character_maximum_length = excluded.ext_character_maximum_length,
