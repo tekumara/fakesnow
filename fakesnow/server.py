@@ -34,7 +34,9 @@ async def login_request(request: Request) -> JSONResponse:
     database = request.query_params.get("databaseName")
     schema = request.query_params.get("schemaName")
     body = await request.body()
-    body_json = json.loads(gzip.decompress(body))
+    if request.headers.get("Content-Encoding") == "gzip":
+        body = gzip.decompress(body)
+    body_json = json.loads(body)
     session_params: dict[str, Any] = body_json["data"]["SESSION_PARAMETERS"]
     if db_path := session_params.get("FAKESNOW_DB_PATH"):
         # isolated creates a new in-memory database, rather than using the shared in-memory database
@@ -53,7 +55,10 @@ async def query_request(request: Request) -> JSONResponse:
         conn = to_conn(request)
 
         body = await request.body()
-        body_json = json.loads(gzip.decompress(body))
+        if request.headers.get("Content-Encoding") == "gzip":
+            body = gzip.decompress(body)
+
+        body_json = json.loads(body)
 
         sql_text = body_json["sqlText"]
 
