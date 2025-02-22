@@ -52,7 +52,7 @@ async def login_request(request: Request) -> JSONResponse:
 
 async def query_request(request: Request) -> JSONResponse:
     try:
-        conn = to_conn(request)
+        conn = to_conn(to_token(request))
 
         body = await request.body()
         if request.headers.get("Content-Encoding") == "gzip":
@@ -107,16 +107,37 @@ async def query_request(request: Request) -> JSONResponse:
         )
 
 
-def to_conn(request: Request) -> FakeSnowflakeConnection:
+def to_token(request: Request) -> str:
     if not (auth := request.headers.get("Authorization")):
-        raise ServerError(status_code=401, code="390103", message="Session token not found in the request data.")
+        raise ServerError(status_code=401, code="390101", message="Authorization header not found in the request data.")
 
-    token = auth[17:-1]
+    return auth[17:-1]
 
+
+def to_conn(token: str) -> FakeSnowflakeConnection:
     if not (conn := sessions.get(token)):
         raise ServerError(status_code=401, code="390104", message="User must login again to access the service.")
 
     return conn
+
+
+async def session(request: Request) -> JSONResponse:
+    try:
+        token = to_token(request)
+        _ = to_conn(token)
+
+        if bool(request.query_params.get("delete")):
+            del sessions[token]
+
+        return JSONResponse(
+            {"data": None, "code": None, "message": None, "success": True},
+        )
+
+    except ServerError as e:
+        return JSONResponse(
+            {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
+            status_code=e.status_code,
+        )
 
 
 routes = [
@@ -125,6 +146,7 @@ routes = [
         login_request,
         methods=["POST"],
     ),
+    Route("/session", session, methods=["POST"]),
     Route(
         "/queries/v1/query-request",
         query_request,

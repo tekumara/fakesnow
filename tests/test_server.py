@@ -7,6 +7,7 @@ import pytest
 import pytz
 import requests
 import snowflake.connector
+import snowflake.connector.network
 from dirty_equals import IsUUID
 from snowflake.connector.cursor import ResultMetadata
 
@@ -109,6 +110,21 @@ def test_server_abort_request(server: dict) -> None:
         conn1.cursor() as cur,
     ):
         cur.execute("select 'will abort'")
+
+
+def test_server_close(server: dict) -> None:
+    conn = snowflake.connector.connect(**server)
+
+    # conn.close() ignores errors so we call the endpoint directly
+    assert conn.rest and conn.rest.token
+    response = requests.post(
+        f"http://{server['host']}:{server['port']}/session?delete=true",
+        headers={"Authorization": f'Snowflake Token="{conn.rest.token}"'},
+        timeout=5,
+        json={},
+    )
+    assert response.status_code == 200
+    assert response.json()["success"]
 
 
 def test_server_no_gzip(server: dict) -> None:
