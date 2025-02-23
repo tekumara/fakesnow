@@ -47,7 +47,15 @@ async def login_request(request: Request) -> JSONResponse:
         fs = shared_fs
     token = secrets.token_urlsafe(32)
     sessions[token] = fs.connect(database, schema)
-    return JSONResponse({"data": {"token": token}, "success": True})
+    return JSONResponse(
+        {
+            "data": {
+                "token": token,
+                "parameters": [{"name": "AUTOCOMMIT", "value": True}],
+            },
+            "success": True,
+        }
+    )
 
 
 async def query_request(request: Request) -> JSONResponse:

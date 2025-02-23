@@ -14,6 +14,86 @@ from snowflake.connector.cursor import ResultMetadata
 from tests.utils import indent
 
 
+def test_server_abort_request(server: dict) -> None:
+    with (
+        snowflake.connector.connect(
+            **server,
+            # triggers an abort request
+            network_timeout=0,
+        ) as conn1,
+        conn1.cursor() as cur,
+    ):
+        cur.execute("select 'will abort'")
+
+
+def test_server_close(server: dict) -> None:
+    conn = snowflake.connector.connect(**server)
+
+    # conn.close() ignores errors so we call the endpoint directly
+    assert conn.rest and conn.rest.token
+    response = requests.post(
+        f"http://{server['host']}:{server['port']}/session?delete=true",
+        headers={"Authorization": f'Snowflake Token="{conn.rest.token}"'},
+        timeout=5,
+        json={},
+    )
+    assert response.status_code == 200
+    assert response.json()["success"]
+
+
+def test_server_params(server: dict) -> None:
+    # mimic the jdbc driver
+    headers = {
+        "client_app_id": "JDBC",
+        "client_app_version": "3.22.0",
+        "accept": "application/json",
+        "accept-encoding": "",
+        "user-agent": "JDBC/3.22.0 (Mac OS X 15.3.1) JAVA/21.0.5",
+    }
+
+    login_payload = {
+        "data": {
+            "ACCOUNT_NAME": "127",
+            "CLIENT_APP_ID": "JDBC",
+            "CLIENT_APP_VERSION": "3.22.0",
+            "CLIENT_ENVIRONMENT": {
+                "tracing": "INFO",
+                "OS": "Mac OS X",
+                "OCSP_MODE": "FAIL_OPEN",
+                "JAVA_VM": "OpenJDK 64-Bit Server VM",
+                "APPLICATION": "DBeaver_DBeaver",
+                "JDBC_JAR_NAME": "snowflake-jdbc-3.22.0",
+                "password": "****",
+                "database": "TEST_DB",
+                "application": "DBeaver_DBeaver",
+                "OS_VERSION": "15.3.1",
+                "serverURL": "http://127.0.0.1:8000/",
+                "JAVA_VERSION": "21.0.5",
+                "user": "fake",
+                "account": "127",
+                "JAVA_RUNTIME": "OpenJDK Runtime Environment",
+            },
+            "EXT_AUTHN_DUO_METHOD": "push",
+            "LOGIN_NAME": "fake",
+            "PASSWORD": "snow",
+            "SESSION_PARAMETERS": {},
+        },
+        "inFlightCtx": None,
+    }
+
+    response = requests.post(
+        f"http://{server['host']}:{server['port']}/session/v1/login-request",
+        headers=headers,
+        json=login_payload,
+        timeout=5,
+    )
+    assert response.status_code == 200
+    assert response.json()["success"]
+
+    # expected by the JDBC driver
+    assert {"name": "AUTOCOMMIT", "value": True} in response.json()["data"]["parameters"]
+
+
 def test_server_rowcount(scur: snowflake.connector.cursor.SnowflakeCursor):
     cur = scur
 
@@ -98,33 +178,6 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
             2,
         )
     ]
-
-
-def test_server_abort_request(server: dict) -> None:
-    with (
-        snowflake.connector.connect(
-            **server,
-            # triggers an abort request
-            network_timeout=0,
-        ) as conn1,
-        conn1.cursor() as cur,
-    ):
-        cur.execute("select 'will abort'")
-
-
-def test_server_close(server: dict) -> None:
-    conn = snowflake.connector.connect(**server)
-
-    # conn.close() ignores errors so we call the endpoint directly
-    assert conn.rest and conn.rest.token
-    response = requests.post(
-        f"http://{server['host']}:{server['port']}/session?delete=true",
-        headers={"Authorization": f'Snowflake Token="{conn.rest.token}"'},
-        timeout=5,
-        json={},
-    )
-    assert response.status_code == 200
-    assert response.json()["success"]
 
 
 def test_server_no_gzip(server: dict) -> None:
