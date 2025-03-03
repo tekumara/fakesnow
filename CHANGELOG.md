@@ -2,6 +2,14 @@
 
 # Changelog
 
+## [0.9.30](https://github.com/tekumara/fakesnow/compare/v0.9.29...v0.9.30) (2025-02-23)
+
+
+### Features
+
+* **server:** return AUTOCOMMIT parameter for JDBC driver ([89bcb69](https://github.com/tekumara/fakesnow/commit/89bcb69f11c5a32fcc5b58aa6d427fd3f6b375a3)), closes [#178](https://github.com/tekumara/fakesnow/issues/178)
+* **server:** support session close ([f93f924](https://github.com/tekumara/fakesnow/commit/f93f924931253c68379b38f5164e854a9b8ecdfa)), closes [#176](https://github.com/tekumara/fakesnow/issues/176)
+
 ## [0.9.29](https://github.com/tekumara/fakesnow/compare/v0.9.28...v0.9.29) (2025-02-16)
 
 
