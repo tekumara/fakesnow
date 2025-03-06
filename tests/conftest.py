@@ -11,6 +11,7 @@ from sqlalchemy.engine import Engine, create_engine
 
 import fakesnow.fixtures
 import fakesnow.server
+from tests.moto import create_moto_fixture, create_moto_server
 
 pytest_plugins = fakesnow.fixtures.__name__
 
@@ -99,6 +100,9 @@ def scur(
     with sconn.cursor() as cur:
         yield cur
 
+
+moto_server = create_moto_server()
+moto = create_moto_fixture()
 
 if os.getenv("TEST_SERVER"):
     # use server to run all tests
