@@ -8,6 +8,43 @@ import pytz
 import snowflake.connector.cursor
 
 
+def test_show_databases(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("show databases")
+    assert dcur.fetchall() == [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "name": "DB1",
+            "is_default": "N",
+            "is_current": "N",
+            "origin": "",
+            "owner": "SYSADMIN",
+            "comment": None,
+            "options": "",
+            "retention_time": 1,
+            "kind": "STANDARD",
+            "budget": None,
+            "owner_role_type": "ROLE",
+            "object_visibility": None,
+        }
+    ]
+    # test describe
+    assert [r.name for r in dcur.description] == [
+        "created_on",
+        "name",
+        "is_default",
+        "is_current",
+        "origin",
+        "owner",
+        "comment",
+        "options",
+        "retention_time",
+        "kind",
+        "budget",
+        "owner_role_type",
+        "object_visibility",
+    ]
+
+
 @pytest.mark.xfail(
     reason="only partial supports exists to support sqlalchemy, see test_reflect",
 )

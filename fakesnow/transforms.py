@@ -1046,6 +1046,37 @@ def show_schemas(expression: exp.Expression, current_database: str | None = None
     return expression
 
 
+SQL_SHOW_DATABASES = """
+SELECT
+    to_timestamp(0)::timestamptz as 'created_on',
+    database_name as 'name',
+    'N' as 'is_default',
+    'N' as 'is_current',
+    '' as 'origin',
+    'SYSADMIN' as 'owner',
+    comment,
+    '' as 'options',
+    1 as 'retention_time',
+    'STANDARD' as 'kind',
+    NULL as 'budget',
+    'ROLE' as 'owner_role_type',
+    NULL as 'object_visibility'
+FROM duckdb_databases
+WHERE database_name NOT IN ('memory', '_fs_global')
+"""
+
+
+def show_databases(expression: exp.Expression) -> exp.Expression:
+    """Transform SHOW DATABASES to a query against the information_schema.schemata table.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-databases
+    """
+    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "DATABASES":
+        return sqlglot.parse_one(SQL_SHOW_DATABASES, read="duckdb")
+
+    return expression
+
+
 def split(expression: exp.Expression) -> exp.Expression:
     """
     Convert output of duckdb str_split from varchar[] to JSON array to match Snowflake.
