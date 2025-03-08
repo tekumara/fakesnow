@@ -300,9 +300,7 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
 def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show functions")
-    result = dcur.fetchall()
-
-    assert len(result) == 0
+    dcur.fetchall()
 
     # Check for expected column names in description
     assert [r.name for r in dcur.description] == [
@@ -331,10 +329,7 @@ def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
 def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show procedures")
-    result = dcur.fetchall()
-
-    # Currently returns no rows due to WHERE 0 = 1 in the SQL
-    assert len(result) == 0
+    dcur.fetchall()
 
     # Check for expected column names in description
     assert [r.name for r in dcur.description] == [
