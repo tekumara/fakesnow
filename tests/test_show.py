@@ -302,7 +302,7 @@ def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show functions")
     result = dcur.fetchall()
 
-    assert len(result) == 1
+    assert len(result) == 0
 
     # Check for expected column names in description
     assert [r.name for r in dcur.description] == [
@@ -326,4 +326,32 @@ def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "language",
         "is_memoizable",
         "is_data_metric",
+    ]
+
+
+def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("show procedures")
+    result = dcur.fetchall()
+
+    # Currently returns no rows due to WHERE 0 = 1 in the SQL
+    assert len(result) == 0
+
+    # Check for expected column names in description
+    assert [r.name for r in dcur.description] == [
+        "created_on",
+        "name",
+        "schema_name",
+        "is_builtin",
+        "is_aggregate",
+        "is_ansi",
+        "min_num_arguments",
+        "max_num_arguments",
+        "arguments",
+        "description",
+        "catalog_name",
+        "is_table_function",
+        "valid_for_clustering",
+        "is_secure",
+        "secrets",
+        "external_access_integrations",
     ]

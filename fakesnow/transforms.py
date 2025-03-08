@@ -1077,7 +1077,7 @@ def show_databases(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-# returns a single function
+# returns zero rows
 SQL_SHOW_FUNCTIONS = """
 SELECT
     '1970-01-01 00:00:00 UTC'::timestamptz as created_on,
@@ -1099,7 +1099,8 @@ SELECT
     'N' as is_external_function,
     'SQL' as language,
     'N' as is_memoizable,
-    'N' as is_data_metric;
+    'N' as is_data_metric
+WHERE 0 = 1;
 """
 
 
@@ -1110,6 +1111,44 @@ def show_functions(expression: exp.Expression) -> exp.Expression:
     """
     if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "FUNCTIONS":
         return sqlglot.parse_one(SQL_SHOW_FUNCTIONS, read="duckdb")
+
+    return expression
+
+
+# returns zero rows
+SQL_SHOW_PROCEDURES = """
+SELECT
+    '2012-08-01 07:00:00 UTC'::timestamptz as 'created_on',
+    'SYSTEM$CLASSIFY' as 'name',
+    '' as 'schema_name',
+    'Y' as 'is_builtin',
+    'N' as 'is_aggregate',
+    'N' as 'is_ansi',
+    2 as 'min_num_arguments',
+    2 as 'max_num_arguments',
+    'SYSTEM$CLASSIFY(VARCHAR, OBJECT) RETURN OBJECT' as 'arguments',
+    'classify stored proc' as 'description',
+    '' as 'catalog_name',
+    'N' as 'is_table_function',
+    'N' as 'valid_for_clustering',
+    NULL as 'is_secure',
+    '' as 'secrets',
+    '' as 'external_access_integrations',
+WHERE 0 = 1;
+"""
+
+
+def show_procedures(expression: exp.Expression) -> exp.Expression:
+    """Transform SHOW PROCEDURES.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-procedures
+    """
+    if (
+        isinstance(expression, exp.Show)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "PROCEDURES"
+    ):
+        return sqlglot.parse_one(SQL_SHOW_PROCEDURES, read="duckdb")
 
     return expression
 
