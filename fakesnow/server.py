@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import gzip
 import json
+import logging
 import secrets
 from base64 import b64encode
 from dataclasses import dataclass
@@ -18,6 +19,10 @@ from fakesnow.arrow import to_ipc, to_sf
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.rowtype import describe_as_rowtype
+
+logger = logging.getLogger("fakesnow.server")
+# use same format as uvicorn
+logger.handlers = logging.getLogger("uvicorn").handlers
 
 shared_fs = FakeSnow()
 sessions: dict[str, FakeSnowflakeConnection] = {}
@@ -86,6 +91,13 @@ async def query_request(request: Request) -> JSONResponse:
                     "success": False,
                 }
             )
+        except Exception as e:
+            # we have a bug or use of an unsupported feature
+            msg = f"Unhandled error during query {sql_text=}"
+            logger.error(msg, exc_info=e)
+            # my guess at mimicking a 500 error as per https://docs.snowflake.com/en/developer-guide/sql-api/reference
+            # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318
+            raise ServerError(status_code=500, code="261000", message=msg) from None
 
         rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 

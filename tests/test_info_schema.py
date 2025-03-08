@@ -73,7 +73,7 @@ def test_describe_view_columns(dcur: snowflake.connector.cursor.DictCursor):
         ResultMetadata(name='expression', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='comment', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='policy name', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        # TODO: ignore the following, see https://github.com/tekumara/fakesnow/issues/26
+        # TODO: return correct type_code, see https://github.com/tekumara/fakesnow/issues/26
         # ResultMetadata(name='privacy domain', type_code=9, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)
     ]
     # fmt: on
