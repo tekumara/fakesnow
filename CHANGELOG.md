@@ -2,6 +2,23 @@
 
 # Changelog
 
+## [0.9.30](https://github.com/tekumara/fakesnow/compare/v0.9.29...v0.9.30) (2025-03-08)
+
+
+### Features
+
+* **server:** return AUTOCOMMIT parameter for JDBC driver ([89bcb69](https://github.com/tekumara/fakesnow/commit/89bcb69f11c5a32fcc5b58aa6d427fd3f6b375a3)), closes [#178](https://github.com/tekumara/fakesnow/issues/178)
+* **server:** support session close ([f93f924](https://github.com/tekumara/fakesnow/commit/f93f924931253c68379b38f5164e854a9b8ecdfa)), closes [#176](https://github.com/tekumara/fakesnow/issues/176)
+* show databases ([8615334](https://github.com/tekumara/fakesnow/commit/8615334de2d5b0b86c2e9e3789f33c57e4da1127)), closes [#179](https://github.com/tekumara/fakesnow/issues/179)
+* show functions ([cd8f602](https://github.com/tekumara/fakesnow/commit/cd8f6026ad3e9f6a272937bc88916c33a486c191)), closes [#186](https://github.com/tekumara/fakesnow/issues/186)
+* show procedures ([29b7a8d](https://github.com/tekumara/fakesnow/commit/29b7a8d7c3747f62f2195f2d55110400e9e0299c)), closes [#187](https://github.com/tekumara/fakesnow/issues/187)
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.393 to 1.1.396 ([#182](https://github.com/tekumara/fakesnow/issues/182)) ([822e98a](https://github.com/tekumara/fakesnow/commit/822e98af0660322ee35c5cfce37ad248f3dce69d))
+* **deps:** update sqlglot requirement from ~=26.6.0 to ~=26.7.0 ([#180](https://github.com/tekumara/fakesnow/issues/180)) ([4668547](https://github.com/tekumara/fakesnow/commit/466854728271af0ced11b55e79c032b94a80d6cf))
+
 ## [0.9.29](https://github.com/tekumara/fakesnow/compare/v0.9.28...v0.9.29) (2025-02-16)
 
 
