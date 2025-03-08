@@ -296,3 +296,34 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
         # "is_hybrid",
         # "is_iceberg",
     ]
+
+
+def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("show functions")
+    result = dcur.fetchall()
+
+    assert len(result) == 1
+
+    # Check for expected column names in description
+    assert [r.name for r in dcur.description] == [
+        "created_on",
+        "name",
+        "schema_name",
+        "is_builtin",
+        "is_aggregate",
+        "is_ansi",
+        "min_num_arguments",
+        "max_num_arguments",
+        "arguments",
+        "description",
+        "catalog_name",
+        "is_table_function",
+        "valid_for_clustering",
+        "is_secure",
+        "secrets",
+        "external_access_integrations",
+        "is_external_function",
+        "language",
+        "is_memoizable",
+        "is_data_metric",
+    ]

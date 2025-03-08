@@ -1077,6 +1077,43 @@ def show_databases(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+# returns a single function
+SQL_SHOW_FUNCTIONS = """
+SELECT
+    '1970-01-01 00:00:00 UTC'::timestamptz as created_on,
+    'SYSTIMESTAMP' as name,
+    '' as schema_name,
+    'Y' as is_builtin,
+    'N' as is_aggregate,
+    'N' as is_ansi,
+    0 as min_num_arguments,
+    0 as max_num_arguments,
+    'SYSTIMESTAMP() RETURN TIMESTAMP_LTZ' as arguments,
+    'Returns the current timestamp' as description,
+    '' as catalog_name,
+    'N' as is_table_function,
+    'N' as valid_for_clustering,
+    NULL as is_secure,
+    '' as secrets,
+    '' as external_access_integrations,
+    'N' as is_external_function,
+    'SQL' as language,
+    'N' as is_memoizable,
+    'N' as is_data_metric;
+"""
+
+
+def show_functions(expression: exp.Expression) -> exp.Expression:
+    """Transform SHOW FUNCTIONS.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-functions
+    """
+    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "FUNCTIONS":
+        return sqlglot.parse_one(SQL_SHOW_FUNCTIONS, read="duckdb")
+
+    return expression
+
+
 def split(expression: exp.Expression) -> exp.Expression:
     """
     Convert output of duckdb str_split from varchar[] to JSON array to match Snowflake.
