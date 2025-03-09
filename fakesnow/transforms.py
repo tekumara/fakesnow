@@ -8,7 +8,6 @@ import sqlglot
 from sqlglot import exp
 
 from fakesnow import transforms_merge
-from fakesnow.instance import USERS_TABLE_FQ_NAME
 from fakesnow.variables import Variables
 
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.' as status")
@@ -1492,7 +1491,7 @@ def show_users(expression: exp.Expression) -> exp.Expression:
     https://docs.snowflake.com/en/sql-reference/sql/show-users
     """
     if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "USERS":
-        return sqlglot.parse_one(f"SELECT * FROM {USERS_TABLE_FQ_NAME}", read="duckdb")
+        return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_users_ext", read="duckdb")
 
     return expression
 
@@ -1510,7 +1509,9 @@ def create_user(expression: exp.Expression) -> exp.Expression:
             _, name, *ignored = sub_exp.split(" ")
             if ignored:
                 raise NotImplementedError(f"`CREATE USER` with {ignored} not yet supported")
-            return sqlglot.parse_one(f"INSERT INTO {USERS_TABLE_FQ_NAME} (name) VALUES ('{name}')", read="duckdb")
+            return sqlglot.parse_one(
+                f"INSERT INTO _fs_global._fs_information_schema._fs_users_ext (name) VALUES ('{name}')", read="duckdb"
+            )
 
     return expression
 

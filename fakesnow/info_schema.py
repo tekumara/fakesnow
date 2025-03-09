@@ -33,6 +33,39 @@ create table if not exists _fs_global._fs_information_schema._fs_columns_ext (
 )
 """
 
+# replicates the output structure of https://docs.snowflake.com/en/sql-reference/sql/show-users
+SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_USERS_TABLE_EXT = """
+create table if not exists _fs_global._fs_information_schema._fs_users_ext (
+    name varchar,
+    created_on TIMESTAMPTZ,
+    login_name varchar,
+    display_name varchar,
+    first_name varchar,
+    last_name varchar,
+    email varchar,
+    mins_to_unlock varchar,
+    days_to_expiry varchar,
+    comment varchar,
+    disabled varchar,
+    must_change_password varchar,
+    snowflake_lock varchar,
+    default_warehouse varchar,
+    default_namespace varchar,
+    default_role varchar,
+    default_secondary_roles varchar,
+    ext_authn_duo varchar,
+    ext_authn_uid varchar,
+    mins_to_bypass_mfa varchar,
+    owner varchar,
+    last_success_login TIMESTAMPTZ,
+    expires_at_time TIMESTAMPTZ,
+    locked_until_time TIMESTAMPTZ,
+    has_password varchar,
+    has_rsa_public_key varchar,
+)
+"""
+
+
 SQL_CREATE_FS_INFORMATION_SCHEMA = Template(
     """
 create schema if not exists ${catalog}._fs_information_schema
@@ -169,6 +202,7 @@ def fs_global_creation_sql(catalog: str) -> str:
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_TABLES_EXT};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_EXT};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_VIEW};
+        {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_USERS_TABLE_EXT};
     """
 
 

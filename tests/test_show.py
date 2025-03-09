@@ -177,9 +177,8 @@ def test_show_primary_keys_from_table(cur: snowflake.connector.cursor.SnowflakeC
 def test_show_excludes_fs(_fakesnow: None):
     # when connecting without a database or schema there should be no objects
     with snowflake.connector.connect() as conn, conn.cursor() as cur:
-        # TODO: still showing _fs_users_ext
-        # cur.execute("show objects in account")
-        # assert cur.fetchall() == []
+        cur.execute("show objects in account")
+        assert cur.fetchall() == []
 
         cur.execute("show schemas in account")
         assert cur.fetchall() == []
