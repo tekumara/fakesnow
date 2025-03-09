@@ -7,7 +7,7 @@ from string import Template
 from fakesnow.instance import GLOBAL_DATABASE_NAME
 
 # use ext prefix in columns to disambiguate when joining with information_schema.tables
-SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT = f"""
+SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_TABLES_EXT = f"""
 create table if not exists {GLOBAL_DATABASE_NAME}.main._fs_tables_ext (
     ext_table_catalog varchar,
     ext_table_schema varchar,
@@ -18,7 +18,7 @@ create table if not exists {GLOBAL_DATABASE_NAME}.main._fs_tables_ext (
 """
 
 
-SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_EXT = f"""
+SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_EXT = f"""
 create table if not exists {GLOBAL_DATABASE_NAME}.main._fs_columns_ext (
     ext_table_catalog varchar,
     ext_table_schema varchar,
@@ -36,12 +36,17 @@ create schema if not exists ${catalog}._fs_information_schema
 """
 )
 
+SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW = Template(
+    """
+create view if not exists ${catalog}._fs_information_schema._fs_columns AS
+select * from _fs_global.main._fs_columns where table_catalog = '${catalog}'
+    """
+)
 
 # only include fields applicable to snowflake (as mentioned by describe table information_schema.columns)
 # snowflake integers are 38 digits, base 10, See https://docs.snowflake.com/en/sql-reference/data-types-numeric
-SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW = Template(
-    """
-create view if not exists ${catalog}._fs_information_schema._fs_columns_snowflake AS
+SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_VIEW = """
+create view if not exists _fs_global.main._fs_columns AS
 select
     columns.table_catalog AS table_catalog,
     columns.table_schema AS table_schema,
@@ -81,10 +86,8 @@ LEFT JOIN duckdb_columns ddb_columns
  AND ddb_columns.schema_name = columns.table_schema
  AND ddb_columns.table_name = columns.table_name
  AND ddb_columns.column_name = columns.column_name
-where database_name = '${catalog}'
-  and schema_name != '_fs_information_schema'
+where schema_name != '_fs_information_schema'
 """
-)
 
 
 # replicates https://docs.snowflake.com/sql-reference/info-schema/databases
@@ -147,7 +150,7 @@ where database_name = '${catalog}'
 )
 
 
-def creation_sql(catalog: str) -> str:
+def per_db_creation_sql(catalog: str) -> str:
     return f"""
         {SQL_CREATE_FS_INFORMATION_SCHEMA.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW.substitute(catalog=catalog)};
@@ -159,8 +162,9 @@ def creation_sql(catalog: str) -> str:
 
 def fs_global_creation_sql(catalog: str) -> str:
     return f"""
-        {SQL_CREATE_INFORMATION_SCHEMA_TABLES_EXT};
-        {SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_EXT};
+        {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_TABLES_EXT};
+        {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_EXT};
+        {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_VIEW};
     """
 
 

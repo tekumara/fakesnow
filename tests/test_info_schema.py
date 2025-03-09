@@ -58,7 +58,7 @@ def test_describe_view_columns(dcur: snowflake.connector.cursor.DictCursor):
     result: list[dict] = dcur.fetchall()  # type: ignore
     assert list(result[0].keys()) == cols
     names = [r["name"] for r in result]
-    # should contain snowflake-specific columns (from _FS_COLUMNS_SNOWFLAKE)
+    # should contain snowflake-specific columns
     assert "comment" in names
     # fmt: off
     assert dcur.description[:-1] == [

@@ -166,7 +166,7 @@ SELECT
     NULL::VARCHAR AS "comment",
     NULL::VARCHAR AS "policy name",
     NULL::JSON AS "privacy domain",
-FROM _fs_information_schema._fs_columns_snowflake
+FROM _fs_information_schema._fs_columns
 WHERE table_catalog = '${catalog}' AND table_schema = '${schema}' AND table_name = '${table}'
 ORDER BY ordinal_position
 """
@@ -195,7 +195,7 @@ FROM (DESCRIBE ${view})
 def describe_table(
     expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
 ) -> exp.Expression:
-    """Redirect to the information_schema._fs_columns_snowflake to match snowflake.
+    """Redirect to the information_schema._fs_columns to match snowflake.
 
     See https://docs.snowflake.com/en/sql-reference/sql/desc-table
     """
@@ -210,17 +210,10 @@ def describe_table(
         catalog = table.catalog or current_database
         schema = table.db or current_schema
 
-        # TODO - move this after information_schema_fs_columns_snowflake
-        if schema and schema.upper() == "INFORMATION_SCHEMA":
-            # information schema views don't exist in _fs_columns_snowflake
-            return sqlglot.parse_one(
-                SQL_DESCRIBE_INFO_SCHEMA.substitute(view=f"system.information_schema.{table.name}"), read="duckdb"
-            )
-        elif table.name.upper() == "_FS_COLUMNS_SNOWFLAKE":
-            # information schema views don't exist in _fs_columns_snowflake
-            return sqlglot.parse_one(
-                SQL_DESCRIBE_INFO_SCHEMA.substitute(view="_fs_information_schema._FS_COLUMNS_SNOWFLAKE"), read="duckdb"
-            )
+        if schema and schema.upper() == "_FS_INFORMATION_SCHEMA":
+            # describing an information_schema view
+            # (schema already transformed from information_schema -> _fs_information_schema)
+            return sqlglot.parse_one(SQL_DESCRIBE_INFO_SCHEMA.substitute(view=f"{schema}.{table.name}"), read="duckdb")
 
         return sqlglot.parse_one(
             SQL_DESCRIBE_TABLE.substitute(catalog=catalog, schema=schema, table=table.name),
@@ -230,7 +223,7 @@ def describe_table(
     return expression
 
 
-def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:
+def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:  #
     """Drop schema cascade.
 
     By default duckdb won't delete a schema if it contains tables, whereas snowflake will.
@@ -602,8 +595,8 @@ def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def information_schema_fs_columns_snowflake(expression: exp.Expression) -> exp.Expression:
-    """Redirect to the _FS_COLUMNS_SNOWFLAKE view which has metadata that matches snowflake.
+def information_schema_fs_columns(expression: exp.Expression) -> exp.Expression:
+    """Redirect to the _FS_COLUMNS view which has metadata that matches snowflake.
 
     Because duckdb doesn't store character_maximum_length or character_octet_length.
     """
@@ -615,7 +608,7 @@ def information_schema_fs_columns_snowflake(expression: exp.Expression) -> exp.E
         and expression.name
         and expression.name.upper() == "COLUMNS"
     ):
-        expression.set("this", exp.Identifier(this="_FS_COLUMNS_SNOWFLAKE", quoted=False))
+        expression.set("this", exp.Identifier(this="_FS_COLUMNS", quoted=False))
         expression.set("db", exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False))
 
     return expression
