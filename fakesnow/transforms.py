@@ -1016,7 +1016,7 @@ select
     catalog_name as 'database_name',
     NULL as 'schema_name'
 from information_schema.schemata
-where not catalog_name in ('memory', 'system', 'temp')
+where not catalog_name in ('memory', 'system', 'temp', '_fs_global')
   and not schema_name in ('main', 'pg_catalog')
 """
 

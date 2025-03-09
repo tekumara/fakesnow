@@ -4,11 +4,14 @@ from __future__ import annotations
 
 from string import Template
 
-from fakesnow.instance import GLOBAL_DATABASE_NAME
+SQL_CREATE_GLOBAL_FS_INFORMATION_SCHEMA = """
+create schema if not exists _fs_global._fs_information_schema
+"""
+
 
 # use ext prefix in columns to disambiguate when joining with information_schema.tables
-SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_TABLES_EXT = f"""
-create table if not exists {GLOBAL_DATABASE_NAME}.main._fs_tables_ext (
+SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_TABLES_EXT = """
+create table if not exists _fs_global._fs_information_schema._fs_tables_ext (
     ext_table_catalog varchar,
     ext_table_schema varchar,
     ext_table_name varchar,
@@ -18,8 +21,8 @@ create table if not exists {GLOBAL_DATABASE_NAME}.main._fs_tables_ext (
 """
 
 
-SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_EXT = f"""
-create table if not exists {GLOBAL_DATABASE_NAME}.main._fs_columns_ext (
+SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_EXT = """
+create table if not exists _fs_global._fs_information_schema._fs_columns_ext (
     ext_table_catalog varchar,
     ext_table_schema varchar,
     ext_table_name varchar,
@@ -39,14 +42,14 @@ create schema if not exists ${catalog}._fs_information_schema
 SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW = Template(
     """
 create view if not exists ${catalog}._fs_information_schema._fs_columns AS
-select * from _fs_global.main._fs_columns where table_catalog = '${catalog}'
+select * from _fs_global._fs_information_schema._fs_columns where table_catalog = '${catalog}'
     """
 )
 
 # only include fields applicable to snowflake (as mentioned by describe table information_schema.columns)
 # snowflake integers are 38 digits, base 10, See https://docs.snowflake.com/en/sql-reference/data-types-numeric
 SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_VIEW = """
-create view if not exists _fs_global.main._fs_columns AS
+create view if not exists _fs_global._fs_information_schema._fs_columns AS
 select
     columns.table_catalog AS table_catalog,
     columns.table_schema AS table_schema,
@@ -76,7 +79,7 @@ collation_name, is_identity, identity_generation, identity_cycle,
     null::VARCHAR as identity_start,
     null::VARCHAR as identity_increment,
 from system.information_schema.columns columns
-left join _fs_global.main._fs_columns_ext ext
+left join _fs_global._fs_information_schema._fs_columns_ext ext
   on ext_table_catalog = columns.table_catalog
  AND ext_table_schema = columns.table_schema
  AND ext_table_name = columns.table_name
@@ -115,7 +118,7 @@ SQL_CREATE_INFORMATION_SCHEMA_TABLES_VIEW = Template(
 create view if not exists ${catalog}._fs_information_schema._fs_tables AS
 select *
 from system.information_schema.tables tables
-left join _fs_global.main._fs_tables_ext on
+left join _fs_global._fs_information_schema._fs_tables_ext on
     tables.table_catalog = _fs_tables_ext.ext_table_catalog AND
     tables.table_schema = _fs_tables_ext.ext_table_schema AND
     tables.table_name = _fs_tables_ext.ext_table_name
@@ -162,6 +165,7 @@ def per_db_creation_sql(catalog: str) -> str:
 
 def fs_global_creation_sql(catalog: str) -> str:
     return f"""
+        {SQL_CREATE_GLOBAL_FS_INFORMATION_SCHEMA};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_TABLES_EXT};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_EXT};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_VIEW};
@@ -170,7 +174,7 @@ def fs_global_creation_sql(catalog: str) -> str:
 
 def insert_table_comment_sql(catalog: str, schema: str, table: str, comment: str) -> str:
     return f"""
-        INSERT INTO {GLOBAL_DATABASE_NAME}.main._fs_tables_ext
+        INSERT INTO _fs_global._fs_information_schema._fs_tables_ext
         values ('{catalog}', '{schema}', '{table}', '{comment}')
         ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name)
         DO UPDATE SET comment = excluded.comment
@@ -184,7 +188,7 @@ def insert_text_lengths_sql(catalog: str, schema: str, table: str, text_lengths:
     )
 
     return f"""
-        INSERT INTO {GLOBAL_DATABASE_NAME}.main._fs_columns_ext
+        INSERT INTO _fs_global._fs_information_schema._fs_columns_ext
         values {values}
         ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name, ext_column_name)
         DO UPDATE SET ext_character_maximum_length = excluded.ext_character_maximum_length,
