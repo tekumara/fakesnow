@@ -279,6 +279,8 @@ class FakeSnowflakeCursor:
                 raise e
         except duckdb.ConnectionException as e:
             raise snowflake.connector.errors.DatabaseError(msg=e.args[0], errno=250002, sqlstate="08003") from None
+        except duckdb.ParserException as e:
+            raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=1003, sqlstate="42000") from None
 
         affected_count = None
 

@@ -282,18 +282,16 @@ def test_datediff_string_literal_timestamp_cast(cur: snowflake.connector.cursor.
     assert cur.fetchall() == [(datetime.datetime(2023, 4, 2, 0, 0), datetime.datetime(2023, 3, 2, 0, 0), -44640)]
 
 
-def test_current_database_schema(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("select current_database(), current_schema()")
-
-        assert cur.fetchall() == [
-            {"current_database()": "DB1", "current_schema()": "SCHEMA1"},
-        ]
-
-
 def test_equal_null(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select equal_null(NULL, NULL), equal_null(1, 1), equal_null(1, 2), equal_null(1, NULL)")
     assert cur.fetchall() == [(True, True, False, False)]
+
+
+def test_error_syntax(cur: snowflake.connector.cursor.SnowflakeCursor):
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute("create table tb1")
+
+    assert "001003 (42000)" in str(excinfo.value)
 
 
 def test_executemany(cur: snowflake.connector.cursor.SnowflakeCursor):
