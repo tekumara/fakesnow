@@ -14,6 +14,24 @@ import snowflake.connector.pandas_tools
 import fakesnow
 
 
+def test_close_conn(conn: snowflake.connector.SnowflakeConnection):
+    assert not conn.is_closed()
+
+    conn.close()
+    with pytest.raises(snowflake.connector.errors.DatabaseError) as excinfo:
+        conn.execute_string("select 1")
+
+    # actual snowflake error message is:
+    # 250002 (08003): Connection is closed
+    assert "250002 (08003)" in str(excinfo.value)
+
+    assert conn.is_closed()
+
+
+def test_close_cur(cur: snowflake.connector.cursor.SnowflakeCursor):
+    assert cur.close() is True
+
+
 def test_connect_auto_create(_fakesnow: None):
     with snowflake.connector.connect(database="db1", schema="schema1"):
         # creates db1 and schema1
@@ -215,3 +233,12 @@ def test_connect_with_non_existent_db_or_schema(_fakesnow_no_auto_create: None):
 
         # schema still present on connection
         assert conn.schema == "JAFFLES"
+
+
+def test_current_database_schema(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        cur.execute("select current_database(), current_schema()")
+
+        assert cur.fetchall() == [
+            {"current_database()": "DB1", "current_schema()": "SCHEMA1"},
+        ]

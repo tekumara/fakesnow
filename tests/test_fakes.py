@@ -168,24 +168,6 @@ def test_clone(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1, "Jenny", True)]
 
 
-def test_close_conn(conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor):
-    assert not conn.is_closed()
-
-    conn.close()
-    with pytest.raises(snowflake.connector.errors.DatabaseError) as excinfo:
-        conn.execute_string("select 1")
-
-    # actual snowflake error message is:
-    # 250002 (08003): Connection is closed
-    assert "250002 (08003)" in str(excinfo.value)
-
-    assert conn.is_closed()
-
-
-def test_close_cur(conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor):
-    assert cur.close() is True
-
-
 def test_create_database_respects_if_not_exists() -> None:
     with tempfile.TemporaryDirectory(prefix="fakesnow-test") as db_path, fakesnow.patch(db_path=db_path):
         cursor = snowflake.connector.connect().cursor()
