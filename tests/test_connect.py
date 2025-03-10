@@ -138,6 +138,10 @@ def test_connect_without_database(_fakesnow_no_auto_create: None):
             in str(excinfo.value)
         )
 
+        cur.execute("create database db1")
+        # should succeed even though there is no current database (used by dbeaver)
+        cur.execute("show objects in schema db1.information_schema")
+
         # test description works without database
         assert cur.execute("SELECT 1").fetchall() == [(1,)]
         assert cur.description

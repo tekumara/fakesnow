@@ -63,6 +63,11 @@ def is_unqualified_table_expression(expression: exp.Expression) -> tuple[bool, b
         else:
             raise AssertionError(f"Unexpected parent kind: {parent_kind.name}")
 
+    elif node.parent.key == "show":
+        # don't require a database or schema for SHOW
+        # TODO: make this more nuanced
+        no_database = False
+        no_schema = False
     else:
         no_database = not node.args.get("catalog")
         no_schema = not node.args.get("db")
