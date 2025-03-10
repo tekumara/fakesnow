@@ -285,10 +285,12 @@ class FakeSnowflakeCursor:
         if set_database := transformed.args.get("set_database"):
             self._conn.database = set_database
             self._conn.database_set = True
+            result_sql = SQL_SUCCESS
 
         elif set_schema := transformed.args.get("set_schema"):
             self._conn._schema = set_schema  # noqa: SLF001
             self._conn.schema_set = True
+            result_sql = SQL_SUCCESS
 
         elif create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions

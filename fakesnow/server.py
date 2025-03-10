@@ -23,6 +23,7 @@ from fakesnow.rowtype import describe_as_rowtype
 logger = logging.getLogger("fakesnow.server")
 # use same format as uvicorn
 logger.handlers = logging.getLogger("uvicorn").handlers
+logger.setLevel(logging.INFO)
 
 shared_fs = FakeSnow()
 sessions: dict[str, FakeSnowflakeConnection] = {}
@@ -51,6 +52,7 @@ async def login_request(request: Request) -> JSONResponse:
         # share the in-memory database across connections
         fs = shared_fs
     token = secrets.token_urlsafe(32)
+    logger.info(f"Session login {database=} {schema=}")
     sessions[token] = fs.connect(database, schema)
     return JSONResponse(
         {
@@ -78,6 +80,8 @@ async def query_request(request: Request) -> JSONResponse:
         try:
             # only a single sql statement is sent at a time by the python snowflake connector
             cur = await run_in_threadpool(conn.cursor().execute, sql_text)
+            rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
+
         except snowflake.connector.errors.ProgrammingError as e:
             code = f"{e.errno:06d}"
             return JSONResponse(
@@ -98,8 +102,6 @@ async def query_request(request: Request) -> JSONResponse:
             # my guess at mimicking a 500 error as per https://docs.snowflake.com/en/developer-guide/sql-api/reference
             # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318
             raise ServerError(status_code=500, code="261000", message=msg) from None
-
-        rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
         if cur._arrow_table:  # noqa: SLF001
             batch_bytes = to_ipc(to_sf(cur._arrow_table, rowtype))  # noqa: SLF001
