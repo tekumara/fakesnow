@@ -7,8 +7,64 @@ from typing import ClassVar, Literal, cast
 import sqlglot
 from sqlglot import exp
 
-from fakesnow import transforms_merge
+from fakesnow.transforms.merge import merge
 from fakesnow.variables import Variables
+
+__all__ = [
+    "alias_in_join",
+    "alter_table_strip_cluster_by",
+    "array_agg",
+    "array_agg_within_group",
+    "array_size",
+    "create_clone",
+    "create_database",
+    "create_user",
+    "dateadd_date_cast",
+    "dateadd_string_literal_timestamp_cast",
+    "datediff_string_literal_timestamp_cast",
+    "drop_schema_cascade",
+    "extract_comment_on_columns",
+    "extract_comment_on_table",
+    "extract_text_length",
+    "flatten",
+    "flatten_value_cast_as_varchar",
+    "float_to_double",
+    "identifier",
+    "indices_to_json_extract",
+    "information_schema_databases",
+    "information_schema_fs_tables",
+    "information_schema_fs_views",
+    "integer_precision",
+    "json_extract_cased_as_varchar",
+    "json_extract_cast_as_varchar",
+    "json_extract_precedence",
+    "merge",
+    "object_construct",
+    "random",
+    "regex_replace",
+    "regex_substr",
+    "sample",
+    "semi_structured_types",
+    "set_schema",
+    "sha256",
+    "show_keys",
+    "show_objects_tables",
+    "show_schemas",
+    "show_users",
+    "split",
+    "tag",
+    "timestamp_ntz",
+    "to_date",
+    "to_decimal",
+    "to_timestamp",
+    "to_timestamp_ntz",
+    "trim_cast_varchar",
+    "try_parse_json",
+    "try_to_decimal",
+    "update_variables",
+    "upper_case_unquoted_identifiers",
+    "values_columns",
+]
 
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.' as status")
 
@@ -731,10 +787,6 @@ def json_extract_precedence(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, (exp.JSONExtract, exp.JSONExtractScalar)):
         return exp.Paren(this=expression)
     return expression
-
-
-def merge(expression: exp.Expression) -> list[exp.Expression]:
-    return transforms_merge.merge(expression)
 
 
 def random(expression: exp.Expression) -> exp.Expression:
