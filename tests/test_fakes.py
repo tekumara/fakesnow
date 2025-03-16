@@ -529,6 +529,12 @@ def test_get_result_batches_dict(dcur: snowflake.connector.cursor.DictCursor):
     )
 
 
+def test_hex_decode_binary(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("SELECT HEX_DECODE_BINARY('EDF1439075A83A447FB8B630DDC9C8DE')")
+    # NB: Snowflake returns bytesarray instead of bytes
+    assert cur.fetchall() == [(b"\xed\xf1C\x90u\xa8:D\x7f\xb8\xb60\xdd\xc9\xc8\xde",)]
+
+
 def test_identifier(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table example (x int)")
     cur.execute("insert into example values(1)")
