@@ -2,6 +2,35 @@
 
 # Changelog
 
+## [0.9.30](https://github.com/tekumara/fakesnow/compare/v0.9.29...v0.9.30) (2025-03-16)
+
+
+### Features
+
+* **server:** log sql text on unhandled exception during query ([2fbb9d8](https://github.com/tekumara/fakesnow/commit/2fbb9d8636bcd924b9bb218ca5e91679a6bc7774))
+* **server:** return AUTOCOMMIT parameter for JDBC driver ([89bcb69](https://github.com/tekumara/fakesnow/commit/89bcb69f11c5a32fcc5b58aa6d427fd3f6b375a3)), closes [#178](https://github.com/tekumara/fakesnow/issues/178)
+* **server:** support session close ([f93f924](https://github.com/tekumara/fakesnow/commit/f93f924931253c68379b38f5164e854a9b8ecdfa)), closes [#176](https://github.com/tekumara/fakesnow/issues/176)
+* show databases ([8615334](https://github.com/tekumara/fakesnow/commit/8615334de2d5b0b86c2e9e3789f33c57e4da1127)), closes [#179](https://github.com/tekumara/fakesnow/issues/179)
+* show functions ([cd8f602](https://github.com/tekumara/fakesnow/commit/cd8f6026ad3e9f6a272937bc88916c33a486c191)), closes [#186](https://github.com/tekumara/fakesnow/issues/186)
+* show procedures ([29b7a8d](https://github.com/tekumara/fakesnow/commit/29b7a8d7c3747f62f2195f2d55110400e9e0299c)), closes [#187](https://github.com/tekumara/fakesnow/issues/187)
+
+
+### Bug Fixes
+
+* _fs_* tables showing in dbeaver ([77def7f](https://github.com/tekumara/fakesnow/commit/77def7f4851f1d6ae5cfd2b18f14dd2df3092b70)), closes [#188](https://github.com/tekumara/fakesnow/issues/188)
+* allow SHOW when not database set ([c6ec3db](https://github.com/tekumara/fakesnow/commit/c6ec3dbda8fbd9222b3d75f86c0bdc6406f4ba65))
+* handle syntax errors ([53f4632](https://github.com/tekumara/fakesnow/commit/53f463201c76bf4de07fa036927a7c5fb21ee518))
+* USE DATABASE/SCHEMA description ([5c208ad](https://github.com/tekumara/fakesnow/commit/5c208ad1531b1fb8ed8af922164d9cc41591dd91))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.393 to 1.1.396 ([#182](https://github.com/tekumara/fakesnow/issues/182)) ([822e98a](https://github.com/tekumara/fakesnow/commit/822e98af0660322ee35c5cfce37ad248f3dce69d))
+* **deps:** update ruff requirement from ~=0.9.4 to ~=0.11.0 ([#190](https://github.com/tekumara/fakesnow/issues/190)) ([08f53df](https://github.com/tekumara/fakesnow/commit/08f53dff319547f67518be581eae2c2c7f1f3805))
+* **deps:** update setuptools requirement from ~=75.6 to ~=76.0 ([#192](https://github.com/tekumara/fakesnow/issues/192)) ([6c60c34](https://github.com/tekumara/fakesnow/commit/6c60c343ad94bdb481d67203b22d199a3f7ed078))
+* **deps:** update sqlglot requirement from ~=26.6.0 to ~=26.7.0 ([#180](https://github.com/tekumara/fakesnow/issues/180)) ([4668547](https://github.com/tekumara/fakesnow/commit/466854728271af0ced11b55e79c032b94a80d6cf))
+* **deps:** update sqlglot requirement from ~=26.7.0 to ~=26.10.1 ([#191](https://github.com/tekumara/fakesnow/issues/191)) ([5986c9a](https://github.com/tekumara/fakesnow/commit/5986c9acd7ff4e96cfde1ec59a6e5b7fb4665f80))
+
 ## [0.9.29](https://github.com/tekumara/fakesnow/compare/v0.9.28...v0.9.29) (2025-02-16)
 
 
