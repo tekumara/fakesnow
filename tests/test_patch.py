@@ -9,6 +9,12 @@ from snowflake.connector.pandas_tools import write_pandas
 import fakesnow
 
 
+def test_patch_nop_regexes():
+    with fakesnow.patch(nop_regexes=["^CALL.*"]), snowflake.connector.connect() as conn, conn.cursor() as cur:
+        cur.execute("call this_procedure_does_not_exist('foo', 'bar);")
+        assert cur.fetchall() == [("Statement executed successfully.",)]
+
+
 def test_patch_snowflake_connector_connect(_fakesnow_no_auto_create: None) -> None:
     assert isinstance(snowflake.connector.connect, MagicMock), "snowflake.connector.connect is not mocked"
 
