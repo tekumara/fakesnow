@@ -836,29 +836,29 @@ def object_construct(expression: exp.Expression) -> exp.Expression:
     See https://docs.snowflake.com/en/sql-reference/functions/object_construct
     """
 
-    if isinstance(expression, exp.Struct):
-        non_null_expressions = []
-        for e in expression.expressions:
-            if not (isinstance(e, exp.PropertyEQ)):
-                non_null_expressions.append(e)
-                continue
+    if not isinstance(expression, exp.Struct):
+        return expression
 
-            left = e.left
-            right = e.right
-
-            left_is_null = isinstance(left, exp.Null)
-            right_is_null = isinstance(right, exp.Null)
-
-            if left_is_null or right_is_null:
-                continue
-
+    non_null_expressions = []
+    for e in expression.expressions:
+        if not (isinstance(e, exp.PropertyEQ)):
             non_null_expressions.append(e)
+            continue
 
-        new_struct = expression.copy()
-        new_struct.set("expressions", non_null_expressions)
-        return exp.Anonymous(this="TO_JSON", expressions=[new_struct])
+        left = e.left
+        right = e.right
 
-    return expression
+        left_is_null = isinstance(left, exp.Null)
+        right_is_null = isinstance(right, exp.Null)
+
+        if left_is_null or right_is_null:
+            continue
+
+        non_null_expressions.append(e)
+
+    new_struct = expression.copy()
+    new_struct.set("expressions", non_null_expressions)
+    return exp.Anonymous(this="TO_JSON", expressions=[new_struct])
 
 
 def regex_replace(expression: exp.Expression) -> exp.Expression:
@@ -1301,8 +1301,6 @@ def _get_to_number_args(e: exp.ToNumber) -> tuple[exp.Expression | None, exp.Exp
                 # to_number('100', 'TM9', 10, 2)
                 if arg_scale:
                     _scale = arg_scale
-            else:
-                pass
         else:
             # to_number('100', 10, ...)
             # arg_format is not a string, so it must be precision.
@@ -1312,12 +1310,10 @@ def _get_to_number_args(e: exp.ToNumber) -> tuple[exp.Expression | None, exp.Exp
             # And arg_precision must be scale
             if arg_precision:
                 _scale = arg_precision
-    else:
-        # If format is not provided, just check for precision and scale directly
-        if arg_precision:
-            _precision = arg_precision
-            if arg_scale:
-                _scale = arg_scale
+    elif arg_precision:
+        _precision = arg_precision
+        if arg_scale:
+            _scale = arg_scale
 
     return _format, _precision, _scale
 
@@ -1638,8 +1634,7 @@ def show_keys(
                   AND table_name NOT LIKE '_fs_%'
                 """
 
-        scope_kind = expression.args.get("scope_kind")
-        if scope_kind:
+        if scope_kind := expression.args.get("scope_kind"):
             table = expression.args["scope"]
 
             if scope_kind == "SCHEMA":
