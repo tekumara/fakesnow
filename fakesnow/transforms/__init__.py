@@ -1023,35 +1023,36 @@ def show_objects_tables(expression: exp.Expression, current_database: str | None
         catalog = table.db or current_database
         schema = table.name
     else:
-        # all objects / tables
+        # all objects / tables - will show everything in the "account"
         catalog = None
         schema = None
 
-    tables_only = "and table_type = 'BASE TABLE'" if show == "TABLES" else ""
-    # without a database will show everything in the "account"
-    table_catalog = f" and table_catalog = '{catalog}'" if catalog else ""
-    schema = f" and table_schema = '{schema}'" if schema else ""
+    columns = [
+        "to_timestamp(0)::timestamptz as 'created_on'",
+        "table_name as 'name'",
+        "case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind'",
+        "table_catalog as 'database_name'",
+        "table_schema as 'schema_name'",
+    ]
+    if not expression.args["terse"]:
+        columns.append('null as "comment"')
+    columns_clause = ", ".join(columns)
+
+    where = ["not (table_schema == '_fs_information_schema')"]  # exclude fakesnow's internal schemas
+    if show == "TABLES":
+        where.append("table_type = 'BASE TABLE'")
+    if catalog:
+        where.append(f"table_catalog = '{catalog}'")
+    if schema:
+        where.append(f"table_schema = '{schema}'")
+    where_clause = " AND ".join(where)
+
     limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
 
-    extra_columns = ""
-
-    terse = expression.args["terse"]
-    if not terse:
-        extra_columns = ',null as "comment"'
-
     query = f"""
-        SELECT
-            to_timestamp(0)::timestamptz as 'created_on'
-            , table_name as 'name'
-            , case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind'
-            , table_catalog as 'database_name'
-            , table_schema as 'schema_name'
-            {extra_columns}
+        SELECT {columns_clause}
         from information_schema.tables
-        where not (table_schema == '_fs_information_schema')
-		{tables_only}
-        {table_catalog}
-        {schema}
+        where {where_clause}
         {limit}
     """
 
