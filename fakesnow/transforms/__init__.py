@@ -1027,31 +1027,33 @@ def show_objects_tables(expression: exp.Expression, current_database: str | None
         catalog = None
         schema = None
 
-    tables_only = "table_type = 'BASE TABLE' and " if show == "TABLES" else ""
-    exclude_fakesnow_tables = "not (table_schema == '_fs_information_schema')"
+    tables_only = "and table_type = 'BASE TABLE'" if show == "TABLES" else ""
     # without a database will show everything in the "account"
     table_catalog = f" and table_catalog = '{catalog}'" if catalog else ""
     schema = f" and table_schema = '{schema}'" if schema else ""
     limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
 
-    columns = [
-        "to_timestamp(0)::timestamptz as 'created_on'",
-        "table_name as 'name'",
-        "case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind'",
-        "table_catalog as 'database_name'",
-        "table_schema as 'schema_name'",
-    ]
+    extra_columns = ""
 
     terse = expression.args["terse"]
     if not terse:
-        columns.append('null as "comment"')
+        extra_columns = ',null as "comment"'
 
-    columns_str = ", ".join(columns)
-
-    query = (
-        f"SELECT {columns_str} from information_schema.tables "
-        f"where {tables_only}{exclude_fakesnow_tables}{table_catalog}{schema}{limit}"
-    )
+    query = f"""
+        SELECT
+            to_timestamp(0)::timestamptz as 'created_on'
+            , table_name as 'name'
+            , case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind'
+            , table_catalog as 'database_name'
+            , table_schema as 'schema_name'
+            {extra_columns}
+        from information_schema.tables
+        where not (table_schema == '_fs_information_schema')
+		{tables_only}
+        {table_catalog}
+        {schema}
+        {limit}
+    """
 
     return sqlglot.parse_one(query, read="duckdb")
 
