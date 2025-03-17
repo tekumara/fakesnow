@@ -348,6 +348,16 @@ def test_identifier(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1,)]
 
 
+def test_number_38_0_is_int(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table example (i1 number(38,0))")
+    cur.execute("insert into example values (123)")
+    cur.execute("select * from example")
+    results = cur.fetchall()
+    assert results == [(123,)]
+    # should not be Decimal
+    assert isinstance(results[0][0], int)
+
+
 def test_non_existent_table_throws_snowflake_exception(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
         cur.execute("select * from this_table_does_not_exist")
