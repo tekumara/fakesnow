@@ -268,7 +268,7 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "schema_name": "SCHEMA1",
         },
     ]
-    # assert dcur.fetchall() == objects
+    assert dcur.fetchall() == objects
     dcur.execute("show terse tables in db1.schema1")
     assert dcur.fetchall() == objects
     assert [r.name for r in dcur.description] == [
@@ -306,6 +306,11 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
         # "is_hybrid",
         # "is_iceberg",
     ]
+
+    dcur.execute("create table foo(x int)")
+    dcur.execute("show terse tables like 'example'")
+    # should not match show foo
+    assert dcur.fetchall() == objects
 
 
 def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):

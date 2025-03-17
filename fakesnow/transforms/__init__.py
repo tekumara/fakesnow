@@ -1045,6 +1045,8 @@ def show_objects_tables(expression: exp.Expression, current_database: str | None
         where.append(f"table_catalog = '{catalog}'")
     if schema:
         where.append(f"table_schema = '{schema}'")
+    if (like := expression.args.get("like")) and isinstance(like, exp.Expression):
+        where.append(f"table_name ilike {like.sql()}")
     where_clause = " AND ".join(where)
 
     limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
