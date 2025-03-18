@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.32](https://github.com/tekumara/fakesnow/compare/v0.9.31...v0.9.32) (2025-03-18)
+
+
+### Features
+
+* SHOW COLUMNS ([9734834](https://github.com/tekumara/fakesnow/commit/97348345c3194dd0b6f01b5a4221da18d5a0421f)), closes [#195](https://github.com/tekumara/fakesnow/issues/195)
+
 ## [0.9.31](https://github.com/tekumara/fakesnow/compare/v0.9.30...v0.9.31) (2025-03-18)
 
 
