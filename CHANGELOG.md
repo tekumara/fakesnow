@@ -2,6 +2,20 @@
 
 # Changelog
 
+## [0.9.31](https://github.com/tekumara/fakesnow/compare/v0.9.30...v0.9.31) (2025-03-18)
+
+
+### Features
+
+* handle additional syntax errors ([4044e7a](https://github.com/tekumara/fakesnow/commit/4044e7a9badcb37c4922abaad8d76afb0ef3ef9b))
+* SHOW TERSE TABLES LIKE ([58abdda](https://github.com/tekumara/fakesnow/commit/58abddaee6a8ebffcc265c79b991144b36e2c63b))
+* treat number(38,0) as int ([0d8160d](https://github.com/tekumara/fakesnow/commit/0d8160d223c069890eb96e265a16430492fb75c1)), closes [#193](https://github.com/tekumara/fakesnow/issues/193)
+
+
+### Chores
+
+* bump pyarrow-stubs 17.19 ([647c032](https://github.com/tekumara/fakesnow/commit/647c03279681cc0ef5cd89994d70d95ccc2232a5))
+
 ## [0.9.30](https://github.com/tekumara/fakesnow/compare/v0.9.29...v0.9.30) (2025-03-16)
 
 
