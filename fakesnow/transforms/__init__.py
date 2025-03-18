@@ -1067,6 +1067,73 @@ def show_objects_tables(expression: exp.Expression, current_database: str | None
     return sqlglot.parse_one(query, read="duckdb")
 
 
+def show_columns(
+    expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
+) -> exp.Expression:
+    """Transform SHOW COLUMNS to a query against the fs global information_schema columns table.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-columns
+    """
+    if not (
+        isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "COLUMNS"
+    ):
+        return expression
+
+    scope_kind = expression.args.get("scope_kind")
+    table = expression.find(exp.Table)
+
+    if scope_kind == "ACCOUNT" or not scope_kind:
+        # all columns
+        catalog = None
+        schema = None
+        table = None
+    elif scope_kind == "DATABASE" and table:
+        catalog = table.name
+        schema = None
+        table = None
+    elif scope_kind == "SCHEMA" and table:
+        catalog = table.db or current_database
+        schema = table.name
+        table = None
+    elif scope_kind in ("TABLE", "VIEW") and table:
+        catalog = table.catalog or current_database
+        schema = table.db or current_schema
+        table = table.name
+    else:
+        raise NotImplementedError(f"show_object_columns: {expression.sql(dialect='snowflake')}")
+
+    query = f"""
+    SELECT
+        table_name,
+        table_schema as "schema_name",
+        column_name,
+        CASE
+            WHEN data_type = 'NUMBER' THEN '{{"type":"FIXED","precision":'|| numeric_precision || ',"scale":' || numeric_scale || ',"nullable":true}}'
+            WHEN data_type = 'TEXT' THEN '{{"type":"TEXT","length":' || coalesce(character_maximum_length,16777216)  || ',"byteLength":' || CASE WHEN character_maximum_length = 16777216 THEN 16777216 ELSE coalesce(character_maximum_length*4,16777216) END  || ',"nullable":true,"fixed":false}}'
+            WHEN data_type in ('TIMESTAMP_NTZ','TIMESTAMP_TZ','TIME') THEN '{{"type":"' || data_type || '","precision":0,"scale":9,"nullable":true}}'
+            WHEN data_type = 'FLOAT' THEN '{{"type":"REAL","nullable":true}}'
+            WHEN data_type = 'BINARY' THEN '{{"type":"BINARY","length":8388608,"byteLength":8388608,"nullable":true,"fixed":true}}'
+            ELSE '{{"type":"' || data_type || '","nullable":true}}'
+        END as "data_type",
+        CASE WHEN is_nullable = 'YES' THEN 'true' ELSE 'false' END as "null?",
+        COALESCE(column_default, '') as "default",
+        'COLUMN' as "kind",
+        '' as "expression",
+        COALESCE(comment, '') as "comment",
+        table_catalog as "database_name",
+        '' as "autoincrement",
+        NULL as "schema_evolution_record"
+    FROM _fs_global._fs_information_schema._fs_columns c
+    WHERE 1=1
+    {f"AND table_catalog = '{catalog}'" if catalog else ""}
+    {f"AND table_schema = '{schema}'" if schema else ""}
+    {f"AND table_name = '{table}'" if table else ""}
+    ORDER BY table_name, ordinal_position
+    """  # noqa: E501
+
+    return sqlglot.parse_one(query, read="duckdb")
+
+
 SQL_SHOW_SCHEMAS = """
 select
     to_timestamp(0)::timestamptz as 'created_on',

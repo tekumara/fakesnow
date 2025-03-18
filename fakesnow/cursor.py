@@ -233,6 +233,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.show_procedures)
             .transform(lambda e: transforms.show_schemas(e, self._conn.database))
             .transform(lambda e: transforms.show_objects_tables(e, self._conn.database))
+            .transform(lambda e: transforms.show_columns(e, self._conn.database))
             # TODO collapse into a single show_keys function
             .transform(lambda e: transforms.show_keys(e, self._conn.database, kind="PRIMARY"))
             .transform(lambda e: transforms.show_keys(e, self._conn.database, kind="UNIQUE"))
@@ -259,6 +260,9 @@ class FakeSnowflakeCursor:
         cmd = expr.key_command(transformed)
 
         sql = transformed.sql(dialect="duckdb")
+
+        if not sql:
+            raise NotImplementedError(transformed.sql(dialect="snowflake"))
 
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
             sql = f"SELECT setseed({seed}); {sql}"

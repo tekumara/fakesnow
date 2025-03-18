@@ -313,6 +313,229 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.fetchall() == objects
 
 
+def test_show_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("""create or replace table example (
+            XBOOLEAN BOOLEAN, XINT INT, XFLOAT FLOAT, XDECIMAL DECIMAL(10,2),
+            XVARCHAR VARCHAR, XVARCHAR20 VARCHAR(20),
+            XDATE DATE, XTIME TIME, XTIMESTAMP TIMESTAMP_TZ, XTIMESTAMP_NTZ TIMESTAMP_NTZ,
+            XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT, */ XVARIANT VARIANT)
+        """)
+    dcur.execute("create view view1 as select xboolean from example")
+
+    # TODO: fix data_type
+    example1_cols = [
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XBOOLEAN",
+            "data_type": '{"type":"BOOLEAN","nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XINT",
+            "data_type": '{"type":"FIXED","precision":38,"scale":0,"nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XFLOAT",
+            "data_type": '{"type":"REAL","nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XDECIMAL",
+            "data_type": '{"type":"FIXED","precision":10,"scale":2,"nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XVARCHAR",
+            "data_type": '{"type":"TEXT","length":16777216,"byteLength":16777216,"nullable":true,"fixed":false}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XVARCHAR20",
+            "data_type": '{"type":"TEXT","length":20,"byteLength":80,"nullable":true,"fixed":false}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XDATE",
+            "data_type": '{"type":"DATE","nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XTIME",
+            "data_type": '{"type":"TIME","precision":0,"scale":9,"nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XTIMESTAMP",
+            "data_type": '{"type":"TIMESTAMP_TZ","precision":0,"scale":9,"nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XTIMESTAMP_NTZ",
+            "data_type": '{"type":"TIMESTAMP_NTZ","precision":0,"scale":9,"nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XBINARY",
+            "data_type": '{"type":"BINARY","length":8388608,"byteLength":8388608,"nullable":true,"fixed":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+        {
+            "table_name": "EXAMPLE",
+            "schema_name": "SCHEMA1",
+            "column_name": "XVARIANT",
+            "data_type": '{"type":"VARIANT","nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        },
+    ]
+
+    view1_cols = [
+        {
+            "table_name": "VIEW1",
+            "schema_name": "SCHEMA1",
+            "column_name": "XBOOLEAN",
+            "data_type": '{"type":"BOOLEAN","nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        }
+    ]
+
+    dcur.execute("SHOW COLUMNS IN example")
+    assert dcur.fetchall() == example1_cols
+
+    dcur.execute("SHOW COLUMNS IN SCHEMA db1.schema1")
+    assert dcur.fetchall() == example1_cols + view1_cols
+
+    dcur.execute("SHOW COLUMNS IN ACCOUNT")
+    assert dcur.fetchall() == example1_cols + view1_cols
+
+    assert [r.name for r in dcur.description] == [
+        "table_name",
+        "schema_name",
+        "column_name",
+        "data_type",
+        "null?",
+        "default",
+        "kind",
+        "expression",
+        "comment",
+        "database_name",
+        "autoincrement",
+        "schema_evolution_record",
+    ]
+
+
 def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show functions")
     dcur.fetchall()
