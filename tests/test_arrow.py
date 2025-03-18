@@ -18,7 +18,7 @@ def rowtype(types: list[str]) -> list[ColumnInfo]:
 def test_with_sf_schema() -> None:
     # see https://arrow.apache.org/docs/python/api/datatypes.html
     def f(t: pa.DataType, rowtype: list[ColumnInfo]) -> dict:
-        return to_sf_schema(pa.schema([pa.field(str(t), t)]), rowtype).field(0).metadata
+        return to_sf_schema(pa.schema([pa.field(str(t), t)]), rowtype).field(0).metadata  # pyright: ignore reportReturnType
 
     assert f(pa.string(), rowtype(["VARCHAR"])) == {
         b"logicalType": b"TEXT",
@@ -64,7 +64,7 @@ def test_timestamp_to_sf_struct():
             pa.array([1365123723], type=pa.int64()),
             pa.array([123456000], type=pa.int32()),
             pa.array([1440], type=pa.int32()),
-        ],  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/42
+        ],
         fields=[
             pa.field("epoch", nullable=False, type=pa.int64()),
             pa.field("fraction", nullable=False, type=pa.int32()),
@@ -82,7 +82,7 @@ def test_timestamp_to_sf_struct():
         arrays=[
             pa.array([1365123723], type=pa.int64()),
             pa.array([123456000], type=pa.int32()),
-        ],  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/42
+        ],
         fields=[
             pa.field("epoch", nullable=False, type=pa.int64()),
             pa.field("fraction", nullable=False, type=pa.int32()),
@@ -190,7 +190,7 @@ def test_read_base64_from_actual_snowflake_result() -> None:
         b"byteLength": b"8",
         b"finalType": b"T",
     }
-    assert batch[7] == pa.array([15329123456000], type=pa.int64())  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/40
+    assert batch[7] == pa.array([15329123456000], type=pa.int64())
 
     field = batch.schema.field(8)
     assert field == pa.field(
@@ -212,12 +212,12 @@ def test_read_base64_from_actual_snowflake_result() -> None:
         b"byteLength": b"16",
         b"finalType": b"T",
     }
-    assert batch[8] == pa.StructArray.from_arrays(  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/40
+    assert batch[8] == pa.StructArray.from_arrays(
         arrays=[
             pa.array([1365123723], type=pa.int64()),
             pa.array([123456000], type=pa.int32()),
             pa.array([1440], type=pa.int32()),
-        ],  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/42
+        ],
         fields=[
             pa.field("epoch", nullable=False, type=pa.int64()),
             pa.field("fraction", nullable=False, type=pa.int32()),
@@ -241,11 +241,11 @@ def test_read_base64_from_actual_snowflake_result() -> None:
         b"byteLength": b"16",
         b"finalType": b"T",
     }
-    assert batch[9] == pa.StructArray.from_arrays(  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/40
+    assert batch[9] == pa.StructArray.from_arrays(
         arrays=[
             pa.array([1365123723], type=pa.int64()),
             pa.array([123456000], type=pa.int32()),
-        ],  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/42
+        ],
         fields=[
             pa.field("epoch", nullable=False, type=pa.int64()),
             pa.field("fraction", nullable=False, type=pa.int32()),

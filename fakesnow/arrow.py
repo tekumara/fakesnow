@@ -62,7 +62,7 @@ def to_ipc(table: pa.Table) -> pa.Buffer:
 
 
 def to_sf(table: pa.Table, rowtype: list[ColumnInfo]) -> pa.Table:
-    def to_sf_col(col: pa.Array) -> pa.Array:
+    def to_sf_col(col: pa.ChunkedArray) -> pa.Array | pa.ChunkedArray:
         if pa.types.is_timestamp(col.type):
             return timestamp_to_sf_struct(col)
         elif pa.types.is_time(col.type):
@@ -83,7 +83,7 @@ def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:
 
     # Round to seconds, ie: strip subseconds
     tsa_without_us = pc.floor_temporal(ts, unit="second")  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/45
-    epoch = pc.divide(tsa_without_us.cast(pa.int64()), 1_000_000)  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/44
+    epoch = pc.divide(tsa_without_us.cast(pa.int64()), 1_000_000)
 
     # Calculate fractional part as nanoseconds
     fraction = pc.multiply(pc.subsecond(ts), 1_000_000_000).cast(pa.int32())  # type: ignore
@@ -93,7 +93,7 @@ def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:
         timezone = pa.array([1440] * len(ts), type=pa.int32())
 
         return pa.StructArray.from_arrays(
-            arrays=[epoch, fraction, timezone],  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/42
+            arrays=[epoch, fraction, timezone],
             fields=[
                 pa.field("epoch", nullable=False, type=pa.int64()),
                 pa.field("fraction", nullable=False, type=pa.int32()),
@@ -102,7 +102,7 @@ def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:
         )
     else:
         return pa.StructArray.from_arrays(
-            arrays=[epoch, fraction],  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/42
+            arrays=[epoch, fraction],
             fields=[
                 pa.field("epoch", nullable=False, type=pa.int64()),
                 pa.field("fraction", nullable=False, type=pa.int32()),
