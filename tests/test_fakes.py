@@ -227,9 +227,18 @@ def test_equal_null(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 def test_error_syntax(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        # duckdb.ParserException
         cur.execute("create table tb1")
 
     assert "001003 (42000)" in str(excinfo.value)
+    assert cur.sqlstate == "42000"
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        # sqlglot.errors.ParseError
+        cur.execute("show tables db1.schema1")
+
+    assert "001003 (42000)" in str(excinfo.value)
+    assert cur.sqlstate == "42000"
 
 
 def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):

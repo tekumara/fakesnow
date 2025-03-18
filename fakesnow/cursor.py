@@ -14,6 +14,7 @@ import pyarrow  # needed by fetch_arrow_table()
 import snowflake.connector.converter
 import snowflake.connector.errors
 import sqlglot
+import sqlglot.errors
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import ResultMetadata
 from snowflake.connector.result_batch import ResultBatch
@@ -155,6 +156,11 @@ class FakeSnowflakeCursor:
         except snowflake.connector.errors.ProgrammingError as e:
             self._sqlstate = e.sqlstate
             raise e
+        except sqlglot.errors.ParseError as e:
+            self._sqlstate = "42000"
+            # strip highlight for better readability, TODO: show pointer to start of error
+            msg = str(e).replace("\x1b[4m", "").replace("\x1b[0m", "")
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=1003, sqlstate="42000") from None
 
     def check_db_and_schema(self, expression: exp.Expression) -> None:
         no_database, no_schema = checks.is_unqualified_table_expression(expression)
