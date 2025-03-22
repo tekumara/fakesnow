@@ -2,9 +2,9 @@ import uuid
 
 import snowflake.connector.cursor
 import sqlglot
+from mypy_boto3_s3 import S3Client
 
 from fakesnow.transforms.copy_into import copy_into
-from tests.moto import Session
 
 
 def create_table(dcur: snowflake.connector.cursor.DictCursor):
@@ -12,11 +12,10 @@ def create_table(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("CREATE TABLE schema_.table_ (a INT, b INT)")
 
 
-def upload_file(moto: Session, data: str, key: str = "foo.txt"):
+def upload_file(s3_client: S3Client, data: str, key: str = "foo.txt"):
     bucket = str(uuid.uuid4())
-    client = moto.client()
-    client.create_bucket(Bucket=bucket)
-    client.put_object(Bucket=bucket, Key=key, Body=data)
+    s3_client.create_bucket(Bucket=bucket)
+    s3_client.put_object(Bucket=bucket, Key=key, Body=data)
     return bucket
 
 
@@ -36,9 +35,9 @@ class TestCSV:
         expected_result = "INSERT INTO schema_.table_ SELECT a, b FROM READ_CSV('s3://bucket/foo.txt', header = 1)"
         assert result == expected_result
 
-    def test_execute(self, dcur: snowflake.connector.cursor.DictCursor, moto: Session):
+    def test_execute(self, dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client):
         create_table(dcur)
-        bucket = upload_file(moto, "a,b\n1,2\n")
+        bucket = upload_file(s3_client, "a,b\n1,2\n")
         dcur.execute(self.sql.format(bucket=bucket))
 
 
@@ -60,9 +59,9 @@ class TestCSVDelimiter:
         )
         assert result == expected_result
 
-    def test_execute(self, dcur: snowflake.connector.cursor.DictCursor, moto: Session):
+    def test_execute(self, dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client):
         create_table(dcur)
-        bucket = upload_file(moto, "a|b\n1|2\n")
+        bucket = upload_file(s3_client, "a|b\n1|2\n")
         dcur.execute(self.sql.format(bucket=bucket))
 
 
@@ -84,8 +83,8 @@ class TestCSVSkipHeader:
         )
         assert result == expected_result
 
-    def test_execute(self, dcur: snowflake.connector.cursor.DictCursor, moto: Session):
+    def test_execute(self, dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client):
         create_table(dcur)
 
-        bucket = upload_file(moto, "a|b\n1|2\n")
+        bucket = upload_file(s3_client, "a|b\n1|2\n")
         dcur.execute(self.sql.format(bucket=bucket))

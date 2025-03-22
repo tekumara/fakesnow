@@ -4,16 +4,18 @@ from collections.abc import Iterator
 from time import sleep
 from typing import Callable, cast
 
+import boto3
 import pytest
 import snowflake.connector
 import uvicorn
+from mypy_boto3_s3 import S3Client
 from sqlalchemy.engine import Engine, create_engine
 
 import fakesnow.fixtures
 import fakesnow.server
-from tests.moto import create_moto_fixture, create_moto_server
+import tests.fixtures.moto
 
-pytest_plugins = fakesnow.fixtures.__name__
+pytest_plugins = fakesnow.fixtures.__name__, tests.fixtures.moto.__name__
 
 
 @pytest.fixture
@@ -101,8 +103,34 @@ def scur(
         yield cur
 
 
-moto_server = create_moto_server()
-moto = create_moto_fixture()
+@pytest.fixture()
+def s3_client(moto_session: boto3.Session, cur: snowflake.connector.cursor.SnowflakeCursor) -> S3Client:
+    """Configures duckdb to use the moto session and returns an s3 client."""
+
+    client = moto_session.client("s3")
+    endpoint_url = client.meta.endpoint_url
+
+    creds = moto_session.get_credentials()
+    assert creds
+
+    # NOTE: This is a duckdb query, not a transformed snowflake one!
+    cur.execute(
+        f"""
+        CREATE SECRET s3_secret (
+            TYPE s3,
+            ENDPOINT '{endpoint_url.removeprefix("http://")}',
+            KEY_ID '{creds.access_key}',
+            SECRET '{creds.secret_key}',
+            SESSION_TOKEN '{creds.token}',
+            URL_STYLE 'path',
+            USE_SSL false,
+            REGION '{moto_session.region_name}'
+        );
+        """
+    )
+
+    return client
+
 
 if os.getenv("TEST_SERVER"):
     # use server to run all tests

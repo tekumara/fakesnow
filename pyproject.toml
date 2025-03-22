@@ -22,6 +22,7 @@ fakesnow = "fakesnow.cli:main"
 
 [project.optional-dependencies]
 dev = [
+    "boto3-stubs[s3,sts]",
     "build~=1.0",
     "dirty-equals",
     # to fix https://github.com/pandas-dev/pandas/issues/56995
