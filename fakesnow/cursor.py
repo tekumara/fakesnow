@@ -231,6 +231,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.show_databases)
             .transform(transforms.show_functions)
             .transform(transforms.show_procedures)
+            .transform(transforms.show_warehouses)
             .transform(lambda e: transforms.show_schemas(e, self._conn.database))
             .transform(lambda e: transforms.show_objects_tables(e, self._conn.database))
             .transform(lambda e: transforms.show_columns(e, self._conn.database))

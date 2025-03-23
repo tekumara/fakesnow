@@ -142,6 +142,65 @@ def show_functions(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+# returns zero rows
+SQL_SHOW_WAREHOUSES = """
+SELECT
+    'FAKESNOW_WAREHOUSE' as name,
+    'STARTED' as state,
+    'STANDARD' as type,
+    'X-Small' as size,
+    1 as min_cluster_count,
+    1 as max_cluster_count,
+    1 as started_clusters,
+    0 as running,
+    0 as queued,
+    'N' as is_default,
+    'N' as is_current,
+    600 as auto_suspend,
+    'true' as auto_resume,
+    -- nb: deliberate space before '100' to match Snowflake's output
+    ' 100' as available,
+    '0' as provisioning,
+    '0' as quiescing,
+    '0' as other,
+    '1970-01-01 00:00:00.000000 UTC'::timestamptz as created_on,
+    '1970-01-01 00:00:00.000000 UTC'::timestamptz as resumed_on,
+    '1970-01-01 00:00:00.000000 UTC'::timestamptz as updated_on,
+    'SYSADMIN' as owner,
+    '' as comment,
+    'false' as enable_query_acceleration,
+    8 as query_acceleration_max_scale_factor,
+    'null' as resource_monitor,
+
+    -- deprecated - these 5 cols are for internal use
+    0 as actives,
+    0 as pendings,
+    0 as failed,
+    0 as suspended,
+    '123456789012' as uuid,
+
+    'STANDARD' as scaling_policy,
+    NULL as budget,
+    'ROLE' as owner_role_type,
+    NULL as resource_constraint;
+"""
+
+
+def show_warehouses(expression: exp.Expression) -> exp.Expression:
+    """Transform SHOW WAREHOUSES.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-warehouses
+    """
+    if (
+        isinstance(expression, exp.Show)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "WAREHOUSES"
+    ):
+        return sqlglot.parse_one(SQL_SHOW_WAREHOUSES, read="duckdb")
+
+    return expression
+
+
 def show_keys(
     expression: exp.Expression,
     current_database: str | None = None,

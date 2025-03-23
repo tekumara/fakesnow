@@ -236,6 +236,8 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("create database db2")
+    dcur.execute("create schema db2.schema2")
     dcur.execute("show terse schemas in database db1 limit 100")
     assert dcur.fetchall() == [
         {
@@ -446,4 +448,47 @@ def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "is_secure",
         "secrets",
         "external_access_integrations",
+    ]
+
+
+def test_show_warehouses(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("show warehouses")
+    dcur.fetchall()
+
+    # Check for expected column names in description
+    assert [r.name for r in dcur.description] == [
+        "name",
+        "state",
+        "type",
+        "size",
+        "min_cluster_count",
+        "max_cluster_count",
+        "started_clusters",
+        "running",
+        "queued",
+        "is_default",
+        "is_current",
+        "auto_suspend",
+        "auto_resume",
+        "available",
+        "provisioning",
+        "quiescing",
+        "other",
+        "created_on",
+        "resumed_on",
+        "updated_on",
+        "owner",
+        "comment",
+        "enable_query_acceleration",
+        "query_acceleration_max_scale_factor",
+        "resource_monitor",
+        "actives",
+        "pendings",
+        "failed",
+        "suspended",
+        "uuid",
+        "scaling_policy",
+        "budget",
+        "owner_role_type",
+        "resource_constraint",
     ]

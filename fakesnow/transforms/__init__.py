@@ -17,6 +17,7 @@ from fakesnow.transforms.show import (
     show_procedures as show_procedures,
     show_schemas as show_schemas,
     show_users as show_users,
+    show_warehouses as show_warehouses,
 )
 from fakesnow.variables import Variables
 
