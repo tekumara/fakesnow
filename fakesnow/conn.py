@@ -62,10 +62,9 @@ class FakeSnowflakeConnection:
                 where upper(catalog_name) = '{self.database}'"""
             ).fetchone()
         ):
-            db_file = f"{self.db_path / self.database}.db" if self.db_path else ":memory:"
-
             if self.db_path:
-                # raise a helpful error message when directory doesn't exist
+                # raise a helpful error message when directory doesn't exist so users don't think
+                # they have to create the database themselves
                 if not os.path.isdir(self.db_path):
                     raise NotADirectoryError(f"No such directory: '{self.db_path}'. Please ensure db_path exists.")
                 db_file = f"{self.db_path / self.database}.db"
@@ -111,9 +110,6 @@ class FakeSnowflakeConnection:
         ):
             duck_conn.execute(f"SET schema='{self.database}.main'")
             self.database_set = True
-
-        # use UTC instead of local time zone for consistent testing
-        duck_conn.execute("SET GLOBAL TimeZone = 'UTC'")
 
     def __enter__(self) -> Self:
         return self

@@ -31,6 +31,9 @@ class FakeSnow:
         # create the info schema extensions
         self.duck_conn.execute(info_schema.fs_global_creation_sql(GLOBAL_DATABASE_NAME))
 
+        # use UTC instead of local time zone for consistent testing
+        self.duck_conn.execute("SET GLOBAL TimeZone = 'UTC'")
+
     def connect(
         self, database: str | None = None, schema: str | None = None, **kwargs: Any
     ) -> fakes.FakeSnowflakeConnection:
