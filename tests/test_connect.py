@@ -106,6 +106,14 @@ def test_connect_db_path_reuse():
             assert cur.execute("select * from example").fetchall() == [(420,)]
 
 
+def test_connect_db_path_doesnt_exist():
+    with fakesnow.patch(db_path="db-path-foobar"):
+        with pytest.raises(NotADirectoryError) as excinfo:
+            snowflake.connector.connect(database="db1")
+
+        assert "No such directory: 'db-path-foobar'. Please ensure db_path exists." in str(excinfo.value)
+
+
 def test_connect_information_schema():
     with fakesnow.patch(create_schema_on_connect=False):
         conn = snowflake.connector.connect(database="db1", schema="information_schema")
