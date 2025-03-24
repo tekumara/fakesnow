@@ -55,6 +55,7 @@ def test_connect_different_sessions_use_database(_fakesnow_no_auto_create: None)
         cur.execute("use database marts")
         assert cur.fetchall() == [("Statement executed successfully.",)]
         assert cur.description[0].name == "status"
+
         cur.execute("use schema jaffles")
         assert cur.fetchall() == [("Statement executed successfully.",)]
         assert cur.description[0].name == "status"
@@ -121,6 +122,20 @@ def test_connect_information_schema():
         with conn, conn.cursor() as cur:
             # shouldn't fail
             cur.execute("SELECT * FROM databases")
+
+
+def test_connect_then_unset_schema(_fakesnow: None):
+    with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:
+        # this will unset the schema
+        cur.execute("USE DATABASE db1")
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+
+        assert (
+            "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
+            in str(excinfo.value)
+        )
 
 
 def test_connect_without_database(_fakesnow_no_auto_create: None):

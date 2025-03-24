@@ -298,6 +298,7 @@ class FakeSnowflakeCursor:
         if set_database := transformed.args.get("set_database"):
             self._conn.database = set_database
             self._conn.database_set = True
+            self._conn.schema_set = False
             result_sql = SQL_SUCCESS
 
         elif set_schema := transformed.args.get("set_schema"):
