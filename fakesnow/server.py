@@ -83,6 +83,7 @@ async def query_request(request: Request) -> JSONResponse:
             rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
         except snowflake.connector.errors.ProgrammingError as e:
+            logger.info(f"{sql_text=} ProgrammingError {e}")
             code = f"{e.errno:06d}"
             return JSONResponse(
                 {
@@ -97,7 +98,7 @@ async def query_request(request: Request) -> JSONResponse:
             )
         except Exception as e:
             # we have a bug or use of an unsupported feature
-            msg = f"Unhandled error during query {sql_text=}"
+            msg = f"{sql_text=} Unhandled exception"
             logger.error(msg, exc_info=e)
             # my guess at mimicking a 500 error as per https://docs.snowflake.com/en/developer-guide/sql-api/reference
             # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318
