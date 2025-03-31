@@ -106,6 +106,11 @@ def test_get_path_precedence(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert indent(cur.fetchall()) == [('{\n  "K1": "a",\n  "K2": "b"\n}', "yes")]
 
 
+def test_indices_cast_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("""select parse_json('["banana", "coconut"]')[0]::varchar""")
+    assert cur.fetchall() == [("banana",)]
+
+
 def test_object_construct(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)")

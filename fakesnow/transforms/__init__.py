@@ -576,7 +576,7 @@ def identifier(expression: exp.Expression) -> exp.Expression:
 
 
 def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
-    """Convert indices on objects and arrays to json_extract.
+    """Convert indices on objects and arrays to json_extract or json_extract_string
 
     Supports Snowflake array indices, see
     https://docs.snowflake.com/en/sql-reference/data-types-semistructured#accessing-elements-of-an-array-by-index-or-by-slice
@@ -595,12 +595,16 @@ def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
         and isinstance(index, exp.Literal)
         and index.this
     ):
-        if index.is_string:
-            return exp.JSONExtract(this=expression.this, expression=exp.Literal(this=f"$.{index.this}", is_string=True))
+        if isinstance(expression.parent, exp.Cast) and expression.parent.to.this == exp.DataType.Type.VARCHAR:
+            # If the parent is a cast to varchar, we need to use JSONExtractScalar
+            # to get the unquoted string value.
+            klass = exp.JSONExtractScalar
         else:
-            return exp.JSONExtract(
-                this=expression.this, expression=exp.Literal(this=f"$[{index.this}]", is_string=True)
-            )
+            klass = exp.JSONExtract
+        if index.is_string:
+            return klass(this=expression.this, expression=exp.Literal(this=f"$.{index.this}", is_string=True))
+        else:
+            return klass(this=expression.this, expression=exp.Literal(this=f"$[{index.this}]", is_string=True))
 
     return expression
 
