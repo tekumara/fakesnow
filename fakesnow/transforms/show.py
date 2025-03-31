@@ -324,7 +324,50 @@ def show_objects_tables(expression: exp.Expression, current_database: str | None
         "table_schema as 'schema_name'",
     ]
     if not expression.args["terse"]:
-        columns.append('null as "comment"')
+        if show == "OBJECTS":
+            columns.extend(
+                [
+                    "'' as 'comment'",
+                    "'' as 'cluster_by'",
+                    # TODO: implement rows and bytes as rows * 1024
+                    "0 as 'rows'",
+                    "0 as 'bytes'",
+                    "'SYSADMIN' as 'owner'",
+                    "1 as 'retention_time'",
+                    "'ROLE' as 'owner_role_type'",
+                    "null as 'budget'",
+                    "'N' as 'is_hybrid'",
+                    "'N' as 'is_dynamic'",
+                ]
+            )
+        else:
+            # show == "TABLES"
+            columns.extend(
+                [
+                    "'' as 'comment'",
+                    "'' as 'cluster_by'",
+                    # TODO: implement rows and bytes as rows * 1024
+                    "0 as 'rows'",
+                    "0 as 'bytes'",
+                    "'SYSADMIN' as 'owner'",
+                    "1 as 'retention_time'",
+                    "'OFF' as 'automatic_clustering'",
+                    "'OFF' as 'change_tracking'",
+                    "'OFF' as 'search_optimization'",
+                    "null as 'search_optimization_progress'",
+                    "null as 'search_optimization_bytes'",
+                    "'N' as 'is_external'",
+                    "'N' as 'enable_schema_evolution'",
+                    "'ROLE' as 'owner_role_type'",
+                    "'N' as 'is_event'",
+                    "null as 'budget'",
+                    "'N' as 'is_hybrid'",
+                    "'N' as 'is_iceberg'",
+                    "'N' as 'is_dynamic'",
+                    "'N' as 'is_immutable'",
+                ]
+            )
+
     columns_clause = ", ".join(columns)
 
     where = ["not (table_schema == '_fs_information_schema')"]  # exclude fakesnow's internal schemas
