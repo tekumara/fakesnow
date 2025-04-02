@@ -2,6 +2,20 @@
 
 # Changelog
 
+## [0.9.33](https://github.com/tekumara/fakesnow/compare/v0.9.32...v0.9.33) (2025-04-02)
+
+
+### Bug Fixes
+
+* ARRAY_SIZE of empty array returns 0 ([2cdccf2](https://github.com/tekumara/fakesnow/commit/2cdccf2a55533aa6a4f1dd689c21deedb9d79c3f))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.396 to 1.1.398 ([#207](https://github.com/tekumara/fakesnow/issues/207)) ([bc79949](https://github.com/tekumara/fakesnow/commit/bc7994918d138b8b51c231226ba43ade435270a9))
+* **deps:** update setuptools requirement from ~=76.0 to ~=78.1 ([#206](https://github.com/tekumara/fakesnow/issues/206)) ([2fd0569](https://github.com/tekumara/fakesnow/commit/2fd05694c9655106334a17492a73d671a1c6e6ae))
+* **deps:** update sqlglot requirement from ~=26.10.1 to ~=26.12.1 ([#205](https://github.com/tekumara/fakesnow/issues/205)) ([5ae2d04](https://github.com/tekumara/fakesnow/commit/5ae2d04f11ca6e074068e60f638864d62ba244cb))
+
 ## [0.9.32](https://github.com/tekumara/fakesnow/compare/v0.9.31...v0.9.32) (2025-03-31)
 
 
