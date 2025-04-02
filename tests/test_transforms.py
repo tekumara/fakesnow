@@ -100,7 +100,7 @@ def test_alter_table_strip_cluster_by() -> None:
 def test_array_size() -> None:
     assert (
         sqlglot.parse_one("""select array_size(parse_json('["a","b"]'))""").transform(array_size).sql(dialect="duckdb")
-        == """SELECT CASE WHEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) THEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) END"""
+        == """SELECT CASE WHEN JSON_TYPE(JSON('["a","b"]')) = 'ARRAY' THEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) END"""
     )
 
 

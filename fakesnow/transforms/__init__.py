@@ -59,9 +59,13 @@ def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
 
 def array_size(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, exp.ArraySize):
-        # case is used to convert 0 to null, because null is returned by duckdb when no case matches
+        # return null if not json array
         jal = exp.Anonymous(this="json_array_length", expressions=[expression.this])
-        return exp.Case(ifs=[exp.If(this=jal, true=jal)])
+        is_json_array = exp.EQ(
+            this=exp.Anonymous(this="json_type", expressions=[expression.this]),
+            expression=exp.Literal(this="ARRAY", is_string=True),
+        )
+        return exp.Case(ifs=[exp.If(this=is_json_array, true=jal)])
 
     return expression
 
