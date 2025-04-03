@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.34](https://github.com/tekumara/fakesnow/compare/v0.9.33...v0.9.34) (2025-04-03)
+
+
+### Features
+
+* **server:** support qmark parameter bindings ([f53d95d](https://github.com/tekumara/fakesnow/commit/f53d95d8288c63fc5d04f1ecaf6c4d7252eaf9fc))
+
 ## [0.9.33](https://github.com/tekumara/fakesnow/compare/v0.9.32...v0.9.33) (2025-04-02)
 
 
