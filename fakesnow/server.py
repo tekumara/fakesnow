@@ -16,6 +16,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from fakesnow.arrow import to_ipc, to_sf
+from fakesnow.converter import from_binding
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.rowtype import describe_as_rowtype
@@ -77,9 +78,16 @@ async def query_request(request: Request) -> JSONResponse:
 
         sql_text = body_json["sqlText"]
 
+        params = None
+
+        if bindings := body_json.get("bindings"):
+            # Convert parameters like {'1': {'type': 'FIXED', 'value': '1'}, ...} to tuple (1, ...)
+            params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
+            logger.debug(f"Bindings: {params}")
+
         try:
             # only a single sql statement is sent at a time by the python snowflake connector
-            cur = await run_in_threadpool(conn.cursor().execute, sql_text)
+            cur = await run_in_threadpool(conn.cursor().execute, sql_text, binding_params=params)
             rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
         except snowflake.connector.errors.ProgrammingError as e:

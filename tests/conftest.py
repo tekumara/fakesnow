@@ -73,6 +73,8 @@ def server(unused_tcp_port_factory: Callable[[], int]) -> Iterator[dict]:
         # disable telemetry
         # isolate each session to a separate instance to avoid sharing tables between tests
         session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False, "FAKESNOW_DB_PATH": ":isolated:"},
+        # disable infinite retries on error
+        network_timeout=1,
     )
 
     server.should_exit = True
@@ -86,8 +88,6 @@ def sconn(server: dict) -> Iterator[snowflake.connector.SnowflakeConnection]:
         **server,
         database="db1",
         schema="schema1",
-        # disable infinite retries on error
-        network_timeout=1,
     ) as c:
         yield c
 

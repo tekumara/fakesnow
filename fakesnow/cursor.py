@@ -139,7 +139,12 @@ class FakeSnowflakeCursor:
                 print(f"{command};{params=}" if params else f"{command};", file=sys.stderr)
 
             command = self._inline_variables(command)
-            command, params = self._rewrite_with_params(command, params)
+            if kwargs.get("binding_params"):
+                # params have come via the server
+                params = kwargs["binding_params"]
+            else:
+                command, params = self._rewrite_with_params(command, params)
+
             if self._conn.nop_regexes and any(re.match(p, command, re.IGNORECASE) for p in self._conn.nop_regexes):
                 transformed = transforms.SUCCESS_NOP
                 self._execute(transformed, params)
@@ -384,7 +389,7 @@ class FakeSnowflakeCursor:
         self._sfqid = str(uuid.uuid4())
 
         self._last_sql = result_sql or sql
-        self._last_params = params
+        self._last_params = None if result_sql else params
 
     def _log_sql(self, sql: str, params: Sequence[Any] | dict[Any, Any] | None = None) -> None:
         if (fs_debug := os.environ.get("FAKESNOW_DEBUG")) and fs_debug != "snowflake":
