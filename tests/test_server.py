@@ -3,12 +3,14 @@
 import datetime
 from decimal import Decimal
 
+import numpy as np
+import pandas as pd
 import pytest
 import pytz
 import requests
 import snowflake.connector
-import snowflake.connector.network
 from dirty_equals import IsUUID
+from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
 
 from tests.utils import indent
@@ -85,6 +87,23 @@ def test_server_close(server: dict) -> None:
     )
     assert response.status_code == 200
     assert response.json()["success"]
+
+
+def test_server_fetch_pandas_all(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur = scur
+
+    cur.execute("select * from values (1, 'Salted'), (2, 'Caramel') as t(id, flavour)")
+
+    expected_df = pd.DataFrame(
+        [
+            # TODO: snowflake returns int8
+            (np.int32(1), "Salted"),
+            (np.int32(2), "Caramel"),
+        ],
+        columns=["ID", "FLAVOUR"],
+    )
+
+    assert_frame_equal(cur.fetch_pandas_all(), expected_df)
 
 
 def test_server_response_params(server: dict) -> None:

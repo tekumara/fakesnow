@@ -121,6 +121,9 @@ async def query_request(request: Request) -> JSONResponse:
         return JSONResponse(
             {
                 "data": {
+                    "parameters": [
+                        {"name": "TIMEZONE", "value": "Etc/UTC"},
+                    ],
                     "rowtype": rowtype,
                     "rowsetBase64": rowset_b64,
                     "total": cur._rowcount,  # noqa: SLF001

@@ -160,7 +160,7 @@ def test_fetch_pandas_all(cur: snowflake.connector.cursor.SnowflakeCursor):
             {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
         ]
     )
-    # integers have dtype int64
+    # integers have dtype int64 (TODO: snowflake returns int8)
     assert_frame_equal(cur.fetch_pandas_all(), expected_df)
 
     # can refetch
