@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 import snowflake.connector
 import snowflake.connector.cursor
-import snowflake.connector.pandas_tools
 from dirty_equals import IsUUID
 from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata

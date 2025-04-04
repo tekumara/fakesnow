@@ -78,12 +78,12 @@ async def query_request(request: Request) -> JSONResponse:
 
         sql_text = body_json["sqlText"]
 
-        params = None
-
         if bindings := body_json.get("bindings"):
-            # Convert parameters like {'1': {'type': 'FIXED', 'value': '1'}, ...} to tuple (1, ...)
+            # Convert parameters like {'1': {'type': 'FIXED', 'value': '10'}, ...} to tuple (10, ...)
             params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
             logger.debug(f"Bindings: {params}")
+        else:
+            params = None
 
         try:
             # only a single sql statement is sent at a time by the python snowflake connector

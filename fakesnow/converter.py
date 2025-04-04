@@ -4,7 +4,7 @@ import binascii
 import datetime
 from datetime import date, time, timezone
 
-# convert bindings provided as strings to the server into python types
+# convert server bindings from strings into python types
 
 
 def from_binding(binding: dict[str, str]) -> int | bytes | bool | date | time | datetime.datetime | str:
