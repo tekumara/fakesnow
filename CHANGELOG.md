@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.35](https://github.com/tekumara/fakesnow/compare/v0.9.34...v0.9.35) (2025-04-05)
+
+
+### Features
+
+* **server:** support fetch_pandas_all ([c75f035](https://github.com/tekumara/fakesnow/commit/c75f035a1cd765b858be52be98a1bb0a309f44f0))
+
 ## [0.9.34](https://github.com/tekumara/fakesnow/compare/v0.9.33...v0.9.34) (2025-04-03)
 
 
