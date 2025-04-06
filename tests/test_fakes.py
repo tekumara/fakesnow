@@ -243,6 +243,14 @@ def test_error_syntax(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.sqlstate == "42000"
 
 
+def test_error_not_implemented(cur: snowflake.connector.cursor.SnowflakeCursor):
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute("SELECT TO_DECIMAL('1.2345', '99.9')")
+    assert "not implemented. Please raise an issue via https://github.com/tekumara/fakesnow/issues/new" in str(
+        excinfo.value
+    )
+
+
 def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table example (f float, f4 float4, f8 float8, d double, r real)")
     cur.execute("insert into example values (1.23, 1.23, 1.23, 1.23, 1.23)")

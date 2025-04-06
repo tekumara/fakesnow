@@ -283,7 +283,7 @@ def show_keys(
 
                 statement += f"AND table_name = '{table.name}' "
             else:
-                raise NotImplementedError(f"SHOW PRIMARY KEYS with {scope_kind} not yet supported")
+                raise NotImplementedError(f"SHOW PRIMARY KEYS with {scope_kind}")
         return sqlglot.parse_one(statement)
     return expression
 

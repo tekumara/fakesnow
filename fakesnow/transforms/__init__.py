@@ -837,7 +837,7 @@ def regex_replace(expression: exp.Expression) -> exp.Expression:
         if len(expression.args) > 3:
             # see https://docs.snowflake.com/en/sql-reference/functions/regexp_replace
             raise NotImplementedError(
-                "REGEXP_REPLACE with additional parameters (eg: <position>, <occurrence>, <parameters>) not supported"
+                "REGEXP_REPLACE with additional parameters (eg: <position>, <occurrence>, <parameters>)"
             )
 
         # pattern: snowflake requires escaping backslashes in single-quoted string constants, but duckdb doesn't
@@ -1316,7 +1316,7 @@ def create_user(expression: exp.Expression) -> exp.Expression:
         if sub_exp.upper().startswith("USER"):
             _, name, *ignored = sub_exp.split(" ")
             if ignored:
-                raise NotImplementedError(f"`CREATE USER` with {ignored} not yet supported")
+                raise NotImplementedError(f"`CREATE USER` with {ignored}")
             return sqlglot.parse_one(
                 f"INSERT INTO _fs_global._fs_information_schema._fs_users_ext (name) VALUES ('{name}')", read="duckdb"
             )

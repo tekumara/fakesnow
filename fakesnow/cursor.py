@@ -166,6 +166,9 @@ class FakeSnowflakeCursor:
             # strip highlight for better readability, TODO: show pointer to start of error
             msg = str(e).replace("\x1b[4m", "").replace("\x1b[0m", "")
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=1003, sqlstate="42000") from None
+        except NotImplementedError as e:
+            msg = f"{e} not implemented. Please raise an issue via https://github.com/tekumara/fakesnow/issues/new"
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=9999, sqlstate="99999") from e
 
     def check_db_and_schema(self, expression: exp.Expression) -> None:
         no_database, no_schema = checks.is_unqualified_table_expression(expression)
@@ -403,7 +406,7 @@ class FakeSnowflakeCursor:
     ) -> FakeSnowflakeCursor:
         if isinstance(seqparams, dict):
             # see https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-api
-            raise NotImplementedError("dict params not supported yet")
+            raise NotImplementedError("executemany dict params")
 
         # TODO: support insert optimisations
         # the snowflake connector will optimise inserts into a single query
