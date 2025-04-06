@@ -10,6 +10,7 @@ def fs_global_creation_sql() -> str:
     return f"""
         {SQL_CREATE_VIEW_SHOW_OBJECTS};
         {SQL_CREATE_VIEW_SHOW_TABLES};
+        {SQL_CREATE_VIEW_SHOW_VIEWS};
     """
 
 
@@ -354,14 +355,35 @@ where not (table_schema == '_fs_information_schema')
 and table_type = 'BASE TABLE'
 """
 
+# see https://docs.snowflake.com/en/sql-reference/sql/show-views
+SQL_CREATE_VIEW_SHOW_VIEWS = """
+create view if not exists _fs_global._fs_information_schema._fs_show_views as
+select
+    to_timestamp(0)::timestamptz as created_on,
+    table_name as name,
+    '' as reserved,
+    table_catalog as database_name,
+    table_schema as schema_name,
+    'SYSADMIN' as owner,
+    '' as comment,
+    view_definition as text,
+    false as is_secure,
+    false as is_materialized,
+    'ROLE' as owner_role_type,
+    'OFF' as change_tracking
+from information_schema.views
+where not table_catalog in ('system')
+  and not table_schema in ('main', '_fs_information_schema')
+"""
+
 
 def show_tables_etc(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
-    """Transform SHOW OBJECTS/TABLES to a query against the _fs_information_schema views."""
+    """Transform SHOW OBJECTS/TABLES/VIEWS to a query against the _fs_information_schema views."""
     if not (
         isinstance(expression, exp.Show)
         and isinstance(expression.this, str)
         and (show := expression.this.upper())
-        and show in {"OBJECTS", "TABLES"}
+        and show in {"OBJECTS", "TABLES", "VIEWS"}
     ):
         return expression
 
@@ -379,7 +401,12 @@ def show_tables_etc(expression: exp.Expression, current_database: str | None = N
         catalog = None
         schema = None
 
-    columns = ["created_on, name, kind, database_name, schema_name"] if expression.args["terse"] else ["*"]
+    if expression.args["terse"] and show == "VIEWS":
+        columns = ["created_on, name, 'VIEW' as kind, database_name, schema_name"]
+    elif expression.args["terse"]:
+        columns = ["created_on, name, kind, database_name, schema_name"]
+    else:
+        columns = ["*"]
     columns_clause = ", ".join(columns)
 
     where = ["1=1"]

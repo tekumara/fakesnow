@@ -454,6 +454,54 @@ def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
+def test_show_views(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("create table example(x int)")
+    dcur.execute("create view view1 as select * from example")
+    dcur.execute("create schema schema2")
+    dcur.execute("show terse views")
+    objects = [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "name": "VIEW1",
+            "kind": "VIEW",
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+        },
+    ]
+    assert dcur.fetchall() == objects
+    dcur.execute("show terse views in db1.schema1")
+    assert dcur.fetchall() == objects
+    assert [r.name for r in dcur.description] == [
+        "created_on",
+        "name",
+        "kind",
+        "database_name",
+        "schema_name",
+    ]
+
+    dcur.execute("show terse views in account")
+    assert dcur.fetchall() == objects
+
+    dcur.execute("show terse views in schema schema2")
+    assert dcur.fetchall() == []
+
+    dcur.execute("show views in db1.schema1")
+    assert [r.name for r in dcur.description] == [
+        "created_on",
+        "name",
+        "reserved",
+        "database_name",
+        "schema_name",
+        "owner",
+        "comment",
+        "text",
+        "is_secure",
+        "is_materialized",
+        "owner_role_type",
+        "change_tracking",
+    ]
+
+
 def test_show_warehouses(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show warehouses")
     dcur.fetchall()
