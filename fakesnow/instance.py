@@ -7,6 +7,7 @@ import duckdb
 
 import fakesnow.fakes as fakes
 from fakesnow import info_schema
+from fakesnow.transforms import show
 
 GLOBAL_DATABASE_NAME = "_fs_global"
 
@@ -28,8 +29,9 @@ class FakeSnow:
 
         # create a "global" database for storing objects which span databases.
         self.duck_conn.execute(f"ATTACH IF NOT EXISTS ':memory:' AS {GLOBAL_DATABASE_NAME}")
-        # create the info schema extensions
-        self.duck_conn.execute(info_schema.fs_global_creation_sql(GLOBAL_DATABASE_NAME))
+        # create the info schema extensions and show views
+        self.duck_conn.execute(info_schema.fs_global_creation_sql())
+        self.duck_conn.execute(show.fs_global_creation_sql())
 
         # use UTC instead of local time zone for consistent testing
         self.duck_conn.execute("SET GLOBAL TimeZone = 'UTC'")

@@ -34,8 +34,8 @@ create table if not exists _fs_global._fs_information_schema._fs_columns_ext (
 """
 
 # replicates the output structure of https://docs.snowflake.com/en/sql-reference/sql/show-users
-SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_USERS_TABLE_EXT = """
-create table if not exists _fs_global._fs_information_schema._fs_users_ext (
+SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_USERS_TABLE = """
+create table if not exists _fs_global._fs_information_schema._fs_users (
     name varchar,
     created_on TIMESTAMPTZ,
     login_name varchar,
@@ -196,13 +196,13 @@ def per_db_creation_sql(catalog: str) -> str:
     """
 
 
-def fs_global_creation_sql(catalog: str) -> str:
+def fs_global_creation_sql() -> str:
     return f"""
         {SQL_CREATE_GLOBAL_FS_INFORMATION_SCHEMA};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_TABLES_EXT};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_EXT};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_VIEW};
-        {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_USERS_TABLE_EXT};
+        {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_USERS_TABLE};
     """
 
 

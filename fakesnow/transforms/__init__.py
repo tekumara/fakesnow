@@ -13,9 +13,9 @@ from fakesnow.transforms.show import (
     show_databases as show_databases,
     show_functions as show_functions,
     show_keys as show_keys,
-    show_objects_tables as show_objects_tables,
     show_procedures as show_procedures,
     show_schemas as show_schemas,
+    show_tables_etc as show_tables_etc,
     show_users as show_users,
     show_warehouses as show_warehouses,
 )
@@ -1318,7 +1318,7 @@ def create_user(expression: exp.Expression) -> exp.Expression:
             if ignored:
                 raise NotImplementedError(f"`CREATE USER` with {ignored}")
             return sqlglot.parse_one(
-                f"INSERT INTO _fs_global._fs_information_schema._fs_users_ext (name) VALUES ('{name}')", read="duckdb"
+                f"INSERT INTO _fs_global._fs_information_schema._fs_users (name) VALUES ('{name}')", read="duckdb"
             )
 
     return expression

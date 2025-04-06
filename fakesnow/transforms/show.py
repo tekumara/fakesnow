@@ -6,6 +6,13 @@ import sqlglot
 from sqlglot import exp
 
 
+def fs_global_creation_sql() -> str:
+    return f"""
+        {SQL_CREATE_VIEW_SHOW_OBJECTS};
+        {SQL_CREATE_VIEW_SHOW_TABLES};
+    """
+
+
 def show_columns(
     expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
 ) -> exp.Expression:
@@ -288,12 +295,68 @@ def show_keys(
     return expression
 
 
-def show_objects_tables(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
-    """Transform SHOW OBJECTS/TABLES to a query against the information_schema.tables table.
+# see https://docs.snowflake.com/en/sql-reference/sql/show-objects
+SQL_CREATE_VIEW_SHOW_OBJECTS = """
+create view if not exists _fs_global._fs_information_schema._fs_show_objects as
+select
+    to_timestamp(0)::timestamptz as created_on,
+    table_name as name,
+    case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind',
+    table_catalog as database_name,
+    table_schema as schema_name,
+    '' as comment,
+    '' as cluster_by,
+    -- TODO: implement rows and bytes as rows * 1024
+    0 as rows,
+    0 as bytes,
+    'SYSADMIN' as owner,
+    1 as retention_time,
+    'ROLE' as owner_role_type,
+    null as budget,
+    'N' as is_hybrid,
+    'N' as is_dynamic
+from information_schema.tables
+where not (table_schema == '_fs_information_schema')
+"""
 
-    See https://docs.snowflake.com/en/sql-reference/sql/show-objects
-        https://docs.snowflake.com/en/sql-reference/sql/show-tables
-    """
+# see https://docs.snowflake.com/en/sql-reference/sql/show-tables
+SQL_CREATE_VIEW_SHOW_TABLES = """
+create view if not exists _fs_global._fs_information_schema._fs_show_tables as
+select
+    to_timestamp(0)::timestamptz as created_on,
+    table_name as name,
+    'TABLE' as kind,
+    table_catalog as database_name,
+    table_schema as schema_name,
+    '' as comment,
+    '' as cluster_by,
+    -- TODO: implement rows and bytes as rows * 1024
+    0 as rows,
+    0 as bytes,
+    'SYSADMIN' as owner,
+    1 as retention_time,
+    'OFF' as automatic_clustering,
+    'OFF' as change_tracking,
+    'OFF' as search_optimization,
+    null as search_optimization_progress,
+    null as search_optimization_bytes,
+    'N' as is_external,
+    'N' as enable_schema_evolution,
+    'ROLE' as owner_role_type,
+    'N' as is_event,
+    null as budget,
+    'N' as is_hybrid,
+    'N' as is_iceberg,
+    'N' as is_dynamic,
+    'N' as is_immutable
+from information_schema.tables
+where not (table_schema == '_fs_information_schema')
+and table_type = 'BASE TABLE'
+"""
+
+
+def show_tables_etc(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
+    """Transform SHOW OBJECTS/TABLES to a query against the _fs_information_schema views."""
     if not (
         isinstance(expression, exp.Show)
         and isinstance(expression.this, str)
@@ -316,76 +379,23 @@ def show_objects_tables(expression: exp.Expression, current_database: str | None
         catalog = None
         schema = None
 
-    columns = [
-        "to_timestamp(0)::timestamptz as 'created_on'",
-        "table_name as 'name'",
-        "case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind'",
-        "table_catalog as 'database_name'",
-        "table_schema as 'schema_name'",
-    ]
-    if not expression.args["terse"]:
-        if show == "OBJECTS":
-            columns.extend(
-                [
-                    "'' as 'comment'",
-                    "'' as 'cluster_by'",
-                    # TODO: implement rows and bytes as rows * 1024
-                    "0 as 'rows'",
-                    "0 as 'bytes'",
-                    "'SYSADMIN' as 'owner'",
-                    "1 as 'retention_time'",
-                    "'ROLE' as 'owner_role_type'",
-                    "null as 'budget'",
-                    "'N' as 'is_hybrid'",
-                    "'N' as 'is_dynamic'",
-                ]
-            )
-        else:
-            # show == "TABLES"
-            columns.extend(
-                [
-                    "'' as 'comment'",
-                    "'' as 'cluster_by'",
-                    # TODO: implement rows and bytes as rows * 1024
-                    "0 as 'rows'",
-                    "0 as 'bytes'",
-                    "'SYSADMIN' as 'owner'",
-                    "1 as 'retention_time'",
-                    "'OFF' as 'automatic_clustering'",
-                    "'OFF' as 'change_tracking'",
-                    "'OFF' as 'search_optimization'",
-                    "null as 'search_optimization_progress'",
-                    "null as 'search_optimization_bytes'",
-                    "'N' as 'is_external'",
-                    "'N' as 'enable_schema_evolution'",
-                    "'ROLE' as 'owner_role_type'",
-                    "'N' as 'is_event'",
-                    "null as 'budget'",
-                    "'N' as 'is_hybrid'",
-                    "'N' as 'is_iceberg'",
-                    "'N' as 'is_dynamic'",
-                    "'N' as 'is_immutable'",
-                ]
-            )
-
+    columns = ["created_on, name, kind, database_name, schema_name"] if expression.args["terse"] else ["*"]
     columns_clause = ", ".join(columns)
 
-    where = ["not (table_schema == '_fs_information_schema')"]  # exclude fakesnow's internal schemas
-    if show == "TABLES":
-        where.append("table_type = 'BASE TABLE'")
+    where = ["1=1"]
     if catalog:
-        where.append(f"table_catalog = '{catalog}'")
+        where.append(f"database_name = '{catalog}'")
     if schema:
-        where.append(f"table_schema = '{schema}'")
+        where.append(f"schema_name = '{schema}'")
     if (like := expression.args.get("like")) and isinstance(like, exp.Expression):
-        where.append(f"table_name ilike {like.sql()}")
+        where.append(f"name ilike {like.sql()}")
     where_clause = " AND ".join(where)
 
     limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
 
     query = f"""
         SELECT {columns_clause}
-        from information_schema.tables
+        from _fs_global._fs_information_schema._fs_show_{show.lower()}
         where {where_clause}
         {limit}
     """
@@ -471,6 +481,6 @@ def show_users(expression: exp.Expression) -> exp.Expression:
     https://docs.snowflake.com/en/sql-reference/sql/show-users
     """
     if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "USERS":
-        return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_users_ext", read="duckdb")
+        return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_users", read="duckdb")
 
     return expression
