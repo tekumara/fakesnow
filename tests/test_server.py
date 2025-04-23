@@ -74,6 +74,12 @@ def test_server_binding_qmark(server: dict):
         cur.execute("select * from example where xint = ?", (1,))
 
 
+def test_server_client_session_keep_alive(server: dict) -> None:
+    with snowflake.connector.connect(**server | {"client_session_keep_alive": True}):
+        # shouldn't error
+        pass
+
+
 def test_server_close(server: dict) -> None:
     conn = snowflake.connector.connect(**server)
 

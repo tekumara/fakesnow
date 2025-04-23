@@ -59,7 +59,10 @@ async def login_request(request: Request) -> JSONResponse:
         {
             "data": {
                 "token": token,
-                "parameters": [{"name": "AUTOCOMMIT", "value": True}],
+                "parameters": [
+                    {"name": "AUTOCOMMIT", "value": True},
+                    {"name": "CLIENT_SESSION_KEEP_ALIVE_HEARTBEAT_FREQUENCY", "value": 3600},
+                ],
             },
             "success": True,
         }
