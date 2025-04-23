@@ -1,10 +1,11 @@
+import contextlib
 import os
+import socket
 import threading
 from collections.abc import Iterator
 from time import sleep
 from typing import cast
 
-import portpicker
 import pytest
 import snowflake.connector
 import uvicorn
@@ -50,7 +51,11 @@ def snowflake_engine(_fakesnow: None) -> Engine:
 
 @pytest.fixture(scope="session")
 def server() -> Iterator[dict]:
-    port = portpicker.pick_unused_port()
+    # find an unused TCP port between 1024-65535
+    with contextlib.closing(socket.socket(type=socket.SOCK_STREAM)) as sock:
+        sock.bind(("127.0.0.1", 0))
+        port = sock.getsockname()[1]
+
     server = uvicorn.Server(uvicorn.Config(fakesnow.server.app, port=port, log_level="info"))
     thread = threading.Thread(target=server.run, name="Server", daemon=True)
     thread.start()
