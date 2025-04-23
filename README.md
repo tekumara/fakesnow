@@ -135,10 +135,9 @@ fakesnow provides [fixtures](fakesnow/fixtures.py) for easier test integration. 
 ```python
 from typing import Iterator
 
-import fakesnow.fixtures
 import pytest
 
-pytest_plugins = fakesnow.fixtures.__name__
+pytest_plugins = "fakesnow.fixtures"
 
 @pytest.fixture(scope="session", autouse=True)
 def setup(_fakesnow_session: None) -> Iterator[None]:

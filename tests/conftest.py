@@ -7,9 +7,8 @@ import snowflake.connector
 from sqlalchemy.engine import Engine, create_engine
 
 import fakesnow
-import fakesnow.fixtures
 
-pytest_plugins = fakesnow.fixtures.__name__
+pytest_plugins = "fakesnow.fixtures"
 
 
 @pytest.fixture
