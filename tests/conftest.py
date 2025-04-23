@@ -1,18 +1,13 @@
-import contextlib
 import os
-import socket
-import threading
 from collections.abc import Iterator
-from time import sleep
 from typing import cast
 
 import pytest
 import snowflake.connector
-import uvicorn
 from sqlalchemy.engine import Engine, create_engine
 
+import fakesnow
 import fakesnow.fixtures
-import fakesnow.server
 
 pytest_plugins = fakesnow.fixtures.__name__
 
@@ -51,35 +46,13 @@ def snowflake_engine(_fakesnow: None) -> Engine:
 
 @pytest.fixture(scope="session")
 def server() -> Iterator[dict]:
-    # find an unused TCP port between 1024-65535
-    with contextlib.closing(socket.socket(type=socket.SOCK_STREAM)) as sock:
-        sock.bind(("127.0.0.1", 0))
-        port = sock.getsockname()[1]
-
-    server = uvicorn.Server(uvicorn.Config(fakesnow.server.app, port=port, log_level="info"))
-    thread = threading.Thread(target=server.run, name="Server", daemon=True)
-    thread.start()
-
-    while not server.started:
-        sleep(0.1)
-
-    yield dict(
-        user="fake",
-        password="snow",
-        account="fakesnow",
-        host="localhost",
-        port=port,
-        protocol="http",
-        # disable telemetry
-        # isolate each session to a separate instance to avoid sharing tables between tests
-        session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False, "FAKESNOW_DB_PATH": ":isolated:"},
-        # disable infinite retries on error
-        network_timeout=1,
-    )
-
-    server.should_exit = True
-    # wait for server thread to end
-    thread.join()
+    # isolate each session to a separate instance to avoid sharing tables between tests
+    with fakesnow.server(
+        session_parameters={
+            "FAKESNOW_DB_PATH": ":isolated:",
+        }
+    ) as conn_kwargs:
+        yield conn_kwargs
 
 
 @pytest.fixture

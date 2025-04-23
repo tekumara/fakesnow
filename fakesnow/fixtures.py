@@ -1,4 +1,5 @@
 from collections.abc import Iterator
+from typing import Any
 
 import pytest
 
@@ -9,6 +10,12 @@ import fakesnow
 def _fakesnow() -> Iterator[None]:
     with fakesnow.patch():
         yield
+
+
+@pytest.fixture(scope="session")
+def fakesnow_server() -> Iterator[dict[str, Any]]:
+    with fakesnow.server() as conn_kwargs:
+        yield conn_kwargs
 
 
 @pytest.fixture
