@@ -2,8 +2,9 @@ import os
 import threading
 from collections.abc import Iterator
 from time import sleep
-from typing import Callable, cast
+from typing import cast
 
+import portpicker
 import pytest
 import snowflake.connector
 import uvicorn
@@ -48,14 +49,8 @@ def snowflake_engine(_fakesnow: None) -> Engine:
 
 
 @pytest.fixture(scope="session")
-def unused_port(unused_tcp_port_factory: Callable[[], int]) -> int:
-    # unused_tcp_port_factory is from pytest-asyncio
-    return unused_tcp_port_factory()
-
-
-@pytest.fixture(scope="session")
-def server(unused_tcp_port_factory: Callable[[], int]) -> Iterator[dict]:
-    port = unused_tcp_port_factory()
+def server() -> Iterator[dict]:
+    port = portpicker.pick_unused_port()
     server = uvicorn.Server(uvicorn.Config(fakesnow.server.app, port=port, log_level="info"))
     thread = threading.Thread(target=server.run, name="Server", daemon=True)
     thread.start()
