@@ -135,7 +135,7 @@ def server(port: int | None = None, session_parameters: dict[str, str | int | bo
             protocol="http",
             # disable telemetry
             session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False} | (session_parameters or {}),
-            # disable infinite retries on error
+            # disable retries on error
             network_timeout=1,
         )
     finally:
