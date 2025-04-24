@@ -6,8 +6,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any
 
-import snowflake.connector.converter
-import snowflake.connector.errors
+import snowflake.connector
 import sqlglot
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import DictCursor, SnowflakeCursor

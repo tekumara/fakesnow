@@ -193,6 +193,7 @@ Partially supported:
 - Semi-structured data operations
 - Tags
 - User management
+- `COPY INTO` from S3 sources, see [COPY INTO](#copy-into)
 
 Not yet implemented:
 
@@ -205,6 +206,10 @@ For more detail see the [test suite](tests/).
 
 - Row ordering is non-deterministic and may differ from Snowflake unless you fully specify the ORDER BY clause.
 - fakesnow supports a more liberal SQL dialect than actual Snowflake. This means some queries that work with fakesnow might not work with a real Snowflake instance.
+
+## COPY INTO
+
+`COPY INTO` can be used from S3 sources. By default the standard AWS credential chain will be used. If you are getting an HTTP 403 or need to provide alternative S3 credentials you can use the duckdb [CREATE SECRET](https://duckdb.org/docs/stable/extensions/httpfs/s3api) statement. For an example of creating a secret to use a moto S3 endpoint see `s3_client` in [conftest.py](tests/conftest.py#L80)
 
 ## Contributing
 
