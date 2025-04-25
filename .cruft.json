@@ -1,6 +1,6 @@
 {
   "template": "git@github.com:tekumara/python-typed-template.git",
-  "commit": "49cb14fd299526b393f6257238c2baf1f3b59725",
+  "commit": "0cecf703ec6c45f0b7173fe8d8804e3c29e6921f",
   "checkout": null,
   "context": {
     "cookiecutter": {
@@ -8,7 +8,11 @@
       "package_name": "fakesnow",
       "project_name": "fakesnow",
       "description": "Fake Snowflake Connector for Python. Run Snowflake DB locally.",
-      "_template": "git@github.com:tekumara/python-typed-template.git"
+      "_copy_without_render": [
+        ".github"
+      ],
+      "_template": "git@github.com:tekumara/python-typed-template.git",
+      "_commit": "0cecf703ec6c45f0b7173fe8d8804e3c29e6921f"
     }
   },
   "directory": null

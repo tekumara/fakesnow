@@ -2,7 +2,7 @@
 default_stages: [pre-push]
 repos:
   - repo: https://github.com/crate-ci/typos
-    rev: v1.27.0
+    rev: v1.31.1
     hooks:
       - id: typos
   # formatters and linters are available in the virtualenv so they can be run from the makefile & vscode
@@ -10,26 +10,26 @@ repos:
     hooks:
       - id: ruff
         name: ruff
-        entry: .venv/bin/ruff check --force-exclude
+        entry: uv run ruff check --force-exclude
         language: system
         types: [python]
         require_serial: true
       - id: ruff-format
         name: ruff-format
-        entry: .venv/bin/ruff format
+        entry: uv run ruff format
         language: system
         types: [python]
         require_serial: true
       - id: pyright
         name: pyright
-        entry: node_modules/.bin/pyright
+        entry: uv run pyright
         # run on all files to catch type errors that affect unchanged files
         pass_filenames: false
         language: system
         types: [python]
       - id: test
         name: test
-        entry: .venv/bin/pytest
+        entry: uv run pytest
         # run on all files
         pass_filenames: false
         language: system

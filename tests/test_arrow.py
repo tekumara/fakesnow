@@ -12,7 +12,7 @@ from fakesnow.rowtype import ColumnInfo, describe_as_rowtype
 
 
 def rowtype(types: list[str]) -> list[ColumnInfo]:
-    return describe_as_rowtype([("test", typ, None, None, None, None) for typ in types])
+    return describe_as_rowtype([("test", type_, None, None, None, None) for type_ in types])
 
 
 def test_with_sf_schema() -> None:

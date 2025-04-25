@@ -3,15 +3,14 @@
 ## Prerequisites
 
 - make
-- node (required for pyright)
 - python >= 3.9
+- uv >= 0.5.0
 
 ## Getting started
 
 `make install` creates the dev environment with:
 
 - a virtualenv in _.venv/_
-- pyright in _node_modules/_
 - git hooks for formatting & linting on git push (these also run in CI)
 
 `. .venv/bin/activate` activates the virtualenv.

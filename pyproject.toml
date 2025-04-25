@@ -20,40 +20,45 @@ homepage = "https://github.com/tekumara/fakesnow"
 [project.scripts]
 fakesnow = "fakesnow.cli:main"
 
-[project.optional-dependencies]
+[dependency-groups]
 dev = [
+    "boto3",
     "boto3-stubs[s3,sts]",
     "build~=1.0",
     "dirty-equals",
+    "moto[server] >= 5",
     # to fix https://github.com/pandas-dev/pandas/issues/56995
     "pandas-stubs",
-    # include compatible version of pandas, and secure-local-storage for token caching
-    "snowflake-connector-python[pandas, secure-local-storage]",
     "pre-commit~=4.0",
     "pyarrow-stubs==17.19",
+    "pyright==1.1.399",
     "pytest~=8.0",
-    "ruff~=0.11.0",
-    "twine~=6.0",
+    "ruff~=0.11.2",
+    # include compatible version of pandas, and secure-local-storage for token caching
+    "snowflake-connector-python[pandas, secure-local-storage]",
     "snowflake-sqlalchemy~=1.7.0",
-    "boto3",
-    "moto[server] >= 5",
+
+    "twine~=6.1",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
 notebook = ["duckdb-engine", "ipykernel", "jupysql"]
+
 # for the standalone server
+[project.optional-dependencies]
 server = ["starlette", "uvicorn"]
 
 [build-system]
-requires = ["setuptools~=78.1", "wheel~=0.42"]
+requires = ["setuptools~=78.1"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-exclude = ["tests*", "node_modules*", "build*"]
+exclude = ["tests*", "build*"]
 
 [tool.pyright]
 venvPath = "."
 venv = ".venv"
-exclude = ["**/node_modules", "**/__pycache__", "**/.*", "build"]
+exclude = ["**/__pycache__", "**/.*", "build"]
 strictListInference = true
 strictDictionaryInference = true
 strictParameterNoneValue = true
@@ -64,7 +69,6 @@ reportMatchNotExhaustive = true
 reportUnnecessaryTypeIgnoreComment = true
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
 # error on unhandled exceptions in background threads
 # useful for catching errors in server or snowflake connector threads
 filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]

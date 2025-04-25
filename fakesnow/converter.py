@@ -8,20 +8,20 @@ from datetime import date, time, timezone
 
 
 def from_binding(binding: dict[str, str]) -> int | bytes | bool | date | time | datetime.datetime | str:
-    typ = binding["type"]
+    type_ = binding["type"]
     value = binding["value"]
-    if typ == "FIXED":
+    if type_ == "FIXED":
         return int(value)
-    elif typ == "BINARY":
+    elif type_ == "BINARY":
         return from_binary(value)
     # TODO: not strictly needed
-    elif typ == "BOOLEAN":
+    elif type_ == "BOOLEAN":
         return value.lower() == "true"
-    elif typ == "DATE":
+    elif type_ == "DATE":
         return from_date(value)
-    elif typ == "TIME":
+    elif type_ == "TIME":
         return from_time(value)
-    elif typ == "TIMESTAMP_NTZ":
+    elif type_ == "TIMESTAMP_NTZ":
         return from_datetime(value)
     else:
         # For other types, return str
