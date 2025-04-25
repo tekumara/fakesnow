@@ -9,6 +9,7 @@ import pytest
 import pytz
 import requests
 import snowflake.connector
+import snowflake.connector.pandas_tools
 from dirty_equals import IsUUID
 from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
@@ -95,6 +96,17 @@ def test_server_close(server: dict) -> None:
     assert response.json()["success"]
 
 
+def test_server_errors(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur = scur
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute("select * from this_table_does_not_exist")
+
+    assert excinfo.value.errno == 2003
+    assert excinfo.value.sqlstate == "42S02"
+    assert excinfo.value.msg
+    assert "THIS_TABLE_DOES_NOT_EXIST" in excinfo.value.msg
+
+
 def test_server_fetch_pandas_all(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     cur = scur
 
@@ -110,6 +122,64 @@ def test_server_fetch_pandas_all(scur: snowflake.connector.cursor.SnowflakeCurso
     )
 
     assert_frame_equal(cur.fetch_pandas_all(), expected_df)
+
+
+def test_server_no_gzip(server: dict) -> None:
+    # mimic the go snowflake connector which does not gzip requests
+    headers = {
+        "Accept": "application/snowflake",
+        "Content-Type": "application/json",
+        "Accept-Encoding": "gzip",
+        "User-Agent": "Go/1.13.0 (darwin-arm64) gc/go1.23.6",
+        "Client_App_Id": "Go",
+        "Client_App_Version": "1.13.0",
+    }
+
+    login_payload = {
+        "data": {
+            "CLIENT_APP_ID": "Go",
+            "CLIENT_APP_VERSION": "1.13.0",
+            "SVN_REVISION": "",
+            "ACCOUNT_NAME": "fakesnow",
+            "LOGIN_NAME": "fake",
+            "PASSWORD": "snow",
+            "SESSION_PARAMETERS": {"CLIENT_VALIDATE_DEFAULT_PARAMETERS": True},
+            "CLIENT_ENVIRONMENT": {
+                "APPLICATION": "Go",
+                "OS": "darwin",
+                "OS_VERSION": "gc-arm64",
+                "OCSP_MODE": "FAIL_OPEN",
+                "GO_VERSION": "go1.23.6",
+            },
+        }
+    }
+
+    response = requests.post(
+        f"http://{server['host']}:{server['port']}/session/v1/login-request",
+        headers=headers,
+        json=login_payload,
+        timeout=5,
+    )
+    assert response.status_code == 200
+    assert response.json()["success"]
+    token = response.json()["data"]["token"]
+
+    payload = {
+        "sqlText": "SELECT current_timestamp() as TIME, current_user() as USER, current_role() as ROLE;",
+        "asyncExec": False,
+        "sequenceId": 1,
+        "isInternal": False,
+        "queryContextDTO": {},
+    }
+
+    response = requests.post(
+        f"http://{server['host']}:{server['port']}/queries/v1/query-request?requestId=uuid1&request_guid=uuid2",
+        headers=headers | {"Authorization": f'Snowflake Token="{token}"'},
+        json=payload,
+        timeout=5,
+    )
+    assert response.status_code == 200
+    assert response.json()["success"]
 
 
 def test_server_response_params(server: dict) -> None:
@@ -249,72 +319,3 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
             2,
         )
     ]
-
-
-def test_server_no_gzip(server: dict) -> None:
-    # mimic the go snowflake connector which does not gzip requests
-    headers = {
-        "Accept": "application/snowflake",
-        "Content-Type": "application/json",
-        "Accept-Encoding": "gzip",
-        "User-Agent": "Go/1.13.0 (darwin-arm64) gc/go1.23.6",
-        "Client_App_Id": "Go",
-        "Client_App_Version": "1.13.0",
-    }
-
-    login_payload = {
-        "data": {
-            "CLIENT_APP_ID": "Go",
-            "CLIENT_APP_VERSION": "1.13.0",
-            "SVN_REVISION": "",
-            "ACCOUNT_NAME": "fakesnow",
-            "LOGIN_NAME": "fake",
-            "PASSWORD": "snow",
-            "SESSION_PARAMETERS": {"CLIENT_VALIDATE_DEFAULT_PARAMETERS": True},
-            "CLIENT_ENVIRONMENT": {
-                "APPLICATION": "Go",
-                "OS": "darwin",
-                "OS_VERSION": "gc-arm64",
-                "OCSP_MODE": "FAIL_OPEN",
-                "GO_VERSION": "go1.23.6",
-            },
-        }
-    }
-
-    response = requests.post(
-        f"http://{server['host']}:{server['port']}/session/v1/login-request",
-        headers=headers,
-        json=login_payload,
-        timeout=5,
-    )
-    assert response.status_code == 200
-    assert response.json()["success"]
-    token = response.json()["data"]["token"]
-
-    payload = {
-        "sqlText": "SELECT current_timestamp() as TIME, current_user() as USER, current_role() as ROLE;",
-        "asyncExec": False,
-        "sequenceId": 1,
-        "isInternal": False,
-        "queryContextDTO": {},
-    }
-
-    response = requests.post(
-        f"http://{server['host']}:{server['port']}/queries/v1/query-request?requestId=uuid1&request_guid=uuid2",
-        headers=headers | {"Authorization": f'Snowflake Token="{token}"'},
-        json=payload,
-        timeout=5,
-    )
-    assert response.status_code == 200
-    assert response.json()["success"]
-
-
-def test_server_errors(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
-    cur = scur
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        cur.execute("select * from this_table_does_not_exist")
-
-    assert excinfo.value.errno == 2003
-    assert excinfo.value.sqlstate == "42S02"
-    assert excinfo.value.msg
-    assert "THIS_TABLE_DOES_NOT_EXIST" in excinfo.value.msg
