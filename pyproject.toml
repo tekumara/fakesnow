@@ -11,7 +11,7 @@ dependencies = [
     "duckdb~=1.2.0",
     "pyarrow",
     "snowflake-connector-python",
-    "sqlglot~=26.12.1",
+    "sqlglot~=26.16.2",
 ]
 
 [project.urls]
@@ -37,7 +37,6 @@ dev = [
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
     "snowflake-sqlalchemy~=1.7.0",
-
     "twine~=6.1",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
