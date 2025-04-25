@@ -4,7 +4,6 @@
 from __future__ import annotations
 
 import datetime
-import json
 import re
 import tempfile
 from decimal import Decimal
@@ -54,6 +53,9 @@ def test_array_size(cur: snowflake.connector.cursor.SnowflakeCursor):
     # when json is not an array
     cur.execute("""select array_size(parse_json('{"a":"b"}'))""")
     assert cur.fetchall() == [(None,)]
+
+    cur.execute("""select array_size([])""")
+    assert cur.fetchall() == [(0,)]
 
 
 def test_array_agg(dcur: snowflake.connector.cursor.DictCursor):
@@ -241,44 +243,12 @@ def test_error_syntax(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.sqlstate == "42000"
 
 
-def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute(
-        """
-        select t.id, flat.value:fruit from
-        (
-            select 1, parse_json('[{"fruit":"banana"}]')
-            union
-            select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
-        ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
-        order by id
-        """
-        # duckdb lateral join order is non-deterministic so order by id
-        # within an id the order of fruits should match the json array
+def test_error_not_implemented(cur: snowflake.connector.cursor.SnowflakeCursor):
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute("SELECT TO_DECIMAL('1.2345', '99.9')")
+    assert "not implemented. Please raise an issue via https://github.com/tekumara/fakesnow/issues/new" in str(
+        excinfo.value
     )
-    assert cur.fetchall() == [(1, '"banana"'), (2, '"coconut"'), (2, '"durian"')]
-
-
-def test_flatten_index(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute(
-        """
-        select id, f.value::varchar as v, f.index as i
-        from (select column1 as id, column2 as col from (values (1, 's1,s3,s2'), (2, 's2,s1'))) as t
-        , lateral flatten(input => split(t.col, ',')) as f order by id;
-        """
-    )
-    assert cur.fetchall() == [(1, "s1", 0), (1, "s3", 1), (1, "s2", 2), (2, "s2", 0), (2, "s1", 1)]
-
-
-def test_flatten_value_cast_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute(
-        """
-        select id, f.value::varchar as v
-        from (select column1 as id, column2 as col from (values (1, 's1,s2,s3'), (2, 's1,s2'))) as t
-        , lateral flatten(input => split(t.col, ',')) as f order by id
-        """
-    )
-    # should be raw string not json string with double quotes
-    assert cur.fetchall() == [(1, "s1"), (1, "s2"), (1, "s3"), (2, "s1"), (2, "s2")]
 
 
 def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -287,61 +257,6 @@ def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select * from example")
     # 32 bit floats will return 1.2300000190734863 rather than 1.23
     assert cur.fetchall() == [(1.23, 1.23, 1.23, 1.23, 1.23)]
-
-
-def test_get_path_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("""select parse_json('{"fruit":"banana"}'):fruit""")
-    assert cur.fetchall() == [('"banana"',)]
-
-    # converting json to varchar returns unquoted string
-    cur.execute("""select parse_json('{"fruit":"banana"}'):fruit::varchar""")
-    assert cur.fetchall() == [("banana",)]
-
-    # nested json
-    cur.execute("""select get_path(parse_json('{"food":{"fruit":"banana"}}'), 'food.fruit')::varchar""")
-    assert cur.fetchall() == [("banana",)]
-
-    cur.execute("""select parse_json('{"food":{"fruit":"banana"}}'):food.fruit::varchar""")
-    assert cur.fetchall() == [("banana",)]
-
-    cur.execute("""select parse_json('{"food":{"fruit":"banana"}}'):food:fruit::varchar""")
-    assert cur.fetchall() == [("banana",)]
-
-    # json number is varchar
-    cur.execute("""select parse_json('{"count":42}'):count""")
-    assert cur.fetchall() == [("42",)]
-
-    # lower/upper converts to varchar (ie: no quotes) ¯\_(ツ)_/¯
-    cur.execute("""select upper(parse_json('{"fruit":"banana"}'):fruit)""")
-    assert cur.fetchall() == [("BANANA",)]
-
-    cur.execute("""select lower(parse_json('{"fruit":"banana"}'):fruit)""")
-    assert cur.fetchall() == [("banana",)]
-
-    # lower/upper converts json number to varchar too
-    cur.execute("""select upper(parse_json('{"count":"42"}'):count)""")
-    assert cur.fetchall() == [("42",)]
-
-
-def test_get_path_as_number(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("CREATE TABLE example (j VARIANT)")
-    dcur.execute("""INSERT INTO example SELECT PARSE_JSON('{"str": "100", "num" : 200}')""")
-
-    dcur.execute("SELECT j:str::varchar as j_str_varchar, j:num::varchar as j_num_varchar FROM example")
-    assert dcur.fetchall() == [{"J_STR_VARCHAR": "100", "J_NUM_VARCHAR": "200"}]
-
-    dcur.execute("SELECT j:str::number as j_str_number, j:num::number as j_num_number FROM example")
-    assert dcur.fetchall() == [{"J_STR_NUMBER": 100, "J_NUM_NUMBER": 200}]
-
-
-def test_get_path_precedence(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("select {'K1': {'K2': 1}} as col where col:K1:K2 > 0")
-    assert indent(cur.fetchall()) == [('{\n  "K1": {\n    "K2": 1\n  }\n}',)]
-
-    cur.execute(
-        """select parse_json('{"K1": "a", "K2": "b"}') as col, case when col:K1::VARCHAR = 'a' and col:K2::VARCHAR = 'b' then 'yes' end"""
-    )
-    assert indent(cur.fetchall()) == [('{\n  "K1": "a",\n  "K2": "b"\n}', "yes")]
 
 
 def test_hex_decode_binary(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -370,46 +285,6 @@ def test_number_38_0_is_int(cur: snowflake.connector.cursor.SnowflakeCursor):
 def test_non_existent_table_throws_snowflake_exception(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
         cur.execute("select * from this_table_does_not_exist")
-
-
-def test_object_construct(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor() as cur:
-        cur.execute("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)")
-
-        # TODO: strip null within duckdb via python UDF
-        def strip_none_values(d: dict) -> dict:
-            return {k: v for k, v in d.items() if v}
-
-        result = cur.fetchone()
-        assert isinstance(result, tuple)
-        assert strip_none_values(json.loads(result[0])) == json.loads('{\n  "a": 1,\n  "b": "BBBB"\n}')
-
-    with conn.cursor() as cur:
-        cur.execute("SELECT OBJECT_CONSTRUCT('a', 1, null, 'nulkeyed') as col")
-
-        result = cur.fetchone()
-        assert isinstance(result, tuple)
-        assert strip_none_values(json.loads(result[0])) == json.loads('{\n  "a": 1\n}')
-
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT NULL as col, OBJECT_CONSTRUCT( 'k1', 'v1', 'k2', CASE WHEN ZEROIFNULL(col) + 1 >= 2 THEN 'v2' ELSE NULL END, 'k3', 'v3')"
-        )
-
-        result = cur.fetchone()
-        assert isinstance(result, tuple)
-        assert strip_none_values(json.loads(result[1])) == json.loads('{\n  "k1": "v1",\n  "k3": "v3"\n}')
-
-    with conn.cursor() as cur:
-        cur.execute(
-            "SELECT 1 as col, OBJECT_CONSTRUCT( 'k1', 'v1', 'k2', CASE WHEN ZEROIFNULL(col) + 1 >= 2 THEN 'v2' ELSE NULL END, 'k3', 'v3')"
-        )
-
-        result = cur.fetchone()
-        assert isinstance(result, tuple)
-        assert strip_none_values(json.loads(result[1])) == json.loads(
-            '{\n  "k1": "v1",\n  "k2": "v2",\n  "k3": "v3"\n}'
-        )
 
 
 def test_percentile_cont(conn: snowflake.connector.SnowflakeConnection):
@@ -528,41 +403,6 @@ def test_select_from_values(conn: snowflake.connector.SnowflakeConnection):
         ]
 
 
-def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("create or replace table semis (emails array, names object, notes variant)")
-    cur.execute(
-        """insert into semis(emails, names, notes) SELECT ['A', 'B'], OBJECT_CONSTRUCT('k','v1'), ARRAY_CONSTRUCT('foo')::VARIANT"""
-    )
-    cur.execute(
-        """insert into semis(emails, names, notes) SELECT ['C','D'], parse_json('{"k": "v2"}'), parse_json('{"b": "ar"}')"""
-    )
-
-    # results are returned as strings, because the underlying type is JSON (duckdb) / VARIANT (snowflake)
-
-    cur.execute("select emails from semis")
-    assert indent(cur.fetchall()) == [('[\n  "A",\n  "B"\n]',), ('[\n  "C",\n  "D"\n]',)]
-
-    cur.execute("select emails[0] from semis")
-    assert cur.fetchall() == [('"A"',), ('"C"',)]
-
-    cur.execute("select names['k'] from semis")
-    assert cur.fetchall() == [('"v1"',), ('"v2"',)]
-
-    cur.execute("select notes[0] from semis")
-    assert cur.fetchall() == [('"foo"',), (None,)]
-
-    cur.execute(
-        """
-            SELECT OBJECT_CONSTRUCT('key_1', 'one', 'key_2', NULL) AS WITHOUT_KEEP_NULL,
-                   OBJECT_CONSTRUCT_KEEP_NULL('key_1', 'one', 'key_2', NULL) AS KEEP_NULL_1,
-                   OBJECT_CONSTRUCT_KEEP_NULL('key_1', 'one', NULL, 'two') AS KEEP_NULL_2
-        """
-    )
-    assert indent(cur.fetchall()) == [
-        ('{\n  "key_1": "one"\n}', '{\n  "key_1": "one",\n  "key_2": null\n}', '{\n  "key_1": "one"\n}')
-    ]
-
-
 def test_split(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert indent(cur.execute("select split('a,b,c', ',')").fetchall()) == [('[\n  "a",\n  "b",\n  "c"\n]',)]
 
@@ -638,14 +478,6 @@ def test_sha2(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [
         ("1dbd59f661d68b90724f21084396b865497173e4d2714f4d91cf05fa5fc5e18d",) * 4,
     ]
-
-
-def test_try_parse_json(dcur: snowflake.connector.cursor.DictCursor):
-    dcur.execute("""SELECT TRY_PARSE_JSON('{"first":"foo", "last":"bar"}') AS j""")
-    assert dindent(dcur.fetchall()) == [{"J": '{\n  "first": "foo",\n  "last": "bar"\n}'}]
-
-    dcur.execute("""SELECT TRY_PARSE_JSON('{invalid: ,]') AS j""")
-    assert dcur.fetchall() == [{"J": None}]
 
 
 def test_try_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):

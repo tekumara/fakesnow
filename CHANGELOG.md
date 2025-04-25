@@ -2,6 +2,58 @@
 
 # Changelog
 
+## [0.9.35](https://github.com/tekumara/fakesnow/compare/v0.9.34...v0.9.35) (2025-04-06)
+
+
+### Features
+
+* **errors:** raise ProgrammingError for unimplemented features ([8fd8fdc](https://github.com/tekumara/fakesnow/commit/8fd8fdc0fe28cdd3fbd5030e6555b3459342a1c5)), closes [#202](https://github.com/tekumara/fakesnow/issues/202)
+* **server:** support fetch_pandas_all ([c75f035](https://github.com/tekumara/fakesnow/commit/c75f035a1cd765b858be52be98a1bb0a309f44f0))
+* **show:** SHOW VIEWS ([63f3ddf](https://github.com/tekumara/fakesnow/commit/63f3ddfd0131fe3563d171c22f973455384d1ce5))
+
+## [0.9.34](https://github.com/tekumara/fakesnow/compare/v0.9.33...v0.9.34) (2025-04-03)
+
+
+### Features
+
+* **server:** support qmark parameter bindings ([f53d95d](https://github.com/tekumara/fakesnow/commit/f53d95d8288c63fc5d04f1ecaf6c4d7252eaf9fc))
+
+## [0.9.33](https://github.com/tekumara/fakesnow/compare/v0.9.32...v0.9.33) (2025-04-02)
+
+
+### Bug Fixes
+
+* ARRAY_SIZE of empty array returns 0 ([2cdccf2](https://github.com/tekumara/fakesnow/commit/2cdccf2a55533aa6a4f1dd689c21deedb9d79c3f))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.396 to 1.1.398 ([#207](https://github.com/tekumara/fakesnow/issues/207)) ([bc79949](https://github.com/tekumara/fakesnow/commit/bc7994918d138b8b51c231226ba43ade435270a9))
+* **deps:** update setuptools requirement from ~=76.0 to ~=78.1 ([#206](https://github.com/tekumara/fakesnow/issues/206)) ([2fd0569](https://github.com/tekumara/fakesnow/commit/2fd05694c9655106334a17492a73d671a1c6e6ae))
+* **deps:** update sqlglot requirement from ~=26.10.1 to ~=26.12.1 ([#205](https://github.com/tekumara/fakesnow/issues/205)) ([5ae2d04](https://github.com/tekumara/fakesnow/commit/5ae2d04f11ca6e074068e60f638864d62ba244cb))
+
+## [0.9.32](https://github.com/tekumara/fakesnow/compare/v0.9.31...v0.9.32) (2025-03-31)
+
+
+### Features
+
+* helpful error message when db_path doesn't exist ([9aca09a](https://github.com/tekumara/fakesnow/commit/9aca09ac42e24810fd5b58d3d809f2cf5126aa2a)), closes [#197](https://github.com/tekumara/fakesnow/issues/197)
+* **server:** log sql text on SQL error ([a2e5502](https://github.com/tekumara/fakesnow/commit/a2e55029967caafedbe54166f21e6e9258c6d8ea))
+* SHOW COLUMNS ([9734834](https://github.com/tekumara/fakesnow/commit/97348345c3194dd0b6f01b5a4221da18d5a0421f)), closes [#195](https://github.com/tekumara/fakesnow/issues/195)
+* SHOW WAREHOUSES ([151e4b6](https://github.com/tekumara/fakesnow/commit/151e4b654a097939afb4d3f57407c599a397e33b)), closes [#203](https://github.com/tekumara/fakesnow/issues/203)
+* unquote array values cast to varchar ([9c574fd](https://github.com/tekumara/fakesnow/commit/9c574fd87672399d8d30656844058769e1f10852))
+
+
+### Bug Fixes
+
+* SHOW OBJECTS/TABLES returns all columns ([93d9f66](https://github.com/tekumara/fakesnow/commit/93d9f66064491f95bba40cd751d5072392601d3d))
+* USE DATABASE unsets schema ([e1d0a0c](https://github.com/tekumara/fakesnow/commit/e1d0a0c8bf35d5ae87785a78b44f3c92c1eb4127))
+
+
+### Chores
+
+* **tools:** add decode tool to analysis arrow rowsets ([3b469bd](https://github.com/tekumara/fakesnow/commit/3b469bdf7db9f889161eee9304ca56d0e850da02))
+
 ## [0.9.31](https://github.com/tekumara/fakesnow/compare/v0.9.30...v0.9.31) (2025-03-18)
 
 

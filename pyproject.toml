@@ -1,7 +1,7 @@
 [project]
 name = "fakesnow"
 description = "Fake Snowflake Connector for Python. Run, mock and test Snowflake DB locally."
-version = "0.9.31"
+version = "0.9.35"
 readme = "README.md"
 license = { file = "LICENSE" }
 classifiers = ["License :: OSI Approved :: MIT License"]
@@ -11,7 +11,7 @@ dependencies = [
     "duckdb~=1.2.0",
     "pyarrow",
     "snowflake-connector-python",
-    "sqlglot~=26.10.1",
+    "sqlglot~=26.12.1",
 ]
 
 [project.urls]
@@ -32,7 +32,6 @@ dev = [
     "pre-commit~=4.0",
     "pyarrow-stubs==17.19",
     "pytest~=8.0",
-    "pytest-asyncio",
     "ruff~=0.11.0",
     "twine~=6.0",
     "snowflake-sqlalchemy~=1.7.0",
@@ -45,7 +44,7 @@ notebook = ["duckdb-engine", "ipykernel", "jupysql"]
 server = ["starlette", "uvicorn"]
 
 [build-system]
-requires = ["setuptools~=76.0", "wheel~=0.42"]
+requires = ["setuptools~=78.1", "wheel~=0.42"]
 
 [tool.setuptools.packages.find]
 where = ["."]

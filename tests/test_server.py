@@ -3,27 +3,81 @@
 import datetime
 from decimal import Decimal
 
+import numpy as np
+import pandas as pd
 import pytest
 import pytz
 import requests
 import snowflake.connector
-import snowflake.connector.network
 from dirty_equals import IsUUID
+from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
 
 from tests.utils import indent
 
 
 def test_server_abort_request(server: dict) -> None:
-    with (
-        snowflake.connector.connect(
-            **server,
-            # triggers an abort request
-            network_timeout=0,
-        ) as conn1,
-        conn1.cursor() as cur,
-    ):
+    # network_timeout is set to 0 to trigger an abort
+    with snowflake.connector.connect(**server | {"network_timeout": 0}) as conn1, conn1.cursor() as cur:
         cur.execute("select 'will abort'")
+
+
+def test_server_binding_qmark(server: dict):
+    with (
+        snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute(
+            # test most important types from
+            # https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-api#data-type-mappings-for-qmark-and-numeric-bindings
+            """
+            create or replace table example (
+                XINT INT, XDECIMAL DECIMAL(10,2), XFLOAT REAL,
+                XSTR TEXT, XUNICODE TEXT, XBYTES BINARY, XBYTEARRAY BINARY, XBOOL BOOLEAN,
+                XDATE DATE, XTIME TIME, XDATETIME TIMESTAMP_NTZ
+            )
+            """
+        )
+        cur.execute(
+            "insert into example values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                1,
+                10.23,
+                1.23456,
+                "Jenny",
+                "Jenny",
+                b"Jenny",
+                bytearray(b"Jenny"),
+                True,
+                datetime.date(2023, 1, 1),
+                datetime.time(1, 2, 3, 123456),
+                datetime.datetime(2023, 1, 2, 3, 4, 5, 123456),
+            ),
+        )
+        cur.execute("select * from example")
+        assert cur.fetchall() == [
+            (
+                1,
+                Decimal("10.23"),
+                1.23456,
+                "Jenny",
+                "Jenny",
+                bytearray(b"Jenny"),
+                bytearray(b"Jenny"),
+                True,
+                datetime.date(2023, 1, 1),
+                datetime.time(1, 2, 3, 123456),
+                datetime.datetime(2023, 1, 2, 3, 4, 5, 123456),
+            )
+        ]
+
+        cur.execute("select * from example where xint = ?", (1,))
+
+
+def test_server_client_session_keep_alive(server: dict) -> None:
+    with snowflake.connector.connect(**server | {"client_session_keep_alive": True}):
+        # shouldn't error
+        pass
 
 
 def test_server_close(server: dict) -> None:
@@ -41,7 +95,24 @@ def test_server_close(server: dict) -> None:
     assert response.json()["success"]
 
 
-def test_server_params(server: dict) -> None:
+def test_server_fetch_pandas_all(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur = scur
+
+    cur.execute("select * from values (1, 'Salted'), (2, 'Caramel') as t(id, flavour)")
+
+    expected_df = pd.DataFrame(
+        [
+            # TODO: snowflake returns int8
+            (np.int32(1), "Salted"),
+            (np.int32(2), "Caramel"),
+        ],
+        columns=["ID", "FLAVOUR"],
+    )
+
+    assert_frame_equal(cur.fetch_pandas_all(), expected_df)
+
+
+def test_server_response_params(server: dict) -> None:
     # mimic the jdbc driver
     headers = {
         "client_app_id": "JDBC",

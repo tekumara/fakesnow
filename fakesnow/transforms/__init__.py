@@ -14,10 +14,11 @@ from fakesnow.transforms.show import (
     show_databases as show_databases,
     show_functions as show_functions,
     show_keys as show_keys,
-    show_objects_tables as show_objects_tables,
     show_procedures as show_procedures,
     show_schemas as show_schemas,
+    show_tables_etc as show_tables_etc,
     show_users as show_users,
+    show_warehouses as show_warehouses,
 )
 from fakesnow.variables import Variables
 
@@ -59,9 +60,13 @@ def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
 
 def array_size(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, exp.ArraySize):
-        # case is used to convert 0 to null, because null is returned by duckdb when no case matches
+        # return null if not json array
         jal = exp.Anonymous(this="json_array_length", expressions=[expression.this])
-        return exp.Case(ifs=[exp.If(this=jal, true=jal)])
+        is_json_array = exp.EQ(
+            this=exp.Anonymous(this="json_type", expressions=[expression.this]),
+            expression=exp.Literal(this="ARRAY", is_string=True),
+        )
+        return exp.Case(ifs=[exp.If(this=is_json_array, true=jal)])
 
     return expression
 
@@ -576,7 +581,7 @@ def identifier(expression: exp.Expression) -> exp.Expression:
 
 
 def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
-    """Convert indices on objects and arrays to json_extract.
+    """Convert indices on objects and arrays to json_extract or json_extract_string
 
     Supports Snowflake array indices, see
     https://docs.snowflake.com/en/sql-reference/data-types-semistructured#accessing-elements-of-an-array-by-index-or-by-slice
@@ -595,12 +600,16 @@ def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
         and isinstance(index, exp.Literal)
         and index.this
     ):
-        if index.is_string:
-            return exp.JSONExtract(this=expression.this, expression=exp.Literal(this=f"$.{index.this}", is_string=True))
+        if isinstance(expression.parent, exp.Cast) and expression.parent.to.this == exp.DataType.Type.VARCHAR:
+            # If the parent is a cast to varchar, we need to use JSONExtractScalar
+            # to get the unquoted string value.
+            klass = exp.JSONExtractScalar
         else:
-            return exp.JSONExtract(
-                this=expression.this, expression=exp.Literal(this=f"$[{index.this}]", is_string=True)
-            )
+            klass = exp.JSONExtract
+        if index.is_string:
+            return klass(this=expression.this, expression=exp.Literal(this=f"$.{index.this}", is_string=True))
+        else:
+            return klass(this=expression.this, expression=exp.Literal(this=f"$[{index.this}]", is_string=True))
 
     return expression
 
@@ -829,7 +838,7 @@ def regex_replace(expression: exp.Expression) -> exp.Expression:
         if len(expression.args) > 3:
             # see https://docs.snowflake.com/en/sql-reference/functions/regexp_replace
             raise NotImplementedError(
-                "REGEXP_REPLACE with additional parameters (eg: <position>, <occurrence>, <parameters>) not supported"
+                "REGEXP_REPLACE with additional parameters (eg: <position>, <occurrence>, <parameters>)"
             )
 
         # pattern: snowflake requires escaping backslashes in single-quoted string constants, but duckdb doesn't
@@ -1308,9 +1317,9 @@ def create_user(expression: exp.Expression) -> exp.Expression:
         if sub_exp.upper().startswith("USER"):
             _, name, *ignored = sub_exp.split(" ")
             if ignored:
-                raise NotImplementedError(f"`CREATE USER` with {ignored} not yet supported")
+                raise NotImplementedError(f"`CREATE USER` with {ignored}")
             return sqlglot.parse_one(
-                f"INSERT INTO _fs_global._fs_information_schema._fs_users_ext (name) VALUES ('{name}')", read="duckdb"
+                f"INSERT INTO _fs_global._fs_information_schema._fs_users (name) VALUES ('{name}')", read="duckdb"
             )
 
     return expression

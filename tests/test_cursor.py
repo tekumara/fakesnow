@@ -6,7 +6,6 @@ import pandas as pd
 import pytest
 import snowflake.connector
 import snowflake.connector.cursor
-import snowflake.connector.pandas_tools
 from dirty_equals import IsUUID
 from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
@@ -161,7 +160,7 @@ def test_fetch_pandas_all(cur: snowflake.connector.cursor.SnowflakeCursor):
             {"ID": 2, "FIRST_NAME": "Jasper", "LAST_NAME": "M"},
         ]
     )
-    # integers have dtype int64
+    # integers have dtype int64 (TODO: snowflake returns int8)
     assert_frame_equal(cur.fetch_pandas_all(), expected_df)
 
     # can refetch

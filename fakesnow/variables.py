@@ -45,7 +45,7 @@ class Variables:
                 self._set(name, value)
             else:
                 # Haven't been able to produce this in tests yet due to UNSET being parsed as an Alias expression.
-                raise NotImplementedError("UNSET not supported yet")
+                raise NotImplementedError("UNSET")
         elif self._is_unset_expression(expr):  # Unfortunately UNSET varname; is parsed as an Alias expression :(
             alias = expr.args.get("alias")
             assert alias, "UNSET without value in alias attribute is unexpected."

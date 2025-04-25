@@ -16,6 +16,7 @@ from starlette.responses import JSONResponse
 from starlette.routing import Route
 
 from fakesnow.arrow import to_ipc, to_sf
+from fakesnow.converter import from_binding
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.rowtype import describe_as_rowtype
@@ -58,7 +59,10 @@ async def login_request(request: Request) -> JSONResponse:
         {
             "data": {
                 "token": token,
-                "parameters": [{"name": "AUTOCOMMIT", "value": True}],
+                "parameters": [
+                    {"name": "AUTOCOMMIT", "value": True},
+                    {"name": "CLIENT_SESSION_KEEP_ALIVE_HEARTBEAT_FREQUENCY", "value": 3600},
+                ],
             },
             "success": True,
         }
@@ -77,12 +81,20 @@ async def query_request(request: Request) -> JSONResponse:
 
         sql_text = body_json["sqlText"]
 
+        if bindings := body_json.get("bindings"):
+            # Convert parameters like {'1': {'type': 'FIXED', 'value': '10'}, ...} to tuple (10, ...)
+            params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
+            logger.debug(f"Bindings: {params}")
+        else:
+            params = None
+
         try:
             # only a single sql statement is sent at a time by the python snowflake connector
-            cur = await run_in_threadpool(conn.cursor().execute, sql_text)
+            cur = await run_in_threadpool(conn.cursor().execute, sql_text, binding_params=params)
             rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
         except snowflake.connector.errors.ProgrammingError as e:
+            logger.info(f"{sql_text=} ProgrammingError {e}")
             code = f"{e.errno:06d}"
             return JSONResponse(
                 {
@@ -97,7 +109,7 @@ async def query_request(request: Request) -> JSONResponse:
             )
         except Exception as e:
             # we have a bug or use of an unsupported feature
-            msg = f"Unhandled error during query {sql_text=}"
+            msg = f"{sql_text=} Unhandled exception"
             logger.error(msg, exc_info=e)
             # my guess at mimicking a 500 error as per https://docs.snowflake.com/en/developer-guide/sql-api/reference
             # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318
@@ -112,6 +124,9 @@ async def query_request(request: Request) -> JSONResponse:
         return JSONResponse(
             {
                 "data": {
+                    "parameters": [
+                        {"name": "TIMEZONE", "value": "Etc/UTC"},
+                    ],
                     "rowtype": rowtype,
                     "rowsetBase64": rowset_b64,
                     "total": cur._rowcount,  # noqa: SLF001

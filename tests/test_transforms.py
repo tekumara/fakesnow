@@ -41,8 +41,8 @@ from fakesnow.transforms import (
     semi_structured_types,
     set_schema,
     sha256,
-    show_objects_tables,
     show_schemas,
+    show_tables_etc,
     split,
     tag,
     timestamp_ntz,
@@ -100,7 +100,7 @@ def test_alter_table_strip_cluster_by() -> None:
 def test_array_size() -> None:
     assert (
         sqlglot.parse_one("""select array_size(parse_json('["a","b"]'))""").transform(array_size).sql(dialect="duckdb")
-        == """SELECT CASE WHEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) THEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) END"""
+        == """SELECT CASE WHEN JSON_TYPE(JSON('["a","b"]')) = 'ARRAY' THEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) END"""
     )
 
 
@@ -660,20 +660,20 @@ def test_semi_structured_types() -> None:
     )
 
 
-def test_show_objects_tables() -> None:
+def test_show_tables_etc() -> None:
+    assert (
+        sqlglot.parse_one("show objects in database", read="snowflake").transform(show_tables_etc).sql()
+        == """SELECT * FROM _fs_global._fs_information_schema._fs_show_objects WHERE 1 = 1"""
+    )
+    assert (
+        sqlglot.parse_one("show objects in db1.schema1", read="snowflake").transform(show_tables_etc).sql()
+        == """SELECT * FROM _fs_global._fs_information_schema._fs_show_objects WHERE 1 = 1 AND database_name = 'db1' AND schema_name = 'schema1'"""  # noqa: E501
+    )
     assert (
         sqlglot.parse_one("show terse objects in database db1 limit 10", read="snowflake")
-        .transform(show_objects_tables)
+        .transform(show_tables_etc)
         .sql()
-        == """SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS "created_on", table_name AS "name", CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS "kind", table_catalog AS "database_name", table_schema AS "schema_name" FROM information_schema.tables WHERE NOT (table_schema = '_fs_information_schema') AND table_catalog = 'db1' LIMIT 10"""  # noqa: E501
-    )
-    assert (
-        sqlglot.parse_one("show terse objects in db1.schema1", read="snowflake").transform(show_objects_tables).sql()
-        == """SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS "created_on", table_name AS "name", CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS "kind", table_catalog AS "database_name", table_schema AS "schema_name" FROM information_schema.tables WHERE NOT (table_schema = '_fs_information_schema') AND table_catalog = 'db1' AND table_schema = 'schema1'"""  # noqa: E501
-    )
-    assert (
-        sqlglot.parse_one("show terse objects in database", read="snowflake").transform(show_objects_tables).sql()
-        == """SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS "created_on", table_name AS "name", CASE WHEN table_type = 'BASE TABLE' THEN 'TABLE' ELSE table_type END AS "kind", table_catalog AS "database_name", table_schema AS "schema_name" FROM information_schema.tables WHERE NOT (table_schema = '_fs_information_schema')"""  # noqa: E501
+        == """SELECT created_on, name, kind, database_name, schema_name FROM _fs_global._fs_information_schema._fs_show_objects WHERE 1 = 1 AND database_name = 'db1' LIMIT 10"""  # noqa: E501
     )
 
 

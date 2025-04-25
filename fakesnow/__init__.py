@@ -91,3 +91,54 @@ def patch(
     finally:
         stack.close()
         fs.duck_conn.close()
+
+
+@contextmanager
+def server(port: int | None = None, session_parameters: dict[str, str | int | bool] | None = None) -> Iterator[dict]:
+    """Start a fake snowflake server in a separate thread and yield connection kwargs.
+
+    Args:
+        port (int | None, optional): Port to run the server on. If None, an available port is chosen. Defaults to None.
+
+    Yields:
+        Iterator[dict]: Connection parameters for the fake snowflake server.
+    """
+    import socket
+    import threading
+    from time import sleep
+
+    import uvicorn
+
+    import fakesnow.server
+
+    # find an unused TCP port between 1024-65535
+    if not port:
+        with contextlib.closing(socket.socket(type=socket.SOCK_STREAM)) as sock:
+            sock.bind(("127.0.0.1", 0))
+            port = sock.getsockname()[1]
+
+    assert port
+    server = uvicorn.Server(uvicorn.Config(fakesnow.server.app, port=port, log_level="info"))
+    thread = threading.Thread(target=server.run, name="Server", daemon=True)
+    thread.start()
+
+    while not server.started:
+        sleep(0.1)
+
+    try:
+        yield dict(
+            user="fake",
+            password="snow",
+            account="fakesnow",
+            host="localhost",
+            port=port,
+            protocol="http",
+            # disable telemetry
+            session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False} | (session_parameters or {}),
+            # disable retries on error
+            network_timeout=1,
+        )
+    finally:
+        server.should_exit = True
+        # wait for server thread to end
+        thread.join()

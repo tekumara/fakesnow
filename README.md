@@ -5,7 +5,7 @@
 [![PyPI](https://img.shields.io/pypi/v/fakesnow?color=violet)](https://pypi.org/project/fakesnow/)
 [![PyPI - Downloads](https://img.shields.io/pypi/dm/fakesnow?color=violet)](https://pypi.org/project/fakesnow/)
 
-Fake [Snowflake Connector for Python](https://docs.snowflake.com/en/user-guide/python-connector). Run and mock Snowflake DB locally.
+Run, mock and test fake Snowflake databases locally.
 
 ## Install
 
@@ -13,9 +13,21 @@ Fake [Snowflake Connector for Python](https://docs.snowflake.com/en/user-guide/p
 pip install fakesnow
 ```
 
+Or to install with the server:
+
+```
+pip install fakesnow[server]
+```
+
 ## Usage
 
-Run script.py with fakesnow:
+fakesnow offers two main approaches for faking Snowflake: in-process patching of the [Snowflake Connector for Python](https://docs.snowflake.com/en/user-guide/python-connector) or a standalone HTTP server.
+
+Patching only applies to the current Python process. If a subprocess is spawned it won't be patched. For subprocesses, or for non-Python clients, use the server instead.
+
+### In-process patching
+
+To run script.py with patching:
 
 ```shell
 fakesnow script.py
@@ -29,9 +41,9 @@ fakesnow -m pytest
 
 `fakesnow` executes `fakesnow.patch` before running the script or module.
 
-### fakesnow.patch
+#### Use fakesnow.patch in your code
 
-To use fakesnow within your code:
+Alternatively, use fakesnow.patch in your code:
 
 ```python
 import fakesnow
@@ -43,12 +55,16 @@ with fakesnow.patch():
     print(conn.cursor().execute("SELECT 'Hello fake world!'").fetchone())
 ```
 
-The following imports are automatically patched:
+#### What gets patched
+
+The following standard imports are automatically patched:
 
 - `import snowflake.connector.connect`
 - `import snowflake.connector.pandas_tools.write_pandas`
 
-To patch modules that use the `from ... import` syntax, manually specify them, eg: if _mymodule.py_ has the import:
+#### Handling "from ... import" Statements
+
+To patch modules that use the `from ... import` syntax, you need to manually specify them, eg: if _mymodule.py_ contains:
 
 ```python
 from snowflake.connector.pandas_tools import write_pandas
@@ -61,33 +77,77 @@ with fakesnow.patch("mymodule.write_pandas"):
     ...
 ```
 
-By default databases are in-memory. To persist databases between processes, specify a databases path:
+#### Database Persistence
+
+By default, databases are in-memory and will be lost when the process ends. To persist databases between processes, specify a databases path:
 
 ```python
 with fakesnow.patch(db_path="databases/"):
     ...
 ```
 
+### Run fakesnow as a server
+
+For scenarios where patching won't work (like subprocesses or non-Python clients), you can run fakesnow as an HTTP server:
+
+```python
+import fakesnow
+import snowflake.connector
+
+# Start the fakesnow server in a context manager
+# This yields connection kwargs (host, port, etc.)
+with fakesnow.server() as conn_kwargs:
+    # Connect to the fakesnow server using the yielded kwargs
+    with snowflake.connector.connect(**conn_kwargs) as conn:
+        print(conn.cursor().execute("SELECT 'Hello fake server!'").fetchone())
+
+    # The server is automatically stopped when exiting the context manager
+```
+
+This starts an HTTP server in its own thread listening for requests on localhost on an available random port.
+The server accepts any username/password combination.
+
+#### Server Configuration Options
+
+By default, the server uses a single in-memory database for its lifetime. To configure database persistence or isolation:
+
+```python
+# Databases will be saved to the "databases/" directory
+with fakesnow.server(session_parameters={"FAKESNOW_DB_PATH": "databases/"}):
+    ...
+
+# Each connection gets its own isolated in-memory database
+with fakesnow.server(session_parameters={"FAKESNOW_DB_PATH": ":isolated:"}):
+    ...
+```
+
+To specify a port for the server:
+
+```python
+with fakesnow.server(port=12345) as conn_kwargs:
+    ...
+```
+
 ### pytest fixtures
 
-pytest [fixtures](fakesnow/fixtures.py) are provided for testing. Example _conftest.py_:
+fakesnow provides [fixtures](fakesnow/fixtures.py) for easier test integration. Here's an example _conftest.py_ using them:
 
 ```python
 from typing import Iterator
 
-import fakesnow.fixtures
 import pytest
 
-pytest_plugins = fakesnow.fixtures.__name__
+pytest_plugins = "fakesnow.fixtures"
 
 @pytest.fixture(scope="session", autouse=True)
 def setup(_fakesnow_session: None) -> Iterator[None]:
     # the standard imports are now patched
-    ...
+    # Add any additional setup here
     yield
+    # Add any teardown here
 ```
 
-Or with `from ... import` patch targets:
+For code that uses `from ... import` statements:
 
 ```python
 from typing import Iterator
@@ -101,34 +161,51 @@ def _fakesnow_session() -> Iterator[None]:
         yield
 ```
 
+To start a fakesnow server instance, use the `fakesnow_server` session fixture:
+
+```python
+import snowflake.connector
+
+def test_with_server(fakesnow_server: dict):
+    # fakesnow_server contains connection kwargs (host, port, etc.)
+    with snowflake.connector.connect(**fakesnow_server) as conn:
+        conn.cursor().execute("SELECT 1")
+        assert conn.cursor().fetchone() == (1,)
+```
+
 ## Implementation coverage
 
-- [x] cursors and standard SQL
-- [x] [get_result_batches()](https://docs.snowflake.com/en/user-guide/python-connector-api#get_result_batches)
-- [x] information schema
-- [x] multiple databases
-- [x] [parameter binding](https://docs.snowflake.com/en/user-guide/python-connector-example#binding-data)
-- [x] table comments
-- [x] [write_pandas(..)](https://docs.snowflake.com/en/user-guide/python-connector-api#write_pandas)
-- [ ] [access control](https://docs.snowflake.com/en/user-guide/security-access-control-overview)
-- [ ] standalone/out of process api/support for faking non-python connectors
-- [ ] [stored procedures](https://docs.snowflake.com/en/sql-reference/stored-procedures)
+Fully supported:
 
-Partial support
+- Standard SQL operations and cursors
+- Information schema queries
+- Multiple databases
+- [Parameter binding](https://docs.snowflake.com/en/user-guide/python-connector-example#binding-data) in queries
+- Table comments
+- Pandas integration including [write_pandas(..)](https://docs.snowflake.com/en/user-guide/python-connector-api#write_pandas) (not available via the server yet)
+- Result batch retrieval via [get_result_batches()](https://docs.snowflake.com/en/user-guide/python-connector-api#get_result_batches)
+- HTTP server for non-Python connectors
 
-- [x] date functions
-- [x] regex functions
-- [x] semi-structured data
-- [x] tags
-- [x] user management (See [tests/test_users.py](tests/test_users.py))
+Partially supported:
 
-For more detail see [tests/test_fakes.py](tests/test_fakes.py)
+- Date functions
+- Regular expression functions
+- Semi-structured data operations
+- Tags
+- User management
+
+Not yet implemented:
+
+- [Access control](https://docs.snowflake.com/en/user-guide/security-access-control-overview)
+- [Stored procedures](https://docs.snowflake.com/en/sql-reference/stored-procedures)
+
+For more detail see the [test suite](tests/).
 
 ## Caveats
 
-- The order of rows is non deterministic and may not match Snowflake unless ORDER BY is fully specified.
-- A more liberal Snowflake SQL dialect than used by a real Snowflake instance is supported, ie: some queries might pass using fakesnow that a real Snowflake instance would reject.
+- Row ordering is non-deterministic and may differ from Snowflake unless you fully specify the ORDER BY clause.
+- fakesnow supports a more liberal SQL dialect than actual Snowflake. This means some queries that work with fakesnow might not work with a real Snowflake instance.
 
 ## Contributing
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) to get started and develop in this repo.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for instructions on getting started with development and contributing to this project.

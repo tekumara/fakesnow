@@ -9,6 +9,87 @@ import pytz
 import snowflake.connector.cursor
 
 
+def test_show_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("""create or replace table example (
+            XBOOLEAN BOOLEAN, XINT INT, XFLOAT FLOAT, XDECIMAL DECIMAL(10,2),
+            XVARCHAR VARCHAR, XVARCHAR20 VARCHAR(20),
+            XDATE DATE, XTIME TIME, XTIMESTAMP TIMESTAMP_TZ, XTIMESTAMP_NTZ TIMESTAMP_NTZ,
+            XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT, */ XVARIANT VARIANT)
+        """)
+    dcur.execute("create view view1 as select xboolean from example")
+
+    common_fields = {
+        "table_name": "EXAMPLE",
+        "schema_name": "SCHEMA1",
+        "null?": "true",
+        "default": "",
+        "kind": "COLUMN",
+        "expression": "",
+        "comment": "",
+        "database_name": "DB1",
+        "autoincrement": "",
+        "schema_evolution_record": None,
+    }
+
+    # fmt: off
+    example1_cols = [
+        {**common_fields, "column_name": "XBOOLEAN", "data_type": '{"type":"BOOLEAN","nullable":true}'},
+        {**common_fields, "column_name": "XINT", "data_type": '{"type":"FIXED","precision":38,"scale":0,"nullable":true}'},
+        {**common_fields, "column_name": "XFLOAT", "data_type": '{"type":"REAL","nullable":true}'},
+        {**common_fields, "column_name": "XDECIMAL", "data_type": '{"type":"FIXED","precision":10,"scale":2,"nullable":true}'},
+        {**common_fields, "column_name": "XVARCHAR", "data_type": '{"type":"TEXT","length":16777216,"byteLength":16777216,"nullable":true,"fixed":false}'},
+        {**common_fields, "column_name": "XVARCHAR20", "data_type": '{"type":"TEXT","length":20,"byteLength":80,"nullable":true,"fixed":false}'},
+        {**common_fields, "column_name": "XDATE", "data_type": '{"type":"DATE","nullable":true}'},
+        {**common_fields, "column_name": "XTIME", "data_type": '{"type":"TIME","precision":0,"scale":9,"nullable":true}'},
+        {**common_fields, "column_name": "XTIMESTAMP", "data_type": '{"type":"TIMESTAMP_TZ","precision":0,"scale":9,"nullable":true}'},
+        {**common_fields, "column_name": "XTIMESTAMP_NTZ", "data_type": '{"type":"TIMESTAMP_NTZ","precision":0,"scale":9,"nullable":true}'},
+        {**common_fields, "column_name": "XBINARY", "data_type": '{"type":"BINARY","length":8388608,"byteLength":8388608,"nullable":true,"fixed":true}'},
+        {**common_fields, "column_name": "XVARIANT", "data_type": '{"type":"VARIANT","nullable":true}'},
+    ]
+    # fmt: on
+
+    view1_cols = [
+        {
+            "table_name": "VIEW1",
+            "schema_name": "SCHEMA1",
+            "column_name": "XBOOLEAN",
+            "data_type": '{"type":"BOOLEAN","nullable":true}',
+            "null?": "true",
+            "default": "",
+            "kind": "COLUMN",
+            "expression": "",
+            "comment": "",
+            "database_name": "DB1",
+            "autoincrement": "",
+            "schema_evolution_record": None,
+        }
+    ]
+
+    dcur.execute("SHOW COLUMNS IN example")
+    assert dcur.fetchall() == example1_cols
+
+    dcur.execute("SHOW COLUMNS IN SCHEMA db1.schema1")
+    assert dcur.fetchall() == example1_cols + view1_cols
+
+    dcur.execute("SHOW COLUMNS IN ACCOUNT")
+    assert dcur.fetchall() == example1_cols + view1_cols
+
+    assert [r.name for r in dcur.description] == [
+        "table_name",
+        "schema_name",
+        "column_name",
+        "data_type",
+        "null?",
+        "default",
+        "kind",
+        "expression",
+        "comment",
+        "database_name",
+        "autoincrement",
+        "schema_evolution_record",
+    ]
+
+
 def test_show_databases(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show databases")
     assert dcur.fetchall() == [
@@ -193,16 +274,16 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
     objects = [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "database_name": "DB1",
-            "kind": "TABLE",
             "name": "EXAMPLE",
+            "kind": "TABLE",
+            "database_name": "DB1",
             "schema_name": "SCHEMA1",
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "database_name": "DB1",
-            "kind": "VIEW",
             "name": "VIEW1",
+            "kind": "VIEW",
+            "database_name": "DB1",
             "schema_name": "SCHEMA2",
         },
     ]
@@ -224,32 +305,35 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "database_name",
         "schema_name",
         "comment",
-        # TODO: include these columns
-        # "cluster_by",
-        # "rows",
-        # "bytes",
-        # "owner",
-        # "retention_time",
-        # "owner_role_type",
-        # "budget"
+        "cluster_by",
+        "rows",
+        "bytes",
+        "owner",
+        "retention_time",
+        "owner_role_type",
+        "budget",
+        "is_hybrid",
+        "is_dynamic",
     ]
 
 
 def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("create database db2")
+    dcur.execute("create schema db2.schema2")
     dcur.execute("show terse schemas in database db1 limit 100")
     assert dcur.fetchall() == [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "database_name": "DB1",
-            "kind": None,
             "name": "SCHEMA1",
+            "kind": None,
+            "database_name": "DB1",
             "schema_name": None,
         },
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "database_name": "DB1",
-            "kind": None,
             "name": "information_schema",
+            "kind": None,
+            "database_name": "DB1",
             "schema_name": None,
         },
     ]
@@ -263,9 +347,9 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     objects = [
         {
             "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "database_name": "DB1",
-            "kind": "TABLE",
             "name": "EXAMPLE",
+            "kind": "TABLE",
+            "database_name": "DB1",
             "schema_name": "SCHEMA1",
         },
     ]
@@ -289,110 +373,31 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "schema_name",
         "comment",
         # TODO: include these columns
-        # "cluster_by",
-        # "rows",
-        # "bytes",
-        # "owner",
-        # "retention_time",
-        # "automatic_clustering",
-        # "change_tracking",
-        # "search_optimization",
-        # "search_optimization_progress",
-        # "search_optimization_bytes",
-        # "is_external",
-        # "enable_schema_evolution",
-        # "owner_role_type",
-        # "is_event",
-        # "budget",
-        # "is_hybrid",
-        # "is_iceberg",
+        "cluster_by",
+        "rows",
+        "bytes",
+        "owner",
+        "retention_time",
+        "automatic_clustering",
+        "change_tracking",
+        "search_optimization",
+        "search_optimization_progress",
+        "search_optimization_bytes",
+        "is_external",
+        "enable_schema_evolution",
+        "owner_role_type",
+        "is_event",
+        "budget",
+        "is_hybrid",
+        "is_iceberg",
+        "is_dynamic",
+        "is_immutable",
     ]
 
     dcur.execute("create table foo(x int)")
     dcur.execute("show terse tables like 'example'")
     # should not match show foo
     assert dcur.fetchall() == objects
-
-
-def test_show_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("""create or replace table example (
-            XBOOLEAN BOOLEAN, XINT INT, XFLOAT FLOAT, XDECIMAL DECIMAL(10,2),
-            XVARCHAR VARCHAR, XVARCHAR20 VARCHAR(20),
-            XDATE DATE, XTIME TIME, XTIMESTAMP TIMESTAMP_TZ, XTIMESTAMP_NTZ TIMESTAMP_NTZ,
-            XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT, */ XVARIANT VARIANT)
-        """)
-    dcur.execute("create view view1 as select xboolean from example")
-
-    common_fields = {
-        "table_name": "EXAMPLE",
-        "schema_name": "SCHEMA1",
-        "null?": "true",
-        "default": "",
-        "kind": "COLUMN",
-        "expression": "",
-        "comment": "",
-        "database_name": "DB1",
-        "autoincrement": "",
-        "schema_evolution_record": None,
-    }
-
-    # fmt: off
-    example1_cols = [
-        {**common_fields, "column_name": "XBOOLEAN", "data_type": '{"type":"BOOLEAN","nullable":true}'},
-        {**common_fields, "column_name": "XINT", "data_type": '{"type":"FIXED","precision":38,"scale":0,"nullable":true}'},
-        {**common_fields, "column_name": "XFLOAT", "data_type": '{"type":"REAL","nullable":true}'},
-        {**common_fields, "column_name": "XDECIMAL", "data_type": '{"type":"FIXED","precision":10,"scale":2,"nullable":true}'},
-        {**common_fields, "column_name": "XVARCHAR", "data_type": '{"type":"TEXT","length":16777216,"byteLength":16777216,"nullable":true,"fixed":false}'},
-        {**common_fields, "column_name": "XVARCHAR20", "data_type": '{"type":"TEXT","length":20,"byteLength":80,"nullable":true,"fixed":false}'},
-        {**common_fields, "column_name": "XDATE", "data_type": '{"type":"DATE","nullable":true}'},
-        {**common_fields, "column_name": "XTIME", "data_type": '{"type":"TIME","precision":0,"scale":9,"nullable":true}'},
-        {**common_fields, "column_name": "XTIMESTAMP", "data_type": '{"type":"TIMESTAMP_TZ","precision":0,"scale":9,"nullable":true}'},
-        {**common_fields, "column_name": "XTIMESTAMP_NTZ", "data_type": '{"type":"TIMESTAMP_NTZ","precision":0,"scale":9,"nullable":true}'},
-        {**common_fields, "column_name": "XBINARY", "data_type": '{"type":"BINARY","length":8388608,"byteLength":8388608,"nullable":true,"fixed":true}'},
-        {**common_fields, "column_name": "XVARIANT", "data_type": '{"type":"VARIANT","nullable":true}'},
-    ]
-    # fmt: on
-
-    view1_cols = [
-        {
-            "table_name": "VIEW1",
-            "schema_name": "SCHEMA1",
-            "column_name": "XBOOLEAN",
-            "data_type": '{"type":"BOOLEAN","nullable":true}',
-            "null?": "true",
-            "default": "",
-            "kind": "COLUMN",
-            "expression": "",
-            "comment": "",
-            "database_name": "DB1",
-            "autoincrement": "",
-            "schema_evolution_record": None,
-        }
-    ]
-
-    dcur.execute("SHOW COLUMNS IN example")
-    assert dcur.fetchall() == example1_cols
-
-    dcur.execute("SHOW COLUMNS IN SCHEMA db1.schema1")
-    assert dcur.fetchall() == example1_cols + view1_cols
-
-    dcur.execute("SHOW COLUMNS IN ACCOUNT")
-    assert dcur.fetchall() == example1_cols + view1_cols
-
-    assert [r.name for r in dcur.description] == [
-        "table_name",
-        "schema_name",
-        "column_name",
-        "data_type",
-        "null?",
-        "default",
-        "kind",
-        "expression",
-        "comment",
-        "database_name",
-        "autoincrement",
-        "schema_evolution_record",
-    ]
 
 
 def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -446,4 +451,95 @@ def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "is_secure",
         "secrets",
         "external_access_integrations",
+    ]
+
+
+def test_show_views(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("create table example(x int)")
+    dcur.execute("create view view1 as select * from example")
+    dcur.execute("create schema schema2")
+    dcur.execute("show terse views")
+    objects = [
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "name": "VIEW1",
+            "kind": "VIEW",
+            "database_name": "DB1",
+            "schema_name": "SCHEMA1",
+        },
+    ]
+    assert dcur.fetchall() == objects
+    dcur.execute("show terse views in db1.schema1")
+    assert dcur.fetchall() == objects
+    assert [r.name for r in dcur.description] == [
+        "created_on",
+        "name",
+        "kind",
+        "database_name",
+        "schema_name",
+    ]
+
+    dcur.execute("show terse views in account")
+    assert dcur.fetchall() == objects
+
+    dcur.execute("show terse views in schema schema2")
+    assert dcur.fetchall() == []
+
+    dcur.execute("show views in db1.schema1")
+    assert [r.name for r in dcur.description] == [
+        "created_on",
+        "name",
+        "reserved",
+        "database_name",
+        "schema_name",
+        "owner",
+        "comment",
+        "text",
+        "is_secure",
+        "is_materialized",
+        "owner_role_type",
+        "change_tracking",
+    ]
+
+
+def test_show_warehouses(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("show warehouses")
+    dcur.fetchall()
+
+    # Check for expected column names in description
+    assert [r.name for r in dcur.description] == [
+        "name",
+        "state",
+        "type",
+        "size",
+        "min_cluster_count",
+        "max_cluster_count",
+        "started_clusters",
+        "running",
+        "queued",
+        "is_default",
+        "is_current",
+        "auto_suspend",
+        "auto_resume",
+        "available",
+        "provisioning",
+        "quiescing",
+        "other",
+        "created_on",
+        "resumed_on",
+        "updated_on",
+        "owner",
+        "comment",
+        "enable_query_acceleration",
+        "query_acceleration_max_scale_factor",
+        "resource_monitor",
+        "actives",
+        "pendings",
+        "failed",
+        "suspended",
+        "uuid",
+        "scaling_policy",
+        "budget",
+        "owner_role_type",
+        "resource_constraint",
     ]
