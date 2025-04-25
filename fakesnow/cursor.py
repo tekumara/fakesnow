@@ -46,6 +46,12 @@ SQL_DROPPED = Template("SELECT '${name} successfully dropped.' as 'status'")
 SQL_INSERTED_ROWS = Template("SELECT ${count} as 'number of rows inserted'")
 SQL_UPDATED_ROWS = Template("SELECT ${count} as 'number of rows updated', 0 as 'number of multi-joined rows updated'")
 SQL_DELETED_ROWS = Template("SELECT ${count} as 'number of rows deleted'")
+SQL_COPY_ROWS = Template(
+    "SELECT '${file}' as file, 'LOADED' as status, ${count} as rows_parsed, "
+    "${count} as rows_loaded, 1 as error_limit, 0 as errors_seen, "
+    "NULL as first_error, NULL as first_error_line, NULL as first_error_character, "
+    "NULL as first_error_column_name"
+)
 
 
 class FakeSnowflakeCursor:
@@ -249,6 +255,7 @@ class FakeSnowflakeCursor:
             .transform(lambda e: transforms.show_keys(e, self._conn.database, kind="FOREIGN"))
             .transform(transforms.show_users)
             .transform(transforms.create_user)
+            .transform(transforms.copy_into)
             .transform(transforms.sha256)
             .transform(transforms.create_clone)
             .transform(transforms.alias_in_join)
@@ -300,6 +307,10 @@ class FakeSnowflakeCursor:
             raise snowflake.connector.errors.DatabaseError(msg=e.args[0], errno=250002, sqlstate="08003") from None
         except duckdb.ParserException as e:
             raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=1003, sqlstate="42000") from None
+        except duckdb.HTTPException as e:
+            raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=91016, sqlstate="22000") from None
+        except duckdb.ConversionException as e:
+            raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=100038, sqlstate="22018") from None
 
         affected_count = None
 
@@ -318,6 +329,10 @@ class FakeSnowflakeCursor:
             # we created a new database, so create the info schema extensions
             self._duck_conn.execute(info_schema.per_db_creation_sql(create_db_name))
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
+
+        elif copy_from := transformed.args.get("copy_from"):
+            (affected_count,) = self._duck_conn.fetchall()[0]
+            result_sql = SQL_COPY_ROWS.substitute(count=affected_count, file=copy_from)
 
         elif cmd == "INSERT":
             (affected_count,) = self._duck_conn.fetchall()[0]
