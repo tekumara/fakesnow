@@ -2,6 +2,21 @@
 
 # Changelog
 
+## [0.9.36](https://github.com/tekumara/fakesnow/compare/v0.9.35...v0.9.36) (2025-04-25)
+
+
+### Features
+
+* basic COPY INTO .... FORCE = TRUE ([#185](https://github.com/tekumara/fakesnow/issues/185)) ([6e45687](https://github.com/tekumara/fakesnow/commit/6e45687eb0792f99e130df48394433f37cf8762f))
+* **server:** add fakesnow.server to start server ([8489720](https://github.com/tekumara/fakesnow/commit/84897204444602a7a14bf6c4172089bfed022c51))
+* **server:** support client_session_keep_alive ([dfedaaa](https://github.com/tekumara/fakesnow/commit/dfedaaaaa670ae8a036c4ec656ff58d88d90e159))
+
+
+### Chores
+
+* remove portpicker ([456fec5](https://github.com/tekumara/fakesnow/commit/456fec508c1acffd6f0a10753cc710396af5b3d5))
+* use portpicker ([eb9f66a](https://github.com/tekumara/fakesnow/commit/eb9f66af5de9ce926e59def20a4445ddc3105d8a))
+
 ## [0.9.35](https://github.com/tekumara/fakesnow/compare/v0.9.34...v0.9.35) (2025-04-06)
 
 
