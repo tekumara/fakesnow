@@ -1,60 +1,64 @@
 from __future__ import annotations
 
-from dataclasses import dataclass, field, replace
+from dataclasses import dataclass, field
 from pathlib import PurePath
-from typing import Protocol
+from typing import Protocol, cast
 from urllib.parse import urlparse, urlunparse
 
 import snowflake.connector.errors
 from sqlglot import exp
-from typing_extensions import Self
 
 
 def copy_into(expr: exp.Expression) -> exp.Expression:
     if not isinstance(expr, exp.Copy):
         return expr
 
-    schema = expr.this
+    params = _params(expr)
+    url = _source_url(expr, params.files)
 
-    columns = [exp.Column(this=exp.Identifier(this=f"column{i}")) for i in range(len(schema.expressions))] or [
+    # INTO expression
+    target = expr.this
+    columns = [exp.Column(this=exp.Identifier(this=f"column{i}")) for i in range(len(target.expressions))] or [
         exp.Column(this=exp.Star())
     ]
 
-    params = expr.args.get("params", [])
-    # TODO: remove columns
-    file_type_handler = _handle_params(params, [c.name for c in columns])
+    return exp.Insert(
+        this=target,
+        expression=exp.Select(expressions=columns).from_(exp.Table(this=params.file_format.read_expression(url))),
+        copy_from=url,
+    )
 
-    # the FROM expression
+
+def _source_url(expr: exp.Copy, files: list[str]) -> str:
+    # FROM expression
     source = expr.args["files"][0].this
     assert isinstance(source, exp.Literal), f"{source.__class__} is not a exp.Literal"
 
-    if len(file_type_handler.files) > 1:
+    if not files:
+        raise NotImplementedError("COPY INTO without FILES is not currently implemented")
+    if len(files) > 1:
         raise NotImplementedError("Multiple files not currently supported")
-    file = file_type_handler.files[0]
 
     scheme, netloc, path, params, query, fragment = urlparse(source.name)
     if not scheme:
         raise snowflake.connector.errors.ProgrammingError(
             msg=f"SQL compilation error:\ninvalid URL prefix found in: '{source.name}'", errno=1011, sqlstate="42601"
         )
-    path = str(PurePath(path) / file.name)
+    path = str(PurePath(path) / files[0])
     url = urlunparse((scheme, netloc, path, params, query, fragment))
-
-    return exp.Insert(
-        this=schema,
-        expression=exp.Select(expressions=columns).from_(exp.Table(this=file_type_handler.read_expression(url))),
-        copy_from=url,
-    )
+    return url
 
 
-def _handle_params(params: list[exp.CopyParameter], columns: list[str]) -> FileTypeHandler:
-    file_type_handler = None
+def _params(expr: exp.Copy) -> Params:
+    kwargs = {}
     force = False
-    files = []
-    for param in params:
-        var = param.this.name
+
+    params = Params()
+    for param in cast(list[exp.CopyParameter], expr.args.get("params", [])):
+        assert isinstance(param.this, exp.Var), f"{param.this.__class__} is not a Var"
+        var = param.this.name.upper()
         if var == "FILE_FORMAT":
-            if file_type_handler:
+            if kwargs.get("file_format"):
                 raise ValueError(params)
 
             var_type = next((e.args["value"].this for e in param.expressions if e.this.this == "TYPE"), None)
@@ -62,33 +66,23 @@ def _handle_params(params: list[exp.CopyParameter], columns: list[str]) -> FileT
                 raise NotImplementedError("FILE_FORMAT without TYPE is not currently implemented")
 
             if var_type == "CSV":
-                file_type_handler = handle_csv(param.expressions, columns)
+                kwargs["file_format"] = handle_csv(param.expressions)
             else:
                 raise NotImplementedError(f"{var_type} FILE_FORMAT is not currently implemented")
-
-        elif var == "FILES":
-            files = param.expression.expressions if isinstance(param.expression, exp.Tuple) else [param.expression.this]
         elif var == "FORCE":
             force = True
-            pass
+        elif var == "FILES":
+            kwargs["files"] = [lit.name for lit in param.find_all(exp.Literal)]
         else:
             raise ValueError(f"Unknown copy parameter: {param.this}")
 
     if not force:
         raise NotImplementedError("COPY INTO with FORCE=false (default) is not currently implemented")
 
-    if not files:
-        raise NotImplementedError("COPY INTO without FILES is not currently implemented")
-
-    if not file_type_handler:
-        # default to CSV
-        file_type_handler = handle_csv([], columns)
-
-    file_type_handler = file_type_handler.with_files(files)
-    return file_type_handler
+    return Params(**kwargs)
 
 
-def handle_csv(expressions: list[exp.Property], columns: list[str]) -> ReadCSV:
+def handle_csv(expressions: list[exp.Property]) -> ReadCSV:
     skip_header = ReadCSV.skip_header
     quote = ReadCSV.quote
     delimiter = ReadCSV.delimiter
@@ -111,18 +105,12 @@ def handle_csv(expressions: list[exp.Property], columns: list[str]) -> ReadCSV:
         skip_header=skip_header,
         quote=quote,
         delimiter=delimiter,
-        columns=columns,
     )
 
 
 @dataclass
 class FileTypeHandler(Protocol):
-    files: list = field(default_factory=list)
-
     def read_expression(self, url: str) -> exp.Expression: ...
-
-    def with_files(self, files: list) -> Self:
-        return replace(self, files=files)
 
     @staticmethod
     def make_eq(name: str, value: list | str | int | bool) -> exp.EQ:
@@ -141,7 +129,6 @@ class ReadCSV(FileTypeHandler):
     skip_header: bool = False
     quote: str | None = None
     delimiter: str = ","
-    columns: list[str] = field(default_factory=list)
 
     def read_expression(self, url: str) -> exp.Expression:
         args = []
@@ -161,3 +148,10 @@ class ReadCSV(FileTypeHandler):
             args.append(self.make_eq("sep", delimiter))
 
         return exp.func("read_csv", exp.Literal(this=url, is_string=True), *args)
+
+
+@dataclass
+class Params:
+    files: list[str] = field(default_factory=list)
+    # Snowflake defaults to CSV when no file format is specified
+    file_format: FileTypeHandler = field(default_factory=ReadCSV)

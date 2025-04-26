@@ -8,8 +8,9 @@ import pytest
 import snowflake.connector.cursor
 import sqlglot
 from mypy_boto3_s3 import S3Client
+from sqlglot import exp
 
-from fakesnow.transforms.copy_into import copy_into
+from fakesnow.transforms.copy_into import _params, copy_into
 
 
 class Case(NamedTuple):
@@ -174,3 +175,27 @@ def upload_file(s3_client: S3Client, data: str, key: str = "foo.txt") -> str:
     s3_client.create_bucket(Bucket=bucket)
     s3_client.put_object(Bucket=bucket, Key=key, Body=data)
     return bucket
+
+
+def test_param_files_single():
+    sql = """
+    COPY INTO table1 (a, b)
+    FROM @mystage
+    files=('file1.csv')
+    FORCE=true
+    """
+    expr = sqlglot.parse_one(sql, read="snowflake")
+    assert isinstance(expr, exp.Copy)
+    assert _params(expr).files == ["file1.csv"]
+
+
+def test_param_files_multiple():
+    sql = """
+    COPY INTO table1 (a, b)
+    FROM @mystage
+    FILES=('file1.csv', 'file2.csv')
+    FORCE=true
+    """
+    expr = sqlglot.parse_one(sql, read="snowflake")
+    assert isinstance(expr, exp.Copy)
+    assert _params(expr).files == ["file1.csv", "file2.csv"]
