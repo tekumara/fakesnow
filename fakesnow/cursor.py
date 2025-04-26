@@ -25,12 +25,12 @@ import fakesnow.checks as checks
 import fakesnow.expr as expr
 import fakesnow.info_schema as info_schema
 import fakesnow.transforms as transforms
+from fakesnow import logger
 from fakesnow.rowtype import describe_as_result_metadata
 
 if TYPE_CHECKING:
     # don't require pandas at import time
     import pandas as pd
-    import pyarrow.lib
 
     # avoid circular import
     from fakesnow.conn import FakeSnowflakeConnection
@@ -286,7 +286,7 @@ class FakeSnowflakeCursor:
         result_sql = None
 
         try:
-            self._log_sql(sql, params)
+            logger.log_sql(sql, params)
             self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]
@@ -399,7 +399,7 @@ class FakeSnowflakeCursor:
             self._duck_conn.execute(info_schema.insert_text_lengths_sql(catalog, schema, table.name, text_lengths))
 
         if result_sql:
-            self._log_sql(result_sql, params)
+            logger.log_sql(result_sql)
             self._duck_conn.execute(result_sql)
 
         self._arrow_table = self._duck_conn.fetch_arrow_table()
@@ -408,10 +408,6 @@ class FakeSnowflakeCursor:
 
         self._last_sql = result_sql or sql
         self._last_params = None if result_sql else params
-
-    def _log_sql(self, sql: str, params: Sequence[Any] | dict[Any, Any] | None = None) -> None:
-        if (fs_debug := os.environ.get("FAKESNOW_DEBUG")) and fs_debug != "snowflake":
-            print(f"{sql};{params=}" if params else f"{sql};", file=sys.stderr)
 
     def executemany(
         self,
