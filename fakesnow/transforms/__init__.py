@@ -7,7 +7,6 @@ from typing import ClassVar, cast
 import sqlglot
 from sqlglot import exp
 
-from fakesnow.transforms.copy_into import copy_into as copy_into
 from fakesnow.transforms.merge import merge as merge
 from fakesnow.transforms.show import (
     show_columns as show_columns,

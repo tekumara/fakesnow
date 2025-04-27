@@ -1,65 +1,57 @@
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass, field
-from pathlib import PurePath
-from typing import Protocol, cast
+from typing import Any, Protocol, cast
 from urllib.parse import urlparse, urlunparse
 
+import duckdb
 import snowflake.connector.errors
+from duckdb import DuckDBPyConnection
 from sqlglot import exp
 
-
-def copy_into(expr: exp.Expression) -> exp.Expression:
-    if not isinstance(expr, exp.Copy):
-        return expr
-
-    params = _params(expr)
-    url = _source_url(expr, params.files)
-
-    # INTO expression
-    target = expr.this
-    columns = [exp.Column(this=exp.Identifier(this=f"column{i}")) for i in range(len(target.expressions))] or [
-        exp.Column(this=exp.Star())
-    ]
-
-    return exp.Insert(
-        this=target,
-        expression=exp.Select(expressions=columns).from_(exp.Table(this=params.file_format.read_expression(url))),
-        copy_from=url,
-    )
+from fakesnow import logger
 
 
-def _source_url(expr: exp.Copy, files: list[str]) -> str:
-    # FROM expression
-    source = expr.args["files"][0].this
-    assert isinstance(source, exp.Literal), f"{source.__class__} is not a exp.Literal"
+def copy_into(
+    duck_conn: DuckDBPyConnection, expr: exp.Copy, params: Sequence[Any] | dict[Any, Any] | None = None
+) -> str:
+    cparams = _params(expr)
+    urls = _source_urls(expr, cparams.files)
+    inserts = _inserts(expr, cparams, urls)
 
-    if not files:
-        raise NotImplementedError("COPY INTO without FILES is not currently implemented")
-    if len(files) > 1:
-        raise NotImplementedError("Multiple files not currently supported")
+    results = []
+    try:
+        for i, url in zip(inserts, urls):
+            sql = i.sql(dialect="duckdb")
+            logger.log_sql(sql, params)
+            duck_conn.execute(sql, params)
+            (affected_count,) = duck_conn.fetchall()[0]
+            results.append(f"('{url}', 'LOADED', {affected_count}, {affected_count}, 1, 0, NULL, NULL, NULL, NULL)")
 
-    scheme, netloc, path, params, query, fragment = urlparse(source.name)
-    if not scheme:
-        raise snowflake.connector.errors.ProgrammingError(
-            msg=f"SQL compilation error:\ninvalid URL prefix found in: '{source.name}'", errno=1011, sqlstate="42601"
-        )
-    path = str(PurePath(path) / files[0])
-    url = urlunparse((scheme, netloc, path, params, query, fragment))
-    return url
+        columns = "file, status, rows_parsed, rows_loaded, error_limit, errors_seen, first_error, first_error_line, first_error_character, first_error_column_name"  # noqa: E501
+        values = "\n, ".join(results)
+        sql = f"SELECT * FROM (VALUES\n  {values}\n) AS t({columns})"
+        duck_conn.execute(sql)
+        return sql
+    except duckdb.HTTPException as e:
+        raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=91016, sqlstate="22000") from None
+    except duckdb.ConversionException as e:
+        raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=100038, sqlstate="22018") from None
 
 
 def _params(expr: exp.Copy) -> Params:
     kwargs = {}
     force = False
 
-    params = Params()
-    for param in cast(list[exp.CopyParameter], expr.args.get("params", [])):
+    params = cast(list[exp.CopyParameter], expr.args.get("params", []))
+    cparams = Params()
+    for param in params:
         assert isinstance(param.this, exp.Var), f"{param.this.__class__} is not a Var"
         var = param.this.name.upper()
         if var == "FILE_FORMAT":
             if kwargs.get("file_format"):
-                raise ValueError(params)
+                raise ValueError(cparams)
 
             var_type = next((e.args["value"].this for e in param.expressions if e.this.this == "TYPE"), None)
             if not var_type:
@@ -80,6 +72,53 @@ def _params(expr: exp.Copy) -> Params:
         raise NotImplementedError("COPY INTO with FORCE=false (default) is not currently implemented")
 
     return Params(**kwargs)
+
+
+def _source_urls(expr: exp.Copy, files: list[str]) -> list[str]:
+    """
+    Given a COPY statement and a list of files, return a list of URLs with each file appended as a fragment.
+    Checks that the source is a valid URL.
+    """
+    source = expr.args["files"][0].this
+    assert isinstance(source, exp.Literal), f"{source} is not a exp.Literal"
+
+    scheme, netloc, path, params, query, fragment = urlparse(source.name)
+    if not scheme:
+        raise snowflake.connector.errors.ProgrammingError(
+            msg=f"SQL compilation error:\ninvalid URL prefix found in: '{source.name}'", errno=1011, sqlstate="42601"
+        )
+
+    # rebuild url from components to ensure correct handling of host slash
+    return [_urlunparse(scheme, netloc, path, params, query, fragment, file) for file in files] or [source.name]
+
+
+def _urlunparse(scheme: str, netloc: str, path: str, params: str, query: str, fragment: str, suffix: str) -> str:
+    """Construct a URL from its components appending suffix to the last used component."""
+    if fragment:
+        fragment += suffix
+    elif query:
+        query += suffix
+    elif params:
+        params += suffix
+    else:
+        path += suffix
+    return urlunparse((scheme, netloc, path, params, query, fragment))
+
+
+def _inserts(expr: exp.Copy, params: Params, urls: list[str]) -> list[exp.Expression]:
+    # INTO expression
+    target = expr.this
+    columns = [exp.Column(this=exp.Identifier(this=f"column{i}")) for i in range(len(target.expressions))] or [
+        exp.Column(this=exp.Star())
+    ]
+
+    return [
+        exp.Insert(
+            this=target,
+            expression=exp.Select(expressions=columns).from_(exp.Table(this=params.file_format.read_expression(url))),
+        )
+        for url in urls
+    ]
 
 
 def handle_csv(expressions: list[exp.Property]) -> ReadCSV:

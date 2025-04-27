@@ -70,7 +70,10 @@ reportUnnecessaryTypeIgnoreComment = true
 [tool.pytest.ini_options]
 # error on unhandled exceptions in background threads
 # useful for catching errors in server or snowflake connector threads
-filterwarnings = ["error::pytest.PytestUnhandledThreadExceptionWarning"]
+filterwarnings = [
+    "error::pytest.PytestUnhandledThreadExceptionWarning",
+    "ignore::pytest.PytestUnknownMarkWarning",
+]
 
 [tool.ruff]
 line-length = 120
@@ -90,13 +93,13 @@ select = [
     "B",   # bugbear
     "I",   # isort
     # "ARG",  # flake8-unused-arguments - disabled because our fakes don't use all arguments
-    "SLF",  # flake8-self
-    "UP",   # pyupgrade
-    "PERF", # perflint
-    "RUF",  # ruff-specific
-    "SIM",  # flake8-simplify
-    "S113", # request-without-timeout
-    "A",    # flake8-builtins
+    "SLF",   # flake8-self
+    "UP",    # pyupgrade
+    "PERF",  # perflint
+    "RUF",   # ruff-specific
+    "SIM",   # flake8-simplify
+    "S113",  # request-without-timeout
+    "A",     # flake8-builtins
     "ASYNC", # flake8-async
 ]
 
