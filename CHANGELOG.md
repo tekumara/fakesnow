@@ -2,6 +2,19 @@
 
 # Changelog
 
+## [0.9.37](https://github.com/tekumara/fakesnow/compare/v0.9.36...v0.9.37) (2025-04-28)
+
+
+### Features
+
+* COPY INTO supports multiple files ([5c88fce](https://github.com/tekumara/fakesnow/commit/5c88fcefa7867766df51d5d3aa4d2d795b4ee534))
+
+
+### Chores
+
+* bump sqlglot~=26.16.2 ([1b8370c](https://github.com/tekumara/fakesnow/commit/1b8370c3882d95faf349c20dde50ccbeca28259f))
+* uv required in Makefile ([99f15a1](https://github.com/tekumara/fakesnow/commit/99f15a1cef443be6efe84b2db2f819f3c1a6ba18))
+
 ## [0.9.36](https://github.com/tekumara/fakesnow/compare/v0.9.35...v0.9.36) (2025-04-25)
 
 
