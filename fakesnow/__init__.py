@@ -119,7 +119,7 @@ def server(port: int | None = None, session_parameters: dict[str, str | int | bo
 
     assert port
     server = uvicorn.Server(uvicorn.Config(fakesnow.server.app, port=port, log_level="info"))
-    thread = threading.Thread(target=server.run, name="Server", daemon=True)
+    thread = threading.Thread(target=server.run, name="fakesnow server", daemon=True)
     thread.start()
 
     while not server.started:

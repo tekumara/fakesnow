@@ -22,12 +22,15 @@ def copy_into(
 
     results = []
     try:
+        # TODO: fetch files last modified dates and check if file exists in load_history already
         for i, url in zip(inserts, urls):
             sql = i.sql(dialect="duckdb")
             logger.log_sql(sql, params)
             duck_conn.execute(sql, params)
             (affected_count,) = duck_conn.fetchall()[0]
             results.append(f"('{url}', 'LOADED', {affected_count}, {affected_count}, 1, 0, NULL, NULL, NULL, NULL)")
+
+            # TODO: update load_history with the results if loaded
 
         columns = "file, status, rows_parsed, rows_loaded, error_limit, errors_seen, first_error, first_error_line, first_error_character, first_error_column_name"  # noqa: E501
         values = "\n, ".join(results)

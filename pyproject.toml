@@ -15,7 +15,8 @@ dependencies = [
 ]
 
 [project.urls]
-homepage = "https://github.com/tekumara/fakesnow"
+Source = "https://github.com/tekumara/fakesnow"
+Changelog = "https://github.com/tekumara/fakesnow/blob/main/CHANGELOG.md"
 
 [project.scripts]
 fakesnow = "fakesnow.cli:main"

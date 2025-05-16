@@ -21,7 +21,7 @@ pip install fakesnow[server]
 
 ## Usage
 
-fakesnow offers two main approaches for faking Snowflake: in-process patching of the [Snowflake Connector for Python](https://docs.snowflake.com/en/user-guide/python-connector) or a standalone HTTP server.
+fakesnow offers two main approaches for faking Snowflake: [in-process patching](#in-process-patching) of the Snowflake Connector for Python or a [standalone HTTP server](#run-fakesnow-as-a-server).
 
 Patching only applies to the current Python process. If a subprocess is spawned it won't be patched. For subprocesses, or for non-Python clients, use the server instead.
 
@@ -130,7 +130,13 @@ with fakesnow.server(port=12345) as conn_kwargs:
 
 ### pytest fixtures
 
-fakesnow provides [fixtures](fakesnow/fixtures.py) for easier test integration. Here's an example _conftest.py_ using them:
+fakesnow provides [fixtures](fakesnow/fixtures.py) for easier test integration. Add them in _conftest.py_:
+
+```python
+pytest_plugins = "fakesnow.fixtures"
+```
+
+To autouse the fixture you can wrap it like this in _conftest.py_:
 
 ```python
 from typing import Iterator
@@ -155,13 +161,23 @@ from typing import Iterator
 import fakesnow
 import pytest
 
+pytest_plugins = "fakesnow.fixtures"
+
 @pytest.fixture(scope="session", autouse=True)
 def _fakesnow_session() -> Iterator[None]:
     with fakesnow.patch("mymodule.write_pandas"):
         yield
 ```
 
-To start a fakesnow server instance, use the `fakesnow_server` session fixture:
+#### server fixture
+
+To start a fakesnow server instance, enable the plugin in _conftest.py_:
+
+```python
+pytest_plugins = "fakesnow.fixtures"
+```
+
+And then use the `fakesnow_server` session fixture like this:
 
 ```python
 import snowflake.connector
