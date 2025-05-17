@@ -22,8 +22,6 @@ from fakesnow.transforms import (
     extract_comment_on_columns,
     extract_comment_on_table,
     extract_text_length,
-    flatten,
-    flatten_value_cast_as_varchar,
     float_to_double,
     identifier,
     indices_to_json_extract,
@@ -56,7 +54,6 @@ from fakesnow.transforms import (
     upper_case_unquoted_identifiers,
     values_columns,
 )
-from tests.utils import strip
 
 
 def test_alias_in_join() -> None:
@@ -428,52 +425,6 @@ def test_extract_text_length() -> None:
                 FROM VALUES (1), (2) AS T (C1))"""
     e = sqlglot.parse_one(sql).transform(extract_text_length)
     assert e.args["text_lengths"] == [("K", 16777216)]
-
-
-def test_flatten() -> None:
-    assert sqlglot.parse_one(
-        """
-            select t.id, flat.value:fruit from
-            (
-                select 1, parse_json('[{"fruit":"banana"}]')
-                union
-                select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
-            ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
-            """,
-        read="snowflake",
-    ).transform(flatten).sql(dialect="duckdb") == strip("""
-            SELECT
-                t.id,
-                flat.value -> '$.fruit'
-            FROM
-                (SELECT
-                    1,
-                    JSON('[{"fruit":"banana"}]')
-                UNION
-                SELECT
-                    2,
-                    JSON('[{"fruit":"coconut"}, {"fruit":"durian"}]')) AS t(id, fruits),
-                (SELECT
-                        UNNEST(CAST(t.fruits AS JSON[])) AS VALUE,
-                        GENERATE_SUBSCRIPTS(CAST(t.fruits AS JSON[]), 1) - 1 AS INDEX) AS flat
-            """)
-
-
-def test_flatten_value_cast_as_varchar() -> None:
-    assert sqlglot.parse_one(
-        """
-            SELECT ID , F.VALUE::varchar as V
-            FROM TEST AS T
-            , LATERAL FLATTEN(input => SPLIT(T.COL, ',')) AS F;
-            """,
-        read="snowflake",
-    ).transform(flatten_value_cast_as_varchar).sql(dialect="duckdb") == strip("""
-            SELECT
-                ID,
-                F.VALUE ->> '$' AS V
-            FROM
-                TEST AS T,  CROSS JOIN UNNEST(input => STR_SPLIT(T.COL, ',')) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)
-            """)
 
 
 def test_float_to_double() -> None:

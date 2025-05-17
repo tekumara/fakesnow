@@ -6,49 +6,8 @@ import json
 
 import snowflake.connector
 import snowflake.connector.cursor
-import snowflake.connector.pandas_tools
 
 from tests.utils import dindent, indent
-
-
-def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute(
-        """
-        select t.id, flat.value:fruit from
-        (
-            select 1, parse_json('[{"fruit":"banana"}]')
-            union
-            select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
-        ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
-        order by id
-        """
-        # duckdb lateral join order is non-deterministic so order by id
-        # within an id the order of fruits should match the json array
-    )
-    assert cur.fetchall() == [(1, '"banana"'), (2, '"coconut"'), (2, '"durian"')]
-
-
-def test_flatten_index(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute(
-        """
-        select id, f.value::varchar as v, f.index as i
-        from (select column1 as id, column2 as col from (values (1, 's1,s3,s2'), (2, 's2,s1'))) as t
-        , lateral flatten(input => split(t.col, ',')) as f order by id;
-        """
-    )
-    assert cur.fetchall() == [(1, "s1", 0), (1, "s3", 1), (1, "s2", 2), (2, "s2", 0), (2, "s1", 1)]
-
-
-def test_flatten_value_cast_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute(
-        """
-        select id, f.value::varchar as v
-        from (select column1 as id, column2 as col from (values (1, 's1,s2,s3'), (2, 's1,s2'))) as t
-        , lateral flatten(input => split(t.col, ',')) as f order by id
-        """
-    )
-    # should be raw string not json string with double quotes
-    assert cur.fetchall() == [(1, "s1"), (1, "s2"), (1, "s3"), (2, "s1"), (2, "s2")]
 
 
 def test_get_path_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):

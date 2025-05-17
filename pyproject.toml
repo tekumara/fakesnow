@@ -82,6 +82,7 @@ line-length = 120
 src = ["."]
 fix = true
 show-fixes = true
+exclude = ["notebooks"]
 
 [tool.ruff.lint]
 # rules to enable/ignore
