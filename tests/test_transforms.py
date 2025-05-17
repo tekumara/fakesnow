@@ -6,7 +6,6 @@ from sqlglot import exp
 
 from fakesnow.transforms import (
     SUCCESS_NOP,
-    _get_to_number_args,
     alias_in_join,
     alter_table_strip_cluster_by,
     array_agg,
@@ -54,6 +53,7 @@ from fakesnow.transforms import (
     upper_case_unquoted_identifiers,
     values_columns,
 )
+from fakesnow.transforms.transforms import _get_to_number_args
 
 
 def test_alias_in_join() -> None:
