@@ -496,7 +496,10 @@ def flatten(expression: exp.Expression) -> exp.Expression:
         # always true; when no explicit alias provided this will be flattened
         and isinstance(alias, exp.TableAlias)
     ):
-        explode_expression = expression.this.this.expression
+        explode_expression = (
+            expression.this.this.expression if isinstance(expression.this.this, exp.Kwarg) else expression.this.this
+        )
+        assert explode_expression
 
         value = exp.Cast(
             this=explode_expression,

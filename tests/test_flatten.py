@@ -51,6 +51,20 @@ def test_flatten_transform() -> None:
         == expected
     )
 
+    # position arg (no input =>)
+    assert (
+        sqlglot.parse_one(
+            """
+            SELECT ID, F.VALUE::varchar as V
+            FROM TEST AS T, TABLE(FLATTEN(SPLIT(T.COL, ','))) AS F;
+            """,
+            read="snowflake",
+        )
+        .transform(flatten)
+        .sql(dialect="duckdb")
+        == expected
+    )
+
 
 def test_flatten_json(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute(
