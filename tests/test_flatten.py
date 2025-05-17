@@ -84,13 +84,32 @@ def test_flatten_json(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_flatten_index(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute(
-        """
+    sql = """
         select id, f.value::varchar as v, f.index as i
         from (select column1 as id, column2 as col from (values (1, 's1,s3,s2'), (2, 's2,s1'))) as t
         , lateral flatten(input => split(t.col, ',')) as f order by id;
         """
-    )
+
+    assert sqlglot.parse_one(
+        sql,
+        read="snowflake",
+    ).transform(flatten).sql(dialect="duckdb") == strip("""
+        SELECT id, CAST(f.value AS TEXT) AS v, f.index AS i
+        FROM
+            (SELECT
+                    column1 AS id,
+                    column2 AS col
+                FROM
+                    (VALUES
+                            (1, 's1,s3,s2'),
+                            (2, 's2,s1'))) AS t,
+            (SELECT
+                    UNNEST(CAST(STR_SPLIT(t.col, ',') AS JSON[])) AS VALUE,
+                    GENERATE_SUBSCRIPTS(CAST(STR_SPLIT(t.col, ',') AS JSON[]), 1) - 1 AS INDEX) AS f
+        ORDER BY id
+        """)
+    cur.execute(sql)
+
     assert cur.fetchall() == [(1, "s1", 0), (1, "s3", 1), (1, "s2", 2), (2, "s2", 0), (2, "s1", 1)]
 
 
