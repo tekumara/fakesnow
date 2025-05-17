@@ -1,4 +1,3 @@
-
 # ruff: noqa: E501
 
 from __future__ import annotations
@@ -15,17 +14,7 @@ from tests.utils import strip
 
 
 def test_flatten_transform() -> None:
-    assert sqlglot.parse_one(
-        """
-            select t.id, flat.value:fruit from
-            (
-                select 1, parse_json('[{"fruit":"banana"}]')
-                union
-                select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
-            ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
-            """,
-        read="snowflake",
-    ).transform(flatten).sql(dialect="duckdb") == strip("""
+    expected = strip("""
             SELECT
                 t.id,
                 flat.value -> '$.fruit'
@@ -41,6 +30,42 @@ def test_flatten_transform() -> None:
                         UNNEST(CAST(t.fruits AS JSON[])) AS VALUE,
                         GENERATE_SUBSCRIPTS(CAST(t.fruits AS JSON[]), 1) - 1 AS INDEX) AS flat
             """)
+
+    # lateral flatten
+    assert (
+        sqlglot.parse_one(
+            """
+            select t.id, flat.value:fruit from
+            (
+                select 1, parse_json('[{"fruit":"banana"}]')
+                union
+                select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
+            ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
+            """,
+            read="snowflake",
+        )
+        .transform(flatten)
+        .sql(dialect="duckdb")
+        == expected
+    )
+
+    # table(flatten(...))
+    assert (
+        sqlglot.parse_one(
+            """
+            select t.id, flat.value:fruit from
+            (
+                select 1, parse_json('[{"fruit":"banana"}]')
+                union
+                select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
+            ) as t(id, fruits), table(flatten(input => t.fruits)) AS flat
+            """,
+            read="snowflake",
+        )
+        .transform(flatten)
+        .sql(dialect="duckdb")
+        == expected
+    )
 
 
 def test_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -86,8 +111,6 @@ def test_flatten_value_cast_as_varchar() -> None:
             FROM
                 TEST AS T,  CROSS JOIN UNNEST(input => STR_SPLIT(T.COL, ',')) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)
             """)
-
-
 
 
 def test_flatten_value_cast_as_varchar_transform(cur: snowflake.connector.cursor.SnowflakeCursor):

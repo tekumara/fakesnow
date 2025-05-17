@@ -490,7 +490,7 @@ def flatten(expression: exp.Expression) -> exp.Expression:
     TODO: support objects.
     """
     if (
-        isinstance(expression, exp.Lateral)
+        (isinstance(expression, (exp.Lateral, exp.TableFromRows)))
         and isinstance(expression.this, exp.Explode)
         and (alias := expression.args.get("alias"))
         # always true; when no explicit alias provided this will be flattened
