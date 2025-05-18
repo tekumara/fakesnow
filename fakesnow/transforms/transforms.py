@@ -487,11 +487,7 @@ def flatten(expression: exp.Expression) -> exp.Expression:
         input_ = (
             expression.this.this.expression if isinstance(expression.this.this, exp.Kwarg) else expression.this.this
         )
-        assert input_
-
-        return exp.Table(
-            this=exp.Anonymous(this="_fs_flatten", expressions=[input_]), alias=exp.TableAlias(this=alias.this)
-        )
+        return exp.Table(this=exp.Anonymous(this="_fs_flatten", expressions=[input_]), alias=alias)
 
     return expression
 

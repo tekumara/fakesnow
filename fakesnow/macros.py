@@ -12,13 +12,20 @@ FS_FLATTEN = Template(
     """
 CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input) AS TABLE
     SELECT
-        UNNEST(
-            CAST(TO_JSON(input) AS JSON [])
-        ) AS VALUE,
+        NULL AS SEQ, -- TODO use a sequence and nextval
+        CAST(NULL AS VARCHAR) AS KEY,
+        '[' || GENERATE_SUBSCRIPTS(
+            CAST(TO_JSON(input) AS JSON []),
+            1
+        ) - 1 || ']' AS PATH,
         GENERATE_SUBSCRIPTS(
             CAST(TO_JSON(input) AS JSON []),
             1
-        ) - 1 AS INDEX
+        ) - 1 AS INDEX,
+        UNNEST(
+            CAST(TO_JSON(input) AS JSON [])
+        ) AS VALUE,
+        TO_JSON(input) AS THIS;
     """
 )
 

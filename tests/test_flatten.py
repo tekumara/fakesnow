@@ -13,17 +13,18 @@ from fakesnow.transforms import (
 from tests.utils import strip
 
 
-def test_flatten_transform() -> None:
+def test_transform_lateral_flatten() -> None:
     expected = strip("""
         SELECT
             ID,
             CAST(F.VALUE AS TEXT) AS V
         FROM
             TEST AS T,
-            _FS_FLATTEN(STR_SPLIT(T.COL, ',')) AS F
+            _FS_FLATTEN(STR_SPLIT(T.COL, ',')) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)
     """)
 
-    # lateral flatten
+    # sqlglot introduces the identifiers SEQ, KEY, PATH, INDEX, VALUE, THIS
+    # for lineage tracking see https://github.com/tobymao/sqlglot/pull/2417
     assert (
         sqlglot.parse_one(
             """
@@ -37,7 +38,19 @@ def test_flatten_transform() -> None:
         == expected
     )
 
-    # table(flatten(...))
+
+def test_transform_table_flatten() -> None:
+    # table flatten is the same as lateral flatten
+    # except sqlglot doesn't add identifiers for lineage tracking
+    expected = strip("""
+        SELECT
+            ID,
+            CAST(F.VALUE AS TEXT) AS V
+        FROM
+            TEST AS T,
+            _FS_FLATTEN(STR_SPLIT(T.COL, ',')) AS F
+    """)
+
     assert (
         sqlglot.parse_one(
             """
@@ -64,6 +77,16 @@ def test_flatten_transform() -> None:
         .sql(dialect="duckdb")
         == expected
     )
+
+
+def test_flatten_alias_rename(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    sql = "SELECT * FROM table(flatten([1, 2])) as rename (a, b, c)"
+    assert sqlglot.parse_one(
+        sql,
+        read="snowflake",
+    ).transform(flatten).sql(dialect="duckdb") == strip("SELECT * FROM _FS_FLATTEN([1, 2]) AS rename(a, b, c)")
+    cur.execute(sql)
+    assert [d.name for d in cur.description] == ["A", "B", "C", "INDEX", "VALUE", "THIS"]
 
 
 def test_flatten_json(cur: snowflake.connector.cursor.SnowflakeCursor):
