@@ -484,38 +484,13 @@ def flatten(expression: exp.Expression) -> exp.Expression:
         # always true; when no explicit alias provided this will be flattened
         and isinstance(alias, exp.TableAlias)
     ):
-        this = expression.this.this.expression if isinstance(expression.this.this, exp.Kwarg) else expression.this.this
-        assert this
-
-        this_as_json_array = exp.Cast(
-            this=this,
-            to=exp.DataType(
-                this=exp.DataType.Type.ARRAY,
-                expressions=[exp.DataType(this=exp.DataType.Type.JSON, nested=False, prefix=False)],
-                nested=True,
-            ),
+        input_ = (
+            expression.this.this.expression if isinstance(expression.this.this, exp.Kwarg) else expression.this.this
         )
+        assert input_
 
-        return exp.Subquery(
-            this=exp.Select(
-                expressions=[
-                    exp.Unnest(
-                        expressions=[this_as_json_array],
-                        alias=exp.Identifier(this="VALUE", quoted=False),
-                    ),
-                    exp.Alias(
-                        this=exp.Sub(
-                            this=exp.Anonymous(
-                                this="generate_subscripts",
-                                expressions=[this_as_json_array, exp.Literal(this="1", is_string=False)],
-                            ),
-                            expression=exp.Literal(this="1", is_string=False),
-                        ),
-                        alias=exp.Identifier(this="INDEX", quoted=False),
-                    ),
-                ],
-            ),
-            alias=exp.TableAlias(this=alias.this),
+        return exp.Table(
+            this=exp.Anonymous(this="_fs_flatten", expressions=[input_]), alias=exp.TableAlias(this=alias.this)
         )
 
     return expression
