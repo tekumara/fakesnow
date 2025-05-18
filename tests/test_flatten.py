@@ -6,32 +6,19 @@ import snowflake.connector
 import snowflake.connector.cursor
 import sqlglot
 
-from fakesnow.transforms import (
-    flatten,
-    flatten_value_cast_as_varchar,
-)
+from fakesnow.transforms import flatten
 from tests.matchers import IsResultMetadata
 from tests.utils import strip
 
 
 def test_transform_lateral_flatten() -> None:
-    expected = strip("""
-        SELECT
-            ID,
-            CAST(F.VALUE AS TEXT) AS V
-        FROM
-            TEST AS T,
-            _FS_FLATTEN(STR_SPLIT(T.COL, ',')) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)
-    """)
-
     # sqlglot introduces the identifiers SEQ, KEY, PATH, INDEX, VALUE, THIS
     # for lineage tracking see https://github.com/tobymao/sqlglot/pull/2417
+    expected = strip("SELECT * FROM _FS_FLATTEN([1, 2]) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)")
+
     assert (
         sqlglot.parse_one(
-            """
-            SELECT ID, F.VALUE::varchar as V
-            FROM TEST AS T, LATERAL FLATTEN(input => SPLIT(T.COL, ',')) AS F;
-            """,
+            "SELECT * FROM LATERAL FLATTEN(input => [1,2]) AS F",
             read="snowflake",
         )
         .transform(flatten)
@@ -43,21 +30,11 @@ def test_transform_lateral_flatten() -> None:
 def test_transform_table_flatten() -> None:
     # table flatten is the same as lateral flatten
     # except sqlglot doesn't add identifiers for lineage tracking
-    expected = strip("""
-        SELECT
-            ID,
-            CAST(F.VALUE AS TEXT) AS V
-        FROM
-            TEST AS T,
-            _FS_FLATTEN(STR_SPLIT(T.COL, ',')) AS F
-    """)
+    expected = strip("SELECT * FROM _FS_FLATTEN([1, 2]) AS F")
 
     assert (
         sqlglot.parse_one(
-            """
-            SELECT ID, F.VALUE::varchar as V
-            FROM TEST AS T, TABLE(FLATTEN(input => SPLIT(T.COL, ','))) AS F;
-            """,
+            "SELECT * FROM TABLE(FLATTEN(input => [1,2])) AS F",
             read="snowflake",
         )
         .transform(flatten)
@@ -68,10 +45,7 @@ def test_transform_table_flatten() -> None:
     # position arg (no input =>)
     assert (
         sqlglot.parse_one(
-            """
-            SELECT ID, F.VALUE::varchar as V
-            FROM TEST AS T, TABLE(FLATTEN(SPLIT(T.COL, ','))) AS F;
-            """,
+            "SELECT * FROM TABLE(FLATTEN([1,2])) AS F",
             read="snowflake",
         )
         .transform(flatten)
@@ -135,30 +109,7 @@ def test_flatten_index(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1, "s1", 0), (1, "s3", 1), (1, "s2", 2), (2, "s2", 0), (2, "s1", 1)]
 
 
-def test_flatten_value_cast_as_varchar_transform() -> None:
-    assert sqlglot.parse_one(
-        """
-            SELECT ID , F.VALUE::varchar as V
-            FROM TEST AS T
-            , LATERAL FLATTEN(input => SPLIT(T.COL, ',')) AS F;
-            """,
-        read="snowflake",
-    ).transform(flatten_value_cast_as_varchar).sql(dialect="duckdb") == strip("""
-            SELECT
-                ID,
-                F.VALUE ->> '$' AS V
-            FROM
-                TEST AS T,  CROSS JOIN UNNEST(input => STR_SPLIT(T.COL, ',')) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)
-            """)
-
-
 def test_flatten_value_cast_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute(
-        """
-        select id, f.value::varchar as v
-        from (select column1 as id, column2 as col from (values (1, 's1,s2,s3'), (2, 's1,s2'))) as t
-        , lateral flatten(input => split(t.col, ',')) as f order by id
-        """
-    )
+    cur.execute("SELECT VALUE::VARCHAR FROM LATERAL FLATTEN(input => ['a','b'])")
     # should be raw string not json string with double quotes
-    assert cur.fetchall() == [(1, "s1"), (1, "s2"), (1, "s3"), (2, "s1"), (2, "s2")]
+    assert cur.fetchall() == [("a",), ("b",)]
