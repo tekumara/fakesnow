@@ -2,6 +2,25 @@
 
 # Changelog
 
+## [0.9.37](https://github.com/tekumara/fakesnow/compare/v0.9.36...v0.9.37) (2025-05-18)
+
+
+### Features
+
+* COPY INTO supports multiple files ([5c88fce](https://github.com/tekumara/fakesnow/commit/5c88fcefa7867766df51d5d3aa4d2d795b4ee534))
+* support column renames in FLATTEN ([f24fbaa](https://github.com/tekumara/fakesnow/commit/f24fbaac915514c5f1aa75b18f8bd1b8e389248a)), closes [#198](https://github.com/tekumara/fakesnow/issues/198)
+* support FLATTEN without alias ([0bfa83f](https://github.com/tekumara/fakesnow/commit/0bfa83f3f9bb55f54979ad77c36efbe6b8e45b30))
+* support positional arg for FLATTEN ([1b7a4c8](https://github.com/tekumara/fakesnow/commit/1b7a4c8c7811fa7e6263820043f4b91b3b207945))
+* support TABLE(FLATTEN(..)) ([8cc5f8f](https://github.com/tekumara/fakesnow/commit/8cc5f8f0bf7a0a0d29475d51e2d275898a77ba54))
+
+
+### Chores
+
+* bump sqlglot~=26.16.2 ([1b8370c](https://github.com/tekumara/fakesnow/commit/1b8370c3882d95faf349c20dde50ccbeca28259f))
+* **deps-dev:** bump pyright from 1.1.398 to 1.1.400 ([#213](https://github.com/tekumara/fakesnow/issues/213)) ([58d01a8](https://github.com/tekumara/fakesnow/commit/58d01a849647a8636936d7b8dfef582ee8df7620))
+* **deps:** update setuptools requirement from ~=78.1 to ~=80.1 ([#214](https://github.com/tekumara/fakesnow/issues/214)) ([eb24a12](https://github.com/tekumara/fakesnow/commit/eb24a12d39ebd2fd23d056830d6cba014d0053af))
+* uv required in Makefile ([99f15a1](https://github.com/tekumara/fakesnow/commit/99f15a1cef443be6efe84b2db2f819f3c1a6ba18))
+
 ## [0.9.36](https://github.com/tekumara/fakesnow/compare/v0.9.35...v0.9.36) (2025-04-25)
 
 
