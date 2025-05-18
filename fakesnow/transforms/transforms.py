@@ -477,16 +477,11 @@ def flatten(expression: exp.Expression) -> exp.Expression:
 
     TODO: support objects.
     """
-    if (
-        (isinstance(expression, (exp.Lateral, exp.TableFromRows)))
-        and isinstance(expression.this, exp.Explode)
-        and (alias := expression.args.get("alias"))
-        # always true; when no explicit alias provided this will be flattened
-        and isinstance(alias, exp.TableAlias)
-    ):
+    if (isinstance(expression, (exp.Lateral, exp.TableFromRows))) and isinstance(expression.this, exp.Explode):
         input_ = (
             expression.this.this.expression if isinstance(expression.this.this, exp.Kwarg) else expression.this.this
         )
+        alias = expression.args.get("alias")
         return exp.Table(this=exp.Anonymous(this="_fs_flatten", expressions=[input_]), alias=alias)
 
     return expression

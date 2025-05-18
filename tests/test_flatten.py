@@ -10,6 +10,7 @@ from fakesnow.transforms import (
     flatten,
     flatten_value_cast_as_varchar,
 )
+from tests.matchers import IsResultMetadata
 from tests.utils import strip
 
 
@@ -77,6 +78,24 @@ def test_transform_table_flatten() -> None:
         .sql(dialect="duckdb")
         == expected
     )
+
+
+def test_flatten_alias_none(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    sql = "SELECT * FROM table(flatten([1, 2]))"
+    assert sqlglot.parse_one(
+        sql,
+        read="snowflake",
+    ).transform(flatten).sql(dialect="duckdb") == strip("SELECT * FROM _FS_FLATTEN([1, 2])")
+    cur.execute(sql)
+    # check order, names and types of cols
+    assert cur.description == [
+        IsResultMetadata(name="SEQ", type_code=0),
+        IsResultMetadata(name="KEY", type_code=2),
+        IsResultMetadata(name="PATH", type_code=2),
+        IsResultMetadata(name="INDEX", type_code=0),
+        IsResultMetadata(name="VALUE", type_code=5),
+        IsResultMetadata(name="THIS", type_code=5),
+    ]
 
 
 def test_flatten_alias_rename(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
