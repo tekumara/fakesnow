@@ -126,6 +126,13 @@ def test_clone(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1, "Jenny", True)]
 
 
+def test_convert_identifier_dollar_character(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("CREATE DATABASE ORG$INTERNAL$DATAPRODUCT")
+    cur.execute("CREATE SCHEMA ORG$INTERNAL$DATAPRODUCT.SCHEMA")
+    cur.execute("DESCRIBE DATABASE ORG$INTERNAL$DATAPRODUCT")
+    assert len(cur.fetchall()) == 1
+
+
 def test_create_database_respects_if_not_exists() -> None:
     with tempfile.TemporaryDirectory(prefix="fakesnow-test") as db_path, fakesnow.patch(db_path=db_path):
         cursor = snowflake.connector.connect().cursor()

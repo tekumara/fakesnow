@@ -53,7 +53,7 @@ from fakesnow.transforms import (
     upper_case_unquoted_identifiers,
     values_columns,
 )
-from fakesnow.transforms.transforms import _get_to_number_args
+from fakesnow.transforms.transforms import _get_to_number_args, convert_identifier_dollar_character
 
 
 def test_alias_in_join() -> None:
@@ -139,6 +139,15 @@ def test_array_agg_within_group() -> None:
     assert (
         sqlglot.parse_one("SELECT ARRAY_AGG(id) FROM example").transform(array_agg_within_group).sql(dialect="duckdb")
         == "SELECT ARRAY_AGG(id) FROM example"
+    )
+
+
+def test_convert_identifier_dollar_character() -> None:
+    assert (
+        sqlglot.parse_one("SELECT * FROM ORG$INTERNAL$DATAPRODUCT.SCHEMA.TABLE")
+        .transform(convert_identifier_dollar_character)
+        .sql()
+        == "SELECT * FROM ORG_INTERNAL_DATAPRODUCT.SCHEMA.TABLE"
     )
 
 

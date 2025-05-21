@@ -19,6 +19,7 @@ from fakesnow.transforms.transforms import (
     array_agg as array_agg,
     array_agg_within_group as array_agg_within_group,
     array_size as array_size,
+    convert_identifier_dollar_character as convert_identifier_dollar_character,
     create_clone as create_clone,
     create_database as create_database,
     create_user as create_user,

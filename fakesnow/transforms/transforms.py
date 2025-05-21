@@ -94,6 +94,29 @@ def array_agg_within_group(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def convert_identifier_dollar_character(expression: exp.Expression) -> exp.Expression:
+    """Convert the dollar $ characters in identifiers to underscores
+
+    Example:
+        >>> import sqlglot
+        >>> original = "SELECT * FROM ORG$INTERNAL$DATAPRODUCT.SCHEMA.TABLE"
+        >>> sqlglot.parse_one(original).transform(convert_identifier_dollar_character).sql()
+        "SELECT * FROM ORG_INTERNAL_DATAPRODUCT.SCHEMA.TABLE"
+    Args:
+        expression (exp.Expression): the expression that will be transformed.
+
+    Returns:
+        exp.Expression: The transformed expression.
+    """
+    if isinstance(expression, exp.Identifier):
+        name = expression.this
+        if "$" in name:
+            new = expression.copy()
+            new.set("this", name.replace("$", "_"))
+            return new
+    return expression
+
+
 def create_clone(expression: exp.Expression) -> exp.Expression:
     """Transform create table clone to create table as select."""
 
