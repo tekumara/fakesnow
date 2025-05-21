@@ -744,6 +744,18 @@ def random(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def quote_identifiers_with_dollar_signs(expression: exp.Expression) -> exp.Expression:
+    """Quote identifiers with dollar signs.
+
+    Snowflake allows $ in unquoted identifiers, but DuckDB does not. This transform
+    quotes any unquoted identifiers that contain a $ so they will be accepted by DuckDB.
+    """
+    for ident in expression.find_all(exp.Identifier):
+        if isinstance(ident.this, str) and "$" in ident.this and not ident.quoted:
+            ident.quoted = True
+    return expression
+
+
 def sample(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, exp.TableSample) and not expression.args.get("method"):
         # set snowflake default (bernoulli) rather than use the duckdb default (system)

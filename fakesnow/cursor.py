@@ -197,7 +197,9 @@ class FakeSnowflakeCursor:
 
     def _transform(self, expression: exp.Expression) -> exp.Expression:
         return (
-            expression.transform(transforms.upper_case_unquoted_identifiers)
+            expression
+            .transform(transforms.quote_identifiers_with_dollar_signs)  # New transform
+            .transform(transforms.upper_case_unquoted_identifiers)
             .transform(transforms.update_variables, variables=self._conn.variables)
             .transform(transforms.set_schema, current_database=self._conn.database)
             .transform(transforms.create_database, db_path=self._conn.db_path)
