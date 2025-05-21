@@ -745,14 +745,16 @@ def random(expression: exp.Expression) -> exp.Expression:
 
 
 def quote_identifiers_with_dollar_signs(expression: exp.Expression) -> exp.Expression:
-    """Quote identifiers with dollar signs.
-
-    Snowflake allows $ in unquoted identifiers, but DuckDB does not. This transform
-    quotes any unquoted identifiers that contain a $ so they will be accepted by DuckDB.
-    """
-    for ident in expression.find_all(exp.Identifier):
-        if isinstance(ident.this, str) and "$" in ident.this and not ident.quoted:
-            ident.quoted = True
+    if isinstance(expression, exp.Identifier):
+        if isinstance(expression.this, str) and '$' in expression.this and not expression.quoted:
+            # Create a new Identifier node with the 'quoted' property set to True.
+            # Using expression.copy() ensures all other aspects of the identifier are preserved.
+            new_ident = expression.copy()
+            new_ident.args['quoted'] = True 
+            # As an alternative, sqlglot's set method can be used if available and preferred:
+            # new_ident.set('quoted', True) 
+            # For now, modifying new_ident.args['quoted'] is a direct approach.
+            return new_ident
     return expression
 
 

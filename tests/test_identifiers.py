@@ -1,7 +1,5 @@
 import pytest
 
-from fakesnow.fixtures import conn
-
 
 def test_select_unquoted_identifier_with_dollar_sign(conn):
     # Test that an unquoted identifier with a dollar sign is handled.

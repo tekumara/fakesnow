@@ -45,6 +45,7 @@ from fakesnow.transforms.transforms import (
     json_extract_precedence as json_extract_precedence,
     object_construct as object_construct,
     random as random,
+    quote_identifiers_with_dollar_signs as quote_identifiers_with_dollar_signs,
     regex_replace as regex_replace,
     regex_substr as regex_substr,
     sample as sample,

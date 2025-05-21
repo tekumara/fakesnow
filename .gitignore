@@ -17,3 +17,4 @@ pip-wheel-metadata/
 duckdb
 notebooks/.ipynb_checkpoints
 tests/vcr
+uv.lock
