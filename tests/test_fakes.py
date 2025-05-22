@@ -272,6 +272,11 @@ def test_identifier(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1,)]
 
 
+def test_identifier_with_dollar_character(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    # shouldn't error
+    cur.execute("CREATE DATABASE ORG$INTERNAL")
+
+
 def test_number_38_0_is_int(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table example (i1 number(38,0))")
     cur.execute("insert into example values (123)")
