@@ -2,6 +2,18 @@
 
 # Changelog
 
+## [0.9.38](https://github.com/tekumara/fakesnow/compare/v0.9.37...v0.9.38) (2025-05-22)
+
+
+### Bug Fixes
+
+* support identifiers containing dollar signs ([#218](https://github.com/tekumara/fakesnow/issues/218)) ([1fd60dc](https://github.com/tekumara/fakesnow/commit/1fd60dc2d8db16bf1e31729092b0697fc675a851))
+
+
+### Chores
+
+* add FUNDING.yml ([379322b](https://github.com/tekumara/fakesnow/commit/379322bda75b4bc1f615eef49419dc7923b2a721))
+
 ## [0.9.37](https://github.com/tekumara/fakesnow/compare/v0.9.36...v0.9.37) (2025-05-18)
 
 
