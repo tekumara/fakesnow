@@ -213,6 +213,39 @@ def test_execute_two_files(
     ]
 
 
+def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+    create_table(dcur)
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("COPY INTO table1 FROM 'invalid_source' FILES=('foobar.csv') FORCE=true")
+
+    assert str(excinfo.value) == "001011 (42601): SQL compilation error:\ninvalid URL prefix found in: 'invalid_source'"
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("COPY INTO table1 FROM 's3://invalid_source' FILES=('foobar.csv') FORCE=true")
+
+    assert "091016 (22000)" in str(excinfo.value)
+    assert "invalid_source" in str(excinfo.value)
+    assert "foobar.csv" in str(excinfo.value)
+
+    # file has header but the skip header file format option is not used
+    sql = """
+    COPY INTO table1
+    FROM 's3://{bucket}/'
+    FILES=('foo.csv')
+    FILE_FORMAT = (TYPE = 'CSV')
+    FORCE = TRUE;
+    """
+    csv_data = "a,b\n1,2\n"
+
+    bucket = upload_file(s3_client, csv_data)
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute(sql.format(bucket=bucket))
+
+    assert "100038 (22018)" in str(excinfo.value)
+
+
 def test_load_history(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
     create_table(dcur)
     bucket = str(uuid.uuid4())
@@ -258,51 +291,6 @@ def test_load_history(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3
             "ERROR_LIMIT": 1,
         }
     ]
-
-
-def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
-    create_table(dcur)
-
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute("COPY INTO table1 FROM 'invalid_source' FILES=('foobar.csv') FORCE=true")
-
-    assert str(excinfo.value) == "001011 (42601): SQL compilation error:\ninvalid URL prefix found in: 'invalid_source'"
-
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute("COPY INTO table1 FROM 's3://invalid_source' FILES=('foobar.csv') FORCE=true")
-
-    assert "091016 (22000)" in str(excinfo.value)
-    assert "invalid_source" in str(excinfo.value)
-    assert "foobar.csv" in str(excinfo.value)
-
-    # file has header but the skip header file format option is not used
-    sql = """
-    COPY INTO table1
-    FROM 's3://{bucket}/'
-    FILES=('foo.csv')
-    FILE_FORMAT = (TYPE = 'CSV')
-    FORCE = TRUE;
-    """
-    csv_data = "a,b\n1,2\n"
-
-    bucket = upload_file(s3_client, csv_data)
-
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute(sql.format(bucket=bucket))
-
-    assert "100038 (22018)" in str(excinfo.value)
-
-
-def create_table(dcur: snowflake.connector.cursor.DictCursor) -> None:
-    dcur.execute("CREATE TABLE schema1.table1 (a INT, b INT)")
-
-
-def upload_file(s3_client: S3Client, data: str, bucket: str | None = None, key: str = "foo.csv") -> str:
-    if not bucket:
-        bucket = str(uuid.uuid4())
-    s3_client.create_bucket(Bucket=bucket)
-    s3_client.put_object(Bucket=bucket, Key=key, Body=data)
-    return bucket
 
 
 def test_param_files_single():
@@ -369,6 +357,18 @@ def test_param_files_none():
     """)
     assert params.files == []
     assert _source_urls(expr, params.files) == ["s3://mybucket/myfile.csv"]
+
+
+def create_table(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE TABLE schema1.table1 (a INT, b INT)")
+
+
+def upload_file(s3_client: S3Client, data: str, bucket: str | None = None, key: str = "foo.csv") -> str:
+    if not bucket:
+        bucket = str(uuid.uuid4())
+    s3_client.create_bucket(Bucket=bucket)
+    s3_client.put_object(Bucket=bucket, Key=key, Body=data)
+    return bucket
 
 
 def parse(sql: str) -> tuple[exp.Copy, Params]:
