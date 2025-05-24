@@ -33,7 +33,6 @@ cases = [
             FROM 's3://{bucket}/'
             FILES=('foo.csv')
             FILE_FORMAT = (TYPE = 'CSV')
-            FORCE = TRUE;
             """,
             expected_inserts=["INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)"],
             csv_data="1,2\n3,4",
@@ -50,7 +49,6 @@ cases = [
             STORAGE_INTEGRATION = some_name
             FILES=('foo.csv')
             FILE_FORMAT = (TYPE = 'CSV')
-            FORCE = TRUE;
             """,
             expected_inserts=[
                 "INSERT INTO SCHEMA1.TABLE1 (B) SELECT column0 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)"
@@ -69,7 +67,6 @@ cases = [
             STORAGE_INTEGRATION = some_name
             FILES=('foo.csv')
             FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1)
-            FORCE = TRUE;
             """,
             expected_inserts=[
                 "INSERT INTO TABLE1 (A, B) SELECT column0, column1 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, skip = 1)"
@@ -86,7 +83,6 @@ cases = [
             COPY INTO table1
             FROM 's3://{bucket}/'
             FILES=('foo.csv')
-            FORCE = TRUE;
             """,
             expected_inserts=["INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)"],
             csv_data="1,2\n",
@@ -103,7 +99,6 @@ cases = [
             STORAGE_INTEGRATION = some_name
             FILES=('foo.csv')
             FILE_FORMAT = (TYPE = 'CSV' FIELD_DELIMITER = '|')
-            FORCE = TRUE;
             """,
             expected_inserts=[
                 "INSERT INTO TABLE1 (A, B) SELECT column0, column1 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, sep = '|')"
@@ -167,7 +162,6 @@ def test_execute_two_files(
     COPY INTO table1
     FROM 's3://{bucket}/'
     FILES=('foo.csv', 'bar.csv')
-    FORCE = TRUE;
     """
 
     dcur.execute(sql.format(bucket=bucket))
@@ -217,12 +211,12 @@ def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
     create_table(dcur)
 
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute("COPY INTO table1 FROM 'invalid_source' FILES=('foobar.csv') FORCE=true")
+        dcur.execute("COPY INTO table1 FROM 'invalid_source' FILES=('foobar.csv')")
 
     assert str(excinfo.value) == "001011 (42601): SQL compilation error:\ninvalid URL prefix found in: 'invalid_source'"
 
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute("COPY INTO table1 FROM 's3://invalid_source' FILES=('foobar.csv') FORCE=true")
+        dcur.execute("COPY INTO table1 FROM 's3://invalid_source' FILES=('foobar.csv')")
 
     assert "091016 (22000)" in str(excinfo.value)
     assert "invalid_source" in str(excinfo.value)
@@ -234,7 +228,6 @@ def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
     FROM 's3://{bucket}/'
     FILES=('foo.csv')
     FILE_FORMAT = (TYPE = 'CSV')
-    FORCE = TRUE;
     """
     csv_data = "a,b\n1,2\n"
 
@@ -246,6 +239,78 @@ def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
     assert "100038 (22018)" in str(excinfo.value)
 
 
+def test_force(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+    create_table(dcur)
+    bucket = str(uuid.uuid4())
+    upload_file(s3_client, "1,2", bucket=bucket, key="foo.csv")
+
+    sql = """
+    COPY INTO table1
+    FROM 's3://{bucket}/'
+    FILES=('foo.csv')
+    """
+
+    dcur.execute(sql.format(bucket=bucket))
+    assert dcur.fetchall() == [
+        {
+            "file": f"s3://{bucket}/foo.csv",
+            "status": "LOADED",
+            "rows_parsed": 1,
+            "rows_loaded": 1,
+            "error_limit": 1,
+            "errors_seen": 0,
+            "first_error": None,
+            "first_error_line": None,
+            "first_error_character": None,
+            "first_error_column_name": None,
+        }
+    ]
+
+    # reloading the same file should skip it
+    dcur.execute(sql.format(bucket=bucket))
+    assert dcur.fetchall() == [
+        {
+            "file": f"s3://{bucket}/foo.csv",
+            "status": "LOAD_SKIPPED",
+            "rows_parsed": 0,
+            "rows_loaded": 0,
+            "error_limit": None,
+            "errors_seen": 1,
+            "first_error": "File was loaded before.",
+            "first_error_line": None,
+            "first_error_character": None,
+            "first_error_column_name": None,
+        }
+    ]
+
+    # reloading the same file with force will load it again
+    dcur.execute(f"{sql} FORCE = TRUE".format(bucket=bucket))
+    assert dcur.fetchall() == [
+        {
+            "file": f"s3://{bucket}/foo.csv",
+            "status": "LOADED",
+            "rows_parsed": 1,
+            "rows_loaded": 1,
+            "error_limit": 1,
+            "errors_seen": 0,
+            "first_error": None,
+            "first_error_line": None,
+            "first_error_character": None,
+            "first_error_column_name": None,
+        }
+    ]
+
+    dcur.execute("SELECT * FROM schema1.table1")
+    assert dcur.fetchall() == [
+        {"A": 1, "B": 2},  # first load
+        {"A": 1, "B": 2},  # reload with force = true
+    ]
+
+    # two rows, for the first load and the reload with force = true
+    dcur.execute("SELECT * FROM information_schema.load_history")
+    assert len(dcur.fetchall()) == 2
+
+
 def test_load_history(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
     create_table(dcur)
     bucket = str(uuid.uuid4())
@@ -255,7 +320,6 @@ def test_load_history(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3
     COPY INTO table1
     FROM 's3://{bucket}/'
     FILES=('foo.csv')
-    FORCE = TRUE;
     """
 
     dcur.execute(sql.format(bucket=bucket))
@@ -298,7 +362,6 @@ def test_param_files_single():
     COPY INTO table1 (a, b)
     FROM 's3://mybucket/'
     files=('file1.csv')
-    FORCE=true
     """)
     assert params.files == ["file1.csv"]
     assert _source_urls(expr, params.files) == ["s3://mybucket/file1.csv"]
@@ -309,7 +372,6 @@ def test_param_files_prefix():
     COPY INTO table1 (a, b)
     FROM 's3://mybucket/pre'
     FILES=('file1.csv')
-    FORCE=true
     """)
     assert params.files == ["file1.csv"]
     assert _source_urls(expr, params.files) == ["s3://mybucket/prefile1.csv"]
@@ -320,7 +382,6 @@ def test_param_files_prefix_query():
     COPY INTO table1 (a, b)
     FROM 's3://mybucket/pre?query=1'
     FILES=('file1.csv')
-    FORCE=true
     """)
     assert params.files == ["file1.csv"]
     assert _source_urls(expr, params.files) == ["s3://mybucket/pre?query=1file1.csv"]
@@ -331,7 +392,6 @@ def test_param_files_host_without_trailing_slash():
     COPY INTO table1 (a, b)
     FROM 's3://mybucket'
     FILES=('file1.csv')
-    FORCE=true
     """)
     assert params.files == ["file1.csv"]
     assert _source_urls(expr, params.files) == ["s3://mybucket/file1.csv"]
@@ -342,7 +402,6 @@ def test_params_files_multiple():
     COPY INTO table1 (a, b)
     FROM 's3://mybucket/data/'
     FILES=('file1.csv', 'file2.csv')
-    FORCE=true
     """)
 
     assert params.files == ["file1.csv", "file2.csv"]
@@ -353,7 +412,6 @@ def test_param_files_none():
     expr, params = parse("""
     COPY INTO table1 (a, b)
     FROM 's3://mybucket/myfile.csv'
-    FORCE=true
     """)
     assert params.files == []
     assert _source_urls(expr, params.files) == ["s3://mybucket/myfile.csv"]

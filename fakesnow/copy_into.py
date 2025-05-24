@@ -29,7 +29,7 @@ class LoadHistoryRecord(NamedTuple):
     first_error_character_position: int | None
     first_error_col_name: str | None
     error_count: int
-    error_limit: int
+    error_limit: int | None
 
 
 def copy_into(
@@ -55,38 +55,58 @@ def copy_into(
     histories: list[LoadHistoryRecord] = []
     load_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
     try:
-        # TODO: fetch files last modified dates and check if file exists in load_history already
         for i, url in zip(inserts, urls):
-            sql = i.sql(dialect="duckdb")
-            logger.log_sql(sql, params)
-            duck_conn.execute(sql, params)
-            (affected_count,) = duck_conn.fetchall()[0]
+            # Check if file has been loaded into any table before
+            check_sql = "SELECT 1 FROM _fs_information_schema._fs_load_history WHERE FILE_NAME = ? LIMIT 1"
+            duck_conn.execute(check_sql, [url])
+            if duck_conn.fetchone() and not cparams.force:
+                affected_count = 0
+                status = "LOAD_SKIPPED"
+                error_limit = None
+                error_count = 1
+                first_error_message = "File was loaded before."
+            else:
+                sql = i.sql(dialect="duckdb")
+                logger.log_sql(sql, params)
+                duck_conn.execute(sql, params)
+                (affected_count,) = duck_conn.fetchall()[0]
+                status = "LOADED"
+                error_limit = 1
+                error_count = 0
+                first_error_message = None
 
             history = LoadHistoryRecord(
                 schema_name=schema,
                 file_name=url,
                 table_name=table.name,
                 last_load_time=load_time,
-                status="LOADED",
+                status=status,
                 row_count=affected_count,
                 row_parsed=affected_count,
-                first_error_message=None,
+                first_error_message=first_error_message,
                 first_error_line_number=None,
                 first_error_character_position=None,
                 first_error_col_name=None,
-                error_count=0,
-                error_limit=1,
+                error_count=error_count,
+                error_limit=error_limit,
             )
             histories.append(history)
 
-        values = "\n ,".join(str(tuple(history)).replace("None", "NULL") for history in histories)
-        sql = f"INSERT INTO _fs_information_schema._fs_load_history VALUES {values}"
-        duck_conn.execute(sql, params)
+        # Only insert into load_history for records that aren't skipped
+        insert_histories = [h for h in histories if h.status != "LOAD_SKIPPED"]
+        if insert_histories:
+            values = "\n ,".join(str(tuple(history)).replace("None", "NULL") for history in insert_histories)
+            sql = f"INSERT INTO _fs_information_schema._fs_load_history VALUES {values}"
+            duck_conn.execute(sql, params)
 
-        columns = "file, status, rows_parsed, rows_loaded, error_limit, errors_seen, first_error, first_error_line, first_error_character, first_error_column_name"  # noqa: E501
+        columns = (
+            "file, status, rows_parsed, rows_loaded, error_limit, errors_seen, first_error, first_error_line, "
+            "first_error_character, first_error_column_name"
+        )
         values = "\n, ".join(
             f"('{h.file_name}', '{h.status}', {h.row_parsed}, {h.row_count}, "
-            f"{h.error_limit}, {h.error_count}, {h.first_error_message or 'NULL'}, "
+            f"{h.error_limit or 'NULL'}, {h.error_count}, "
+            f"{repr(h.first_error_message) if h.first_error_message else 'NULL'}, "
             f"{h.first_error_line_number or 'NULL'}, {h.first_error_character_position or 'NULL'}, "
             f"{h.first_error_col_name or 'NULL'})"
             for h in histories
@@ -128,10 +148,7 @@ def _params(expr: exp.Copy) -> Params:
         else:
             raise ValueError(f"Unknown copy parameter: {param.this}")
 
-    if not force:
-        raise NotImplementedError("COPY INTO with FORCE=false (default) is not currently implemented")
-
-    return Params(**kwargs)
+    return Params(force=force, **kwargs)
 
 
 def _source_urls(expr: exp.Copy, files: list[str]) -> list[str]:
@@ -254,3 +271,4 @@ class Params:
     files: list[str] = field(default_factory=list)
     # Snowflake defaults to CSV when no file format is specified
     file_format: FileTypeHandler = field(default_factory=ReadCSV)
+    force: bool = False
