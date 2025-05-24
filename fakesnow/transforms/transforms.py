@@ -574,12 +574,13 @@ def information_schema_fs(expression: exp.Expression) -> exp.Expression:
     * _FS_COLUMNS view which has character_maximum_length or character_octet_length.
     * _FS_TABLES to access additional metadata columns (eg: comment).
     * _FS_VIEWS to return Snowflake's version instead of duckdb's
+    * _FS_LOAD_HISTORY table which duckdb doesn't have.
     """
 
     if (
         isinstance(expression, exp.Table)
         and expression.db.upper() == "INFORMATION_SCHEMA"
-        and expression.name.upper() in {"COLUMNS", "TABLES", "VIEWS"}
+        and expression.name.upper() in {"COLUMNS", "TABLES", "VIEWS", "LOAD_HISTORY"}
     ):
         expression.set("this", exp.Identifier(this=f"_FS_{expression.name.upper()}", quoted=False))
         expression.set("db", exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False))

@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+import datetime
 from collections.abc import Sequence
 from dataclasses import dataclass, field
-from typing import Any, Protocol, cast
+from typing import Any, NamedTuple, Protocol, cast
 from urllib.parse import urlparse, urlunparse
 
 import duckdb
@@ -13,14 +14,46 @@ from sqlglot import exp
 from fakesnow import logger
 
 
+class LoadHistoryRecord(NamedTuple):
+    """Represents a record in the INFORMATION_SCHEMA.LOAD_HISTORY table."""
+
+    schema_name: str
+    file_name: str
+    table_name: str
+    last_load_time: str  # ISO8601 datetime with timezone
+    status: str
+    row_count: int
+    row_parsed: int
+    first_error_message: str | None
+    first_error_line_number: int | None
+    first_error_character_position: int | None
+    first_error_col_name: str | None
+    error_count: int
+    error_limit: int
+
+
 def copy_into(
-    duck_conn: DuckDBPyConnection, expr: exp.Copy, params: Sequence[Any] | dict[Any, Any] | None = None
+    duck_conn: DuckDBPyConnection,
+    current_schema: str | None,
+    expr: exp.Copy,
+    params: Sequence[Any] | dict[Any, Any] | None = None,
 ) -> str:
     cparams = _params(expr)
     urls = _source_urls(expr, cparams.files)
     inserts = _inserts(expr, cparams, urls)
+    table = expr.this
+    if isinstance(expr.this, exp.Table):
+        table = expr.this
+    elif isinstance(expr.this, exp.Schema) and isinstance(expr.this.this, exp.Table):
+        table = expr.this.this
+    else:
+        raise AssertionError(f"copy into {expr.this.__class__} is not Table or Schema")
 
-    results = []
+    schema = table.db or current_schema
+    assert schema
+
+    histories: list[LoadHistoryRecord] = []
+    load_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
     try:
         # TODO: fetch files last modified dates and check if file exists in load_history already
         for i, url in zip(inserts, urls):
@@ -28,12 +61,36 @@ def copy_into(
             logger.log_sql(sql, params)
             duck_conn.execute(sql, params)
             (affected_count,) = duck_conn.fetchall()[0]
-            results.append(f"('{url}', 'LOADED', {affected_count}, {affected_count}, 1, 0, NULL, NULL, NULL, NULL)")
 
-            # TODO: update load_history with the results if loaded
+            history = LoadHistoryRecord(
+                schema_name=schema,
+                file_name=url,
+                table_name=table.name,
+                last_load_time=load_time,
+                status="LOADED",
+                row_count=affected_count,
+                row_parsed=affected_count,
+                first_error_message=None,
+                first_error_line_number=None,
+                first_error_character_position=None,
+                first_error_col_name=None,
+                error_count=0,
+                error_limit=1,
+            )
+            histories.append(history)
+
+        values = "\n ,".join(str(tuple(history)).replace("None", "NULL") for history in histories)
+        sql = f"INSERT INTO _fs_information_schema._fs_load_history VALUES {values}"
+        duck_conn.execute(sql, params)
 
         columns = "file, status, rows_parsed, rows_loaded, error_limit, errors_seen, first_error, first_error_line, first_error_character, first_error_column_name"  # noqa: E501
-        values = "\n, ".join(results)
+        values = "\n, ".join(
+            f"('{h.file_name}', '{h.status}', {h.row_parsed}, {h.row_count}, "
+            f"{h.error_limit}, {h.error_count}, {h.first_error_message or 'NULL'}, "
+            f"{h.first_error_line_number or 'NULL'}, {h.first_error_character_position or 'NULL'}, "
+            f"{h.first_error_col_name or 'NULL'})"
+            for h in histories
+        )
         sql = f"SELECT * FROM (VALUES\n  {values}\n) AS t({columns})"
         duck_conn.execute(sql)
         return sql

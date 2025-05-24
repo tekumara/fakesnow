@@ -483,6 +483,10 @@ def test_information_schema_fs() -> None:
         sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.VIEWS").transform(information_schema_fs).sql()
         == "SELECT * FROM _FS_INFORMATION_SCHEMA._FS_VIEWS"
     )
+    assert (
+        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.LOAD_HISTORY").transform(information_schema_fs).sql()
+        == "SELECT * FROM _FS_INFORMATION_SCHEMA._FS_LOAD_HISTORY"
+    )
 
 
 def test_json_extract_cased_as_varchar() -> None:

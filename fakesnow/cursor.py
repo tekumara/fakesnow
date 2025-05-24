@@ -285,7 +285,7 @@ class FakeSnowflakeCursor:
 
         try:
             if isinstance(transformed, exp.Copy):
-                sql = copy_into(self._duck_conn, transformed, params)
+                sql = copy_into(self._duck_conn, self._conn.schema, transformed, params)
             else:
                 logger.log_sql(sql, params)
                 self._duck_conn.execute(sql, params)

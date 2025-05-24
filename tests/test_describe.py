@@ -21,6 +21,8 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         )
         """
     )
+    # for type_code mappings see indexes in FIELD_TYPES
+    # https://github.com/snowflakedb/snowflake-connector-python/blob/2f346e490eb9e78e0c2e6c23ec55c3236fe4450b/src/snowflake/connector/constants.py#L126
     # fmt: off
     expected_metadata = [
         ResultMetadata(name='XBOOLEAN', type_code=13, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
@@ -45,6 +47,7 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         ResultMetadata(name='XTIMESTAMP_NTZ', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP_NTZ9', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP_TZ', type_code=7, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
+        # TODO: TIMESTAMP_LTZ type_code=6
         ResultMetadata(name='XDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XTIME', type_code=12, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XBINARY', type_code=11, display_size=None, internal_size=8388608, precision=None, scale=None, is_nullable=True),

@@ -185,6 +185,26 @@ where database_name = '${catalog}'
 """
 )
 
+SQL_CREATE_LOAD_HISTORY_TABLE = Template(
+    """
+create table if not exists ${catalog}._fs_information_schema._fs_load_history (
+    SCHEMA_NAME VARCHAR,
+    FILE_NAME VARCHAR,
+    TABLE_NAME VARCHAR,
+    LAST_LOAD_TIME TIMESTAMP WITH TIME ZONE,
+    STATUS VARCHAR,
+    ROW_COUNT INTEGER,
+    ROW_PARSED INTEGER,
+    FIRST_ERROR_MESSAGE VARCHAR,
+    FIRST_ERROR_LINE_NUMBER INTEGER,
+    FIRST_ERROR_CHARACTER_POSITION INTEGER,
+    FIRST_ERROR_COL_NAME VARCHAR,
+    ERROR_COUNT INTEGER,
+    ERROR_LIMIT INTEGER
+)
+    """
+)
+
 
 def per_db_creation_sql(catalog: str) -> str:
     return f"""
@@ -193,6 +213,7 @@ def per_db_creation_sql(catalog: str) -> str:
         {SQL_CREATE_INFORMATION_SCHEMA_DATABASES_VIEW.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_TABLES_VIEW.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_VIEWS_VIEW.substitute(catalog=catalog)};
+        {SQL_CREATE_LOAD_HISTORY_TABLE.substitute(catalog=catalog)};
     """
 
 

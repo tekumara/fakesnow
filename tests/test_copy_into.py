@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import uuid
+from datetime import timezone
 from typing import NamedTuple
 from unittest.mock import MagicMock, patch
 
 import pytest
 import snowflake.connector.cursor
 import sqlglot
+from dirty_equals import IsNow
 from mypy_boto3_s3 import S3Client
 from sqlglot import exp
 
@@ -208,6 +210,53 @@ def test_execute_two_files(
         {"A": 3, "B": 4},  # from foo.csv
         {"A": 5, "B": 6},  # from bar.csv
         {"A": 7, "B": 8},  # from bar.csv
+    ]
+
+
+def test_load_history(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+    create_table(dcur)
+    bucket = str(uuid.uuid4())
+    upload_file(s3_client, "1,2\n3,4", bucket=bucket, key="foo.csv")
+
+    sql = """
+    COPY INTO table1
+    FROM 's3://{bucket}/'
+    FILES=('foo.csv')
+    FORCE = TRUE;
+    """
+
+    dcur.execute(sql.format(bucket=bucket))
+    assert dcur.fetchall() == [
+        {
+            "file": f"s3://{bucket}/foo.csv",
+            "status": "LOADED",
+            "rows_parsed": 2,
+            "rows_loaded": 2,
+            "error_limit": 1,
+            "errors_seen": 0,
+            "first_error": None,
+            "first_error_line": None,
+            "first_error_character": None,
+            "first_error_column_name": None,
+        }
+    ]
+    dcur.execute("SELECT * FROM information_schema.load_history")
+    assert dcur.fetchall() == [
+        {
+            "SCHEMA_NAME": "SCHEMA1",
+            "FILE_NAME": f"s3://{bucket}/foo.csv",
+            "TABLE_NAME": "TABLE1",
+            "LAST_LOAD_TIME": IsNow(tz=timezone.utc),
+            "STATUS": "LOADED",
+            "ROW_COUNT": 2,  # number of rows loaded
+            "ROW_PARSED": 2,
+            "FIRST_ERROR_MESSAGE": None,
+            "FIRST_ERROR_LINE_NUMBER": None,
+            "FIRST_ERROR_CHARACTER_POSITION": None,
+            "FIRST_ERROR_COL_NAME": None,
+            "ERROR_COUNT": 0,
+            "ERROR_LIMIT": 1,
+        }
     ]
 
 
