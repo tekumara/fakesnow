@@ -291,11 +291,11 @@ class FakeSnowflakeCursor:
                 self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]
-            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from None
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from e
         except duckdb.CatalogException as e:
             # minimal processing to make it look like a snowflake exception, message content may differ
             msg = cast(str, e.args[0]).split("\n")[0]
-            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from None
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2003, sqlstate="42S02") from e
         except duckdb.TransactionException as e:
             if "cannot rollback - no transaction is active" in str(
                 e
@@ -305,9 +305,9 @@ class FakeSnowflakeCursor:
             else:
                 raise e
         except duckdb.ConnectionException as e:
-            raise snowflake.connector.errors.DatabaseError(msg=e.args[0], errno=250002, sqlstate="08003") from None
+            raise snowflake.connector.errors.DatabaseError(msg=e.args[0], errno=250002, sqlstate="08003") from e
         except duckdb.ParserException as e:
-            raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=1003, sqlstate="42000") from None
+            raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=1003, sqlstate="42000") from e
 
         affected_count = None
 
