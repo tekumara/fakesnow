@@ -17,3 +17,5 @@ pip-wheel-metadata/
 duckdb
 notebooks/.ipynb_checkpoints
 tests/vcr
+# ignore uv.lock so we are always testing with the latest versions
+uv.lock
