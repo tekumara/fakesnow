@@ -24,8 +24,7 @@ from fakesnow.transforms import (
     float_to_double,
     identifier,
     indices_to_json_extract,
-    information_schema_fs_columns,
-    information_schema_fs_tables,
+    information_schema_fs,
     integer_precision,
     json_extract_cased_as_varchar,
     json_extract_cast_as_varchar,
@@ -471,17 +470,18 @@ def test_integer_precision() -> None:
     )
 
 
-def test_information_schema_fs_columns_snowflake() -> None:
+def test_information_schema_fs() -> None:
     assert (
-        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.COLUMNS").transform(information_schema_fs_columns).sql()
+        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.COLUMNS").transform(information_schema_fs).sql()
         == "SELECT * FROM _FS_INFORMATION_SCHEMA._FS_COLUMNS"
     )
-
-
-def test_information_schema_fs_tables() -> None:
     assert (
-        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(information_schema_fs_tables).sql()
+        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.TABLES").transform(information_schema_fs).sql()
         == "SELECT * FROM _FS_INFORMATION_SCHEMA._FS_TABLES"
+    )
+    assert (
+        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.VIEWS").transform(information_schema_fs).sql()
+        == "SELECT * FROM _FS_INFORMATION_SCHEMA._FS_VIEWS"
     )
 
 

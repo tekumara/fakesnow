@@ -569,20 +569,19 @@ def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def information_schema_fs_columns(expression: exp.Expression) -> exp.Expression:
-    """Redirect to the _FS_COLUMNS view which has metadata that matches snowflake.
-
-    Because duckdb doesn't store character_maximum_length or character_octet_length.
+def information_schema_fs(expression: exp.Expression) -> exp.Expression:
+    """Redirects for
+    * _FS_COLUMNS view which has character_maximum_length or character_octet_length.
+    * _FS_TABLES to access additional metadata columns (eg: comment).
+    * _FS_VIEWS to return Snowflake's version instead of duckdb's
     """
 
     if (
         isinstance(expression, exp.Table)
-        and expression.db
         and expression.db.upper() == "INFORMATION_SCHEMA"
-        and expression.name
-        and expression.name.upper() == "COLUMNS"
+        and expression.name.upper() in {"COLUMNS", "TABLES", "VIEWS"}
     ):
-        expression.set("this", exp.Identifier(this="_FS_COLUMNS", quoted=False))
+        expression.set("this", exp.Identifier(this=f"_FS_{expression.name.upper()}", quoted=False))
         expression.set("db", exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False))
 
     return expression
@@ -604,38 +603,6 @@ def information_schema_databases(
             this=exp.Identifier(this="DATABASES", quoted=False),
             db=exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False),
         )
-    return expression
-
-
-def information_schema_fs_tables(
-    expression: exp.Expression,
-) -> exp.Expression:
-    """Use _FS_TABLES to access additional metadata columns (eg: comment)."""
-
-    if (
-        isinstance(expression, exp.Select)
-        and (tbl := expression.find(exp.Table))
-        and tbl.db.upper() == "INFORMATION_SCHEMA"
-        and tbl.name.upper() == "TABLES"
-    ):
-        tbl.set("this", exp.Identifier(this="_FS_TABLES", quoted=False))
-        tbl.set("db", exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False))
-
-    return expression
-
-
-def information_schema_fs_views(expression: exp.Expression) -> exp.Expression:
-    """Use _FS_VIEWS to return Snowflake's version instead of duckdb's."""
-
-    if (
-        isinstance(expression, exp.Select)
-        and (tbl := expression.find(exp.Table))
-        and tbl.db.upper() == "INFORMATION_SCHEMA"
-        and tbl.name.upper() == "VIEWS"
-    ):
-        tbl.set("this", exp.Identifier(this="_FS_VIEWS", quoted=False))
-        tbl.set("db", exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False))
-
     return expression
 
 
