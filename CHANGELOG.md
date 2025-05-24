@@ -2,6 +2,19 @@
 
 # Changelog
 
+## [0.9.39](https://github.com/tekumara/fakesnow/compare/v0.9.38...v0.9.39) (2025-05-24)
+
+
+### Features
+
+* support COPY_INTO without FORCE = TRUE ([2034881](https://github.com/tekumara/fakesnow/commit/2034881a1bb0aef7413aa903e4c7aa62cfa3f353))
+* support LOAD_HISTORY table ([8ea1847](https://github.com/tekumara/fakesnow/commit/8ea18476eb501829b728d8d887fe3d1a0249c7e9))
+
+
+### Chores
+
+* ignore uv.lock ([e77f458](https://github.com/tekumara/fakesnow/commit/e77f458950bdfbae046a62984c8a05a59d5733df))
+
 ## [0.9.38](https://github.com/tekumara/fakesnow/compare/v0.9.37...v0.9.38) (2025-05-22)
 
 
