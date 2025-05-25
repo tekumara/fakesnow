@@ -80,8 +80,8 @@ def test_show_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("SHOW COLUMNS IN example")
     assert dcur.fetchall() == example1_cols
 
-    dcur.execute("SHOW COLUMNS IN SCHEMA db1.schema1")
-    assert dcur.fetchall() == example1_cols + view1_cols
+    dcur.execute("SHOW COLUMNS IN SCHEMA db1.schema3")
+    assert dcur.fetchall() == table3_cols
 
     dcur.execute("SHOW COLUMNS IN ACCOUNT")
     assert dcur.fetchall() == example1_cols + view1_cols + table3_cols
@@ -395,8 +395,8 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.fetchall() == [table1]
 
     # in qualified schema
-    dcur.execute("show terse tables in db1.schema1")
-    assert dcur.fetchall() == [table1]
+    dcur.execute("show terse tables in db2.schema2")
+    assert dcur.fetchall() == [table2]
     dcur.execute("show terse tables in schema db1.schema1")
     assert dcur.fetchall() == [table1]
 
