@@ -1100,6 +1100,21 @@ def to_timestamp_ntz(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+
+def cast_integer_to_timestamp(expression: exp.Expression) -> exp.Expression:
+    """Rewrite CAST(<int> AS TIMESTAMP[_NTZ]) to TO_TIMESTAMP(<int>) for DuckDB compatibility."""
+    if (
+        isinstance(expression, exp.Cast)
+        and isinstance(expression.this, exp.Literal)
+        and not expression.this.is_string
+        and expression.to.this in [exp.DataType.Type.TIMESTAMP, exp.DataType.Type.TIMESTAMPNTZ]
+    ):
+        # Use TO_TIMESTAMP(<int>)
+        return exp.Anonymous(this="TO_TIMESTAMP", expressions=[expression.this])
+    return expression
+
+
+
 def timestamp_ntz(expression: exp.Expression) -> exp.Expression:
     """Convert timestamp_ntz (snowflake) to timestamp (duckdb).
 
