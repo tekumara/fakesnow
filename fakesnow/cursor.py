@@ -226,6 +226,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.to_date)
             .transform(transforms.to_decimal)
             .transform(transforms.try_to_decimal)
+            .transform(transforms.cast_integer_to_timestamp)
             .transform(transforms.to_timestamp_ntz)
             .transform(transforms.to_timestamp)
             .transform(transforms.object_construct)

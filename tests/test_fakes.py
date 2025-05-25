@@ -463,6 +463,12 @@ def test_to_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(datetime.datetime(2013, 4, 5, 1, 2, 3),)]
 
 
+def test_to_timestamp_from_integer(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # snowflake returns naive timestamps (ie: no timezone)
+    cur.execute("select 1748179630::timestamp_ntz")
+    assert cur.fetchall() == [(datetime.datetime(2025, 5, 25, 13, 27, 10),)]
+
+
 def test_truncate(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("CREATE TABLE example (i INTEGER)")
     dcur.execute("INSERT INTO example VALUES (1)")
