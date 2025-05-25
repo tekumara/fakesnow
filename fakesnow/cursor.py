@@ -43,6 +43,7 @@ SQL_CREATED_DATABASE = Template("SELECT 'Database ${name} successfully created.'
 SQL_CREATED_SCHEMA = Template("SELECT 'Schema ${name} successfully created.' as 'status'")
 SQL_CREATED_TABLE = Template("SELECT 'Table ${name} successfully created.' as 'status'")
 SQL_CREATED_VIEW = Template("SELECT 'View ${name} successfully created.' as 'status'")
+SQL_CREATED_STAGE = Template("SELECT 'Stage area ${name} successfully created.' as status")
 SQL_DROPPED = Template("SELECT '${name} successfully dropped.' as 'status'")
 SQL_INSERTED_ROWS = Template("SELECT ${count} as 'number of rows inserted'")
 SQL_UPDATED_ROWS = Template("SELECT ${count} as 'number of rows updated', 0 as 'number of multi-joined rows updated'")
@@ -248,6 +249,7 @@ class FakeSnowflakeCursor:
             .transform(lambda e: transforms.show_schemas(e, self._conn.database))
             .transform(lambda e: transforms.show_tables_etc(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.show_columns(e, self._conn.database, self._conn.schema))
+            .transform(lambda e: transforms.show_stages(e, self._conn.database, self._conn.schema))
             # TODO collapse into a single show_keys function
             .transform(lambda e: transforms.show_keys(e, self._conn.database, kind="PRIMARY"))
             .transform(lambda e: transforms.show_keys(e, self._conn.database, kind="UNIQUE"))
@@ -258,6 +260,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.create_clone)
             .transform(transforms.alias_in_join)
             .transform(transforms.alter_table_strip_cluster_by)
+            .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
         )
 
     def _transform_explode(self, expression: exp.Expression) -> list[exp.Expression]:
@@ -326,6 +329,9 @@ class FakeSnowflakeCursor:
             # we created a new database, so create the info schema extensions
             self._duck_conn.execute(info_schema.per_db_creation_sql(create_db_name))
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
+
+        elif stage_name := transformed.args.get("stage_name"):
+            result_sql = SQL_CREATED_STAGE.substitute(name=stage_name)
 
         elif cmd == "INSERT":
             (affected_count,) = self._duck_conn.fetchall()[0]

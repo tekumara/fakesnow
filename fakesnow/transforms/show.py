@@ -102,7 +102,7 @@ def show_columns(
 
     query = f"""
     SELECT *
-    FROM _fs_global._fs_information_schema._fs_show_columns c
+    FROM _fs_global._fs_information_schema._fs_show_columns
     WHERE {where_clause}
     """
 
@@ -335,6 +335,53 @@ def show_schemas(expression: exp.Expression, current_database: str | None = None
         )
 
     return expression
+
+
+def show_stages(
+    expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
+) -> exp.Expression:
+    """Transform SHOW STAGES to a select from the fake _fs_stages table."""
+    if not (
+        isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "STAGES"
+    ):
+        return expression
+
+    scope_kind = expression.args.get("scope_kind")
+    table = expression.find(exp.Table)
+
+    if scope_kind == "DATABASE":
+        catalog = (table and table.name) or current_database
+        schema = None
+    elif scope_kind == "SCHEMA" and table:
+        catalog = table.db or current_database
+        schema = table.name
+    elif scope_kind == "TABLE" and table:
+        catalog = table.db or current_database
+        assert isinstance(table.this, exp.Identifier)
+        schema = table.this.this
+    elif scope_kind == "ACCOUNT":
+        # show all objects / tables in the account
+        catalog = None
+        schema = None
+    else:
+        # no explicit scope - show current database and schema only
+        catalog = current_database
+        schema = current_schema
+
+    where = ["1=1"]
+    if catalog:
+        where.append(f"database_name = '{catalog}'")
+    if schema:
+        where.append(f"schema_name = '{schema}'")
+    where_clause = " AND ".join(where)
+
+    query = f"""
+        SELECT *
+        from _fs_global._fs_information_schema._fs_stages
+        where {where_clause}
+    """
+
+    return sqlglot.parse_one(query, read="duckdb")
 
 
 # see https://docs.snowflake.com/en/sql-reference/sql/show-objects

@@ -191,7 +191,7 @@ create table if not exists ${catalog}._fs_information_schema._fs_load_history (
     SCHEMA_NAME VARCHAR,
     FILE_NAME VARCHAR,
     TABLE_NAME VARCHAR,
-    LAST_LOAD_TIME TIMESTAMP WITH TIME ZONE,
+    LAST_LOAD_TIME TIMESTAMPTZ,
     STATUS VARCHAR,
     ROW_COUNT INTEGER,
     ROW_PARSED INTEGER,
@@ -204,6 +204,29 @@ create table if not exists ${catalog}._fs_information_schema._fs_load_history (
 )
     """
 )
+
+
+SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_STAGES_TABLE = """
+CREATE TABLE IF NOT EXISTS _fs_global._fs_information_schema._fs_stages (
+    created_on TIMESTAMPTZ,
+    name TEXT,
+    database_name TEXT,
+    schema_name TEXT,
+    url TEXT,
+    has_credentials TEXT,
+    has_encryption_key TEXT,
+    owner TEXT,
+    comment TEXT,
+    region TEXT,
+    type TEXT,
+    cloud TEXT,
+    notification_channel TEXT,
+    storage_integration TEXT,
+    endpoint TEXT,
+    owner_role_type TEXT,
+    directory_enabled TEXT
+);
+"""
 
 
 def per_db_creation_sql(catalog: str) -> str:
@@ -224,6 +247,7 @@ def fs_global_creation_sql() -> str:
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_EXT};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_VIEW};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_USERS_TABLE};
+        {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_STAGES_TABLE}
     """
 
 

@@ -8,10 +8,12 @@ from fakesnow.transforms.show import (
     show_keys as show_keys,
     show_procedures as show_procedures,
     show_schemas as show_schemas,
+    show_stages as show_stages,
     show_tables_etc as show_tables_etc,
     show_users as show_users,
     show_warehouses as show_warehouses,
 )
+from fakesnow.transforms.stage import create_stage as create_stage
 from fakesnow.transforms.transforms import (
     SUCCESS_NOP as SUCCESS_NOP,
     alias_in_join as alias_in_join,
