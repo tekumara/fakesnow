@@ -377,7 +377,9 @@ where not table_catalog in ('system')
 """
 
 
-def show_tables_etc(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
+def show_tables_etc(
+    expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
+) -> exp.Expression:
     """Transform SHOW OBJECTS/TABLES/VIEWS to a query against the _fs_information_schema views."""
     if not (
         isinstance(expression, exp.Show)
@@ -396,10 +398,14 @@ def show_tables_etc(expression: exp.Expression, current_database: str | None = N
     elif scope_kind == "SCHEMA" and table:
         catalog = table.db or current_database
         schema = table.name
-    else:
-        # all objects / tables - will show everything in the "account"
+    elif scope_kind == "ACCOUNT":
+        # show all objects / tables in the account
         catalog = None
         schema = None
+    else:
+        # no explicit scope - show current database and schema only
+        catalog = current_database
+        schema = current_schema
 
     if expression.args["terse"] and show == "VIEWS":
         columns = ["created_on, name, 'VIEW' as kind, database_name, schema_name"]

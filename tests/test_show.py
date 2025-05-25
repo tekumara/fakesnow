@@ -341,29 +341,73 @@ def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("create table example(x int)")
-    dcur.execute("create view view1 as select * from example")
+    dcur.execute("create table table1(x int)")
+    dcur.execute("create view view1 as select * from table1")
+    dcur.execute("create database db2")
+    dcur.execute("create schema db2.schema2")
+    dcur.execute("create table db2.schema2.table2(x int)")
+    dcur.execute("create schema schema3")
+    dcur.execute("create table schema3.table3(x int)")
+
+    table1 = {
+        "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+        "name": "TABLE1",
+        "kind": "TABLE",
+        "database_name": "DB1",
+        "schema_name": "SCHEMA1",
+    }
+    table2 = {
+        "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+        "name": "TABLE2",
+        "kind": "TABLE",
+        "database_name": "DB2",
+        "schema_name": "SCHEMA2",
+    }
+    table3 = {
+        "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+        "name": "TABLE3",
+        "kind": "TABLE",
+        "database_name": "DB1",
+        "schema_name": "SCHEMA3",
+    }
+    foo = {
+        "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+        "name": "FOO",
+        "kind": "TABLE",
+        "database_name": "DB1",
+        "schema_name": "SCHEMA1",
+    }
+
+    # show in current db/schema
     dcur.execute("show terse tables")
-    objects = [
-        {
-            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "name": "EXAMPLE",
-            "kind": "TABLE",
-            "database_name": "DB1",
-            "schema_name": "SCHEMA1",
-        },
-    ]
-    assert dcur.fetchall() == objects
+    assert dcur.fetchall() == [table1]
+
+    # in qualified schema
     dcur.execute("show terse tables in db1.schema1")
-    assert dcur.fetchall() == objects
-    assert [r.name for r in dcur.description] == [
-        "created_on",
-        "name",
-        "kind",
-        "database_name",
-        "schema_name",
+    assert dcur.fetchall() == [table1]
+    dcur.execute("show terse tables in schema db1.schema1")
+    assert dcur.fetchall() == [table1]
+
+    # in qualified database
+    dcur.execute("show terse tables in database db2")
+    assert dcur.fetchall() == [table2]
+
+    # using like
+    dcur.execute("create table foo(x int)")
+    dcur.execute("show terse tables like 'table%'")
+    # should not match show foo
+    assert dcur.fetchall() == [table1]
+
+    # in account - ordered by database, schema, name
+    dcur.execute("show terse tables in account")
+    assert dcur.fetchall() == [
+        foo,  # db1
+        table1,  # db1
+        table3,  # db1
+        table2,  # db2
     ]
 
+    # non-terse has all the columns
     dcur.execute("show tables in db1.schema1")
     assert [r.name for r in dcur.description] == [
         "created_on",
@@ -372,7 +416,6 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "database_name",
         "schema_name",
         "comment",
-        # TODO: include these columns
         "cluster_by",
         "rows",
         "bytes",
@@ -393,11 +436,6 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "is_dynamic",
         "is_immutable",
     ]
-
-    dcur.execute("create table foo(x int)")
-    dcur.execute("show terse tables like 'example'")
-    # should not match show foo
-    assert dcur.fetchall() == objects
 
 
 def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
