@@ -178,65 +178,6 @@ def show_functions(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-# returns zero rows
-SQL_SHOW_WAREHOUSES = """
-SELECT
-    'FAKESNOW_WAREHOUSE' as name,
-    'STARTED' as state,
-    'STANDARD' as type,
-    'X-Small' as size,
-    1 as min_cluster_count,
-    1 as max_cluster_count,
-    1 as started_clusters,
-    0 as running,
-    0 as queued,
-    'N' as is_default,
-    'N' as is_current,
-    600 as auto_suspend,
-    'true' as auto_resume,
-    -- nb: deliberate space before '100' to match Snowflake's output
-    ' 100' as available,
-    '0' as provisioning,
-    '0' as quiescing,
-    '0' as other,
-    '1970-01-01 00:00:00.000000 UTC'::timestamptz as created_on,
-    '1970-01-01 00:00:00.000000 UTC'::timestamptz as resumed_on,
-    '1970-01-01 00:00:00.000000 UTC'::timestamptz as updated_on,
-    'SYSADMIN' as owner,
-    '' as comment,
-    'false' as enable_query_acceleration,
-    8 as query_acceleration_max_scale_factor,
-    'null' as resource_monitor,
-
-    -- deprecated - these 5 cols are for internal use
-    0 as actives,
-    0 as pendings,
-    0 as failed,
-    0 as suspended,
-    '123456789012' as uuid,
-
-    'STANDARD' as scaling_policy,
-    NULL as budget,
-    'ROLE' as owner_role_type,
-    NULL as resource_constraint;
-"""
-
-
-def show_warehouses(expression: exp.Expression) -> exp.Expression:
-    """Transform SHOW WAREHOUSES.
-
-    See https://docs.snowflake.com/en/sql-reference/sql/show-warehouses
-    """
-    if (
-        isinstance(expression, exp.Show)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == "WAREHOUSES"
-    ):
-        return sqlglot.parse_one(SQL_SHOW_WAREHOUSES, read="duckdb")
-
-    return expression
-
-
 def show_keys(
     expression: exp.Expression,
     current_database: str | None = None,
@@ -321,6 +262,78 @@ def show_keys(
             else:
                 raise NotImplementedError(f"SHOW PRIMARY KEYS with {scope_kind}")
         return sqlglot.parse_one(statement)
+    return expression
+
+
+# returns zero rows
+SQL_SHOW_PROCEDURES = """
+SELECT
+    '2012-08-01 07:00:00 UTC'::timestamptz as 'created_on',
+    'SYSTEM$CLASSIFY' as 'name',
+    '' as 'schema_name',
+    'Y' as 'is_builtin',
+    'N' as 'is_aggregate',
+    'N' as 'is_ansi',
+    2 as 'min_num_arguments',
+    2 as 'max_num_arguments',
+    'SYSTEM$CLASSIFY(VARCHAR, OBJECT) RETURN OBJECT' as 'arguments',
+    'classify stored proc' as 'description',
+    '' as 'catalog_name',
+    'N' as 'is_table_function',
+    'N' as 'valid_for_clustering',
+    NULL as 'is_secure',
+    '' as 'secrets',
+    '' as 'external_access_integrations',
+WHERE 0 = 1;
+"""
+
+
+def show_procedures(expression: exp.Expression) -> exp.Expression:
+    """Transform SHOW PROCEDURES.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-procedures
+    """
+    if (
+        isinstance(expression, exp.Show)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "PROCEDURES"
+    ):
+        return sqlglot.parse_one(SQL_SHOW_PROCEDURES, read="duckdb")
+
+    return expression
+
+
+SQL_SHOW_SCHEMAS = """
+select
+    to_timestamp(0)::timestamptz as 'created_on',
+    case
+        when schema_name = '_fs_information_schema' then 'information_schema'
+        else schema_name
+    end as 'name',
+    NULL as 'kind',
+    catalog_name as 'database_name',
+    NULL as 'schema_name'
+from information_schema.schemata
+where not catalog_name in ('memory', 'system', 'temp', '_fs_global')
+  and not schema_name in ('main', 'pg_catalog')
+"""
+
+
+def show_schemas(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
+    """Transform SHOW SCHEMAS to a query against the information_schema.schemata table.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-schemas
+    """
+    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "SCHEMAS":
+        if (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
+            database = ident.this
+        else:
+            database = current_database
+
+        return sqlglot.parse_one(
+            f"{SQL_SHOW_SCHEMAS} and catalog_name = '{database}'" if database else SQL_SHOW_SCHEMAS, read="duckdb"
+        )
+
     return expression
 
 
@@ -464,78 +477,6 @@ def show_tables_etc(
     return sqlglot.parse_one(query, read="duckdb")
 
 
-# returns zero rows
-SQL_SHOW_PROCEDURES = """
-SELECT
-    '2012-08-01 07:00:00 UTC'::timestamptz as 'created_on',
-    'SYSTEM$CLASSIFY' as 'name',
-    '' as 'schema_name',
-    'Y' as 'is_builtin',
-    'N' as 'is_aggregate',
-    'N' as 'is_ansi',
-    2 as 'min_num_arguments',
-    2 as 'max_num_arguments',
-    'SYSTEM$CLASSIFY(VARCHAR, OBJECT) RETURN OBJECT' as 'arguments',
-    'classify stored proc' as 'description',
-    '' as 'catalog_name',
-    'N' as 'is_table_function',
-    'N' as 'valid_for_clustering',
-    NULL as 'is_secure',
-    '' as 'secrets',
-    '' as 'external_access_integrations',
-WHERE 0 = 1;
-"""
-
-
-def show_procedures(expression: exp.Expression) -> exp.Expression:
-    """Transform SHOW PROCEDURES.
-
-    See https://docs.snowflake.com/en/sql-reference/sql/show-procedures
-    """
-    if (
-        isinstance(expression, exp.Show)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == "PROCEDURES"
-    ):
-        return sqlglot.parse_one(SQL_SHOW_PROCEDURES, read="duckdb")
-
-    return expression
-
-
-SQL_SHOW_SCHEMAS = """
-select
-    to_timestamp(0)::timestamptz as 'created_on',
-    case
-        when schema_name = '_fs_information_schema' then 'information_schema'
-        else schema_name
-    end as 'name',
-    NULL as 'kind',
-    catalog_name as 'database_name',
-    NULL as 'schema_name'
-from information_schema.schemata
-where not catalog_name in ('memory', 'system', 'temp', '_fs_global')
-  and not schema_name in ('main', 'pg_catalog')
-"""
-
-
-def show_schemas(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
-    """Transform SHOW SCHEMAS to a query against the information_schema.schemata table.
-
-    See https://docs.snowflake.com/en/sql-reference/sql/show-schemas
-    """
-    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "SCHEMAS":
-        if (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
-            database = ident.this
-        else:
-            database = current_database
-
-        return sqlglot.parse_one(
-            f"{SQL_SHOW_SCHEMAS} and catalog_name = '{database}'" if database else SQL_SHOW_SCHEMAS, read="duckdb"
-        )
-
-    return expression
-
-
 def show_users(expression: exp.Expression) -> exp.Expression:
     """Transform SHOW USERS to a query against the global database's information_schema._fs_users table.
 
@@ -543,5 +484,64 @@ def show_users(expression: exp.Expression) -> exp.Expression:
     """
     if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "USERS":
         return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_users", read="duckdb")
+
+    return expression
+
+
+# returns zero rows
+SQL_SHOW_WAREHOUSES = """
+SELECT
+    'FAKESNOW_WAREHOUSE' as name,
+    'STARTED' as state,
+    'STANDARD' as type,
+    'X-Small' as size,
+    1 as min_cluster_count,
+    1 as max_cluster_count,
+    1 as started_clusters,
+    0 as running,
+    0 as queued,
+    'N' as is_default,
+    'N' as is_current,
+    600 as auto_suspend,
+    'true' as auto_resume,
+    -- nb: deliberate space before '100' to match Snowflake's output
+    ' 100' as available,
+    '0' as provisioning,
+    '0' as quiescing,
+    '0' as other,
+    '1970-01-01 00:00:00.000000 UTC'::timestamptz as created_on,
+    '1970-01-01 00:00:00.000000 UTC'::timestamptz as resumed_on,
+    '1970-01-01 00:00:00.000000 UTC'::timestamptz as updated_on,
+    'SYSADMIN' as owner,
+    '' as comment,
+    'false' as enable_query_acceleration,
+    8 as query_acceleration_max_scale_factor,
+    'null' as resource_monitor,
+
+    -- deprecated - these 5 cols are for internal use
+    0 as actives,
+    0 as pendings,
+    0 as failed,
+    0 as suspended,
+    '123456789012' as uuid,
+
+    'STANDARD' as scaling_policy,
+    NULL as budget,
+    'ROLE' as owner_role_type,
+    NULL as resource_constraint;
+"""
+
+
+def show_warehouses(expression: exp.Expression) -> exp.Expression:
+    """Transform SHOW WAREHOUSES.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-warehouses
+    """
+    if (
+        isinstance(expression, exp.Show)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "WAREHOUSES"
+    ):
+        return sqlglot.parse_one(SQL_SHOW_WAREHOUSES, read="duckdb")
 
     return expression
