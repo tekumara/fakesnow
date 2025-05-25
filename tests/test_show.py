@@ -17,6 +17,8 @@ def test_show_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
             XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT, */ XVARIANT VARIANT)
         """)
     dcur.execute("create view view1 as select xboolean from example")
+    dcur.execute("create schema schema3")
+    dcur.execute("create table schema3.table3 (x int)")
 
     common_fields = {
         "table_name": "EXAMPLE",
@@ -65,6 +67,16 @@ def test_show_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
         }
     ]
 
+    # fmt: off
+    table3_cols = [
+        {**common_fields, "table_name": "TABLE3", "schema_name": "SCHEMA3", "column_name": "X", "data_type": '{"type":"FIXED","precision":38,"scale":0,"nullable":true}'}
+    ]
+    # fmt: on
+
+    # current database/schema
+    dcur.execute("SHOW COLUMNS")
+    assert dcur.fetchall() == example1_cols + view1_cols
+
     dcur.execute("SHOW COLUMNS IN example")
     assert dcur.fetchall() == example1_cols
 
@@ -72,7 +84,7 @@ def test_show_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.fetchall() == example1_cols + view1_cols
 
     dcur.execute("SHOW COLUMNS IN ACCOUNT")
-    assert dcur.fetchall() == example1_cols + view1_cols
+    assert dcur.fetchall() == example1_cols + view1_cols + table3_cols
 
     assert [r.name for r in dcur.description] == [
         "table_name",

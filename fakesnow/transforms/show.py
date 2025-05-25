@@ -29,12 +29,7 @@ def show_columns(
     scope_kind = expression.args.get("scope_kind")
     table = expression.find(exp.Table)
 
-    if scope_kind == "ACCOUNT" or not scope_kind:
-        # all columns
-        catalog = None
-        schema = None
-        table = None
-    elif scope_kind == "DATABASE" and table:
+    if scope_kind == "DATABASE" and table:
         catalog = table.name
         schema = None
         table = None
@@ -46,6 +41,16 @@ def show_columns(
         catalog = table.catalog or current_database
         schema = table.db or current_schema
         table = table.name
+    elif scope_kind == "ACCOUNT":
+        # all columns
+        catalog = None
+        schema = None
+        table = None
+    elif not scope_kind:
+        # no explicit scope - show current database and schema only
+        catalog = current_database
+        schema = current_schema
+        table = None
     else:
         raise NotImplementedError(f"show_object_columns: {expression.sql(dialect='snowflake')}")
 
@@ -75,7 +80,7 @@ def show_columns(
     {f"AND table_catalog = '{catalog}'" if catalog else ""}
     {f"AND table_schema = '{schema}'" if schema else ""}
     {f"AND table_name = '{table}'" if table else ""}
-    ORDER BY table_name, ordinal_position
+    ORDER BY table_catalog, table_schema, table_name, ordinal_position
     """  # noqa: E501
 
     return sqlglot.parse_one(query, read="duckdb")
