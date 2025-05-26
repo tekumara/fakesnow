@@ -616,25 +616,31 @@ def test_semi_structured_types() -> None:
 
 
 def test_show_tables_etc() -> None:
+    def _show_tables_etc(e: exp.Expression) -> exp.Expression:
+        return show_tables_etc(e, None, None)
+
     assert (
-        sqlglot.parse_one("show objects in database", read="snowflake").transform(show_tables_etc).sql()
+        sqlglot.parse_one("show objects in database", read="snowflake").transform(_show_tables_etc).sql()
         == """SELECT * FROM _fs_global._fs_information_schema._fs_show_objects WHERE 1 = 1"""
     )
     assert (
-        sqlglot.parse_one("show objects in db1.schema1", read="snowflake").transform(show_tables_etc).sql()
+        sqlglot.parse_one("show objects in db1.schema1", read="snowflake").transform(_show_tables_etc).sql()
         == """SELECT * FROM _fs_global._fs_information_schema._fs_show_objects WHERE 1 = 1 AND database_name = 'db1' AND schema_name = 'schema1'"""  # noqa: E501
     )
     assert (
         sqlglot.parse_one("show terse objects in database db1 limit 10", read="snowflake")
-        .transform(show_tables_etc)
+        .transform(_show_tables_etc)
         .sql()
         == """SELECT created_on, name, kind, database_name, schema_name FROM _fs_global._fs_information_schema._fs_show_objects WHERE 1 = 1 AND database_name = 'db1' LIMIT 10"""  # noqa: E501
     )
 
 
 def test_show_schemas() -> None:
+    def _show_schemas(e: exp.Expression) -> exp.Expression:
+        return show_schemas(e, None)
+
     assert (
-        sqlglot.parse_one("show terse schemas in database db1", read="snowflake").transform(show_schemas).sql()
+        sqlglot.parse_one("show terse schemas in database db1", read="snowflake").transform(_show_schemas).sql()
         == """SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS "created_on", CASE WHEN schema_name = '_fs_information_schema' THEN 'information_schema' ELSE schema_name END AS "name", NULL AS "kind", catalog_name AS "database_name", NULL AS "schema_name" FROM information_schema.schemata WHERE NOT catalog_name IN ('memory', 'system', 'temp', '_fs_global') AND NOT schema_name IN ('main', 'pg_catalog') AND catalog_name = 'db1'"""  # noqa: E501
     )
 

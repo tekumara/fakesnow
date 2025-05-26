@@ -52,7 +52,7 @@ ORDER BY table_catalog, table_schema, table_name, ordinal_position
 
 
 def show_columns(
-    expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
+    expression: exp.Expression, current_database: str | None, current_schema: str | None
 ) -> exp.Expression:
     """Transform SHOW COLUMNS to a query against the fs global information_schema columns table.
 
@@ -180,7 +180,7 @@ def show_functions(expression: exp.Expression) -> exp.Expression:
 
 def show_keys(
     expression: exp.Expression,
-    current_database: str | None = None,
+    current_database: str | None,
     *,
     kind: Literal["PRIMARY", "UNIQUE", "FOREIGN"],
 ) -> exp.Expression:
@@ -319,7 +319,7 @@ where not catalog_name in ('memory', 'system', 'temp', '_fs_global')
 """
 
 
-def show_schemas(expression: exp.Expression, current_database: str | None = None) -> exp.Expression:
+def show_schemas(expression: exp.Expression, current_database: str | None) -> exp.Expression:
     """Transform SHOW SCHEMAS to a query against the information_schema.schemata table.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-schemas
@@ -337,9 +337,7 @@ def show_schemas(expression: exp.Expression, current_database: str | None = None
     return expression
 
 
-def show_stages(
-    expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
-) -> exp.Expression:
+def show_stages(expression: exp.Expression, current_database: str | None, current_schema: str | None) -> exp.Expression:
     """Transform SHOW STAGES to a select from the fake _fs_stages table."""
     if not (
         isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "STAGES"
@@ -466,7 +464,7 @@ where not table_catalog in ('system')
 
 
 def show_tables_etc(
-    expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
+    expression: exp.Expression, current_database: str | None, current_schema: str | None
 ) -> exp.Expression:
     """Transform SHOW OBJECTS/TABLES/VIEWS to a query against the _fs_information_schema views."""
     if not (
