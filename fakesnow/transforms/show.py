@@ -12,6 +12,7 @@ def fs_global_creation_sql() -> str:
         {SQL_CREATE_VIEW_SHOW_TABLES};
         {SQL_CREATE_VIEW_SHOW_VIEWS};
         {SQL_CREATE_VIEW_SHOW_COLUMNS};
+        {SQL_CREATE_VIEW_SHOW_DATABASES};
     """
 
 
@@ -109,7 +110,8 @@ def show_columns(
     return sqlglot.parse_one(query, read="duckdb")
 
 
-SQL_SHOW_DATABASES = """
+SQL_CREATE_VIEW_SHOW_DATABASES = """
+create view if not exists _fs_global._fs_information_schema._fs_show_databases as
 SELECT
     to_timestamp(0)::timestamptz as 'created_on',
     database_name as 'name',
@@ -130,12 +132,12 @@ WHERE database_name NOT IN ('memory', '_fs_global')
 
 
 def show_databases(expression: exp.Expression) -> exp.Expression:
-    """Transform SHOW DATABASES to a query against the information_schema.schemata table.
+    """Transform SHOW DATABASES to a query against _fs_show_databases.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-databases
     """
     if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "DATABASES":
-        return sqlglot.parse_one(SQL_SHOW_DATABASES, read="duckdb")
+        return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_show_databases", read="duckdb")
 
     return expression
 
