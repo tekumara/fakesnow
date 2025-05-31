@@ -22,7 +22,12 @@ def create_stage(
     catalog = table.catalog or current_database
     schema = table.db or current_schema
     ident = table.this
-    stage_name = ident.this if getattr(ident, "quoted", False) else ident.this.upper()
+    if isinstance(ident, exp.Placeholder):
+        stage_name = "?"
+    elif isinstance(ident, exp.Identifier):
+        stage_name = ident.this if ident.quoted else ident.this.upper()
+    else:
+        raise ValueError(f"Invalid identifier type {ident.__class__.__name__} for stage name")
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     is_temp = False
@@ -45,6 +50,7 @@ def create_stage(
     cloud = "AWS" if url.startswith("s3://") else None
 
     stage_type = ("EXTERNAL" if url else "INTERNAL") + (" TEMPORARY" if is_temp else "")
+    stage_name_value = stage_name if stage_name == "?" else repr(stage_name)
 
     insert_sql = f"""
         INSERT INTO _fs_global._fs_information_schema._fs_stages
@@ -52,7 +58,7 @@ def create_stage(
         comment, region, type, cloud, notification_channel, storage_integration, endpoint, owner_role_type,
         directory_enabled)
         VALUES (
-            '{now}', '{stage_name}', '{catalog}', '{schema}', '{url}', 'N', 'N', 'SYSADMIN',
+            '{now}', {stage_name_value}, '{catalog}', '{schema}', '{url}', 'N', 'N', 'SYSADMIN',
             '', NULL, '{stage_type}', {f"'{cloud}'" if cloud else "NULL"}, NULL, NULL, NULL, 'ROLE',
             'N'
         )

@@ -331,7 +331,13 @@ class FakeSnowflakeCursor:
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
         elif stage_name := transformed.args.get("stage_name"):
-            result_sql = SQL_CREATED_STAGE.substitute(name=stage_name)
+            if stage_name == "?":
+                assert isinstance(params, (tuple, list)) and len(params) == 1, (
+                    "Expected single parameter for stage name"
+                )
+                result_sql = SQL_CREATED_STAGE.substitute(name=params[0].upper())
+            else:
+                result_sql = SQL_CREATED_STAGE.substitute(name=stage_name.upper())
 
         elif cmd == "INSERT":
             (affected_count,) = self._duck_conn.fetchall()[0]

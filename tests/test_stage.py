@@ -96,3 +96,12 @@ def test_create_stage(dcur: snowflake.connector.cursor.SnowflakeCursor):
         stage3,
         stage4,
     ]
+
+
+def test_create_stage_qmark(_fakesnow: None):
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor(snowflake.connector.cursor.DictCursor) as dcur,
+    ):
+        dcur.execute("CREATE STAGE identifier(?)", ("stage1",))
+        assert dcur.fetchall() == [{"status": "Stage area STAGE1 successfully created."}]

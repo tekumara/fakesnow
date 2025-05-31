@@ -530,8 +530,11 @@ def identifier(expression: exp.Expression) -> exp.Expression:
         and isinstance(expression.this, str)
         and expression.this.upper() == "IDENTIFIER"
     ):
-        expression = exp.Identifier(this=expression.expressions[0].this, quoted=False)
-
+        arg = expression.expressions[0]
+        # ? is parsed as exp.Placeholder
+        if isinstance(arg, exp.Placeholder):
+            return arg
+        return exp.Identifier(this=arg.this, quoted=False)
     return expression
 
 

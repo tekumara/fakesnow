@@ -439,6 +439,7 @@ def test_identifier() -> None:
     assert (
         sqlglot.parse_one("select * from identifier('example')").transform(identifier).sql() == "SELECT * FROM example"
     )
+    assert sqlglot.parse_one("select * from identifier(?)").transform(identifier).sql() == "SELECT * FROM ?"
 
 
 def test_indices_to_object() -> None:
