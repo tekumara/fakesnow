@@ -13,6 +13,7 @@ def fs_global_creation_sql() -> str:
         {SQL_CREATE_VIEW_SHOW_VIEWS};
         {SQL_CREATE_VIEW_SHOW_COLUMNS};
         {SQL_CREATE_VIEW_SHOW_DATABASES};
+        {SQL_CREATE_VIEW_SHOW_FUNCTIONS};
     """
 
 
@@ -142,8 +143,8 @@ def show_databases(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-# returns zero rows
-SQL_SHOW_FUNCTIONS = """
+SQL_CREATE_VIEW_SHOW_FUNCTIONS = """
+create view if not exists _fs_global._fs_information_schema._fs_show_functions as
 SELECT
     '1970-01-01 00:00:00 UTC'::timestamptz as created_on,
     'SYSTIMESTAMP' as name,
@@ -175,7 +176,7 @@ def show_functions(expression: exp.Expression) -> exp.Expression:
     See https://docs.snowflake.com/en/sql-reference/sql/show-functions
     """
     if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "FUNCTIONS":
-        return sqlglot.parse_one(SQL_SHOW_FUNCTIONS, read="duckdb")
+        return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_show_functions", read="duckdb")
 
     return expression
 
