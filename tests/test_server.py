@@ -234,6 +234,9 @@ def test_server_response_params(server: dict) -> None:
     # expected by the JDBC driver
     assert {"name": "AUTOCOMMIT", "value": True} in response.json()["data"]["parameters"]
 
+    # expected by the .NET connector
+    assert "sessionInfo" in response.json()["data"]
+
 
 def test_server_rowcount(scur: snowflake.connector.cursor.SnowflakeCursor):
     cur = scur
