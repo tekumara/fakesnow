@@ -15,6 +15,7 @@ def fs_global_creation_sql() -> str:
         {SQL_CREATE_VIEW_SHOW_DATABASES};
         {SQL_CREATE_VIEW_SHOW_FUNCTIONS};
         {SQL_CREATE_VIEW_SHOW_SCHEMAS};
+        {SQL_CREATE_VIEW_SHOW_PROCEDURES};
     """
 
 
@@ -269,8 +270,8 @@ def show_keys(
     return expression
 
 
-# returns zero rows
-SQL_SHOW_PROCEDURES = """
+SQL_CREATE_VIEW_SHOW_PROCEDURES = """
+create view if not exists _fs_global._fs_information_schema._fs_show_procedures as
 SELECT
     '2012-08-01 07:00:00 UTC'::timestamptz as 'created_on',
     'SYSTEM$CLASSIFY' as 'name',
@@ -302,7 +303,10 @@ def show_procedures(expression: exp.Expression) -> exp.Expression:
         and isinstance(expression.this, str)
         and expression.this.upper() == "PROCEDURES"
     ):
-        return sqlglot.parse_one(SQL_SHOW_PROCEDURES, read="duckdb")
+        return sqlglot.parse_one(
+            "SELECT * FROM _fs_global._fs_information_schema._fs_show_procedures",
+            read="duckdb",
+        )
 
     return expression
 
