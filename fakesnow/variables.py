@@ -62,7 +62,9 @@ class Variables:
         for name, value in self._variables.items():
             sql = re.sub(rf"\${name}", value, sql, flags=re.IGNORECASE)
 
-        if remaining_variables := re.search(r"(?<![\$\w])\$\w+", sql):
+        # Only treat $<word> (not $<number>) as session variables,
+        # ignore identifiers containing $
+        if remaining_variables := re.search(r"(?<![\$\w])\$(?!\d+)\w+", sql):
             raise snowflake.connector.errors.ProgrammingError(
                 msg=f"Session variable '{remaining_variables.group().upper()}' does not exist"
             )

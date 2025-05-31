@@ -14,7 +14,8 @@ def test_create_stage(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
     dcur.execute("CREATE TEMP STAGE db2.schema2.stage2")
     dcur.execute("CREATE STAGE schema3.stage3 URL='s3://bucket/path/'")
-    dcur.execute("CREATE TEMP STAGE stage4 URL='s3://bucket/path/'")
+    # lowercase url
+    dcur.execute("CREATE TEMP STAGE stage4 url='s3://bucket/path/'")
 
     common_fields = {
         "created_on": IsNow(tz=timezone.utc),

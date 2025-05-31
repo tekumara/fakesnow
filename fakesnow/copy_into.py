@@ -34,12 +34,31 @@ class LoadHistoryRecord(NamedTuple):
 
 def copy_into(
     duck_conn: DuckDBPyConnection,
+    current_database: str | None,
     current_schema: str | None,
     expr: exp.Copy,
     params: Sequence[Any] | dict[Any, Any] | None = None,
 ) -> str:
     cparams = _params(expr)
-    urls = _source_urls(expr, cparams.files)
+    if isinstance(cparams.file_format, ReadParquet):
+        from_ = expr.args["files"][0]
+        # parquet must use MATCH_BY_COLUMN_NAME (TODO) or a copy transformation
+        # ie: the from clause in COPY INTO must be a subquery
+        if not isinstance(from_, exp.Subquery):
+            raise snowflake.connector.errors.ProgrammingError(
+                msg="SQL compilation error:\nPARQUET file format can produce one and only one column of type variant, object, or array. Load data into separate columns using the MATCH_BY_COLUMN_NAME copy option or copy with transformation.",  # noqa: E501
+                errno=2019,
+                sqlstate="0A000",
+            )
+
+    from_source = _from_source(expr)
+    source = (
+        stage_url_from_var(from_source, duck_conn, current_database, current_schema)
+        if from_source.startswith("@")
+        else from_source
+    )
+    urls = _source_urls(source, cparams.files)
+
     inserts = _inserts(expr, cparams, urls)
     table = expr.this
     if isinstance(expr.this, exp.Table):
@@ -55,9 +74,10 @@ def copy_into(
     histories: list[LoadHistoryRecord] = []
     load_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
     try:
+        check_sql = "SELECT 1 FROM _fs_information_schema._fs_load_history WHERE FILE_NAME = ? LIMIT 1"
+
         for i, url in zip(inserts, urls):
             # Check if file has been loaded into any table before
-            check_sql = "SELECT 1 FROM _fs_information_schema._fs_load_history WHERE FILE_NAME = ? LIMIT 1"
             duck_conn.execute(check_sql, [url])
             if duck_conn.fetchone() and not cparams.force:
                 affected_count = 0
@@ -92,9 +112,7 @@ def copy_into(
             )
             histories.append(history)
 
-        # Only insert into load_history for records that aren't skipped
-        insert_histories = [h for h in histories if h.status != "LOAD_SKIPPED"]
-        if insert_histories:
+        if insert_histories := [h for h in histories if h.status != "LOAD_SKIPPED"]:
             values = "\n ,".join(str(tuple(history)).replace("None", "NULL") for history in insert_histories)
             sql = f"INSERT INTO _fs_information_schema._fs_load_history VALUES {values}"
             duck_conn.execute(sql, params)
@@ -139,6 +157,8 @@ def _params(expr: exp.Copy) -> Params:
 
             if var_type == "CSV":
                 kwargs["file_format"] = handle_csv(param.expressions)
+            elif var_type == "PARQUET":
+                kwargs["file_format"] = ReadParquet()
             else:
                 raise NotImplementedError(f"{var_type} FILE_FORMAT is not currently implemented")
         elif var == "FORCE":
@@ -151,22 +171,94 @@ def _params(expr: exp.Copy) -> Params:
     return Params(force=force, **kwargs)
 
 
-def _source_urls(expr: exp.Copy, files: list[str]) -> list[str]:
-    """
-    Given a COPY statement and a list of files, return a list of URLs with each file appended as a fragment.
-    Checks that the source is a valid URL.
-    """
-    source = expr.args["files"][0].this
-    assert isinstance(source, exp.Literal), f"{source} is not a exp.Literal"
+def _from_source(expr: exp.Copy) -> str:
+    # NB: sqlglot parses the from clause as "files" strangely
+    from_ = expr.args["files"][0].this
 
-    scheme, netloc, path, params, query, fragment = urlparse(source.name)
+    if isinstance(from_, exp.Select):
+        from_table = from_.args["from"]
+        # if a subquery is used in the FROM clause it must be loaded from a stage not an external location
+        assert isinstance(from_table, exp.From), f"{from_table.__class__} is not a From"
+        assert isinstance(from_table.this, exp.Table), f"{from_table.__class__} is not a Table"
+        var = from_table.this.this
+        if not isinstance(var, exp.Var):
+            # not a very helpful message, but this is what Snowflake returns
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"SQL compilation error:\ninvalid URL prefix found in: {from_table.this.this}",
+                errno=1011,
+                sqlstate="42601",
+            )
+        # return the name of the stage, eg: @stage1
+        return var.this
+
+    assert isinstance(from_, exp.Literal), f"{from_} is not a exp.Literal"
+    # return url
+    return from_.name
+
+
+def normalise_ident(name: str) -> str:
+    """
+    Strip double quotes if present else return uppercased.
+    Snowflake treats quoted identifiers as case-sensitive and un-quoted identifiers as case-insensitive
+    """
+    if name.startswith('"') and name.endswith('"'):
+        return name[1:-1]  # Strip quotes
+
+    return name.upper()
+
+
+def stage_url_from_var(
+    from_source: str, duck_conn: DuckDBPyConnection, current_database: str | None, current_schema: str | None
+) -> str:
+    parts = from_source[1:].split(".")
+    if len(parts) == 3:
+        # Fully qualified name
+        database_name, schema_name, name = parts
+    elif len(parts) == 2:
+        # Schema + stage name
+        assert current_database, "Current database must be set when stage name is not fully qualified"
+        database_name, schema_name, name = current_database, parts[0], parts[1]
+    elif len(parts) == 1:
+        # Stage name only
+        assert current_database, "Current database must be set when stage name is not fully qualified"
+        assert current_schema, "Current schema must be set when stage name is not fully qualified"
+        database_name, schema_name, name = current_database, current_schema, parts[0]
+    else:
+        raise ValueError(f"Invalid stage name: {from_source}")
+
+    # Normalize names to uppercase if not wrapped in double quotes
+    database_name = normalise_ident(database_name)
+    schema_name = normalise_ident(schema_name)
+    name = normalise_ident(name)
+
+    # Look up the stage URL
+    duck_conn.execute(
+        """
+        SELECT url FROM _fs_global._fs_information_schema._fs_stages
+        WHERE database_name = ? and schema_name  = ? and name = ?
+        """,
+        (database_name, schema_name, name),
+    )
+    if result := duck_conn.fetchone():
+        return result[0]
+    else:
+        raise snowflake.connector.errors.ProgrammingError(
+            msg=f"SQL compilation error:\nStage '{database_name}.{schema_name}.{name}' does not exist or not authorized.",  # noqa: E501
+            errno=2003,
+            sqlstate="02000",
+        )
+
+
+def _source_urls(from_source: str, files: list[str]) -> list[str]:
+    """Convert from_source to a list of URLs."""
+    scheme, netloc, path, params, query, fragment = urlparse(from_source)
     if not scheme:
         raise snowflake.connector.errors.ProgrammingError(
-            msg=f"SQL compilation error:\ninvalid URL prefix found in: '{source.name}'", errno=1011, sqlstate="42601"
+            msg=f"SQL compilation error:\ninvalid URL prefix found in: '{from_source}'", errno=1011, sqlstate="42601"
         )
 
     # rebuild url from components to ensure correct handling of host slash
-    return [_urlunparse(scheme, netloc, path, params, query, fragment, file) for file in files] or [source.name]
+    return [_urlunparse(scheme, netloc, path, params, query, fragment, file) for file in files] or [from_source]
 
 
 def _urlunparse(scheme: str, netloc: str, path: str, params: str, query: str, fragment: str, suffix: str) -> str:
@@ -185,9 +277,16 @@ def _urlunparse(scheme: str, netloc: str, path: str, params: str, query: str, fr
 def _inserts(expr: exp.Copy, params: Params, urls: list[str]) -> list[exp.Expression]:
     # INTO expression
     target = expr.this
-    columns = [exp.Column(this=exp.Identifier(this=f"column{i}")) for i in range(len(target.expressions))] or [
-        exp.Column(this=exp.Star())
-    ]
+
+    from_ = expr.args["files"][0]
+    if isinstance(from_, exp.Subquery):
+        select = from_.this
+        assert isinstance(select, exp.Select), f"{select.__class__} is not a Select"
+        columns = _strip_json_extract(select).expressions
+    else:
+        columns = [exp.Column(this=exp.Identifier(this=f"column{i}")) for i in range(len(target.expressions))] or [
+            exp.Column(this=exp.Star())
+        ]
 
     return [
         exp.Insert(
@@ -196,6 +295,20 @@ def _inserts(expr: exp.Copy, params: Params, urls: list[str]) -> list[exp.Expres
         )
         for url in urls
     ]
+
+
+def _strip_json_extract(expr: exp.Select) -> exp.Select:
+    """
+    Strip $1 prefix from SELECT statement columns.
+    """
+    dollar1 = exp.Parameter(this=exp.Literal(this="1", is_string=False))
+
+    for p in expr.find_all(exp.Parameter):
+        if p == dollar1 and p.parent and (key := p.parent.expression.find(exp.JSONPathKey)):
+            assert p.parent.parent, expr
+            p.parent.parent.args["this"] = exp.Identifier(this=key.this)
+
+    return expr
 
 
 def handle_csv(expressions: list[exp.Property]) -> ReadCSV:
@@ -264,6 +377,12 @@ class ReadCSV(FileTypeHandler):
             args.append(self.make_eq("sep", delimiter))
 
         return exp.func("read_csv", exp.Literal(this=url, is_string=True), *args)
+
+
+@dataclass
+class ReadParquet(FileTypeHandler):
+    def read_expression(self, url: str) -> exp.Expression:
+        return exp.func("read_parquet", exp.Literal(this=url, is_string=True))
 
 
 @dataclass

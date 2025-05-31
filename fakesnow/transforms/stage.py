@@ -31,7 +31,12 @@ def create_stage(
     for prop in properties:
         if isinstance(prop, exp.TemporaryProperty):
             is_temp = True
-        elif isinstance(prop, exp.Property) and isinstance(prop.this, exp.Var) and prop.this.this == "URL":
+        elif (
+            isinstance(prop, exp.Property)
+            and isinstance(prop.this, exp.Var)
+            and isinstance(prop.this.this, str)
+            and prop.this.this.upper() == "URL"
+        ):
             value = prop.args.get("value")
             if isinstance(value, exp.Literal):
                 url = value.this

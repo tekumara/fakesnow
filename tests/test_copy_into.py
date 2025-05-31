@@ -1,11 +1,13 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+import re
 import uuid
 from datetime import timezone
 from typing import NamedTuple
 from unittest.mock import MagicMock, patch
 
+import pandas as pd
 import pytest
 import snowflake.connector.cursor
 import sqlglot
@@ -14,15 +16,16 @@ from mypy_boto3_s3 import S3Client
 from sqlglot import exp
 
 from fakesnow import logger
-from fakesnow.copy_into import Params, _params, _source_urls
+from fakesnow.copy_into import Params, _from_source, _params, _source_urls, _strip_json_extract
 
 
 class Case(NamedTuple):
     sql: str
     expected_inserts: list[str]
-    csv_data: str
+    data: str | bytes
     expected_rows_loaded: int
     expected_data: list[dict[str, int | None]]
+    stage: str | None = None
 
 
 cases = [
@@ -35,7 +38,7 @@ cases = [
             FILE_FORMAT = (TYPE = 'CSV')
             """,
             expected_inserts=["INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)"],
-            csv_data="1,2\n3,4",
+            data="1,2\n3,4",
             expected_rows_loaded=2,
             expected_data=[{"A": 1, "B": 2}, {"A": 3, "B": 4}],
         ),
@@ -53,7 +56,7 @@ cases = [
             expected_inserts=[
                 "INSERT INTO SCHEMA1.TABLE1 (B) SELECT column0 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)"
             ],
-            csv_data="1,2\n",
+            data="1,2\n",
             expected_rows_loaded=1,
             expected_data=[{"A": None, "B": 1}],
         ),
@@ -71,7 +74,7 @@ cases = [
             expected_inserts=[
                 "INSERT INTO TABLE1 (A, B) SELECT column0, column1 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, skip = 1)"
             ],
-            csv_data="a,b\n1,2\n",
+            data="a,b\n1,2\n",
             expected_rows_loaded=1,
             expected_data=[{"A": 1, "B": 2}],
         ),
@@ -85,7 +88,7 @@ cases = [
             FILES=('foo.csv')
             """,
             expected_inserts=["INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)"],
-            csv_data="1,2\n",
+            data="1,2\n",
             expected_rows_loaded=1,
             expected_data=[{"A": 1, "B": 2}],
         ),
@@ -103,20 +106,32 @@ cases = [
             expected_inserts=[
                 "INSERT INTO TABLE1 (A, B) SELECT column0, column1 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, sep = '|')"
             ],
-            csv_data="1|2\n",
+            data="1|2\n",
             expected_rows_loaded=1,
             expected_data=[{"A": 1, "B": 2}],
         ),
         id="pipe delimiter",
     ),
+    pytest.param(
+        Case(
+            stage="create stage stage1 url='s3://{bucket}/'",
+            sql="""
+            COPY INTO table1
+            FROM (SELECT $1:B::integer, $1:A::integer FROM @stage1)
+            FILES=('foo.parquet')
+            FILE_FORMAT = (TYPE = 'PARQUET')
+            """,
+            expected_inserts=[
+                "INSERT INTO TABLE1 SELECT CAST((B) AS BIGINT), CAST((A) AS BIGINT) FROM READ_PARQUET('s3://{bucket}/foo.parquet')"
+            ],
+            data=pd.DataFrame({"A": [1, 2], "B": [11, 12]}).to_parquet(),
+            expected_rows_loaded=2,
+            # columns are swapped to test the order of the select
+            expected_data=[{"A": 11, "B": 1}, {"A": 12, "B": 2}],
+        ),
+        id="parquet",
+    ),
 ]
-
-
-def captured_inserts(mock_log_sql: MagicMock) -> list[str]:
-    """
-    Return the captured SQL inserts from mock_log_sql.
-    """
-    return [call[0][0] for call in mock_log_sql.call_args_list if call[0][0].startswith("INSERT INTO")]
 
 
 @pytest.mark.parametrize("case", cases)
@@ -125,13 +140,18 @@ def test_execute(
     mock_log_sql: MagicMock, case: Case, dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
 ) -> None:
     create_table(dcur)
-    bucket = upload_file(s3_client, case.csv_data)
+    match = re.search(r"FILES=\('([^']+)'\)", case.sql)
+    assert match
+    key = match.group(1)
+    bucket = upload_file(s3_client, case.data, key=key)
+    if case.stage:
+        dcur.execute(case.stage.format(bucket=bucket))
     dcur.execute(case.sql.format(bucket=bucket))
 
     assert captured_inserts(mock_log_sql) == [i.format(bucket=bucket) for i in case.expected_inserts]
     assert dcur.fetchall() == [
         {
-            "file": f"s3://{bucket}/foo.csv",
+            "file": f"s3://{bucket}/{key}",
             "status": "LOADED",
             "rows_parsed": case.expected_rows_loaded,
             "rows_loaded": case.expected_rows_loaded,
@@ -222,6 +242,19 @@ def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
     assert "invalid_source" in str(excinfo.value)
     assert "foobar.csv" in str(excinfo.value)
 
+    # external locations cannot be used in a copy transformation ie: a FROM (SELECT ...) clause
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute(
+            """
+            COPY INTO table1
+            FROM (SELECT * FROM 's3://bucket/foo.csv')
+        """
+        )
+    assert (
+        str(excinfo.value)
+        == "001011 (42601): SQL compilation error:\ninvalid URL prefix found in: 's3://bucket/foo.csv'"
+    )
+
     # file has header but the skip header file format option is not used
     sql = """
     COPY INTO table1
@@ -237,6 +270,24 @@ def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
         dcur.execute(sql.format(bucket=bucket))
 
     assert "100038 (22018)" in str(excinfo.value)
+
+
+def test_errors_parquet(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+    create_table(dcur)
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute(
+            """
+            COPY INTO table1
+            FROM 's3://bucket/'
+            FILES=('foo.parquet')
+            FILE_FORMAT = (TYPE = 'PARQUET')
+        """
+        )
+    assert (
+        str(excinfo.value)
+        == "002019 (0A000): SQL compilation error:\nPARQUET file format can produce one and only one column of type variant, object, or array. Load data into separate columns using the MATCH_BY_COLUMN_NAME copy option or copy with transformation."
+    )
 
 
 def test_force(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
@@ -310,6 +361,8 @@ def test_force(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client)
     dcur.execute("SELECT * FROM information_schema.load_history")
     assert len(dcur.fetchall()) == 2
 
+    # TODO: TRUNCATE TABLE should reset the load history
+
 
 def test_load_history(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
     create_table(dcur)
@@ -364,7 +417,8 @@ def test_param_files_single():
     files=('file1.csv')
     """)
     assert params.files == ["file1.csv"]
-    assert _source_urls(expr, params.files) == ["s3://mybucket/file1.csv"]
+    from_source = _from_source(expr)
+    assert _source_urls(from_source, params.files) == ["s3://mybucket/file1.csv"]
 
 
 def test_param_files_prefix():
@@ -374,7 +428,8 @@ def test_param_files_prefix():
     FILES=('file1.csv')
     """)
     assert params.files == ["file1.csv"]
-    assert _source_urls(expr, params.files) == ["s3://mybucket/prefile1.csv"]
+    from_source = _from_source(expr)
+    assert _source_urls(from_source, params.files) == ["s3://mybucket/prefile1.csv"]
 
 
 def test_param_files_prefix_query():
@@ -384,7 +439,8 @@ def test_param_files_prefix_query():
     FILES=('file1.csv')
     """)
     assert params.files == ["file1.csv"]
-    assert _source_urls(expr, params.files) == ["s3://mybucket/pre?query=1file1.csv"]
+    from_source = _from_source(expr)
+    assert _source_urls(from_source, params.files) == ["s3://mybucket/pre?query=1file1.csv"]
 
 
 def test_param_files_host_without_trailing_slash():
@@ -394,7 +450,8 @@ def test_param_files_host_without_trailing_slash():
     FILES=('file1.csv')
     """)
     assert params.files == ["file1.csv"]
-    assert _source_urls(expr, params.files) == ["s3://mybucket/file1.csv"]
+    from_source = _from_source(expr)
+    assert _source_urls(from_source, params.files) == ["s3://mybucket/file1.csv"]
 
 
 def test_params_files_multiple():
@@ -405,7 +462,8 @@ def test_params_files_multiple():
     """)
 
     assert params.files == ["file1.csv", "file2.csv"]
-    assert _source_urls(expr, params.files) == ["s3://mybucket/data/file1.csv", "s3://mybucket/data/file2.csv"]
+    from_source = _from_source(expr)
+    assert _source_urls(from_source, params.files) == ["s3://mybucket/data/file1.csv", "s3://mybucket/data/file2.csv"]
 
 
 def test_param_files_none():
@@ -414,14 +472,55 @@ def test_param_files_none():
     FROM 's3://mybucket/myfile.csv'
     """)
     assert params.files == []
-    assert _source_urls(expr, params.files) == ["s3://mybucket/myfile.csv"]
+    from_source = _from_source(expr)
+    assert _source_urls(from_source, params.files) == ["s3://mybucket/myfile.csv"]
+
+
+def test__strip_json_extract():
+    sql = 'SELECT $1:"A"::integer, $1:"B"::integer FROM @stage1'
+
+    assert (
+        sqlglot.parse_one(
+            sql,
+            read="snowflake",
+        )
+        .transform(_strip_json_extract)
+        .sql()
+        # TODO: quoted????
+        == "SELECT CAST(A AS INT), CAST(B AS INT) FROM @stage1"
+    )
+
+    # after all our transforms sql becomes
+    sql = "SELECT CAST((JSON_EXTRACT_PATH_TEXT($1, 'A')) AS BIGINT), CAST((JSON_EXTRACT_PATH_TEXT($1, 'B')) AS BIGINT) FROM @stage1"
+
+    assert (
+        sqlglot.parse_one(
+            sql,
+            read="snowflake",
+        )
+        .transform(_strip_json_extract)
+        .sql()
+        == "SELECT CAST((A) AS BIGINT), CAST((B) AS BIGINT) FROM @stage1"
+    )
+
+
+def captured_inserts(mock_log_sql: MagicMock) -> list[str]:
+    """
+    Return the captured SQL inserts from mock_log_sql.
+    """
+    return [
+        call[0][0]
+        for call in mock_log_sql.call_args_list
+        # filter out create stage inserts
+        if call[0][0].startswith("INSERT INTO") and "_fs_stages" not in call[0][0]
+    ]
 
 
 def create_table(dcur: snowflake.connector.cursor.DictCursor) -> None:
     dcur.execute("CREATE TABLE schema1.table1 (a INT, b INT)")
 
 
-def upload_file(s3_client: S3Client, data: str, bucket: str | None = None, key: str = "foo.csv") -> str:
+def upload_file(s3_client: S3Client, data: str | bytes, bucket: str | None = None, key: str = "foo.csv") -> str:
     if not bucket:
         bucket = str(uuid.uuid4())
     s3_client.create_bucket(Bucket=bucket)
