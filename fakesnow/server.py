@@ -7,8 +7,11 @@ import secrets
 from base64 import b64encode
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import urlparse
+from urllib.request import url2pathname
 
 import snowflake.connector.errors
+from sqlglot import exp, parse_one
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
@@ -87,6 +90,35 @@ async def query_request(request: Request) -> JSONResponse:
             logger.debug(f"Bindings: {params}")
         else:
             params = None
+
+        expr = parse_one(sql_text, read="snowflake")
+        if isinstance(expr, exp.Put):
+            assert isinstance(expr.this, exp.Literal), "PUT command requires a file path as a literal"
+            src_url = urlparse(expr.this.this)
+            src_path = url2pathname(src_url.path)
+            stage_name = expr.args["target"].this
+            stage_info = {
+                "locationType": "S3",
+                "location": f"fakesnow_bucket/{stage_name}/",
+                "region": "us-east-1",
+                "creds": {"AWS_KEY_ID": "fake_key", "AWS_SECRET_KEY": "fake_secret"},
+                "endPoint": "localhost:9999",
+            }
+            return JSONResponse(
+                {
+                    "data": {
+                        "stageInfo": stage_info,
+                        "src_locations": [src_path],
+                        "autoCompress": True,
+                        "overwrite": False,
+                        "sourceCompression": "auto_detect",
+                        "command": "UPLOAD",
+                    },
+                    "success": True,
+                }
+            )
+        elif isinstance(expr, exp.List):
+            pass
 
         try:
             # only a single sql statement is sent at a time by the python snowflake connector

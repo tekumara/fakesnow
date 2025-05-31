@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 
 import datetime
+import tempfile
 from decimal import Decimal
 
 import numpy as np
@@ -182,6 +183,18 @@ def test_server_no_gzip(server: dict) -> None:
     assert response.json()["success"]
 
 
+def test_server_put(sdcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur = sdcur
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2")
+        temp_file_path = temp_file.name
+
+        dcur.execute("CREATE STAGE stage1")
+        dcur.execute(f"PUT 'file://{temp_file_path}' @stage1")
+        dcur.fetchall()
+
+
 def test_server_response_params(server: dict) -> None:
     # mimic the jdbc driver
     headers = {
@@ -319,3 +332,19 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
             2,
         )
     ]
+
+
+def test_server_write_pandas_auto_create(sconn: snowflake.connector.SnowflakeConnection):
+    conn = sconn
+    with conn.cursor() as cur:
+        df = pd.DataFrame.from_records(
+            [
+                {"ID": 1, "FIRST_NAME": "Jenny"},
+                {"ID": 2, "FIRST_NAME": "Jasper"},
+            ]
+        )
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS", auto_create_table=True)
+
+        cur.execute("select id, first_name from customers")
+
+        assert cur.fetchall() == [(1, "Jenny"), (2, "Jasper")]
