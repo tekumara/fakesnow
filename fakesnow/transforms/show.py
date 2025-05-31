@@ -14,6 +14,7 @@ def fs_global_creation_sql() -> str:
         {SQL_CREATE_VIEW_SHOW_COLUMNS};
         {SQL_CREATE_VIEW_SHOW_DATABASES};
         {SQL_CREATE_VIEW_SHOW_FUNCTIONS};
+        {SQL_CREATE_VIEW_SHOW_SCHEMAS};
     """
 
 
@@ -306,7 +307,8 @@ def show_procedures(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-SQL_SHOW_SCHEMAS = """
+SQL_CREATE_VIEW_SHOW_SCHEMAS = """
+create view if not exists _fs_global._fs_information_schema._fs_show_schemas as
 select
     to_timestamp(0)::timestamptz as 'created_on',
     case
@@ -323,7 +325,7 @@ where not catalog_name in ('memory', 'system', 'temp', '_fs_global')
 
 
 def show_schemas(expression: exp.Expression, current_database: str | None) -> exp.Expression:
-    """Transform SHOW SCHEMAS to a query against the information_schema.schemata table.
+    """Transform SHOW SCHEMAS to a query against the _fs_show_schemas view.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-schemas
     """
@@ -333,9 +335,11 @@ def show_schemas(expression: exp.Expression, current_database: str | None) -> ex
         else:
             database = current_database
 
-        return sqlglot.parse_one(
-            f"{SQL_SHOW_SCHEMAS} and catalog_name = '{database}'" if database else SQL_SHOW_SCHEMAS, read="duckdb"
-        )
+        query = "SELECT * FROM _fs_global._fs_information_schema._fs_show_schemas"
+
+        if database:
+            query += f" WHERE database_name = '{database}'"
+        return sqlglot.parse_one(query, read="duckdb")
 
     return expression
 

@@ -642,7 +642,7 @@ def test_show_schemas() -> None:
 
     assert (
         sqlglot.parse_one("show terse schemas in database db1", read="snowflake").transform(_show_schemas).sql()
-        == """SELECT CAST(UNIX_TO_TIME(0) AS TIMESTAMPTZ) AS "created_on", CASE WHEN schema_name = '_fs_information_schema' THEN 'information_schema' ELSE schema_name END AS "name", NULL AS "kind", catalog_name AS "database_name", NULL AS "schema_name" FROM information_schema.schemata WHERE NOT catalog_name IN ('memory', 'system', 'temp', '_fs_global') AND NOT schema_name IN ('main', 'pg_catalog') AND catalog_name = 'db1'"""  # noqa: E501
+        == "SELECT * FROM _fs_global._fs_information_schema._fs_show_schemas WHERE database_name = 'db1'"
     )
 
 
