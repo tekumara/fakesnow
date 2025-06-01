@@ -399,9 +399,9 @@ create view if not exists _fs_global._fs_information_schema._fs_show_objects as
 select
     to_timestamp(0)::timestamptz as created_on,
     table_name as name,
-    case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind',
     table_catalog as database_name,
     table_schema as schema_name,
+    case when table_type='BASE TABLE' then 'TABLE' else table_type end as 'kind',
     '' as comment,
     '' as cluster_by,
     -- TODO: implement rows and bytes as rows * 1024
@@ -410,9 +410,9 @@ select
     'SYSADMIN' as owner,
     1 as retention_time,
     'ROLE' as owner_role_type,
-    null as budget,
     'N' as is_hybrid,
-    'N' as is_dynamic
+    'N' as is_dynamic,
+    'N' as is_iceberg
 from information_schema.tables
 where not (table_schema == '_fs_information_schema')
 """

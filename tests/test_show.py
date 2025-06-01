@@ -313,9 +313,9 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert [r.name for r in dcur.description] == [
         "created_on",
         "name",
-        "kind",
         "database_name",
         "schema_name",
+        "kind",
         "comment",
         "cluster_by",
         "rows",
@@ -323,9 +323,9 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "owner",
         "retention_time",
         "owner_role_type",
-        "budget",
         "is_hybrid",
         "is_dynamic",
+        "is_iceberg",
     ]
 
 
