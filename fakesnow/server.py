@@ -93,25 +93,26 @@ async def query_request(request: Request) -> JSONResponse:
 
         expr = parse_one(sql_text, read="snowflake")
         if isinstance(expr, exp.Put):
+            # see https://docs.snowflake.com/en/sql-reference/sql/put
             assert isinstance(expr.this, exp.Literal), "PUT command requires a file path as a literal"
             src_url = urlparse(expr.this.this)
             src_path = url2pathname(src_url.path)
             stage_name = expr.args["target"].this
             stage_info = {
-                "locationType": "S3",
-                "location": f"fakesnow_bucket/{stage_name}/",
-                "region": "us-east-1",
-                "creds": {"AWS_KEY_ID": "fake_key", "AWS_SECRET_KEY": "fake_secret"},
-                "endPoint": "localhost:9999",
+                "locationType": "LOCAL_FS",
+                "location": f"/tmp/fakesnow_bucket/{stage_name}/",
+                "creds": {},
             }
             return JSONResponse(
                 {
                     "data": {
                         "stageInfo": stage_info,
                         "src_locations": [src_path],
+                        # defaults as per https://docs.snowflake.com/en/sql-reference/sql/put
+                        "parallel": 4,
                         "autoCompress": True,
-                        "overwrite": False,
                         "sourceCompression": "auto_detect",
+                        "overwrite": False,
                         "command": "UPLOAD",
                     },
                     "success": True,
