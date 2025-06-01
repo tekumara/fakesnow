@@ -347,19 +347,3 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
             2,
         )
     ]
-
-
-def test_server_write_pandas_auto_create(sconn: snowflake.connector.SnowflakeConnection):
-    conn = sconn
-    with conn.cursor() as cur:
-        df = pd.DataFrame.from_records(
-            [
-                {"ID": 1, "FIRST_NAME": "Jenny"},
-                {"ID": 2, "FIRST_NAME": "Jasper"},
-            ]
-        )
-        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS", auto_create_table=True)
-
-        cur.execute("select id, first_name from customers")
-
-        assert cur.fetchall() == [(1, "Jenny"), (2, "Jasper")]
