@@ -76,6 +76,7 @@ class FakeSnowflakeCursor:
         self._use_dict_result = use_dict_result
         self._last_sql = None
         self._last_params = None
+        self._last_transformed = None
         self._sqlstate = None
         self._arraysize = 1
         self._arrow_table = None
@@ -106,6 +107,7 @@ class FakeSnowflakeCursor:
     def close(self) -> bool:
         self._last_sql = None
         self._last_params = None
+        self._last_transformed = None
         return True
 
     def describe(self, command: str, *args: Any, **kwargs: Any) -> list[ResultMetadata]:
@@ -261,6 +263,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.alias_in_join)
             .transform(transforms.alter_table_strip_cluster_by)
             .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
+            .transform(lambda e: transforms.put_stage(e, self._conn.database, self._conn.schema))
         )
 
     def _transform_explode(self, expression: exp.Expression) -> list[exp.Expression]:
@@ -330,10 +333,10 @@ class FakeSnowflakeCursor:
             self._duck_conn.execute(info_schema.per_db_creation_sql(create_db_name))
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
-        elif stage_name := transformed.args.get("stage_name"):
+        elif stage_name := transformed.args.get("create_stage_name"):
             if stage_name == "?":
                 assert isinstance(params, (tuple, list)) and len(params) == 1, (
-                    "Expected single parameter for stage name"
+                    "Expected single parameter for create_stage_name"
                 )
                 result_sql = SQL_CREATED_STAGE.substitute(name=params[0].upper())
             else:
@@ -411,8 +414,21 @@ class FakeSnowflakeCursor:
         self._rowcount = affected_count or self._arrow_table.num_rows
         self._sfqid = str(uuid.uuid4())
 
+        if stage_name := transformed.args.get("put_stage_name"):
+            if stage_name == "?":
+                assert isinstance(params, (tuple, list)) and len(params) == 1, (
+                    "Expected single parameter for put_stage_name"
+                )
+            if self._arrow_table.num_rows != 1:
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg=f"SQL compilation error:\nStage '{stage_name}' does not exist or not authorized.",
+                    errno=2003,
+                    sqlstate="02000",
+                )
+
         self._last_sql = result_sql or sql
         self._last_params = None if result_sql else params
+        self._last_transformed = transformed
 
     def executemany(
         self,

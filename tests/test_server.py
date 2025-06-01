@@ -210,6 +210,21 @@ def test_server_put(sdcur: snowflake.connector.cursor.DictCursor) -> None:
         ]
 
 
+def test_server_put_non_existent_stage(sdcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur = sdcur
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file_path = temp_file.name
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            dcur.execute(f"PUT 'file://{temp_file_path}' @foobar")
+
+        assert (
+            str(excinfo.value)
+            == "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.FOOBAR' does not exist or not authorized."
+        )
+
+
 def test_server_response_params(server: dict) -> None:
     # mimic the jdbc driver
     headers = {

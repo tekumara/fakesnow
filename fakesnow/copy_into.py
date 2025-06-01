@@ -11,6 +11,7 @@ import snowflake.connector.errors
 from duckdb import DuckDBPyConnection
 from sqlglot import exp
 
+import fakesnow.transforms.stage as stage
 from fakesnow import logger
 
 
@@ -196,40 +197,10 @@ def _from_source(expr: exp.Copy) -> str:
     return from_.name
 
 
-def normalise_ident(name: str) -> str:
-    """
-    Strip double quotes if present else return uppercased.
-    Snowflake treats quoted identifiers as case-sensitive and un-quoted identifiers as case-insensitive
-    """
-    if name.startswith('"') and name.endswith('"'):
-        return name[1:-1]  # Strip quotes
-
-    return name.upper()
-
-
 def stage_url_from_var(
     from_source: str, duck_conn: DuckDBPyConnection, current_database: str | None, current_schema: str | None
 ) -> str:
-    parts = from_source[1:].split(".")
-    if len(parts) == 3:
-        # Fully qualified name
-        database_name, schema_name, name = parts
-    elif len(parts) == 2:
-        # Schema + stage name
-        assert current_database, "Current database must be set when stage name is not fully qualified"
-        database_name, schema_name, name = current_database, parts[0], parts[1]
-    elif len(parts) == 1:
-        # Stage name only
-        assert current_database, "Current database must be set when stage name is not fully qualified"
-        assert current_schema, "Current schema must be set when stage name is not fully qualified"
-        database_name, schema_name, name = current_database, current_schema, parts[0]
-    else:
-        raise ValueError(f"Invalid stage name: {from_source}")
-
-    # Normalize names to uppercase if not wrapped in double quotes
-    database_name = normalise_ident(database_name)
-    schema_name = normalise_ident(schema_name)
-    name = normalise_ident(name)
+    database_name, schema_name, name = stage.parts_from_var(from_source, current_database, current_schema)
 
     # Look up the stage URL
     duck_conn.execute(

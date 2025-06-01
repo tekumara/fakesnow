@@ -13,7 +13,10 @@ from fakesnow.transforms.show import (
     show_users as show_users,
     show_warehouses as show_warehouses,
 )
-from fakesnow.transforms.stage import create_stage as create_stage
+from fakesnow.transforms.stage import (
+    create_stage as create_stage,
+    put_stage as put_stage,
+)
 from fakesnow.transforms.transforms import (
     SUCCESS_NOP as SUCCESS_NOP,
     alias_in_join as alias_in_join,
