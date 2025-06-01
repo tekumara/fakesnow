@@ -1,6 +1,8 @@
 # ruff: noqa: E501
 
 import datetime
+import os
+import tempfile
 from decimal import Decimal
 
 import numpy as np
@@ -180,6 +182,32 @@ def test_server_no_gzip(server: dict) -> None:
     )
     assert response.status_code == 200
     assert response.json()["success"]
+
+
+def test_server_put(sdcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur = sdcur
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        data = "1,2\n"
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file_path = temp_file.name
+        temp_file_basename = os.path.basename(temp_file_path)
+
+        dcur.execute("CREATE STAGE stage1")
+        dcur.execute(f"PUT 'file://{temp_file_path}' @stage1")
+        assert dcur.fetchall() == [
+            {
+                "source": temp_file_basename,
+                "target": f"{temp_file_basename}.gz",
+                "source_size": len(data),
+                "target_size": 42,  # GZIP compressed size
+                "source_compression": "NONE",
+                "target_compression": "GZIP",
+                "status": "UPLOADED",
+                "message": "",
+            }
+        ]
 
 
 def test_server_response_params(server: dict) -> None:

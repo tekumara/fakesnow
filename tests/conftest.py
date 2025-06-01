@@ -76,6 +76,14 @@ def scur(
         yield cur
 
 
+@pytest.fixture
+def sdcur(
+    sconn: snowflake.connector.SnowflakeConnection,
+) -> Iterator[snowflake.connector.cursor.DictCursor]:
+    with sconn.cursor(snowflake.connector.cursor.DictCursor) as cur:
+        yield cast(snowflake.connector.cursor.DictCursor, cur)
+
+
 @pytest.fixture()
 def s3_client(moto_session: boto3.Session, cur: snowflake.connector.cursor.SnowflakeCursor) -> S3Client:
     """Configures duckdb to use the moto session and returns an s3 client."""
