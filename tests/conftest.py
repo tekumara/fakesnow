@@ -115,4 +115,4 @@ def s3_client(moto_session: boto3.Session, cur: snowflake.connector.cursor.Snowf
 
 if os.getenv("TEST_SERVER"):
     # use server to run all tests
-    conn = sconn  # type: ignore
+    conn = sconn
