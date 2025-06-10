@@ -45,8 +45,8 @@ def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def array_construct(expression: exp.Expression) -> exp.Expression:
-    """Handle ARRAY_CONSTRUCT
+def array_construct_etc(expression: exp.Expression) -> exp.Expression:
+    """Handle ARRAY_CONSTRUCT_* and ARRAY_CAT
 
     Convert ARRAY_CONSTRUCT args to json_array.
     Convert ARRAY_CONSTRUCT_COMPACT args to a list.
@@ -56,8 +56,10 @@ def array_construct(expression: exp.Expression) -> exp.Expression:
     """
     if isinstance(expression, exp.ArrayConstructCompact):
         return exp.ArrayConstructCompact(expressions=[exp.Array(expressions=expression.expressions)])
-    elif isinstance(expression, exp.Array):
+    elif isinstance(expression, exp.Array) and isinstance(expression.parent, exp.Select):
         return exp.Anonymous(this="json_array", expressions=expression.expressions)
+    elif isinstance(expression, exp.ArrayConcat) and isinstance(expression.parent, exp.Select):
+        return exp.Cast(this=expression, to=exp.DataType(this=exp.DataType.Type.JSON, nested=False))
     return expression
 
 

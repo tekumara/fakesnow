@@ -10,13 +10,26 @@ import snowflake.connector.cursor
 from tests.utils import dindent, indent
 
 
+def test_array_cat(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select array_cat(['a', 'b'], ['c', 'd'])")
+    assert indent(cur.fetchall()) == [('[\n  "a",\n  "b",\n  "c",\n  "d"\n]',)]
+
+    # TODO: with mixed types
+    # cur.execute("select array_cat(['a', 1], ['b', '2'])")
+    # assert indent(cur.fetchall()) == [('[\n  "a",\n     1,\n  "b",\n  "2"\n]',)]
+
+    # TODO: with null values
+    # cur.execute("select array_cat(['a', 'b'], null)")
+    # assert cur.fetchall() == [(None,)]
+
+
 def test_array_construct(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("SELECT ARRAY_CONSTRUCT(PARSE_JSON('null'), 'hello', 3.01, 4, 5);")
+    cur.execute("select array_construct(PARSE_JSON('null'), 'hello', 3.01, 4, 5);")
     assert indent(cur.fetchall()) == [('[\n  null,\n  "hello",\n  3.01,\n  4,\n  5\n]',)]
 
 
 def test_array_construct_compact(cur: snowflake.connector.cursor.SnowflakeCursor):
-    cur.execute("SELECT ARRAY_CONSTRUCT_COMPACT(1, 2, NULL, 3, NULL, 4)")
+    cur.execute("select array_construct_compact(1, 2, NULL, 3, NULL, 4)")
     assert indent(cur.fetchall()) == [("[\n  1,\n  2,\n  3,\n  4\n]",)]
 
 
