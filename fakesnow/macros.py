@@ -29,9 +29,20 @@ CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input) AS TABLE
     """
 )
 
+# emulates https://docs.snowflake.com/en/sql-reference/functions/array_construct_compact
+# requires transforms.array_construct_compact
+ARRAY_CONSTRUCT_COMPACT = Template(
+    """
+CREATE OR REPLACE MACRO ${catalog}.array_construct_compact(list) AS (
+    SELECT ARRAY_AGG(x)::JSON FROM UNNEST(list) AS t(x) WHERE x IS NOT NULL
+);
+"""
+)
+
 
 def creation_sql(catalog: str) -> str:
     return f"""
         {EQUAL_NULL.substitute(catalog=catalog)};
         {FS_FLATTEN.substitute(catalog=catalog)};
+        {ARRAY_CONSTRUCT_COMPACT.substitute(catalog=catalog)};
     """

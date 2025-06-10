@@ -45,6 +45,17 @@ def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def array_construct_compact(expression: exp.Expression) -> exp.Expression:
+    """Convert ARRAY_CONSTRUCT_COMPACT args to a list.
+
+    Because the macro expects a single argument to use with UNNEST.
+    """
+    if isinstance(expression, exp.ArrayConstructCompact):
+        return exp.ArrayConstructCompact(expressions=[exp.Array(expressions=expression.expressions)])
+
+    return expression
+
+
 def array_size(expression: exp.Expression) -> exp.Expression:
     if isinstance(expression, exp.ArraySize):
         # return null if not json array
