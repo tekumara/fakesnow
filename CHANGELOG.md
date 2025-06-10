@@ -2,6 +2,23 @@
 
 # Changelog
 
+## [0.9.40](https://github.com/tekumara/fakesnow/compare/v0.9.39...v0.9.40) (2025-06-10)
+
+
+### Features
+
+* PUT now errors if stage doesn't exist ([d6f13d3](https://github.com/tekumara/fakesnow/commit/d6f13d30101647aeb9ac08b306be59e03f51d7e1))
+* **server:** support basic PUT ([#223](https://github.com/tekumara/fakesnow/issues/223)) ([f698b0f](https://github.com/tekumara/fakesnow/commit/f698b0f5fbf3b0017e9cb0c3506b36d2bb89f4d6))
+* support ARRAY_CAT ([41a632e](https://github.com/tekumara/fakesnow/commit/41a632e99fd580b89ff242bbd2cba219992a5b67))
+* support ARRAY_CONSTRUCT ([96a0bb1](https://github.com/tekumara/fakesnow/commit/96a0bb1b5d81db09faaf0eba1454cf84874957ee))
+* support ARRAY_CONSTRUCT_COMPACT ([86befb6](https://github.com/tekumara/fakesnow/commit/86befb690874e67abca3bcaa0e306e3884586a1f))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.400 to 1.1.401 ([#225](https://github.com/tekumara/fakesnow/issues/225)) ([5f537fd](https://github.com/tekumara/fakesnow/commit/5f537fd06bc6a46e611f5871344dc63f08d80c5a))
+* **deps:** update sqlglot requirement from ~=26.16.2 to ~=26.24.0 ([#226](https://github.com/tekumara/fakesnow/issues/226)) ([182ce7e](https://github.com/tekumara/fakesnow/commit/182ce7ee7ca9c8401db68c5bcc5be16d06ed7dcc))
+
 ## [0.9.39](https://github.com/tekumara/fakesnow/compare/v0.9.38...v0.9.39) (2025-06-01)
 
 
