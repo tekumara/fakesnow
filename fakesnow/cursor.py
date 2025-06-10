@@ -241,7 +241,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.identifier)
             .transform(transforms.array_agg_within_group)
             .transform(transforms.array_agg)
-            .transform(transforms.array_construct_compact)
+            .transform(transforms.array_construct)
             .transform(transforms.dateadd_date_cast)
             .transform(transforms.dateadd_string_literal_timestamp_cast)
             .transform(transforms.datediff_string_literal_timestamp_cast)

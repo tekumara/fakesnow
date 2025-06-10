@@ -10,6 +10,11 @@ import snowflake.connector.cursor
 from tests.utils import dindent, indent
 
 
+def test_array_construct(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("SELECT ARRAY_CONSTRUCT(PARSE_JSON('null'), 'hello', 3.01, 4, 5);")
+    assert indent(cur.fetchall()) == [('[\n  null,\n  "hello",\n  3.01,\n  4,\n  5\n]',)]
+
+
 def test_array_construct_compact(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("SELECT ARRAY_CONSTRUCT_COMPACT(1, 2, NULL, 3, NULL, 4)")
     assert indent(cur.fetchall()) == [("[\n  1,\n  2,\n  3,\n  4\n]",)]

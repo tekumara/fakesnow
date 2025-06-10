@@ -23,7 +23,7 @@ from fakesnow.transforms.transforms import (
     alter_table_strip_cluster_by as alter_table_strip_cluster_by,
     array_agg as array_agg,
     array_agg_within_group as array_agg_within_group,
-    array_construct_compact as array_construct_compact,
+    array_construct as array_construct,
     array_size as array_size,
     create_clone as create_clone,
     create_database as create_database,
