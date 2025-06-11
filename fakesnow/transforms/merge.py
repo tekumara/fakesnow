@@ -78,7 +78,9 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
             insert_values = then.expression.expressions
             values.update([str(c) for c in insert_values if isinstance(c, exp.Column)])
             predicate = f"AND {condition}" if condition else ""
-            case_when_clauses.append(f"WHEN {target_tbl}.rowid is NULL {predicate} THEN {w_idx}")
+            case_when_clauses.append(
+                f"WHEN {target_tbl.alias or target_tbl.name}.rowid is NULL {predicate} THEN {w_idx}"
+            )
 
     sql = f"""
     CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
