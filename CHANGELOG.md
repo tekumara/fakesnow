@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.41](https://github.com/tekumara/fakesnow/compare/v0.9.40...v0.9.41) (2025-06-11)
+
+
+### Bug Fixes
+
+* MERGE when using table alias ([4eb1f45](https://github.com/tekumara/fakesnow/commit/4eb1f455bf55292d40568eead055aeac2dc39dde)), closes [#227](https://github.com/tekumara/fakesnow/issues/227)
+
 ## [0.9.40](https://github.com/tekumara/fakesnow/compare/v0.9.39...v0.9.40) (2025-06-10)
 
 
