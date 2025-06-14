@@ -165,7 +165,7 @@ class FakeSnowflakeCursor:
             self.check_db_and_schema(expression)
 
             for exp in self._transform_explode(expression):
-                transformed = self._transform(exp)
+                transformed = self._transform(exp, params)
                 self._execute(transformed, params)
 
             return self
@@ -199,7 +199,7 @@ class FakeSnowflakeCursor:
                 sqlstate="22000",
             )
 
-    def _transform(self, expression: exp.Expression) -> exp.Expression:
+    def _transform(self, expression: exp.Expression, params: Sequence[Any] | dict[Any, Any] | None) -> exp.Expression:
         return (
             expression.transform(transforms.upper_case_unquoted_identifiers)
             .transform(transforms.update_variables, variables=self._conn.variables)
@@ -266,7 +266,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.alter_table_strip_cluster_by)
             .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.list_stage(e, self._conn.database, self._conn.schema))
-            .transform(lambda e: transforms.put_stage(e, self._conn.database, self._conn.schema))
+            .transform(lambda e: transforms.put_stage(e, self._conn.database, self._conn.schema, params))
         )
 
     def _transform_explode(self, expression: exp.Expression) -> list[exp.Expression]:
@@ -289,6 +289,9 @@ class FakeSnowflakeCursor:
 
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
             sql = f"SELECT setseed({seed}); {sql}"
+
+        if transformed.args.get("consumed_params"):
+            params = None
 
         result_sql = None
 

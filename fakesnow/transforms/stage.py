@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import datetime
 import tempfile
+from collections.abc import Sequence
+from typing import Any
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
@@ -14,7 +16,9 @@ LOCAL_BUCKET_PATH = tempfile.mkdtemp(prefix="fakesnow_bucket_")
 
 
 def create_stage(
-    expression: exp.Expression, current_database: str | None, current_schema: str | None
+    expression: exp.Expression,
+    current_database: str | None,
+    current_schema: str | None,
 ) -> exp.Expression:
     """Transform CREATE STAGE to an INSERT statement for the fake stages table."""
     if not (
@@ -30,6 +34,7 @@ def create_stage(
     schema = table.db or current_schema
     ident = table.this
     if isinstance(ident, exp.Placeholder):
+        # TODO: support fully qualified stage name in param
         stage_name = "?"
     elif isinstance(ident, exp.Identifier):
         stage_name = ident.this if ident.quoted else ident.this.upper()
@@ -107,10 +112,12 @@ def list_stage(expression: exp.Expression, current_database: str | None, current
     return transformed
 
 
-# TODO: handle ?
-
-
-def put_stage(expression: exp.Expression, current_database: str | None, current_schema: str | None) -> exp.Expression:
+def put_stage(
+    expression: exp.Expression,
+    current_database: str | None,
+    current_schema: str | None,
+    params: Sequence[Any] | dict[Any, Any] | None,
+) -> exp.Expression:
     """Transform PUT to a SELECT statement to locate the stage.
 
     See https://docs.snowflake.com/en/sql-reference/sql/put
@@ -124,17 +131,21 @@ def put_stage(expression: exp.Expression, current_database: str | None, current_
     target = expression.args["target"]
 
     assert isinstance(target, exp.Var), f"{target} is not a exp.Var"
-    var = target.text("this")
-    if not var.startswith("@"):
-        msg = f"SQL compilation error:\n{var} does not start with @"
+    this = target.text("this")
+    if this == "?":
+        if not (isinstance(params, Sequence) and len(params) == 1):
+            raise NotImplementedError("PUT requires a single parameter for the stage name")
+        this = params[0]
+    if not this.startswith("@"):
+        msg = f"SQL compilation error:\n{this} does not start with @"
         raise snowflake.connector.errors.ProgrammingError(
             msg=msg,
             errno=1003,
             sqlstate="42000",
         )
-    catalog, schema, stage_name = parts_from_var(
-        var[1:], current_database=current_database, current_schema=current_schema
-    )
+    # strip leading @
+    var = this[1:]
+    catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
     query = f"""
         SELECT *
@@ -160,6 +171,7 @@ def put_stage(expression: exp.Expression, current_database: str | None, current_
         "overwrite": False,
         "command": "UPLOAD",
     }
+    transformed.args["consumed_params"] = target.text("this") == "?"
 
     return transformed
 
