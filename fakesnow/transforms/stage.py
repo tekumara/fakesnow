@@ -206,3 +206,18 @@ def local_dir(fqname: str) -> str:
     """
     catalog, schema, stage_name = fqname.split(".")
     return f"{LOCAL_BUCKET_PATH}/{catalog}/{schema}/{stage_name}/"
+
+
+def list_stage_files_sql(stage_name: str) -> str:
+    """
+    Generate SQL to list files in a stage directory, matching Snowflake's LIST output format.
+    """
+    sdir = local_dir(stage_name)
+    return f"""
+        select
+            lower(split_part(filename, '/', -2)) || '/' || split_part(filename, '/', -1) AS name,
+            size,
+            md5(content) as md5,
+            strftime(last_modified, '%a, %d %b %Y %H:%M:%S GMT') as last_modified
+        from read_blob('{sdir}/*')
+    """

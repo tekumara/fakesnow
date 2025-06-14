@@ -353,14 +353,7 @@ class FakeSnowflakeCursor:
                     sqlstate="02000",
                 )
             if transformed.args.get("list_stage_name"):
-                sdir = stage.local_dir(stage_name)
-                result_sql = f"""
-                        select
-                            lower(split_part(filename, '/', -2)) || '/' || split_part(filename, '/', -1) AS name,
-                            size,
-                            md5(content) as md5,
-                            strftime(last_modified, '%a, %d %b %Y %H:%M:%S GMT') as last_modified
-                        from read_blob('{sdir}/*')"""
+                result_sql = stage.list_stage_files_sql(stage_name)
             elif transformed.args.get("put_stage_name"):
                 result_sql = SQL_SUCCESS
 
