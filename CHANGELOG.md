@@ -2,6 +2,14 @@
 
 # Changelog
 
+## [0.9.42](https://github.com/tekumara/fakesnow/compare/v0.9.41...v0.9.42) (2025-06-14)
+
+
+### Features
+
+* LIST stage ([3ae9994](https://github.com/tekumara/fakesnow/commit/3ae99944743811e3b8fc34dae1fe53e73e52ecba))
+* support PUT with qmark params ([7bca3f6](https://github.com/tekumara/fakesnow/commit/7bca3f620008ba64854b894ea5ef36f13de9ce60))
+
 ## [0.9.41](https://github.com/tekumara/fakesnow/compare/v0.9.40...v0.9.41) (2025-06-11)
 
 
