@@ -184,17 +184,10 @@ def test_server_no_gzip(server: dict) -> None:
     assert response.json()["success"]
 
 
-def test_server_put_list(server: dict) -> None:
-    with (
-        snowflake.connector.connect(
-            **server,
-            database="db1",
-            schema="schema1",
-            paramstyle="qmark",
-        ) as conn,
-        conn.cursor(snowflake.connector.cursor.DictCursor) as dcur,
-        tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file,
-    ):
+def test_server_put_list(sdcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur = sdcur
+
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         data = "1,2\n"
         temp_file.write(data)
         temp_file.flush()
@@ -229,9 +222,47 @@ def test_server_put_list(server: dict) -> None:
             ),
         }
 
-        # qmark style params
-        dcur.execute(f"PUT 'file://{temp_file_path}' ?", ("@stage1",))
-        dcur.execute(f"PUT 'file://{temp_file_path}' ?", ("@db1.schema1.stage1",))
+        # fully qualified stage name quoted
+        dcur.execute('CREATE STAGE db1.schema1."stage2"')
+        dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage2\"")
+
+
+def test_server_put_qmark_quoted(server: dict) -> None:
+    with (
+        snowflake.connector.connect(
+            **server,
+            database="db1",
+            schema="schema1",
+            paramstyle="qmark",
+        ) as conn,
+        conn.cursor(snowflake.connector.cursor.DictCursor) as dcur,
+        tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file,
+    ):
+        data = "1,2\n"
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file_path = temp_file.name
+        temp_file_basename = os.path.basename(temp_file_path)
+
+        # quoted to mimic write_pandas
+        dcur.execute("CREATE STAGE ?", ('"stage1"',))
+        dcur.execute(f"PUT 'file://{temp_file_path}' ?", ('@"stage1"',))
+        assert dcur.fetchall() == [
+            {
+                "source": temp_file_basename,
+                "target": f"{temp_file_basename}.gz",
+                "source_size": len(data),
+                "target_size": 42,  # GZIP compressed size
+                "source_compression": "NONE",
+                "target_compression": "GZIP",
+                "status": "UPLOADED",
+                "message": "",
+            }
+        ]
+
+        # fully qualified stage name
+        dcur.execute("CREATE STAGE ?", ('db1.schema1."stage2"',))
+        dcur.execute(f"PUT 'file://{temp_file_path}' ?", ('@db1.schema1."stage2"',))
 
 
 def test_server_put_non_existent_stage(sdcur: snowflake.connector.cursor.DictCursor) -> None:

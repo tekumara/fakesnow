@@ -19,6 +19,7 @@ def create_stage(
     expression: exp.Expression,
     current_database: str | None,
     current_schema: str | None,
+    params: Sequence[Any] | dict[Any, Any] | None,
 ) -> exp.Expression:
     """Transform CREATE STAGE to an INSERT statement for the fake stages table."""
     if not (
@@ -30,13 +31,17 @@ def create_stage(
     ):
         return expression
 
-    catalog = table.catalog or current_database
-    schema = table.db or current_schema
     ident = table.this
     if isinstance(ident, exp.Placeholder):
-        # TODO: support fully qualified stage name in param
-        stage_name = "?"
+        if not (isinstance(params, Sequence) and len(params) == 1):
+            raise NotImplementedError("PUT requires a single parameter for the stage name")
+        var = params[0]
+        catalog, schema, stage_name = parts_from_var(
+            var, current_database=current_database, current_schema=current_schema
+        )
     elif isinstance(ident, exp.Identifier):
+        catalog = table.catalog or current_database
+        schema = table.db or current_schema
         stage_name = ident.this if ident.quoted else ident.this.upper()
     else:
         raise ValueError(f"Invalid identifier type {ident.__class__.__name__} for stage name")
@@ -62,7 +67,6 @@ def create_stage(
     cloud = "AWS" if url.startswith("s3://") else None
 
     stage_type = ("EXTERNAL" if url else "INTERNAL") + (" TEMPORARY" if is_temp else "")
-    stage_name_value = stage_name if stage_name == "?" else repr(stage_name)
 
     insert_sql = f"""
         INSERT INTO _fs_global._fs_information_schema._fs_stages
@@ -70,13 +74,14 @@ def create_stage(
         comment, region, type, cloud, notification_channel, storage_integration, endpoint, owner_role_type,
         directory_enabled)
         VALUES (
-            '{now}', {stage_name_value}, '{catalog}', '{schema}', '{url}', 'N', 'N', 'SYSADMIN',
+            '{now}', '{stage_name}', '{catalog}', '{schema}', '{url}', 'N', 'N', 'SYSADMIN',
             '', NULL, '{stage_type}', {f"'{cloud}'" if cloud else "NULL"}, NULL, NULL, NULL, 'ROLE',
             'N'
         )
         """
     transformed = sqlglot.parse_one(insert_sql, read="duckdb")
     transformed.args["create_stage_name"] = stage_name
+    transformed.args["consumed_params"] = isinstance(ident, exp.Placeholder)
     return transformed
 
 

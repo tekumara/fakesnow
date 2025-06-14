@@ -147,7 +147,8 @@ class FakeSnowflakeCursor:
             self._sqlstate = None
 
             if os.environ.get("FAKESNOW_DEBUG") == "snowflake":
-                print(f"{command};{params=}" if params else f"{command};", file=sys.stderr)
+                p = params or kwargs.get("binding_params")
+                print(f"{command};params={p}" if p else f"{command};", file=sys.stderr)
 
             command = self._inline_variables(command)
             if kwargs.get("binding_params"):
@@ -264,7 +265,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.create_clone)
             .transform(transforms.alias_in_join)
             .transform(transforms.alter_table_strip_cluster_by)
-            .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
+            .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema, params))
             .transform(lambda e: transforms.list_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.put_stage(e, self._conn.database, self._conn.schema, params))
         )
@@ -340,13 +341,7 @@ class FakeSnowflakeCursor:
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
         elif stage_name := transformed.args.get("create_stage_name"):
-            if stage_name == "?":
-                assert isinstance(params, (tuple, list)) and len(params) == 1, (
-                    "Expected single parameter for create_stage_name"
-                )
-                result_sql = SQL_CREATED_STAGE.substitute(name=params[0].upper())
-            else:
-                result_sql = SQL_CREATED_STAGE.substitute(name=stage_name.upper())
+            result_sql = SQL_CREATED_STAGE.substitute(name=stage_name)
 
         elif stage_name := transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
             if self._duck_conn.fetch_arrow_table().num_rows != 1:
