@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import tempfile
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
@@ -8,7 +9,8 @@ import snowflake.connector.errors
 import sqlglot
 from sqlglot import exp
 
-LOCAL_BUCKET_PATH = "/tmp/fakesnow_bucket"
+# TODO: clean up temp files on exit
+LOCAL_BUCKET_PATH = tempfile.mkdtemp(prefix="fakesnow_bucket_")
 
 
 def create_stage(
@@ -73,6 +75,38 @@ def create_stage(
     return transformed
 
 
+def list_stage(expression: exp.Expression, current_database: str | None, current_schema: str | None) -> exp.Expression:
+    """Transform LIST to list file system operation.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/list
+    """
+    if not (
+        isinstance(expression, exp.Alias)
+        and isinstance(expression.this, exp.Column)
+        and isinstance(expression.this.this, exp.Identifier)
+        and isinstance(expression.this.this.this, str)
+        and expression.this.this.this.upper() == "LIST"
+    ):
+        return expression
+
+    stage = expression.args["alias"].this
+    if not isinstance(stage, exp.Var):
+        raise ValueError(f"LIST command requires a stage name as a Var, got {stage}")
+
+    var = stage.text("this")
+    catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
+
+    query = f"""
+        SELECT *
+        from _fs_global._fs_information_schema._fs_stages
+        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
+    """
+
+    transformed = sqlglot.parse_one(query, read="duckdb")
+    transformed.args["list_stage_name"] = f"{catalog}.{schema}.{stage_name}"
+    return transformed
+
+
 # TODO: handle ?
 
 
@@ -98,7 +132,9 @@ def put_stage(expression: exp.Expression, current_database: str | None, current_
             errno=1003,
             sqlstate="42000",
         )
-    catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
+    catalog, schema, stage_name = parts_from_var(
+        var[1:], current_database=current_database, current_schema=current_schema
+    )
 
     query = f"""
         SELECT *
@@ -107,12 +143,13 @@ def put_stage(expression: exp.Expression, current_database: str | None, current_
     """
 
     transformed = sqlglot.parse_one(query, read="duckdb")
-    transformed.args["put_stage_name"] = f"{catalog}.{schema}.{stage_name}"
+    fqname = f"{catalog}.{schema}.{stage_name}"
+    transformed.args["put_stage_name"] = fqname
     transformed.args["put_stage_data"] = {
         "stageInfo": {
             # use LOCAL_FS otherwise we need to mock S3 with HTTPS which requires a certificate
             "locationType": "LOCAL_FS",
-            "location": f"{LOCAL_BUCKET_PATH}/{stage_name}/",
+            "location": local_dir(fqname),
             "creds": {},
         },
         "src_locations": [src_path],
@@ -139,7 +176,7 @@ def normalise_ident(name: str) -> str:
 
 
 def parts_from_var(var: str, current_database: str | None, current_schema: str | None) -> tuple[str, str, str]:
-    parts = var[1:].split(".")
+    parts = var.split(".")
     if len(parts) == 3:
         # Fully qualified name
         database_name, schema_name, name = parts
@@ -161,3 +198,11 @@ def parts_from_var(var: str, current_database: str | None, current_schema: str |
     name = normalise_ident(name)
 
     return database_name, schema_name, name
+
+
+def local_dir(fqname: str) -> str:
+    """
+    Given a fully qualified stage name, return the directory path where the stage files are stored.
+    """
+    catalog, schema, stage_name = fqname.split(".")
+    return f"{LOCAL_BUCKET_PATH}/{catalog}/{schema}/{stage_name}/"

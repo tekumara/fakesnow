@@ -15,6 +15,7 @@ from fakesnow.transforms.show import (
 )
 from fakesnow.transforms.stage import (
     create_stage as create_stage,
+    list_stage as list_stage,
     put_stage as put_stage,
 )
 from fakesnow.transforms.transforms import (

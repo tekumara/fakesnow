@@ -12,7 +12,7 @@ import pytz
 import requests
 import snowflake.connector
 import snowflake.connector.pandas_tools
-from dirty_equals import IsUUID
+from dirty_equals import IsDatetime, IsUUID
 from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
 
@@ -184,7 +184,7 @@ def test_server_no_gzip(server: dict) -> None:
     assert response.json()["success"]
 
 
-def test_server_put(sdcur: snowflake.connector.cursor.DictCursor) -> None:
+def test_server_put_list(sdcur: snowflake.connector.cursor.DictCursor) -> None:
     dcur = sdcur
 
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
@@ -208,6 +208,19 @@ def test_server_put(sdcur: snowflake.connector.cursor.DictCursor) -> None:
                 "message": "",
             }
         ]
+
+        dcur.execute("LIST @stage1")
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0] == {
+            "name": f"stage1/{temp_file_basename}.gz",
+            "size": 42,
+            "md5": "29498d110c32a756df8109e70d22fa36",
+            "last_modified": IsDatetime(
+                # string in RFC 7231 date format (e.g. 'Sat, 31 May 2025 08:50:51 GMT')
+                format_string="%a, %d %b %Y %H:%M:%S GMT"
+            ),
+        }
 
 
 def test_server_put_non_existent_stage(sdcur: snowflake.connector.cursor.DictCursor) -> None:

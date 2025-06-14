@@ -54,7 +54,7 @@ def copy_into(
 
     from_source = _from_source(expr)
     source = (
-        stage_url_from_var(from_source, duck_conn, current_database, current_schema)
+        stage_url_from_var(from_source[1:], duck_conn, current_database, current_schema)
         if from_source.startswith("@")
         else from_source
     )
@@ -198,9 +198,9 @@ def _from_source(expr: exp.Copy) -> str:
 
 
 def stage_url_from_var(
-    from_source: str, duck_conn: DuckDBPyConnection, current_database: str | None, current_schema: str | None
+    var: str, duck_conn: DuckDBPyConnection, current_database: str | None, current_schema: str | None
 ) -> str:
-    database_name, schema_name, name = stage.parts_from_var(from_source, current_database, current_schema)
+    database_name, schema_name, name = stage.parts_from_var(var, current_database, current_schema)
 
     # Look up the stage URL
     duck_conn.execute(
@@ -220,16 +220,16 @@ def stage_url_from_var(
         )
 
 
-def _source_urls(from_source: str, files: list[str]) -> list[str]:
+def _source_urls(source: str, files: list[str]) -> list[str]:
     """Convert from_source to a list of URLs."""
-    scheme, netloc, path, params, query, fragment = urlparse(from_source)
+    scheme, netloc, path, params, query, fragment = urlparse(source)
     if not scheme:
         raise snowflake.connector.errors.ProgrammingError(
-            msg=f"SQL compilation error:\ninvalid URL prefix found in: '{from_source}'", errno=1011, sqlstate="42601"
+            msg=f"SQL compilation error:\ninvalid URL prefix found in: '{source}'", errno=1011, sqlstate="42601"
         )
 
     # rebuild url from components to ensure correct handling of host slash
-    return [_urlunparse(scheme, netloc, path, params, query, fragment, file) for file in files] or [from_source]
+    return [_urlunparse(scheme, netloc, path, params, query, fragment, file) for file in files] or [source]
 
 
 def _urlunparse(scheme: str, netloc: str, path: str, params: str, query: str, fragment: str, suffix: str) -> str:

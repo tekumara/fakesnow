@@ -28,6 +28,7 @@ import fakesnow.transforms as transforms
 from fakesnow import logger
 from fakesnow.copy_into import copy_into
 from fakesnow.rowtype import describe_as_result_metadata
+from fakesnow.transforms import stage
 
 if TYPE_CHECKING:
     # don't require pandas at import time
@@ -264,6 +265,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.alias_in_join)
             .transform(transforms.alter_table_strip_cluster_by)
             .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
+            .transform(lambda e: transforms.list_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.put_stage(e, self._conn.database, self._conn.schema))
         )
 
@@ -343,6 +345,25 @@ class FakeSnowflakeCursor:
             else:
                 result_sql = SQL_CREATED_STAGE.substitute(name=stage_name.upper())
 
+        elif stage_name := transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
+            if self._duck_conn.fetch_arrow_table().num_rows != 1:
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg=f"SQL compilation error:\nStage '{stage_name}' does not exist or not authorized.",
+                    errno=2003,
+                    sqlstate="02000",
+                )
+            if transformed.args.get("list_stage_name"):
+                sdir = stage.local_dir(stage_name)
+                result_sql = f"""
+                        select
+                            lower(split_part(filename, '/', -2)) || '/' || split_part(filename, '/', -1) AS name,
+                            size,
+                            md5(content) as md5,
+                            strftime(last_modified, '%a, %d %b %Y %H:%M:%S GMT') as last_modified
+                        from read_blob('{sdir}/*')"""
+            elif transformed.args.get("put_stage_name"):
+                result_sql = SQL_SUCCESS
+
         elif cmd == "INSERT":
             (affected_count,) = self._duck_conn.fetchall()[0]
             result_sql = SQL_INSERTED_ROWS.substitute(count=affected_count)
@@ -414,18 +435,6 @@ class FakeSnowflakeCursor:
         self._arrow_table = self._duck_conn.fetch_arrow_table()
         self._rowcount = affected_count or self._arrow_table.num_rows
         self._sfqid = str(uuid.uuid4())
-
-        if stage_name := transformed.args.get("put_stage_name"):
-            if stage_name == "?":
-                assert isinstance(params, (tuple, list)) and len(params) == 1, (
-                    "Expected single parameter for put_stage_name"
-                )
-            if self._arrow_table.num_rows != 1:
-                raise snowflake.connector.errors.ProgrammingError(
-                    msg=f"SQL compilation error:\nStage '{stage_name}' does not exist or not authorized.",
-                    errno=2003,
-                    sqlstate="02000",
-                )
 
         self._last_sql = result_sql or sql
         self._last_params = None if result_sql else params
