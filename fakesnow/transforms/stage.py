@@ -74,10 +74,13 @@ def create_stage(
         (created_on, name, database_name, schema_name, url, has_credentials, has_encryption_key, owner,
         comment, region, type, cloud, notification_channel, storage_integration, endpoint, owner_role_type,
         directory_enabled)
-        VALUES (
+        SELECT
             '{now}', '{stage_name}', '{catalog}', '{schema}', '{url}', 'N', 'N', 'SYSADMIN',
             '', NULL, '{stage_type}', {f"'{cloud}'" if cloud else "NULL"}, NULL, NULL, NULL, 'ROLE',
             'N'
+        WHERE NOT EXISTS (
+            SELECT 1 FROM _fs_global._fs_information_schema._fs_stages
+            WHERE name = '{stage_name}' AND database_name = '{catalog}' AND schema_name = '{schema}'
         )
         """
     transformed = sqlglot.parse_one(insert_sql, read="duckdb")

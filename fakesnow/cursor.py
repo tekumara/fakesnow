@@ -341,6 +341,13 @@ class FakeSnowflakeCursor:
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
         elif stage_name := transformed.args.get("create_stage_name"):
+            (affected_count,) = self._duck_conn.fetchall()[0]
+            if affected_count == 0:
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg=f"SQL compilation error:\nObject '{stage_name}' already exists.",
+                    errno=2002,
+                    sqlstate="42710",
+                )
             result_sql = SQL_CREATED_STAGE.substitute(name=stage_name)
 
         elif stage_name := transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
