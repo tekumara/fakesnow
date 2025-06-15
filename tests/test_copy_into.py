@@ -412,7 +412,7 @@ def test_load_history(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3
 
 def test_param_files_single():
     expr, params = parse("""
-    COPY INTO table1 (a, b)
+    COPY INTO table1
     FROM 's3://mybucket/'
     files=('file1.csv')
     """)
@@ -423,7 +423,7 @@ def test_param_files_single():
 
 def test_param_files_prefix():
     expr, params = parse("""
-    COPY INTO table1 (a, b)
+    COPY INTO table1
     FROM 's3://mybucket/pre'
     FILES=('file1.csv')
     """)
@@ -434,7 +434,7 @@ def test_param_files_prefix():
 
 def test_param_files_prefix_query():
     expr, params = parse("""
-    COPY INTO table1 (a, b)
+    COPY INTO table1
     FROM 's3://mybucket/pre?query=1'
     FILES=('file1.csv')
     """)
@@ -445,7 +445,7 @@ def test_param_files_prefix_query():
 
 def test_param_files_host_without_trailing_slash():
     expr, params = parse("""
-    COPY INTO table1 (a, b)
+    COPY INTO table1
     FROM 's3://mybucket'
     FILES=('file1.csv')
     """)
@@ -456,7 +456,7 @@ def test_param_files_host_without_trailing_slash():
 
 def test_params_files_multiple():
     expr, params = parse("""
-    COPY INTO table1 (a, b)
+    COPY INTO table1
     FROM 's3://mybucket/data/'
     FILES=('file1.csv', 'file2.csv')
     """)
@@ -468,13 +468,12 @@ def test_params_files_multiple():
 
 def test_param_files_none():
     expr, params = parse("""
-    COPY INTO table1 (a, b)
+    COPY INTO table1
     FROM 's3://mybucket/myfile.csv'
     """)
     assert params.files == []
     from_source = _from_source(expr)
     assert _source_urls(from_source, params.files) == ["s3://mybucket/myfile.csv"]
-
 
 def test__strip_json_extract():
     sql = 'SELECT $1:"A"::integer, $1:"B"::integer FROM @stage1'
