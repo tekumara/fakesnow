@@ -181,28 +181,19 @@ def test_execute_two_files(
     sql = """
     COPY INTO table1
     FROM 's3://{bucket}/'
-    FILES=('foo.csv', 'bar.csv')
+    FILES=('bar.csv', 'foo.csv')
     """
 
     dcur.execute(sql.format(bucket=bucket))
 
-    assert captured_inserts(mock_log_sql) == [
-        f"INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)",
+    excepted_inserts = [
         f"INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/bar.csv', header = FALSE)",
+        f"INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)",
     ]
-    assert dcur.fetchall() == [
-        {
-            "file": f"s3://{bucket}/foo.csv",
-            "status": "LOADED",
-            "rows_parsed": 2,
-            "rows_loaded": 2,
-            "error_limit": 1,
-            "errors_seen": 0,
-            "first_error": None,
-            "first_error_line": None,
-            "first_error_character": None,
-            "first_error_column_name": None,
-        },
+    assert captured_inserts(mock_log_sql) == excepted_inserts
+    mock_log_sql.reset_mock()
+
+    expected_results = [
         {
             "file": f"s3://{bucket}/bar.csv",
             "status": "LOADED",
@@ -215,16 +206,53 @@ def test_execute_two_files(
             "first_error_character": None,
             "first_error_column_name": None,
         },
+        {
+            "file": f"s3://{bucket}/foo.csv",
+            "status": "LOADED",
+            "rows_parsed": 2,
+            "rows_loaded": 2,
+            "error_limit": 1,
+            "errors_seen": 0,
+            "first_error": None,
+            "first_error_line": None,
+            "first_error_character": None,
+            "first_error_column_name": None,
+        },
     ]
+    assert dcur.fetchall() == expected_results
     assert dcur.description
     assert dcur.rowcount == 2, "rowcount should be length of results not number of rows loaded"
     dcur.execute("SELECT * FROM schema1.table1")
     assert dcur.fetchall() == [
-        {"A": 1, "B": 2},  # from foo.csv
-        {"A": 3, "B": 4},  # from foo.csv
         {"A": 5, "B": 6},  # from bar.csv
         {"A": 7, "B": 8},  # from bar.csv
+        {"A": 1, "B": 2},  # from foo.csv
+        {"A": 3, "B": 4},  # from foo.csv
     ]
+
+    # without the FILES clause should load all files in the bucket
+    sql = """
+    COPY INTO table1
+    FROM 's3://{bucket}/'
+    FORCE = TRUE
+    """
+
+    dcur.execute(sql.format(bucket=bucket))
+    assert captured_inserts(mock_log_sql) == excepted_inserts
+    assert dcur.fetchall() == expected_results
+
+
+def test_execute_no_files(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+    bucket = str(uuid.uuid4())
+    s3_client.create_bucket(Bucket=bucket)
+
+    sql = """
+    COPY INTO table1
+    FROM 's3://{bucket}/'
+    """
+
+    dcur.execute(sql.format(bucket=bucket))
+    assert dcur.fetchall() == [{"status": "Copy executed with 0 files processed."}]
 
 
 def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
@@ -465,15 +493,6 @@ def test_params_files_multiple():
     from_source = _from_source(expr)
     assert _source_urls(from_source, params.files) == ["s3://mybucket/data/file1.csv", "s3://mybucket/data/file2.csv"]
 
-
-def test_param_files_none():
-    expr, params = parse("""
-    COPY INTO table1
-    FROM 's3://mybucket/myfile.csv'
-    """)
-    assert params.files == []
-    from_source = _from_source(expr)
-    assert _source_urls(from_source, params.files) == ["s3://mybucket/myfile.csv"]
 
 def test__strip_json_extract():
     sql = 'SELECT $1:"A"::integer, $1:"B"::integer FROM @stage1'

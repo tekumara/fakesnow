@@ -58,7 +58,11 @@ def copy_into(
         if from_source.startswith("@")
         else from_source
     )
-    urls = _source_urls(source, cparams.files)
+    urls = _source_urls(source, cparams.files) if cparams.files else _source_glob(source, duck_conn)
+    if not urls:
+        sql = "SELECT 'Copy executed with 0 files processed.' AS status"
+        duck_conn.execute(sql)
+        return sql
 
     inserts = _inserts(expr, cparams, urls)
     table = expr.this
@@ -230,6 +234,18 @@ def _source_urls(source: str, files: list[str]) -> list[str]:
 
     # rebuild url from components to ensure correct handling of host slash
     return [_urlunparse(scheme, netloc, path, params, query, fragment, file) for file in files] or [source]
+
+
+def _source_glob(source: str, duck_conn: DuckDBPyConnection) -> list[str]:
+    """List files from the source using duckdb glob."""
+    scheme, netloc, path, params, query, fragment = urlparse(source)
+    if scheme != "s3":
+        raise NotImplementedError(f"Listing files from {scheme} is not implemented")
+
+    sql = f"SELECT file FROM glob('{source}*')"
+    logger.log_sql(sql)
+    result = duck_conn.execute(sql).fetchall()
+    return [r[0] for r in result]
 
 
 def _urlunparse(scheme: str, netloc: str, path: str, params: str, query: str, fragment: str, suffix: str) -> str:
