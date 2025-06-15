@@ -124,7 +124,7 @@ async def query_request(request: Request) -> JSONResponse:
             )
         except Exception as e:
             # we have a bug or use of an unsupported feature
-            msg = f"{sql_text=} Unhandled exception"
+            msg = f"{sql_text=} {params=} Unhandled exception"
             logger.error(msg, exc_info=e)
             # my guess at mimicking a 500 error as per https://docs.snowflake.com/en/developer-guide/sql-api/reference
             # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318

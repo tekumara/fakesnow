@@ -163,6 +163,7 @@ def _params(expr: exp.Copy) -> Params:
     kwargs = {}
     force = False
     purge = False
+    on_error = "ABORT_STATEMENT"
 
     params = cast(list[exp.CopyParameter], expr.args.get("params", []))
     cparams = Params()
@@ -189,10 +190,14 @@ def _params(expr: exp.Copy) -> Params:
             kwargs["files"] = [lit.name for lit in param.find_all(exp.Literal)]
         elif var == "PURGE":
             purge = True
+        elif var == "ON_ERROR":
+            # Expect default ie: ABORT_STATEMENT for now
+            if not param.expression.this == "ABORT_STATEMENT":
+                raise NotImplementedError(param)
         else:
             raise ValueError(f"Unknown copy parameter: {param.this}")
 
-    return Params(force=force, purge=purge, **kwargs)
+    return Params(force=force, purge=purge, on_error=on_error, **kwargs)
 
 
 def _from_source(expr: exp.Copy) -> str:
@@ -404,3 +409,4 @@ class Params:
     file_format: FileTypeHandler = field(default_factory=ReadCSV)
     force: bool = False
     purge: bool = False
+    on_error: str = "ABORT_STATEMENT"  # Default to ABORT_STATEMENT
