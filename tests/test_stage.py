@@ -1,5 +1,6 @@
 from datetime import timezone
 
+import pytest
 import snowflake.connector.cursor
 from dirty_equals import IsNow
 
@@ -16,6 +17,11 @@ def test_create_stage(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("CREATE STAGE schema3.stage3 URL='s3://bucket/path/'")
     # lowercase url
     dcur.execute("CREATE TEMP STAGE stage4 url='s3://bucket/path/'")
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("CREATE STAGE stage1")
+
+    assert str(excinfo.value) == "002002 (42710): SQL compilation error:\nObject 'STAGE1' already exists."
 
     common_fields = {
         "created_on": IsNow(tz=timezone.utc),
