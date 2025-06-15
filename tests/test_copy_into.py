@@ -1,7 +1,9 @@
 # ruff: noqa: E501
 from __future__ import annotations
 
+import os
 import re
+import tempfile
 import uuid
 from datetime import timezone
 from typing import NamedTuple
@@ -167,6 +169,43 @@ def test_execute(
     assert dcur.rowcount == 1, "rowcount should be length of results not number of rows loaded"
     dcur.execute("SELECT * FROM schema1.table1")
     assert dcur.fetchall() == case.expected_data
+
+
+def test_execute_internal_stage_server(sdcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+    dcur = sdcur
+
+    create_table(dcur)
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        data = "1,2\n"
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file_path = temp_file.name
+        temp_file_basename = os.path.basename(temp_file_path)
+
+        # use internal stage
+        dcur.execute("CREATE STAGE stage3")
+        dcur.execute(f"PUT 'file://{temp_file_path}' @stage3")
+
+        sql = """
+        COPY INTO table1
+        FROM @stage3
+        """
+
+        dcur.execute(sql)
+        assert dcur.fetchall() == [
+            {
+                "file": f"stage3/{temp_file_basename}.gz",
+                "status": "LOADED",
+                "rows_parsed": 1,
+                "rows_loaded": 1,
+                "error_limit": 1,
+                "errors_seen": 0,
+                "first_error": None,
+                "first_error_line": None,
+                "first_error_character": None,
+                "first_error_column_name": None,
+            }
+        ]
 
 
 @patch("fakesnow.copy_into.logger.log_sql", side_effect=logger.log_sql)

@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 import tempfile
 from collections.abc import Sequence
+from pathlib import PurePath
 from typing import Any
 from urllib.parse import urlparse
 from urllib.request import url2pathname
@@ -165,7 +166,7 @@ def put_stage(
         "stageInfo": {
             # use LOCAL_FS otherwise we need to mock S3 with HTTPS which requires a certificate
             "locationType": "LOCAL_FS",
-            "location": local_dir(fqname),
+            "location": internal_dir(fqname),
             "creds": {},
         },
         "src_locations": [src_path],
@@ -217,7 +218,11 @@ def parts_from_var(var: str, current_database: str | None, current_schema: str |
     return database_name, schema_name, name
 
 
-def local_dir(fqname: str) -> str:
+def is_internal(s: str) -> bool:
+    return PurePath(s).is_relative_to(LOCAL_BUCKET_PATH)
+
+
+def internal_dir(fqname: str) -> str:
     """
     Given a fully qualified stage name, return the directory path where the stage files are stored.
     """
@@ -229,7 +234,7 @@ def list_stage_files_sql(stage_name: str) -> str:
     """
     Generate SQL to list files in a stage directory, matching Snowflake's LIST output format.
     """
-    sdir = local_dir(stage_name)
+    sdir = internal_dir(stage_name)
     return f"""
         select
             lower(split_part(filename, '/', -2)) || '/' || split_part(filename, '/', -1) AS name,

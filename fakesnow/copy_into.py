@@ -3,6 +3,7 @@ from __future__ import annotations
 import datetime
 from collections.abc import Sequence
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, NamedTuple, Protocol, cast
 from urllib.parse import urlparse, urlunparse
 
@@ -127,7 +128,7 @@ def copy_into(
             "first_error_character, first_error_column_name"
         )
         values = "\n, ".join(
-            f"('{h.file_name}', '{h.status}', {h.row_parsed}, {h.row_count}, "
+            f"('{_result_file_name(h.file_name)}', '{h.status}', {h.row_parsed}, {h.row_count}, "
             f"{h.error_limit or 'NULL'}, {h.error_count}, "
             f"{repr(h.first_error_message) if h.first_error_message else 'NULL'}, "
             f"{h.first_error_line_number or 'NULL'}, {h.first_error_character_position or 'NULL'}, "
@@ -141,6 +142,15 @@ def copy_into(
         raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=91016, sqlstate="22000") from None
     except duckdb.ConversionException as e:
         raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=100038, sqlstate="22018") from None
+
+
+def _result_file_name(url: str) -> str:
+    if not stage.is_internal(urlparse(url).path):
+        return url
+
+    # for internal stages, return the stage name lowered + file name
+    parts = url.split("/")
+    return f"{parts[-2].lower()}/{parts[-1]}"
 
 
 def _params(expr: exp.Copy) -> Params:
@@ -195,6 +205,9 @@ def _from_source(expr: exp.Copy) -> str:
             )
         # return the name of the stage, eg: @stage1
         return var.this
+    elif isinstance(from_, exp.Var):
+        # return the name of the stage, eg: @stage1
+        return from_.this
 
     assert isinstance(from_, exp.Literal), f"{from_} is not a exp.Literal"
     # return url
@@ -215,7 +228,9 @@ def stage_url_from_var(
         (database_name, schema_name, name),
     )
     if result := duck_conn.fetchone():
-        return result[0]
+        # if no URL is found, it is an internal stage ie: local directory
+        url = result[0] or stage.internal_dir(f"{database_name}.{schema_name}.{name}")
+        return url
     else:
         raise snowflake.connector.errors.ProgrammingError(
             msg=f"SQL compilation error:\nStage '{database_name}.{schema_name}.{name}' does not exist or not authorized.",  # noqa: E501
@@ -238,11 +253,12 @@ def _source_urls(source: str, files: list[str]) -> list[str]:
 
 def _source_glob(source: str, duck_conn: DuckDBPyConnection) -> list[str]:
     """List files from the source using duckdb glob."""
-    scheme, netloc, path, params, query, fragment = urlparse(source)
-    if scheme != "s3":
-        raise NotImplementedError(f"Listing files from {scheme} is not implemented")
+    if stage.is_internal(source):
+        source = Path(source).as_uri()  # convert local directory to a file URL
 
-    sql = f"SELECT file FROM glob('{source}*')"
+    scheme, _netloc, _path, _params, _query, _fragment = urlparse(source)
+    glob = f"{source}/*" if scheme == "file" else f"{source}*"
+    sql = f"SELECT file FROM glob('{glob}')"
     logger.log_sql(sql)
     result = duck_conn.execute(sql).fetchall()
     return [r[0] for r in result]
