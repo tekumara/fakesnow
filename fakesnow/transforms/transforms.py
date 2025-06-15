@@ -1098,9 +1098,12 @@ def to_timestamp(expression: exp.Expression) -> exp.Expression:
     """
 
     if isinstance(expression, exp.UnixToTime):
+        # Cast to DATETIME which corresponds to TIMESTAMP WITHOUT TIME ZONE in DuckDB
+        # This ensures that epoch second conversions result in a naive datetime,
+        # matching Snowflake's TIMESTAMP_NTZ behavior.
         return exp.Cast(
             this=expression,
-            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
+            to=exp.DataType(this=exp.DataType.Type.DATETIME, nested=False, prefix=False),
         )
     return expression
 
@@ -1121,16 +1124,61 @@ def to_timestamp_ntz(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def cast_number_to_timestamp_ntz(expression: exp.Expression) -> exp.Expression:
+    if (
+        isinstance(expression, exp.Cast)
+        and expression.to.this == exp.DataType.Type.TIMESTAMPNTZ
+    ):
+        inner_expr = expression.this # This is what will be given to UnixToTime
+
+        # Determine the actual node to check type against (inside Paren if one exists)
+        node_for_checks = inner_expr
+        if isinstance(inner_expr, exp.Paren):
+            node_for_checks = inner_expr.this
+
+        # Condition flags
+        is_lit_num = isinstance(node_for_checks, exp.Literal) and node_for_checks.is_number
+        is_col_num = isinstance(node_for_checks, exp.Column) and node_for_checks.type and node_for_checks.type.this in (
+                        exp.DataType.Type.INT, exp.DataType.Type.BIGINT, exp.DataType.Type.DECIMAL,
+                        exp.DataType.Type.NUMBER, exp.DataType.Type.FLOAT, exp.DataType.Type.DOUBLE)
+        is_arith = isinstance(node_for_checks, (exp.Add, exp.Sub, exp.Mul, exp.Div))
+        # Check for JSONExtractScalar specifically, as it's the output of indices_to_json_extract
+        is_json_extract_scalar = isinstance(node_for_checks, exp.JSONExtractScalar)
+        # The prompt's condition for JSON was:
+        # (isinstance(expression.this, exp.Cast) and isinstance(expression.this.this, exp.JSONExtract))
+        # This is less likely to match after other transforms like indices_to_json_extract and paren wrapping.
+        # We rely on is_json_extract_scalar for JSON handling.
+
+        if is_lit_num or is_col_num or is_arith or is_json_extract_scalar:
+            inner_expr_for_utt: exp.Expression
+            # If it's a JSON extract, it needs pre-casting to BIGINT because its output is text.
+            if is_json_extract_scalar:
+                # Ensure we operate on a copy for modification if node_for_checks is part of a larger shared tree
+                casted_json = exp.Cast(this=node_for_checks.copy(), to=exp.DataType(this=exp.DataType.Type.BIGINT))
+                if isinstance(inner_expr, exp.Paren): # If original was Paren, keep Paren around the new cast
+                    inner_expr_for_utt = exp.Paren(this=casted_json)
+                else: # If no Paren originally, just use the casted_json
+                    inner_expr_for_utt = casted_json
+            else: # For other numeric types (literal, column, arithmetic), use them as is (potentially wrapped in Paren)
+                  # Make a copy to avoid modifying parts of the input expression tree that might be shared.
+                inner_expr_for_utt = inner_expr.copy()
+
+            # Transform to UnixToTime. The existing `to_timestamp` transform
+            # should then handle casting this to DATETIME (naive timestamp).
+            return exp.UnixToTime(this=inner_expr_for_utt)
+    return expression
+
 def timestamp_ntz(expression: exp.Expression) -> exp.Expression:
     """Convert timestamp_ntz (snowflake) to timestamp (duckdb).
 
     NB: timestamp_ntz defaults to nanosecond precision (ie: NTZ(9)). The duckdb equivalent is TIMESTAMP_NS.
     However we use TIMESTAMP (ie: microsecond precision) here rather than TIMESTAMP_NS to avoid
     https://github.com/duckdb/duckdb/issues/7980 in test_write_pandas_timestamp_ntz.
+    TIMESTAMPNTZ in Snowflake is without timezone, so we map it to DATETIME in DuckDB (TIMESTAMP WITHOUT TIME ZONE).
     """
 
     if isinstance(expression, exp.DataType) and expression.this == exp.DataType.Type.TIMESTAMPNTZ:
-        return exp.DataType(this=exp.DataType.Type.TIMESTAMP)
+        return exp.DataType(this=exp.DataType.Type.DATETIME) # DATETIME is TIMESTAMP WITHOUT TIME ZONE for DuckDB
 
     return expression
 

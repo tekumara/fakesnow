@@ -26,6 +26,7 @@ from fakesnow.transforms.transforms import (
     array_agg_within_group as array_agg_within_group,
     array_construct_etc as array_construct_etc,
     array_size as array_size,
+    cast_number_to_timestamp_ntz as cast_number_to_timestamp_ntz,
     create_clone as create_clone,
     create_database as create_database,
     create_user as create_user,
