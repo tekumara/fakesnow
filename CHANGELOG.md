@@ -2,6 +2,24 @@
 
 # Changelog
 
+## [0.9.42](https://github.com/tekumara/fakesnow/compare/v0.9.41...v0.9.42) (2025-06-15)
+
+
+### Features
+
+* LIST stage ([3ae9994](https://github.com/tekumara/fakesnow/commit/3ae99944743811e3b8fc34dae1fe53e73e52ecba))
+* support COPY INTO from internal stage ([02eae2b](https://github.com/tekumara/fakesnow/commit/02eae2bc23ce1f47acac23bf7fd54438421744eb))
+* support COPY INTO with ON_ERROR = ABORT_STATEMENT ([668a5eb](https://github.com/tekumara/fakesnow/commit/668a5eb3352d5db28ec4f2c9a7c8cd3ffa7ad9d9))
+* support COPY INTO with PURGE = TRUE for internal stage files ([9a9bc43](https://github.com/tekumara/fakesnow/commit/9a9bc435e799570d8b839b560fd4fae717253659))
+* support COPY INTO without FILES ([872e768](https://github.com/tekumara/fakesnow/commit/872e7684ceb75ead5248302b8c642f0b971b1408))
+* support PUT with qmark params ([7bca3f6](https://github.com/tekumara/fakesnow/commit/7bca3f620008ba64854b894ea5ef36f13de9ce60))
+* support PUT with quoted stage names ([d880721](https://github.com/tekumara/fakesnow/commit/d88072140960a63921474d7b472af9fd5cad533a))
+
+
+### Bug Fixes
+
+* error when stage is created as second time ([dba2774](https://github.com/tekumara/fakesnow/commit/dba2774a5e221bb2c74c44728cf151fa42b3457b))
+
 ## [0.9.41](https://github.com/tekumara/fakesnow/compare/v0.9.40...v0.9.41) (2025-06-11)
 
 
