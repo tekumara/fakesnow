@@ -349,6 +349,20 @@ def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
     assert "100038 (22018)" in str(excinfo.value)
 
 
+def test_errors_abort_statement(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+    create_table(dcur)
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute(
+            """
+            COPY INTO table1
+            FROM 's3://foobar/'
+            FILES=('foo.csv')
+            ON_ERROR = ABORT_STATEMENT
+            """
+        )
+    assert "091016 (22000)" in str(excinfo.value)
+
+
 def test_errors_parquet(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
     create_table(dcur)
 
