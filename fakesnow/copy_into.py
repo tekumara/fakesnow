@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -100,6 +101,10 @@ def copy_into(
                 error_limit = 1
                 error_count = 0
                 first_error_message = None
+                path = urlparse(url).path
+                if cparams.purge and stage.is_internal(path):
+                    # If the file is internal, we can remove it from the stage
+                    os.remove(path)
 
             history = LoadHistoryRecord(
                 schema_name=schema,
@@ -137,6 +142,7 @@ def copy_into(
         )
         sql = f"SELECT * FROM (VALUES\n  {values}\n) AS t({columns})"
         duck_conn.execute(sql)
+
         return sql
     except duckdb.HTTPException as e:
         raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=91016, sqlstate="22000") from None
@@ -156,6 +162,7 @@ def _result_file_name(url: str) -> str:
 def _params(expr: exp.Copy) -> Params:
     kwargs = {}
     force = False
+    purge = False
 
     params = cast(list[exp.CopyParameter], expr.args.get("params", []))
     cparams = Params()
@@ -180,10 +187,12 @@ def _params(expr: exp.Copy) -> Params:
             force = True
         elif var == "FILES":
             kwargs["files"] = [lit.name for lit in param.find_all(exp.Literal)]
+        elif var == "PURGE":
+            purge = True
         else:
             raise ValueError(f"Unknown copy parameter: {param.this}")
 
-    return Params(force=force, **kwargs)
+    return Params(force=force, purge=purge, **kwargs)
 
 
 def _from_source(expr: exp.Copy) -> str:
@@ -394,3 +403,4 @@ class Params:
     # Snowflake defaults to CSV when no file format is specified
     file_format: FileTypeHandler = field(default_factory=ReadCSV)
     force: bool = False
+    purge: bool = False

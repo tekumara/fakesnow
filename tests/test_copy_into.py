@@ -186,9 +186,14 @@ def test_execute_internal_stage_server(sdcur: snowflake.connector.cursor.DictCur
         dcur.execute("CREATE STAGE stage3")
         dcur.execute(f"PUT 'file://{temp_file_path}' @stage3")
 
+        dcur.execute("LIST @stage3")
+        results = dcur.fetchall()
+        assert len(results) == 1
+
         sql = """
         COPY INTO table1
         FROM @stage3
+        PURGE = TRUE
         """
 
         dcur.execute(sql)
@@ -206,6 +211,11 @@ def test_execute_internal_stage_server(sdcur: snowflake.connector.cursor.DictCur
                 "first_error_column_name": None,
             }
         ]
+
+        # check that the file has been removed from the stage because PURGE was set to TRUE
+        dcur.execute("LIST @stage3")
+        results = dcur.fetchall()
+        assert len(results) == 0
 
 
 @patch("fakesnow.copy_into.logger.log_sql", side_effect=logger.log_sql)
