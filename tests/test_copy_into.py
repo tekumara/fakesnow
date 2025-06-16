@@ -6,7 +6,7 @@ import re
 import tempfile
 import uuid
 from datetime import timezone
-from typing import NamedTuple
+from typing import NamedTuple, cast
 from unittest.mock import MagicMock, patch
 
 import pandas as pd
@@ -18,7 +18,7 @@ from mypy_boto3_s3 import S3Client
 from sqlglot import exp
 
 from fakesnow import logger
-from fakesnow.copy_into import Params, _from_source, _params, _source_urls, _strip_json_extract
+from fakesnow.copy_into import CopyParams, _from_source, _params, _source_urls, _strip_json_extract
 
 
 class Case(NamedTuple):
@@ -349,18 +349,34 @@ def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
     assert "100038 (22018)" in str(excinfo.value)
 
 
-def test_errors_abort_statement(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
-    create_table(dcur)
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute(
-            """
-            COPY INTO table1
-            FROM 's3://foobar/'
-            FILES=('foo.csv')
-            ON_ERROR = ABORT_STATEMENT
-            """
-        )
-    assert "091016 (22000)" in str(excinfo.value)
+def test_errors_abort_statement(_fakesnow: None) -> None:
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn,
+        cast(snowflake.connector.cursor.DictCursor, conn.cursor(snowflake.connector.cursor.DictCursor)) as dcur,
+    ):
+        create_table(dcur)
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            dcur.execute(
+                """
+                COPY INTO table1
+                FROM 's3://foobar/'
+                FILES=('foo.csv')
+                ON_ERROR = ABORT_STATEMENT
+                """
+            )
+        assert "091016 (22000)" in str(excinfo.value)
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            dcur.execute(
+                """
+                COPY INTO table1
+                FROM 's3://foobar/'
+                FILES=('foo.csv')
+                ON_ERROR = ?
+                """,
+                ("abort_statement",),
+            )
+        assert "091016 (22000)" in str(excinfo.value)
 
 
 def test_errors_parquet(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
@@ -609,7 +625,8 @@ def upload_file(s3_client: S3Client, data: str | bytes, bucket: str | None = Non
     return bucket
 
 
-def parse(sql: str) -> tuple[exp.Copy, Params]:
+def parse(sql: str) -> tuple[exp.Copy, CopyParams]:
     expr = sqlglot.parse_one(sql, read="snowflake")
     assert isinstance(expr, exp.Copy)
-    return expr, _params(expr)
+    cparams, _ = _params(expr)
+    return expr, cparams

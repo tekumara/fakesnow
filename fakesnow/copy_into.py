@@ -5,7 +5,7 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, NamedTuple, Protocol, cast
+from typing import Any, NamedTuple, Protocol, Union, cast
 from urllib.parse import urlparse, urlunparse
 
 import duckdb
@@ -15,6 +15,9 @@ from sqlglot import exp
 
 import fakesnow.transforms.stage as stage
 from fakesnow import logger
+from fakesnow.expr import index_of_placeholder
+
+Params = Union[Sequence[Any], dict[Any, Any]]
 
 
 class LoadHistoryRecord(NamedTuple):
@@ -42,7 +45,7 @@ def copy_into(
     expr: exp.Copy,
     params: Sequence[Any] | dict[Any, Any] | None = None,
 ) -> str:
-    cparams = _params(expr)
+    cparams, params = _params(expr, params)
     if isinstance(cparams.file_format, ReadParquet):
         from_ = expr.args["files"][0]
         # parquet must use MATCH_BY_COLUMN_NAME (TODO) or a copy transformation
@@ -159,15 +162,14 @@ def _result_file_name(url: str) -> str:
     return f"{parts[-2].lower()}/{parts[-1]}"
 
 
-def _params(expr: exp.Copy) -> Params:
+def _params(expr: exp.Copy, params: Params | None = None) -> tuple[CopyParams, Params | None]:
     kwargs = {}
     force = False
     purge = False
     on_error = "ABORT_STATEMENT"
 
-    params = cast(list[exp.CopyParameter], expr.args.get("params", []))
-    cparams = Params()
-    for param in params:
+    cparams = CopyParams()
+    for param in cast(list[exp.CopyParameter], expr.args.get("params", [])):
         assert isinstance(param.this, exp.Var), f"{param.this.__class__} is not a Var"
         var = param.this.name.upper()
         if var == "FILE_FORMAT":
@@ -191,13 +193,23 @@ def _params(expr: exp.Copy) -> Params:
         elif var == "PURGE":
             purge = True
         elif var == "ON_ERROR":
-            # Expect default ie: ABORT_STATEMENT for now
-            if not param.expression.this == "ABORT_STATEMENT":
+            if isinstance(param.expression, exp.Var):
+                on_error = param.expression.name.upper()
+            elif isinstance(param.expression, exp.Placeholder):
+                if not isinstance(params, (list, tuple)):
+                    raise NotImplementedError(f"{type(params)=} is not a Sequence")
+                param_idx = index_of_placeholder(expr, param.expression)
+                on_error = params[param_idx]
+                params = params[:param_idx] + params[param_idx + 1 :]  # pyright: ignore[reportOperatorIssue] safe because operands are of same type
+            else:
+                raise NotImplementedError(f"{param.expression.__class__=}")
+
+            if not (isinstance(on_error, str) and on_error.upper() == "ABORT_STATEMENT"):
                 raise NotImplementedError(param)
         else:
             raise ValueError(f"Unknown copy parameter: {param.this}")
 
-    return Params(force=force, purge=purge, on_error=on_error, **kwargs)
+    return CopyParams(force=force, purge=purge, on_error=on_error, **kwargs), params
 
 
 def _from_source(expr: exp.Copy) -> str:
@@ -291,7 +303,7 @@ def _urlunparse(scheme: str, netloc: str, path: str, params: str, query: str, fr
     return urlunparse((scheme, netloc, path, params, query, fragment))
 
 
-def _inserts(expr: exp.Copy, params: Params, urls: list[str]) -> list[exp.Expression]:
+def _inserts(expr: exp.Copy, params: CopyParams, urls: list[str]) -> list[exp.Expression]:
     # INTO expression
     target = expr.this
 
@@ -403,7 +415,7 @@ class ReadParquet(FileTypeHandler):
 
 
 @dataclass
-class Params:
+class CopyParams:
     files: list[str] = field(default_factory=list)
     # Snowflake defaults to CSV when no file format is specified
     file_format: FileTypeHandler = field(default_factory=ReadCSV)
