@@ -198,7 +198,7 @@ Fully supported:
 - Multiple databases
 - [Parameter binding](https://docs.snowflake.com/en/user-guide/python-connector-example#binding-data) in queries
 - Table comments
-- Pandas integration including [write_pandas(..)](https://docs.snowflake.com/en/user-guide/python-connector-api#write_pandas) (not available via the server yet)
+- Pandas integration including [write_pandas(..)](https://docs.snowflake.com/en/user-guide/python-connector-api#write_pandas)
 - Result batch retrieval via [get_result_batches()](https://docs.snowflake.com/en/user-guide/python-connector-api#get_result_batches)
 - HTTP server for non-Python connectors
 
@@ -209,7 +209,8 @@ Partially supported:
 - Semi-structured data operations
 - Tags
 - User management
-- `COPY INTO` from S3 sources, see [COPY INTO](#copy-into)
+- Stages and PUT
+- `COPY INTO` from S3 sources and stages, see [COPY INTO](#copy-into)
 
 Not yet implemented:
 
@@ -225,7 +226,7 @@ For more detail see the [test suite](tests/).
 
 ## COPY INTO
 
-`COPY INTO` can be used from S3 sources. By default the standard AWS credential chain will be used. If you are getting an HTTP 403 or need to provide alternative S3 credentials you can use the duckdb [CREATE SECRET](https://duckdb.org/docs/stable/extensions/httpfs/s3api) statement. For an example of creating a secret to use a moto S3 endpoint see `s3_client` in [conftest.py](tests/conftest.py#L80)
+`COPY INTO` can be used from S3 sources and stages. By default the standard AWS credential chain will be used. If you are getting an HTTP 403 or need to provide alternative S3 credentials you can use the duckdb [CREATE SECRET](https://duckdb.org/docs/stable/extensions/httpfs/s3api) statement. For an example of creating a secret to use a moto S3 endpoint see `s3_client` in [conftest.py](tests/conftest.py#L80)
 
 ## Contributing
 
