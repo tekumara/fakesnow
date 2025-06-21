@@ -16,6 +16,7 @@ from sqlglot import exp
 import fakesnow.transforms.stage as stage
 from fakesnow import logger
 from fakesnow.expr import index_of_placeholder
+from fakesnow.params import MutableParams
 
 Params = Union[Sequence[Any], dict[Any, Any]]
 
@@ -43,9 +44,9 @@ def copy_into(
     current_database: str | None,
     current_schema: str | None,
     expr: exp.Copy,
-    params: Sequence[Any] | dict[Any, Any] | None = None,
+    params: MutableParams | None = None,
 ) -> str:
-    cparams, params = _params(expr, params)
+    cparams = _params(expr, params)
     if isinstance(cparams.file_format, ReadParquet):
         from_ = expr.args["files"][0]
         # parquet must use MATCH_BY_COLUMN_NAME (TODO) or a copy transformation
@@ -162,7 +163,7 @@ def _result_file_name(url: str) -> str:
     return f"{parts[-2].lower()}/{parts[-1]}"
 
 
-def _params(expr: exp.Copy, params: Params | None = None) -> tuple[CopyParams, Params | None]:
+def _params(expr: exp.Copy, params: MutableParams | None = None) -> CopyParams:
     kwargs = {}
     force = False
     purge = False
@@ -199,8 +200,7 @@ def _params(expr: exp.Copy, params: Params | None = None) -> tuple[CopyParams, P
                 if not isinstance(params, (list, tuple)):
                     raise NotImplementedError(f"{type(params)=} is not a Sequence")
                 param_idx = index_of_placeholder(expr, param.expression)
-                on_error = params[param_idx]
-                params = params[:param_idx] + params[param_idx + 1 :]  # pyright: ignore[reportOperatorIssue] safe because operands are of same type
+                on_error = params.pop(param_idx)
             else:
                 raise NotImplementedError(f"{param.expression.__class__=}")
 
@@ -209,7 +209,7 @@ def _params(expr: exp.Copy, params: Params | None = None) -> tuple[CopyParams, P
         else:
             raise ValueError(f"Unknown copy parameter: {param.this}")
 
-    return CopyParams(force=force, purge=purge, on_error=on_error, **kwargs), params
+    return CopyParams(force=force, purge=purge, on_error=on_error, **kwargs)
 
 
 def _from_source(expr: exp.Copy) -> str:

@@ -2,15 +2,15 @@ from __future__ import annotations
 
 import datetime
 import tempfile
-from collections.abc import Sequence
 from pathlib import PurePath
-from typing import Any
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 import snowflake.connector.errors
 import sqlglot
 from sqlglot import exp
+
+from fakesnow.params import MutableParams
 
 # TODO: clean up temp files on exit
 LOCAL_BUCKET_PATH = tempfile.mkdtemp(prefix="fakesnow_bucket_")
@@ -20,7 +20,7 @@ def create_stage(
     expression: exp.Expression,
     current_database: str | None,
     current_schema: str | None,
-    params: Sequence[Any] | dict[Any, Any] | None,
+    params: MutableParams | None,
 ) -> exp.Expression:
     """Transform CREATE STAGE to an INSERT statement for the fake stages table."""
     if not (
@@ -34,9 +34,9 @@ def create_stage(
 
     ident = table.this
     if isinstance(ident, exp.Placeholder):
-        if not (isinstance(params, Sequence) and len(params) == 1):
+        if not (isinstance(params, list) and len(params) == 1):
             raise NotImplementedError("PUT requires a single parameter for the stage name")
-        var = params[0]
+        var = params.pop(0)
         catalog, schema, stage_name = parts_from_var(
             var, current_database=current_database, current_schema=current_schema
         )
@@ -85,7 +85,6 @@ def create_stage(
         """
     transformed = sqlglot.parse_one(insert_sql, read="duckdb")
     transformed.args["create_stage_name"] = stage_name
-    transformed.args["consumed_params"] = isinstance(ident, exp.Placeholder)
     return transformed
 
 
@@ -125,7 +124,7 @@ def put_stage(
     expression: exp.Expression,
     current_database: str | None,
     current_schema: str | None,
-    params: Sequence[Any] | dict[Any, Any] | None,
+    params: MutableParams | None,
 ) -> exp.Expression:
     """Transform PUT to a SELECT statement to locate the stage.
 
@@ -142,9 +141,9 @@ def put_stage(
     assert isinstance(target, exp.Var), f"{target} is not a exp.Var"
     this = target.text("this")
     if this == "?":
-        if not (isinstance(params, Sequence) and len(params) == 1):
+        if not (isinstance(params, list) and len(params) == 1):
             raise NotImplementedError("PUT requires a single parameter for the stage name")
-        this = params[0]
+        this = params.pop(0)
     if not this.startswith("@"):
         msg = f"SQL compilation error:\n{this} does not start with @"
         raise snowflake.connector.errors.ProgrammingError(
@@ -180,7 +179,6 @@ def put_stage(
         "overwrite": False,
         "command": "UPLOAD",
     }
-    transformed.args["consumed_params"] = target.text("this") == "?"
 
     return transformed
 

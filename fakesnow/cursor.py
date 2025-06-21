@@ -27,6 +27,7 @@ import fakesnow.info_schema as info_schema
 import fakesnow.transforms as transforms
 from fakesnow import logger
 from fakesnow.copy_into import copy_into
+from fakesnow.params import MutableParams
 from fakesnow.rowtype import describe_as_result_metadata
 from fakesnow.transforms import stage
 
@@ -157,6 +158,10 @@ class FakeSnowflakeCursor:
             else:
                 command, params = self._rewrite_with_params(command, params)
 
+            # convert tuple to mutable list
+            if not isinstance(params, (list, dict)) and params is not None:
+                params = list(params)
+
             if self._conn.nop_regexes and any(re.match(p, command, re.IGNORECASE) for p in self._conn.nop_regexes):
                 transformed = transforms.SUCCESS_NOP
                 self._execute(transformed, params)
@@ -200,7 +205,7 @@ class FakeSnowflakeCursor:
                 sqlstate="22000",
             )
 
-    def _transform(self, expression: exp.Expression, params: Sequence[Any] | dict[Any, Any] | None) -> exp.Expression:
+    def _transform(self, expression: exp.Expression, params: MutableParams | None) -> exp.Expression:
         return (
             expression.transform(transforms.upper_case_unquoted_identifiers)
             .transform(transforms.update_variables, variables=self._conn.variables)
@@ -275,7 +280,7 @@ class FakeSnowflakeCursor:
         # Split transforms have limited support at the moment.
         return transforms.merge(expression)
 
-    def _execute(self, transformed: exp.Expression, params: Sequence[Any] | dict[Any, Any] | None = None) -> None:
+    def _execute(self, transformed: exp.Expression, params: MutableParams | None = None) -> None:
         self._arrow_table = None
         self._arrow_table_fetch_index = None
         self._rowcount = None
@@ -290,9 +295,6 @@ class FakeSnowflakeCursor:
 
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
             sql = f"SELECT setseed({seed}); {sql}"
-
-        if transformed.args.get("consumed_params"):
-            params = None
 
         result_sql = None
 

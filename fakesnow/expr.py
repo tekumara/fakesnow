@@ -45,5 +45,4 @@ def index_of_placeholder(expr: exp.Expression, target: exp.Placeholder) -> int:
     for index, ph in enumerate(expr.find_all(exp.Placeholder, bfs=False)):
         if ph is target:
             return index
-    else:
-        return -1
+    return -1

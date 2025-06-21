@@ -628,5 +628,5 @@ def upload_file(s3_client: S3Client, data: str | bytes, bucket: str | None = Non
 def parse(sql: str) -> tuple[exp.Copy, CopyParams]:
     expr = sqlglot.parse_one(sql, read="snowflake")
     assert isinstance(expr, exp.Copy)
-    cparams, _ = _params(expr)
+    cparams = _params(expr)
     return expr, cparams
