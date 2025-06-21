@@ -2,6 +2,28 @@
 
 # Changelog
 
+## [0.9.42](https://github.com/tekumara/fakesnow/compare/v0.9.41...v0.9.42) (2025-06-21)
+
+
+### Features
+
+* LIST stage ([3ae9994](https://github.com/tekumara/fakesnow/commit/3ae99944743811e3b8fc34dae1fe53e73e52ecba))
+* PUT when using in-process patching ([7e23b04](https://github.com/tekumara/fakesnow/commit/7e23b049761c19ee97cdfaaaa5467797f3bd9f4c)), closes [#35](https://github.com/tekumara/fakesnow/issues/35)
+* **server:** support duckb's CREATE SECRET ([8bf03f6](https://github.com/tekumara/fakesnow/commit/8bf03f64937e55551ce7bd4b9e0a4ab3e209d188))
+* support COPY INTO from internal stage ([02eae2b](https://github.com/tekumara/fakesnow/commit/02eae2bc23ce1f47acac23bf7fd54438421744eb))
+* support COPY INTO with ON_ERROR = ? ([80c18f8](https://github.com/tekumara/fakesnow/commit/80c18f8ecc59425eb66ddeb01c355fa859d20a17))
+* support COPY INTO with ON_ERROR = ABORT_STATEMENT ([3a686a6](https://github.com/tekumara/fakesnow/commit/3a686a62fb18e69733c33868b5b1f9e6120da95c))
+* support COPY INTO with PURGE = TRUE for internal stage files ([a6578e5](https://github.com/tekumara/fakesnow/commit/a6578e54d6bb1e9e51042d17163479b055652e35))
+* support COPY INTO without FILES ([872e768](https://github.com/tekumara/fakesnow/commit/872e7684ceb75ead5248302b8c642f0b971b1408))
+* support IDENTIFIER(?) in all statements ([cede23c](https://github.com/tekumara/fakesnow/commit/cede23c4c0fbbd6dea251c8b9115af8d1c8e0f87))
+* support PUT with qmark params ([7bca3f6](https://github.com/tekumara/fakesnow/commit/7bca3f620008ba64854b894ea5ef36f13de9ce60))
+* support PUT with quoted stage names ([d880721](https://github.com/tekumara/fakesnow/commit/d88072140960a63921474d7b472af9fd5cad533a))
+
+
+### Bug Fixes
+
+* error when creating stage that already exists ([90d5587](https://github.com/tekumara/fakesnow/commit/90d5587e7dad5cea8a4edf37aae73055f6c0d793))
+
 ## [0.9.41](https://github.com/tekumara/fakesnow/compare/v0.9.40...v0.9.41) (2025-06-11)
 
 
