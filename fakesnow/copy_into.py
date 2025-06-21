@@ -15,8 +15,7 @@ from sqlglot import exp
 
 import fakesnow.transforms.stage as stage
 from fakesnow import logger
-from fakesnow.expr import index_of_placeholder
-from fakesnow.params import MutableParams
+from fakesnow.params import MutableParams, pop_qmark_param
 
 Params = Union[Sequence[Any], dict[Any, Any]]
 
@@ -197,10 +196,7 @@ def _params(expr: exp.Copy, params: MutableParams | None = None) -> CopyParams:
             if isinstance(param.expression, exp.Var):
                 on_error = param.expression.name.upper()
             elif isinstance(param.expression, exp.Placeholder):
-                if not isinstance(params, (list, tuple)):
-                    raise NotImplementedError(f"{type(params)=} is not a Sequence")
-                param_idx = index_of_placeholder(expr, param.expression)
-                on_error = params.pop(param_idx)
+                on_error = pop_qmark_param(params, expr, param.expression)
             else:
                 raise NotImplementedError(f"{param.expression.__class__=}")
 
@@ -389,10 +385,8 @@ class ReadCSV(FileTypeHandler):
     delimiter: str = ","
 
     def read_expression(self, url: str) -> exp.Expression:
-        args = []
-
         # don't parse header and use as column names, keep them as column0, column1, etc
-        args.append(self.make_eq("header", False))
+        args = [self.make_eq("header", False)]
 
         if self.skip_header:
             args.append(self.make_eq("skip", 1))
