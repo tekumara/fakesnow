@@ -1004,11 +1004,7 @@ def to_date(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression.
     """
 
-    if (
-        isinstance(expression, exp.Anonymous)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == "TO_DATE"
-    ):
+    if isinstance(expression, exp.Anonymous) and expression.name.upper() == "TO_DATE":
         return exp.Cast(
             this=expression.expressions[0],
             to=exp.DataType(this=exp.DataType.Type.DATE, nested=False, prefix=False),
@@ -1092,11 +1088,7 @@ def to_decimal(expression: exp.Expression) -> exp.Expression:
             to=exp.DataType(this=exp.DataType.Type.DECIMAL, expressions=[precision, scale], nested=False, prefix=False),
         )
 
-    if (
-        isinstance(expression, exp.Anonymous)
-        and isinstance(expression.this, str)
-        and expression.this.upper() in ["TO_DECIMAL", "TO_NUMERIC"]
-    ):
+    if isinstance(expression, exp.Anonymous) and expression.name.upper() in ["TO_DECIMAL", "TO_NUMERIC"]:
         return _to_decimal(expression, exp.Cast)
 
     return expression
@@ -1107,11 +1099,11 @@ def try_to_decimal(expression: exp.Expression) -> exp.Expression:
     See https://docs.snowflake.com/en/sql-reference/functions/try_to_decimal
     """
 
-    if (
-        isinstance(expression, exp.Anonymous)
-        and isinstance(expression.this, str)
-        and expression.this.upper() in ["TRY_TO_DECIMAL", "TRY_TO_NUMBER", "TRY_TO_NUMERIC"]
-    ):
+    if isinstance(expression, exp.Anonymous) and expression.name.upper() in [
+        "TRY_TO_DECIMAL",
+        "TRY_TO_NUMBER",
+        "TRY_TO_NUMERIC",
+    ]:
         return _to_decimal(expression, exp.TryCast)
 
     return expression
@@ -1137,9 +1129,7 @@ def to_timestamp_ntz(expression: exp.Expression) -> exp.Expression:
     Because it's not yet supported by sqlglot, see https://github.com/tobymao/sqlglot/issues/2748
     """
 
-    if isinstance(expression, exp.Anonymous) and (
-        isinstance(expression.this, str) and expression.this.upper() == "TO_TIMESTAMP_NTZ"
-    ):
+    if isinstance(expression, exp.Anonymous) and expression.name.upper() == "TO_TIMESTAMP_NTZ":
         return exp.StrToTime(
             this=expression.expressions[0],
             format=exp.Literal(this="%Y-%m-%d %H:%M:%S", is_string=True),
@@ -1190,11 +1180,7 @@ def try_parse_json(expression: exp.Expression) -> exp.Expression:
         exp.Expression: The transformed expression.
     """
 
-    if (
-        isinstance(expression, exp.Anonymous)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == "TRY_PARSE_JSON"
-    ):
+    if isinstance(expression, exp.Anonymous) and expression.name.upper() == "TRY_PARSE_JSON":
         expressions = expression.expressions
         return exp.TryCast(
             this=expressions[0],

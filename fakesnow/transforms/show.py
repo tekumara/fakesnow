@@ -62,9 +62,7 @@ def show_columns(
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-columns
     """
-    if not (
-        isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "COLUMNS"
-    ):
+    if not (isinstance(expression, exp.Show) and expression.name.upper() == "COLUMNS"):
         return expression
 
     scope_kind = expression.args.get("scope_kind")
@@ -139,7 +137,7 @@ def show_databases(expression: exp.Expression) -> exp.Expression:
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-databases
     """
-    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "DATABASES":
+    if isinstance(expression, exp.Show) and expression.name.upper() == "DATABASES":
         return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_show_databases", read="duckdb")
 
     return expression
@@ -177,7 +175,7 @@ def show_functions(expression: exp.Expression) -> exp.Expression:
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-functions
     """
-    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "FUNCTIONS":
+    if isinstance(expression, exp.Show) and expression.name.upper() == "FUNCTIONS":
         return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_show_functions", read="duckdb")
 
     return expression
@@ -197,11 +195,7 @@ def show_keys(
     if kind == "FOREIGN":
         snowflake_kind = "IMPORTED"
 
-    if (
-        isinstance(expression, exp.Show)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == f"{snowflake_kind} KEYS"
-    ):
+    if isinstance(expression, exp.Show) and expression.name.upper() == f"{snowflake_kind} KEYS":
         if kind == "FOREIGN":
             statement = f"""
                 SELECT
@@ -298,11 +292,7 @@ def show_procedures(expression: exp.Expression) -> exp.Expression:
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-procedures
     """
-    if (
-        isinstance(expression, exp.Show)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == "PROCEDURES"
-    ):
+    if isinstance(expression, exp.Show) and expression.name.upper() == "PROCEDURES":
         return sqlglot.parse_one(
             "SELECT * FROM _fs_global._fs_information_schema._fs_show_procedures",
             read="duckdb",
@@ -333,7 +323,7 @@ def show_schemas(expression: exp.Expression, current_database: str | None) -> ex
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-schemas
     """
-    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "SCHEMAS":
+    if isinstance(expression, exp.Show) and expression.name.upper() == "SCHEMAS":
         if (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             database = ident.this
         else:
@@ -350,9 +340,7 @@ def show_schemas(expression: exp.Expression, current_database: str | None) -> ex
 
 def show_stages(expression: exp.Expression, current_database: str | None, current_schema: str | None) -> exp.Expression:
     """Transform SHOW STAGES to a select from the fake _fs_stages table."""
-    if not (
-        isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "STAGES"
-    ):
+    if not (isinstance(expression, exp.Show) and expression.name.upper() == "STAGES"):
         return expression
 
     scope_kind = expression.args.get("scope_kind")
@@ -480,8 +468,7 @@ def show_tables_etc(
     """Transform SHOW OBJECTS/TABLES/VIEWS to a query against the _fs_information_schema views."""
     if not (
         isinstance(expression, exp.Show)
-        and isinstance(expression.this, str)
-        and (show := expression.this.upper())
+        and (show := expression.name.upper())
         and show in {"OBJECTS", "TABLES", "VIEWS"}
     ):
         return expression
@@ -538,7 +525,7 @@ def show_users(expression: exp.Expression) -> exp.Expression:
 
     https://docs.snowflake.com/en/sql-reference/sql/show-users
     """
-    if isinstance(expression, exp.Show) and isinstance(expression.this, str) and expression.this.upper() == "USERS":
+    if isinstance(expression, exp.Show) and expression.name.upper() == "USERS":
         return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_users", read="duckdb")
 
     return expression
@@ -593,11 +580,7 @@ def show_warehouses(expression: exp.Expression) -> exp.Expression:
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-warehouses
     """
-    if (
-        isinstance(expression, exp.Show)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == "WAREHOUSES"
-    ):
+    if isinstance(expression, exp.Show) and expression.name.upper() == "WAREHOUSES":
         return sqlglot.parse_one(SQL_SHOW_WAREHOUSES, read="duckdb")
 
     return expression
