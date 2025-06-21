@@ -437,9 +437,28 @@ def test_float_to_double() -> None:
 
 def test_identifier() -> None:
     assert (
-        sqlglot.parse_one("select * from identifier('example')").transform(identifier).sql() == "SELECT * FROM example"
+        sqlglot.parse_one("select * from identifier('example')").transform(lambda e: identifier(e, [])).sql()
+        == "SELECT * FROM example"
     )
-    assert sqlglot.parse_one("select * from identifier(?)").transform(identifier).sql() == "SELECT * FROM ?"
+
+    # verify the AST is correctly transformed, not just the SQL output, because the AST needs to be correct
+    # for other transforms
+    assert sqlglot.parse_one("""select * from identifier('foo.bar."baz"')""").transform(
+        lambda e: identifier(e, [])
+    ) == sqlglot.parse_one("""SELECT * FROM foo.bar."baz" """)
+
+    assert sqlglot.parse_one("""select * from identifier('"foo.bar.baz"')""").transform(
+        lambda e: identifier(e, [])
+    ) == sqlglot.parse_one("""SELECT * FROM "foo.bar.baz" """)
+
+    assert (
+        sqlglot.parse_one("select * from identifier(?)").transform(lambda e: identifier(e, ["example"])).sql()
+        == "SELECT * FROM example"
+    )
+    assert (
+        sqlglot.parse_one("select * from identifier(?)").transform(lambda e: identifier(e, ['"example"'])).sql()
+        == 'SELECT * FROM "example"'
+    )
 
 
 def test_indices_to_object() -> None:

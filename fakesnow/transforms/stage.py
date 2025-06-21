@@ -20,7 +20,6 @@ def create_stage(
     expression: exp.Expression,
     current_database: str | None,
     current_schema: str | None,
-    params: MutableParams | None,
 ) -> exp.Expression:
     """Transform CREATE STAGE to an INSERT statement for the fake stages table."""
     if not (
@@ -33,19 +32,25 @@ def create_stage(
         return expression
 
     ident = table.this
-    if isinstance(ident, exp.Placeholder):
-        if not (isinstance(params, list) and len(params) == 1):
-            raise NotImplementedError("PUT requires a single parameter for the stage name")
-        var = params.pop(0)
-        catalog, schema, stage_name = parts_from_var(
-            var, current_database=current_database, current_schema=current_schema
+    if not isinstance(ident, exp.Identifier):
+        raise snowflake.connector.errors.ProgrammingError(
+            msg=f"SQL compilation error:\nInvalid identifier type {ident.__class__.__name__} for stage name.",
+            errno=1003,
+            sqlstate="42000",
         )
-    elif isinstance(ident, exp.Identifier):
-        catalog = table.catalog or current_database
-        schema = table.db or current_schema
-        stage_name = ident.this if ident.quoted else ident.this.upper()
+
+    # TODO: better handling of quoted catalog and schema
+    if (catalog_ident := table.args.get("catalog")) and isinstance(catalog_ident, exp.Identifier):
+        catalog = catalog_ident.this if catalog_ident.quoted else catalog_ident.name.upper()
     else:
-        raise ValueError(f"Invalid identifier type {ident.__class__.__name__} for stage name")
+        catalog = current_database
+
+    if (db_ident := table.args.get("db")) and isinstance(db_ident, exp.Identifier):
+        schema = db_ident.this if db_ident.quoted else db_ident.name.upper()
+    else:
+        schema = current_schema
+
+    stage_name = ident.this if ident.quoted else ident.name.upper()
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     is_temp = False

@@ -29,7 +29,7 @@ def test_binding_qmark(_fakesnow: None):
 
     with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, ACTIVE boolean)")
-        cur.execute("insert into customers values (?, ?, ?)", (1, "Jenny", True))
+        cur.execute("insert into identifier(?) values (?, ?, ?)", ("CUSTOMERS", 1, "Jenny", True))
         cur.execute("select * from customers")
         assert cur.fetchall() == [(1, "Jenny", True)]
 

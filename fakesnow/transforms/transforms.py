@@ -7,6 +7,7 @@ from typing import ClassVar, cast
 import sqlglot
 from sqlglot import exp
 
+from fakesnow.params import MutableParams, pop_qmark_param
 from fakesnow.variables import Variables
 
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.' as status")
@@ -537,22 +538,47 @@ def float_to_double(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def identifier(expression: exp.Expression) -> exp.Expression:
-    """Convert identifier function to an identifier.
+def identifier(expression: exp.Expression, params: MutableParams | None) -> exp.Expression:
+    """Convert identifier function to an identifier or table.
 
     See https://docs.snowflake.com/en/sql-reference/identifier-literal
     """
 
     if (
-        isinstance(expression, exp.Anonymous)
-        and isinstance(expression.this, str)
-        and expression.this.upper() == "IDENTIFIER"
+        isinstance(expression, exp.Table)
+        and isinstance(expression.this, exp.Anonymous)
+        and isinstance(expression.this.this, str)
+        and expression.this.this.upper() == "IDENTIFIER"
     ):
-        arg = expression.expressions[0]
+        arg = expression.this.expressions[0]
+
         # ? is parsed as exp.Placeholder
-        if isinstance(arg, exp.Placeholder):
-            return arg
-        return exp.Identifier(this=arg.this, quoted=False)
+        val: str = pop_qmark_param(params, arg.root(), arg) if isinstance(arg, exp.Placeholder) else arg.this
+
+        # If the whole identifier is quoted, treat as a single quoted identifier inside a Table node
+        if val.startswith('"') and val.endswith('"'):
+            return exp.Table(this=exp.Identifier(this=val[1:-1], quoted=True))
+
+        # Split a dotted identifier string into parts, identifying and stripping quoted segments
+        parts = [(p[1:-1], True) if p.startswith('"') and p.endswith('"') else (p, False) for p in val.split(".")]
+        if len(parts) == 1:
+            return exp.Table(this=exp.Identifier(this=parts[0][0], quoted=parts[0][1]))
+        elif len(parts) == 2:
+            # db.table
+            return exp.Table(
+                this=exp.Identifier(this=parts[1][0], quoted=parts[1][1]),
+                db=exp.Identifier(this=parts[0][0], quoted=parts[0][1]),
+            )
+        elif len(parts) == 3:
+            # catalog.db.table
+            return exp.Table(
+                this=exp.Identifier(this=parts[2][0], quoted=parts[2][1]),
+                db=exp.Identifier(this=parts[1][0], quoted=parts[1][1]),
+                catalog=exp.Identifier(this=parts[0][0], quoted=parts[0][1]),
+            )
+        else:
+            # fallback: treat as a single identifier
+            return exp.Table(this=exp.Identifier(this=val, quoted=False))
     return expression
 
 

@@ -245,7 +245,7 @@ def test_server_put_qmark_quoted(server: dict) -> None:
         temp_file_basename = os.path.basename(temp_file_path)
 
         # quoted to mimic write_pandas
-        dcur.execute("CREATE STAGE ?", ('"stage1"',))
+        dcur.execute("CREATE STAGE identifier(?)", ('"stage1"',))
         dcur.execute(f"PUT 'file://{temp_file_path}' ?", ('@"stage1"',))
         assert dcur.fetchall() == [
             {
@@ -261,7 +261,7 @@ def test_server_put_qmark_quoted(server: dict) -> None:
         ]
 
         # fully qualified stage name
-        dcur.execute("CREATE STAGE ?", ('db1.schema1."stage2"',))
+        dcur.execute("CREATE STAGE identifier(?)", ('db1.schema1."stage2"',))
         dcur.execute(f"PUT 'file://{temp_file_path}' ?", ('@db1.schema1."stage2"',))
 
 
