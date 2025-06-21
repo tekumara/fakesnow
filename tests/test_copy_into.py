@@ -138,7 +138,7 @@ cases = [
 
 @pytest.mark.parametrize("case", cases)
 @patch("fakesnow.copy_into.logger.log_sql", side_effect=logger.log_sql)
-def test_execute(
+def test_copy(
     mock_log_sql: MagicMock, case: Case, dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
 ) -> None:
     create_table(dcur)
@@ -171,7 +171,7 @@ def test_execute(
     assert dcur.fetchall() == case.expected_data
 
 
-def test_execute_internal_stage_server(sdcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+def test_copy_internal_stage_server(sdcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
     dcur = sdcur
 
     create_table(dcur)
@@ -219,7 +219,7 @@ def test_execute_internal_stage_server(sdcur: snowflake.connector.cursor.DictCur
 
 
 @patch("fakesnow.copy_into.logger.log_sql", side_effect=logger.log_sql)
-def test_execute_two_files(
+def test_copy_two_files(
     mock_log_sql: MagicMock, dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
 ) -> None:
     create_table(dcur)
@@ -291,7 +291,7 @@ def test_execute_two_files(
     assert dcur.fetchall() == expected_results
 
 
-def test_execute_no_files(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+def test_copy_no_files(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
     bucket = str(uuid.uuid4())
     s3_client.create_bucket(Bucket=bucket)
 
