@@ -94,7 +94,7 @@ async def query_request(request: Request) -> JSONResponse:
 
         try:
             # only a single sql statement is sent at a time by the python snowflake connector
-            cur = await run_in_threadpool(conn.cursor().execute, sql_text, binding_params=params)
+            cur = await run_in_threadpool(conn.cursor().execute, sql_text, binding_params=params, server=True)
             rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
             expr = cur._last_transformed  # noqa: SLF001

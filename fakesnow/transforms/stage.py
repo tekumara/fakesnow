@@ -1,19 +1,38 @@
 from __future__ import annotations
 
 import datetime
+import os
 import tempfile
 from pathlib import PurePath
+from typing import Any, TypedDict
 from urllib.parse import urlparse
 from urllib.request import url2pathname
 
 import snowflake.connector.errors
 import sqlglot
+from snowflake.connector.file_util import SnowflakeFileUtil
 from sqlglot import exp
 
 from fakesnow.params import MutableParams
 
 # TODO: clean up temp files on exit
 LOCAL_BUCKET_PATH = tempfile.mkdtemp(prefix="fakesnow_bucket_")
+
+
+class StageInfoDict(TypedDict):
+    locationType: str
+    location: str
+    creds: dict[str, Any]
+
+
+class UploadCommandDict(TypedDict):
+    stageInfo: StageInfoDict
+    src_locations: list[str]
+    parallel: int
+    autoCompress: bool
+    sourceCompression: str
+    overwrite: bool
+    command: str
 
 
 def create_stage(
@@ -240,3 +259,35 @@ def list_stage_files_sql(stage_name: str) -> str:
             strftime(last_modified, '%a, %d %b %Y %H:%M:%S GMT') as last_modified
         from read_blob('{sdir}/*')
     """
+
+
+def upload_files(put_stage_data: UploadCommandDict) -> list[dict[str, Any]]:
+    results = []
+    for src in put_stage_data["src_locations"]:
+        basename = os.path.basename(src)
+        stage_dir = put_stage_data["stageInfo"]["location"]
+
+        os.makedirs(stage_dir, exist_ok=True)
+        gzip_file_name, target_size = SnowflakeFileUtil.compress_file_with_gzip(src, stage_dir)
+
+        # Rename to match expected .gz extension on upload
+        target_basename = basename + ".gz"
+        target = os.path.join(stage_dir, target_basename)
+        os.replace(gzip_file_name, target)
+
+        target_size = os.path.getsize(target)
+        source_size = os.path.getsize(src)
+
+        results.append(
+            {
+                "source": basename,
+                "target": target_basename,
+                "source_size": source_size,
+                "target_size": target_size,
+                "source_compression": "NONE",
+                "target_compression": "GZIP",
+                "status": "UPLOADED",
+                "message": "",
+            }
+        )
+    return results

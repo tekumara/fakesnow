@@ -1,8 +1,10 @@
+import os
+import tempfile
 from datetime import timezone
 
 import pytest
 import snowflake.connector.cursor
-from dirty_equals import IsNow
+from dirty_equals import IsDatetime, IsNow
 
 
 def test_create_stage(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -111,3 +113,44 @@ def test_create_stage_qmark_quoted(_fakesnow: None):
     ):
         dcur.execute("CREATE STAGE identifier(?)", ('"stage1"',))
         assert dcur.fetchall() == [{"status": "Stage area stage1 successfully created."}]
+
+
+def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        data = "1,2\n"
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file_path = temp_file.name
+        temp_file_basename = os.path.basename(temp_file_path)
+
+        dcur.execute("CREATE STAGE stage4")
+        dcur.execute(f"PUT 'file://{temp_file_path}' @stage4")
+        assert dcur.fetchall() == [
+            {
+                "source": temp_file_basename,
+                "target": f"{temp_file_basename}.gz",
+                "source_size": len(data),
+                "target_size": 42,  # GZIP compressed size
+                "source_compression": "NONE",
+                "target_compression": "GZIP",
+                "status": "UPLOADED",
+                "message": "",
+            }
+        ]
+
+        dcur.execute("LIST @stage4")
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0] == {
+            "name": f"stage4/{temp_file_basename}.gz",
+            "size": 42,
+            "md5": "29498d110c32a756df8109e70d22fa36",
+            "last_modified": IsDatetime(
+                # string in RFC 7231 date format (e.g. 'Sat, 31 May 2025 08:50:51 GMT')
+                format_string="%a, %d %b %Y %H:%M:%S GMT"
+            ),
+        }
+
+        # fully qualified stage name quoted
+        dcur.execute('CREATE STAGE db1.schema1."stage5"')
+        dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage5\"")
