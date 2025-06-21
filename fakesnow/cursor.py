@@ -207,7 +207,8 @@ class FakeSnowflakeCursor:
 
     def _transform(self, expression: exp.Expression, params: MutableParams | None) -> exp.Expression:
         return (
-            expression.transform(transforms.upper_case_unquoted_identifiers)
+            expression.transform(lambda e: transforms.identifier(e, params))
+            .transform(transforms.upper_case_unquoted_identifiers)
             .transform(transforms.update_variables, variables=self._conn.variables)
             .transform(transforms.set_schema, current_database=self._conn.database)
             .transform(transforms.create_database, db_path=self._conn.db_path)
@@ -245,7 +246,6 @@ class FakeSnowflakeCursor:
             .transform(transforms.sample)
             .transform(transforms.array_size)
             .transform(transforms.random)
-            .transform(lambda e: transforms.identifier(e, params))
             .transform(transforms.array_agg_within_group)
             .transform(transforms.array_agg)
             .transform(transforms.array_construct_etc)
@@ -386,8 +386,8 @@ class FakeSnowflakeCursor:
                 lambda e: transforms.describe_table(e, self._conn.database, self._conn.schema)
             ).sql(dialect="duckdb")
 
-        elif (eid := transformed.find(exp.Identifier, bfs=False)) and isinstance(eid.this, str):
-            ident = eid.this if eid.quoted else eid.this.upper()
+        elif eid := transformed.find(exp.Identifier, bfs=False):
+            ident = eid.name
             if cmd == "CREATE SCHEMA" and ident:
                 result_sql = SQL_CREATED_SCHEMA.substitute(name=ident)
 

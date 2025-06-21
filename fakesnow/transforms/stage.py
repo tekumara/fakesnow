@@ -39,18 +39,9 @@ def create_stage(
             sqlstate="42000",
         )
 
-    # TODO: better handling of quoted catalog and schema
-    if (catalog_ident := table.args.get("catalog")) and isinstance(catalog_ident, exp.Identifier):
-        catalog = catalog_ident.this if catalog_ident.quoted else catalog_ident.name.upper()
-    else:
-        catalog = current_database
-
-    if (db_ident := table.args.get("db")) and isinstance(db_ident, exp.Identifier):
-        schema = db_ident.this if db_ident.quoted else db_ident.name.upper()
-    else:
-        schema = current_schema
-
-    stage_name = ident.this if ident.quoted else ident.name.upper()
+    catalog = table.catalog or current_database
+    schema = table.db or current_schema
+    stage_name = ident.this
     now = datetime.datetime.now(datetime.timezone.utc).isoformat()
 
     is_temp = False

@@ -231,7 +231,7 @@ def describe_table(
         catalog = table.catalog or current_database
         schema = table.db or current_schema
 
-        if schema and schema.upper() == "_FS_INFORMATION_SCHEMA":
+        if schema == "_FS_INFORMATION_SCHEMA":
             # describing an information_schema view
             # (schema already transformed from information_schema -> _fs_information_schema)
             return sqlglot.parse_one(SQL_DESCRIBE_INFO_SCHEMA.substitute(view=f"{schema}.{table.name}"), read="duckdb")
@@ -626,10 +626,10 @@ def information_schema_fs(expression: exp.Expression) -> exp.Expression:
 
     if (
         isinstance(expression, exp.Table)
-        and expression.db.upper() == "INFORMATION_SCHEMA"
-        and expression.name.upper() in {"COLUMNS", "TABLES", "VIEWS", "LOAD_HISTORY"}
+        and expression.db == "INFORMATION_SCHEMA"
+        and expression.name in {"COLUMNS", "TABLES", "VIEWS", "LOAD_HISTORY"}
     ):
-        expression.set("this", exp.Identifier(this=f"_FS_{expression.name.upper()}", quoted=False))
+        expression.set("this", exp.Identifier(this=f"_FS_{expression.name}", quoted=False))
         expression.set("db", exp.Identifier(this="_FS_INFORMATION_SCHEMA", quoted=False))
 
     return expression
@@ -641,11 +641,8 @@ def information_schema_databases(
 ) -> exp.Expression:
     if (
         isinstance(expression, exp.Table)
-        and (
-            expression.db.upper() == "INFORMATION_SCHEMA"
-            or (current_schema and current_schema.upper() == "INFORMATION_SCHEMA")
-        )
-        and expression.name.upper() == "DATABASES"
+        and (expression.db == "INFORMATION_SCHEMA" or (current_schema and current_schema == "INFORMATION_SCHEMA"))
+        and expression.name == "DATABASES"
     ):
         return exp.Table(
             this=exp.Identifier(this="DATABASES", quoted=False),
