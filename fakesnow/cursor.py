@@ -43,6 +43,7 @@ SCHEMA_UNSET = "schema_unset"
 SQL_SUCCESS = "SELECT 'Statement executed successfully.' as 'status'"
 SQL_CREATED_DATABASE = Template("SELECT 'Database ${name} successfully created.' as 'status'")
 SQL_CREATED_SCHEMA = Template("SELECT 'Schema ${name} successfully created.' as 'status'")
+SQL_CREATED_SECRET = Template("SELECT 'Secret ${name} successfully created.' as 'status'")
 SQL_CREATED_TABLE = Template("SELECT 'Table ${name} successfully created.' as 'status'")
 SQL_CREATED_VIEW = Template("SELECT 'View ${name} successfully created.' as 'status'")
 SQL_CREATED_STAGE = Template("SELECT 'Stage area ${name} successfully created.' as status")
@@ -410,6 +411,15 @@ class FakeSnowflakeCursor:
 
                 elif cmd == "DROP SCHEMA" and ident == self._conn.schema:
                     self._conn._schema = None  # noqa: SLF001
+        elif (
+            cmd == "CREATE"
+            and isinstance(transformed, exp.Command)
+            and isinstance(transformed.expression, str)
+            and transformed.expression.upper().startswith(" SECRET")
+        ):
+            match = re.search(r"SECRET\s+(\w+)\s*\(", transformed.expression, re.IGNORECASE)
+            secret_name = match[1].upper() if match else "UNKNOWN"
+            result_sql = SQL_CREATED_SECRET.substitute(name=secret_name)
 
         if table_comment := cast(tuple[exp.Table, str], transformed.args.get("table_comment")):
             # record table comment

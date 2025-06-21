@@ -304,6 +304,19 @@ def test_copy_no_files(dcur: snowflake.connector.cursor.DictCursor, s3_client: S
     assert dcur.fetchall() == [{"status": "Copy executed with 0 files processed."}]
 
 
+def test_description_create_secret(dcur: snowflake.connector.cursor.DictCursor):
+    # NB: this is NOT a Snowflake object, it's a DuckDB secret, and will fail on Snowflake
+    # but we want to ensure that the description works so that CREATE SECRET works from the server
+    dcur.execute("""
+        CREATE SECRET my_secret (
+            TYPE s3,
+            KEY_ID 'my_secret_key',
+            SECRET 'my_secret_value'
+        )""")
+    assert dcur.fetchall() == [{"status": "Secret MY_SECRET successfully created."}]
+    assert dcur.description
+
+
 def test_errors(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
     create_table(dcur)
 
