@@ -11,7 +11,6 @@ import pytest
 import pytz
 import requests
 import snowflake.connector
-import snowflake.connector.pandas_tools
 from dirty_equals import IsDatetime, IsUUID
 from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
@@ -75,6 +74,17 @@ def test_server_binding_qmark(server: dict):
         ]
 
         cur.execute("select * from example where xint = ?", (1,))
+
+
+def test_server_connect(sconn: snowflake.connector.SnowflakeConnection) -> None:
+    conn = sconn
+
+    assert conn.database == "DB1"
+    assert conn.schema == "SCHEMA1"
+
+    conn.execute_string("create database db2; use database db2; create schema schema2; use schema schema2;")
+    assert conn.database == "DB2"
+    assert conn.schema == "SCHEMA2"
 
 
 def test_server_client_session_keep_alive(server: dict) -> None:
@@ -260,7 +270,7 @@ def test_server_put_qmark_quoted(server: dict) -> None:
             }
         ]
 
-        # fully qualified stage name
+        # fully qualified stage name quoted
         dcur.execute("CREATE STAGE identifier(?)", ('db1.schema1."stage2"',))
         dcur.execute(f"PUT 'file://{temp_file_path}' ?", ('@db1.schema1."stage2"',))
 

@@ -13,6 +13,7 @@ import sqlglot
 from snowflake.connector.file_util import SnowflakeFileUtil
 from sqlglot import exp
 
+from fakesnow.expr import normalise_ident
 from fakesnow.params import MutableParams
 
 # TODO: clean up temp files on exit
@@ -196,17 +197,6 @@ def put_stage(
     }
 
     return transformed
-
-
-def normalise_ident(name: str) -> str:
-    """
-    Strip double quotes if present else return uppercased.
-    Snowflake treats quoted identifiers as case-sensitive and un-quoted identifiers as case-insensitive
-    """
-    if name.startswith('"') and name.endswith('"'):
-        return name[1:-1]  # Strip quotes
-
-    return name.upper()
 
 
 def parts_from_var(var: str, current_database: str | None, current_schema: str | None) -> tuple[str, str, str]:

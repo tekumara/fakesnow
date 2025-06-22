@@ -18,6 +18,7 @@ from starlette.routing import Route
 
 from fakesnow.arrow import to_ipc, to_sf
 from fakesnow.converter import from_binding
+from fakesnow.expr import normalise_ident
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.rowtype import describe_as_rowtype
@@ -39,8 +40,8 @@ class ServerError(Exception):
 
 
 async def login_request(request: Request) -> JSONResponse:
-    database = request.query_params.get("databaseName")
-    schema = request.query_params.get("schemaName")
+    database = (d := request.query_params.get("databaseName")) and normalise_ident(d)
+    schema = (s := request.query_params.get("schemaName")) and normalise_ident(s)
     body = await request.body()
     if request.headers.get("Content-Encoding") == "gzip":
         body = gzip.decompress(body)
@@ -64,7 +65,10 @@ async def login_request(request: Request) -> JSONResponse:
                     {"name": "AUTOCOMMIT", "value": True},
                     {"name": "CLIENT_SESSION_KEEP_ALIVE_HEARTBEAT_FREQUENCY", "value": 3600},
                 ],
-                "sessionInfo": {},
+                "sessionInfo": {
+                    "databaseName": database,
+                    "schemaName": schema,
+                },
             },
             "success": True,
         }
@@ -147,6 +151,8 @@ async def query_request(request: Request) -> JSONResponse:
                     "total": cur._rowcount,  # noqa: SLF001
                     "queryId": cur.sfqid,
                     "queryResultFormat": "arrow",
+                    "finalDatabaseName": conn.database,
+                    "finalSchemaName": conn.schema,
                 },
                 "success": True,
             }

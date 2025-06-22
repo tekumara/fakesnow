@@ -30,3 +30,14 @@ def key_command(expression: exp.Expression) -> str:
         key = expression.key.upper()
 
     return key
+
+
+def normalise_ident(name: str) -> str:
+    """
+    Strip double quotes if present else return uppercased.
+    Snowflake treats quoted identifiers as case-sensitive and un-quoted identifiers as case-insensitive
+    """
+    if name.startswith('"') and name.endswith('"'):
+        return name[1:-1]  # Strip quotes
+
+    return name.upper()
