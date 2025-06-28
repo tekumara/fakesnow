@@ -10,7 +10,6 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Any, cast
 
 import duckdb
-import pandas as pd
 import pyarrow  # needed by fetch_arrow_table()
 import snowflake.connector.converter
 import snowflake.connector.errors
@@ -194,7 +193,7 @@ class FakeSnowflakeCursor:
 
     def _put_files(self, put_stage_data: stage.UploadCommandDict) -> None:
         results = stage.upload_files(put_stage_data)
-        _df = pd.DataFrame.from_records(results)
+        _df = pyarrow.Table.from_pylist(results)
         self._duck_conn.execute("select * from _df")
         self._arrow_table = self._duck_conn.fetch_arrow_table()
         self._rowcount = self._arrow_table.num_rows
