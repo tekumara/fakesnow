@@ -46,7 +46,6 @@ notebook = ["duckdb-engine", "ipykernel", "jupysql"]
 # for the standalone server
 [project.optional-dependencies]
 server = ["starlette", "uvicorn"]
-pandas = ["snowflake-connector-python[pandas]"]
 
 [build-system]
 requires = ["setuptools~=80.1"]
