@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.9.43](https://github.com/tekumara/fakesnow/compare/v0.9.42...v0.9.43) (2025-06-28)
+
+
+### Features
+
+* **server:** return database and schema on login and query ([c5868bc](https://github.com/tekumara/fakesnow/commit/c5868bcb2d18dff765919beba5f04121712631df))
+
 ## [0.9.42](https://github.com/tekumara/fakesnow/compare/v0.9.41...v0.9.42) (2025-06-21)
 
 
