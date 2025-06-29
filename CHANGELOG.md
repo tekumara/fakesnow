@@ -2,6 +2,24 @@
 
 # Changelog
 
+## [0.9.44](https://github.com/tekumara/fakesnow/compare/v0.9.43...v0.9.44) (2025-06-29)
+
+
+### Features
+
+* **server:** add -s option to start server from cli ([e498522](https://github.com/tekumara/fakesnow/commit/e49852277747ede8666d162c8ffd6900f8412ad7))
+* to_timestamp with seconds ([db722d3](https://github.com/tekumara/fakesnow/commit/db722d386df0a349fa3a02d71434d3cfcf3e50b4)), closes [#220](https://github.com/tekumara/fakesnow/issues/220)
+
+
+### Bug Fixes
+
+* **server:** exit cli with error if server can't start ([1444232](https://github.com/tekumara/fakesnow/commit/1444232176270ece9e63d9bd0927710dbf0ecab3))
+
+
+### Chores
+
+* bump duckdb 1.3.1 ([a665386](https://github.com/tekumara/fakesnow/commit/a665386c7afb3336383c34eeae499c5e5ce4234f))
+
 ## [0.9.43](https://github.com/tekumara/fakesnow/compare/v0.9.42...v0.9.43) (2025-06-28)
 
 
