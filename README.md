@@ -88,7 +88,19 @@ with fakesnow.patch(db_path="databases/"):
 
 ### Run fakesnow as a server
 
-For scenarios where patching won't work (like subprocesses or non-Python clients), you can run fakesnow as an HTTP server:
+For scenarios where patching won't work (like subprocesses or non-Python clients), you can run fakesnow as an HTTP server from the command line using [uv](https://docs.astral.sh/uv/):
+
+```
+uvx 'fakesnow[server]' -s
+```
+
+Or from within a virtualenv with `fakesnow[server]` installed:
+
+```
+fakesnow -s
+```
+
+Or start the server in your python program:
 
 ```python
 import fakesnow
@@ -105,7 +117,6 @@ with fakesnow.server() as conn_kwargs:
 ```
 
 This starts an HTTP server in its own thread listening for requests on localhost on an available random port.
-The server accepts any username/password combination.
 
 #### Server Configuration Options
 
@@ -126,6 +137,31 @@ To specify a port for the server:
 ```python
 with fakesnow.server(port=12345) as conn_kwargs:
     ...
+```
+
+#### Connecting with non-Python clients
+
+When using fakesnow server with non-Python clients, use the following example connection parameters:
+
+```
+user: fake
+password: snow
+account: fakesnow
+host: localhost
+port: <port number from server startup>
+protocol: http
+```
+
+The server accepts any username/password/account combination.
+
+Additional parameters that may be helpful:
+- Session parameter `CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED` set to `false`
+- Network timeout set to 1 second (since retries aren't needed in testing)
+
+For example, with the Snowflake CLI:
+
+```
+snowsql -a fakesnow -u fake -p snow -h localhost -P <port> --protocol http
 ```
 
 ### pytest fixtures

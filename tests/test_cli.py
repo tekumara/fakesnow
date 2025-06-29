@@ -1,3 +1,7 @@
+import signal
+import subprocess
+import time
+
 from pytest import CaptureFixture
 
 import fakesnow.cli
@@ -36,6 +40,24 @@ def test_run_path(capsys: CaptureFixture) -> None:
 
     captured = capsys.readouterr()
     assert captured.out == "('Hello fake frobnitz --colour rainbow -m integration!',)\n"
+
+
+def test_run_server() -> None:
+    # Start uvicorn server
+    proc = subprocess.Popen(["fakesnow", "-s"], stderr=subprocess.PIPE, text=True)
+
+    # Wait for startup then hit CTRL+C
+    time.sleep(1)
+    proc.send_signal(signal.SIGINT)
+    exit_code = proc.wait()
+
+    # Collect stderr output
+    assert proc.stderr
+    stderr_output = proc.stderr.read()
+
+    # Check if test passed
+    assert "Application startup complete" in stderr_output
+    assert exit_code == 0
 
 
 def test_run_no_args_shows_usage(capsys: CaptureFixture) -> None:

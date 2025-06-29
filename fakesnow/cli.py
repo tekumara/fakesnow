@@ -1,6 +1,8 @@
 import argparse
 import runpy
+import signal
 import sys
+import threading
 from collections.abc import Sequence
 
 import fakesnow
@@ -8,7 +10,7 @@ import fakesnow
 
 def arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
-        description="""eg: fakesnow script.py OR fakesnow -m pytest""",
+        description="""eg: fakesnow script.py OR fakesnow -m pytest OR fakesnow -s""",
         formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
     parser.add_argument(
@@ -18,6 +20,15 @@ def arg_parser() -> argparse.ArgumentParser:
         "exist. If None databases are in-memory.",
     )
     parser.add_argument("-m", "--module", help="target module")
+    parser.add_argument("-s", "--server", action="store_true", help="Run as HTTP server")
+    parser.add_argument(
+        "-p",
+        "--port",
+        type=int,
+        # suppress default so we can customise how it appears in the help message
+        default=argparse.SUPPRESS,
+        help="Port to run the HTTP server on (default: random available port)",
+    )
     parser.add_argument("path", type=str, nargs="?", help="target path")
     parser.add_argument("targs", nargs="*", help="target args")
     return parser
@@ -49,6 +60,20 @@ def main(args: Sequence[str] = sys.argv[1:]) -> int:
     # split args so the fakesnow cli doesn't consume from the target's args (eg: -m and -d)
     fsargs, targs = split(args)
     pargs = parser.parse_args(fsargs)
+
+    if pargs.server:
+        stop = threading.Event()
+
+        def signal_handler(_signum: int, _frame: object) -> None:
+            stop.set()
+
+        signal.signal(signal.SIGINT, signal_handler)
+
+        with fakesnow.server(port=getattr(pargs, "port", None)):
+            # wait for SIGINT
+            stop.wait()
+
+        return 0
 
     with fakesnow.patch(db_path=pargs.db_path):
         if module := pargs.module:
