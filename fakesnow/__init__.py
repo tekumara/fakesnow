@@ -122,8 +122,11 @@ def server(port: int | None = None, session_parameters: dict[str, str | int | bo
     thread = threading.Thread(target=server.run, name="fakesnow server", daemon=True)
     thread.start()
 
-    while not server.started:
+    while thread.is_alive() and not server.started:
         sleep(0.1)
+
+    if not server.started:
+        raise RuntimeError("Failed to start server")
 
     try:
         yield dict(

@@ -88,19 +88,25 @@ with fakesnow.patch(db_path="databases/"):
 
 ### Run fakesnow as a server
 
-For scenarios where patching won't work (like subprocesses or non-Python clients), you can run fakesnow as an HTTP server from the command line using [uv](https://docs.astral.sh/uv/):
+For scenarios where patching won't work (like subprocesses or non-Python clients), you can run fakesnow as an HTTP server.
+
+#### From the command line
+
+Using [uv](https://docs.astral.sh/uv/):
 
 ```
 uvx 'fakesnow[server]' -s
 ```
 
-Or from within a virtualenv with `fakesnow[server]` installed:
+Or from within a virtualenv that has `fakesnow[server]` installed:
 
 ```
 fakesnow -s
 ```
 
-Or start the server in your python program:
+By default the server listens on a random available port. Use `-p` to specify a port.
+
+#### Within your python program
 
 ```python
 import fakesnow
@@ -116,9 +122,16 @@ with fakesnow.server() as conn_kwargs:
     # The server is automatically stopped when exiting the context manager
 ```
 
-This starts an HTTP server in its own thread listening for requests on localhost on an available random port.
+This starts an HTTP server in its own thread listening for requests on a random available port.
 
-#### Server Configuration Options
+##### Server Configuration Options
+
+To specify a port for the server:
+
+```python
+with fakesnow.server(port=12345) as conn_kwargs:
+    ...
+```
 
 By default, the server uses a single in-memory database for its lifetime. To configure database persistence or isolation:
 
@@ -132,16 +145,9 @@ with fakesnow.server(session_parameters={"FAKESNOW_DB_PATH": ":isolated:"}):
     ...
 ```
 
-To specify a port for the server:
+#### Connecting from non-Python clients
 
-```python
-with fakesnow.server(port=12345) as conn_kwargs:
-    ...
-```
-
-#### Connecting with non-Python clients
-
-When using fakesnow server with non-Python clients, use the following example connection parameters:
+The server is available via HTTP and accepts any username/password/account combination, eg:
 
 ```
 user: fake
@@ -151,8 +157,6 @@ host: localhost
 port: <port number from server startup>
 protocol: http
 ```
-
-The server accepts any username/password/account combination.
 
 Additional parameters that may be helpful:
 - Session parameter `CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED` set to `false`

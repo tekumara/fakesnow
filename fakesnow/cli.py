@@ -69,9 +69,13 @@ def main(args: Sequence[str] = sys.argv[1:]) -> int:
 
         signal.signal(signal.SIGINT, signal_handler)
 
-        with fakesnow.server(port=getattr(pargs, "port", None)):
-            # wait for SIGINT
-            stop.wait()
+        try:
+            with fakesnow.server(port=getattr(pargs, "port", None)):
+                # wait for SIGINT
+                stop.wait()
+        except RuntimeError:
+            # catch to avoid showing traceback since uvicorn will log the error
+            return 1
 
         return 0
 
