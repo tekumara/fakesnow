@@ -62,7 +62,6 @@ from fakesnow.transforms.transforms import (
     to_date as to_date,
     to_decimal as to_decimal,
     to_timestamp as to_timestamp,
-    to_timestamp_ntz as to_timestamp_ntz,
     trim_cast_varchar as trim_cast_varchar,
     try_parse_json as try_parse_json,
     try_to_decimal as try_to_decimal,

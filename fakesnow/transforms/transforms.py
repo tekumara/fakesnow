@@ -1107,7 +1107,7 @@ def try_to_decimal(expression: exp.Expression) -> exp.Expression:
 
 
 def to_timestamp(expression: exp.Expression) -> exp.Expression:
-    """Convert to_timestamp(seconds) to timestamp without timezone (ie: TIMESTAMP_NTZ).
+    """Cast to_timestamp and to_timestamp_ntz to timestamp without timezone (ie: TIMESTAMP_NTZ).
 
     See https://docs.snowflake.com/en/sql-reference/functions/to_timestamp
     """
@@ -1116,20 +1116,6 @@ def to_timestamp(expression: exp.Expression) -> exp.Expression:
         return exp.Cast(
             this=expression,
             to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
-        )
-    return expression
-
-
-def to_timestamp_ntz(expression: exp.Expression) -> exp.Expression:
-    """Convert to_timestamp_ntz to to_timestamp (StrToTime).
-
-    Because it's not yet supported by sqlglot, see https://github.com/tobymao/sqlglot/issues/2748
-    """
-
-    if isinstance(expression, exp.Anonymous) and expression.name.upper() == "TO_TIMESTAMP_NTZ":
-        return exp.StrToTime(
-            this=expression.expressions[0],
-            format=exp.Literal(this="%Y-%m-%d %H:%M:%S", is_string=True),
         )
     return expression
 
