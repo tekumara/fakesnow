@@ -719,7 +719,7 @@ def test_try_to_decimal() -> None:
 def test_to_timestamp() -> None:
     assert (
         sqlglot.parse_one("SELECT to_timestamp(0)", read="snowflake").transform(to_timestamp).sql(dialect="duckdb")
-        == "SELECT CAST(TO_TIMESTAMP(0) AS TIMESTAMP)"
+        == "SELECT _FS_TO_TIMESTAMP(0)"
     )
 
 

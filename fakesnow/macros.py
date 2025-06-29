@@ -39,10 +39,23 @@ CREATE OR REPLACE MACRO ${catalog}.array_construct_compact(list) AS (
 """
 )
 
+FS_TO_TIMESTAMP = Template(
+    """
+CREATE OR REPLACE MACRO ${catalog}._fs_to_timestamp(val) AS (
+    CASE
+        WHEN try_cast(val AS BIGINT) IS NOT NULL
+            THEN CAST(to_timestamp(val::BIGINT) AS TIMESTAMP)
+        ELSE CAST(val AS TIMESTAMP)
+    END
+);
+"""
+)
+
 
 def creation_sql(catalog: str) -> str:
     return f"""
         {EQUAL_NULL.substitute(catalog=catalog)};
         {FS_FLATTEN.substitute(catalog=catalog)};
         {ARRAY_CONSTRUCT_COMPACT.substitute(catalog=catalog)};
+        {FS_TO_TIMESTAMP.substitute(catalog=catalog)};
     """

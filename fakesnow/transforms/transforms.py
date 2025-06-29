@@ -1107,16 +1107,24 @@ def try_to_decimal(expression: exp.Expression) -> exp.Expression:
 
 
 def to_timestamp(expression: exp.Expression) -> exp.Expression:
-    """Cast to_timestamp and to_timestamp_ntz to timestamp without timezone (ie: TIMESTAMP_NTZ).
+    """Transform to_timestamp, to_timestamp_ntz and casts to _fs_to_timestamp function.
 
     See https://docs.snowflake.com/en/sql-reference/functions/to_timestamp
     """
 
+    # to_timestamp used with a Literal
     if isinstance(expression, exp.UnixToTime):
-        return exp.Cast(
-            this=expression,
-            to=exp.DataType(this=exp.DataType.Type.TIMESTAMP, nested=False, prefix=False),
-        )
+        return exp.Anonymous(this="_fs_to_timestamp", expressions=[expression.this])
+    # to_timestamp used with a Column
+    elif isinstance(expression, exp.Anonymous) and expression.name.upper() in ["TO_TIMESTAMP", "TO_TIMESTAMP_NTZ"]:
+        return exp.Anonymous(this="_fs_to_timestamp", expressions=expression.expressions)
+    # casting to timestamp or timestamp_ntz
+    elif isinstance(expression, exp.Cast) and expression.to.this in (
+        exp.DataType.Type.TIMESTAMP,
+        exp.DataType.Type.TIMESTAMPNTZ,
+    ):
+        return exp.Anonymous(this="_fs_to_timestamp", expressions=[expression.this])
+
     return expression
 
 
