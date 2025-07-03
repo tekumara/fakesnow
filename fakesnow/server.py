@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 import gzip
 import json
 import logging
@@ -28,8 +29,11 @@ logger = logging.getLogger("fakesnow.server")
 logger.handlers = logging.getLogger("uvicorn").handlers
 logger.setLevel(logging.INFO)
 
+
 shared_fs = FakeSnow()
 sessions: dict[str, FakeSnowflakeConnection] = {}
+# Global mapping for query results by sfqid
+sfqid_results: dict[str, dict] = {}
 
 
 @dataclass
@@ -96,6 +100,20 @@ async def query_request(request: Request) -> JSONResponse:
 
         expr = parse_one(sql_text, read="snowflake")
 
+        # Support for result_scan: intercept and serve from sfqid_results
+        result_scan_match = re.match(
+            r"select \* from table\(result_scan\('([^']+)'\)\)", sql_text.strip(), re.IGNORECASE
+        )
+        if result_scan_match:
+            scan_sfqid = result_scan_match.group(1)
+            scan_result = sfqid_results.get(scan_sfqid)
+            if scan_result:
+                return JSONResponse(scan_result)
+            else:
+                return JSONResponse(
+                    {"success": False, "message": f"No result found for sfqid {scan_sfqid}"}, status_code=404
+                )
+
         try:
             # only a single sql statement is sent at a time by the python snowflake connector
             cur = await run_in_threadpool(conn.cursor().execute, sql_text, binding_params=params, server=True)
@@ -140,23 +158,33 @@ async def query_request(request: Request) -> JSONResponse:
         else:
             rowset_b64 = ""
 
-        return JSONResponse(
-            {
-                "data": {
-                    "parameters": [
-                        {"name": "TIMEZONE", "value": "Etc/UTC"},
-                    ],
-                    "rowtype": rowtype,
-                    "rowsetBase64": rowset_b64,
-                    "total": cur._rowcount,  # noqa: SLF001
-                    "queryId": cur.sfqid,
-                    "queryResultFormat": "arrow",
-                    "finalDatabaseName": conn.database,
-                    "finalSchemaName": conn.schema,
-                },
-                "success": True,
-            }
-        )
+        result_data = {
+            "data": {
+                "parameters": [
+                    {"name": "TIMEZONE", "value": "Etc/UTC"},
+                ],
+                "rowtype": rowtype,
+                "rowsetBase64": rowset_b64,
+                "total": cur._rowcount,  # noqa: SLF001
+                "queryId": cur.sfqid,
+                "queries": [  # Add queries key for status_resp compatibility
+                    {
+                        "queryId": cur.sfqid,
+                        "status": "SUCCESS",
+                        "sqlText": sql_text,
+                    }
+                ],
+                "queryResultFormat": "arrow",
+                "finalDatabaseName": conn.database,
+                "finalSchemaName": conn.schema,
+            },
+            "success": True,
+        }
+        # Store result by sfqid for monitoring endpoint
+        if cur.sfqid:
+            sfqid_results[cur.sfqid] = result_data
+
+        return JSONResponse(result_data)
 
     except ServerError as e:
         return JSONResponse(
@@ -198,6 +226,15 @@ async def session(request: Request) -> JSONResponse:
         )
 
 
+def monitoring_query(request: Request) -> JSONResponse:
+    sfqid = request.path_params.get("sfqid")
+
+    result = sfqid_results.get(sfqid)
+    if result:
+        return JSONResponse(result)
+    return JSONResponse({"success": False, "message": "Query not found"}, status_code=404)
+
+
 routes = [
     Route(
         "/session/v1/login-request",
@@ -211,6 +248,7 @@ routes = [
         methods=["POST"],
     ),
     Route("/queries/v1/abort-request", lambda _: JSONResponse({"success": True}), methods=["POST"]),
+    Route("/monitoring/queries/{sfqid}", monitoring_query, methods=["GET"]),
 ]
 
 app = Starlette(debug=True, routes=routes)
