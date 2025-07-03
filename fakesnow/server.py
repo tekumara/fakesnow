@@ -111,7 +111,15 @@ async def query_request(request: Request) -> JSONResponse:
                 return JSONResponse(scan_result)
             else:
                 return JSONResponse(
-                    {"success": False, "message": f"No result found for sfqid {scan_sfqid}"}, status_code=404
+                    {
+                        "data": {
+                            "errorCode": "002003",
+                            "sqlState": "02000",
+                        },
+                        "code": "002003",
+                        "message": f"No result found for sfqid {scan_sfqid}",
+                        "success": False,
+                    }
                 )
 
         try:

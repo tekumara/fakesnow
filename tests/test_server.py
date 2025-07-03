@@ -430,3 +430,97 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
             2,
         )
     ]
+
+
+def test_server_monitoring_query(scur: snowflake.connector.cursor.SnowflakeCursor, server: dict) -> None:
+    """Test the monitoring query endpoint that returns stored query results by sfqid."""
+    cur = scur
+
+    # Execute a query to generate a result
+    cur.execute("select 'test_value' as test_column, 42 as test_number")
+    sfqid = cur.sfqid
+    assert sfqid  # Make sure we have a query ID
+
+    # Access the monitoring endpoint directly via HTTP
+    response = requests.get(
+        f"http://{server['host']}:{server['port']}/monitoring/queries/{sfqid}",
+        timeout=5,
+    )
+
+    assert response.status_code == 200
+    result = response.json()
+    assert result["success"] is True
+    assert "data" in result
+    assert result["data"]["queryId"] == sfqid
+    assert result["data"]["queries"][0]["queryId"] == sfqid
+    assert result["data"]["queries"][0]["status"] == "SUCCESS"
+    assert "select 'test_value' as test_column, 42 as test_number" in result["data"]["queries"][0]["sqlText"]
+
+
+def test_server_monitoring_query_not_found(server: dict) -> None:
+    """Test the monitoring query endpoint returns 404 for non-existent query IDs."""
+    fake_sfqid = "00000000-0000-0000-0000-000000000000"
+
+    response = requests.get(
+        f"http://{server['host']}:{server['port']}/monitoring/queries/{fake_sfqid}",
+        timeout=5,
+    )
+
+    assert response.status_code == 404
+    result = response.json()
+    assert result["success"] is False
+    assert result["message"] == "Query not found"
+
+
+def test_server_result_scan(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    """Test the result_scan function that allows querying previous query results by sfqid."""
+    cur = scur
+
+    # Execute an initial query
+    cur.execute("select 'original_value' as column1, 123 as column2")
+    original_results = cur.fetchall()
+    sfqid = cur.sfqid
+    assert sfqid
+
+    # Use result_scan to get the same results
+    cur.execute(f"select * from table(result_scan('{sfqid}'))")
+    scan_results = cur.fetchall()
+
+    # Results should be identical
+    assert scan_results == original_results
+
+
+def test_server_result_scan_not_found(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    """Test result_scan with a non-existent sfqid returns an error."""
+    cur = scur
+    fake_sfqid = "00000000-0000-0000-0000-000000000000"
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute(f"select * from table(result_scan('{fake_sfqid}'))")
+
+    # The error should indicate the result was not found
+    assert excinfo.value.errno == 2003
+    assert "No result found for sfqid" in str(excinfo.value.msg)
+
+
+def test_server_result_scan_case_insensitive(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    """Test that result_scan is case-insensitive like real Snowflake SQL."""
+    cur = scur
+
+    # Execute an initial query
+    cur.execute("select 'test_case' as test_col")
+    original_results = cur.fetchall()
+    sfqid = cur.sfqid
+    assert sfqid
+
+    # Test various case variations of result_scan
+    test_cases = [
+        f"SELECT * FROM TABLE(RESULT_SCAN('{sfqid}'))",
+        f"select * from table(result_scan('{sfqid}'))",
+        f"Select * From Table(Result_Scan('{sfqid}'))",
+    ]
+
+    for sql in test_cases:
+        cur.execute(sql)
+        scan_results = cur.fetchall()
+        assert scan_results == original_results
