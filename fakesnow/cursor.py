@@ -34,6 +34,7 @@ from fakesnow.transforms import stage
 if TYPE_CHECKING:
     # don't require pandas at import time
     import pandas as pd
+    from snowflake.connector import SnowflakeConnection
 
     # avoid circular import
     from fakesnow.conn import FakeSnowflakeConnection
@@ -572,4 +573,7 @@ class FakeResultBatch(ResultBatch):
         return self._batch.to_pandas()
 
     def to_arrow(self) -> pyarrow.Table:
+        raise NotImplementedError()
+
+    def populate_data(self, connection: SnowflakeConnection | None = None, **kwargs: Any) -> Self:
         raise NotImplementedError()
