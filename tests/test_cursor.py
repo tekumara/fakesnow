@@ -267,3 +267,19 @@ def test_transactions(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("ROLLBACK")
         assert cur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
         assert cur.fetchall() == [("Statement executed successfully.",)]
+
+
+def test_execute_async_and_get_results_from_sfqid(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # Test the execute_async and get_results_from_sfqid methods
+    cur.execute_async("SELECT 1 AS col1, 2 AS col2")
+    sfqid = cur.sfqid
+    assert sfqid
+    cur.get_results_from_sfqid(sfqid)
+    assert cur.fetchall() == [(1, 2)]
+
+
+def test_get_results_from_sfqid_not_found(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # Test that get_results_from_sfqid raises an error if the SFQID is not found
+    with pytest.raises(snowflake.connector.errors.ProgrammingError, match="Query with SFQID 0000 not found.") as exc:
+        cur.get_results_from_sfqid("0000")
+    assert exc.value.errno == 2003

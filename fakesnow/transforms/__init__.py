@@ -52,6 +52,7 @@ from fakesnow.transforms.transforms import (
     random as random,
     regex_replace as regex_replace,
     regex_substr as regex_substr,
+    result_scan as result_scan,
     sample as sample,
     semi_structured_types as semi_structured_types,
     set_schema as set_schema,

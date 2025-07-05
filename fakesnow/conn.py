@@ -23,6 +23,7 @@ class FakeSnowflakeConnection:
     def __init__(
         self,
         duck_conn: DuckDBPyConnection,
+        results_cache: dict[str, list],
         database: str | None = None,
         schema: str | None = None,
         create_database: bool = True,
@@ -51,6 +52,7 @@ class FakeSnowflakeConnection:
         self.nop_regexes = nop_regexes
         self._paramstyle = kwargs.get("paramstyle", snowflake.connector.paramstyle)
         self.variables = Variables()
+        self.results_cache = results_cache
 
         # create database if needed
         if (

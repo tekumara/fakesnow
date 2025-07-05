@@ -33,6 +33,7 @@ from fakesnow.transforms import (
     random,
     regex_replace,
     regex_substr,
+    result_scan,
     sample,
     semi_structured_types,
     set_schema,
@@ -996,3 +997,59 @@ def test_sha256_binary() -> None:
         sqlglot.parse_one("insert into table1 (name) select sha2_binary('foo', 256, 'wtf')").transform(sha256).sql()
         == "INSERT INTO table1 (name) SELECT SHA2_BINARY('foo', 256, 'wtf')"
     )
+
+
+def test_result_scan() -> None:
+    # Test RESULT_SCAN transform detection
+    assert (
+        sqlglot.parse_one("SELECT * FROM TABLE(RESULT_SCAN('12345'))", read="snowflake")
+        .transform(result_scan)
+        .args.get("result_scan_sfqid")
+        == "12345"
+    )
+
+    # Test with different SFQID
+    assert (
+        sqlglot.parse_one("SELECT * FROM TABLE(RESULT_SCAN('abc-def-456'))", read="snowflake")
+        .transform(result_scan)
+        .args.get("result_scan_sfqid")
+        == "abc-def-456"
+    )
+
+    # Test normal query - should not be transformed
+    assert (
+        sqlglot.parse_one("SELECT * FROM my_table", read="snowflake")
+        .transform(result_scan)
+        .args.get("result_scan_sfqid")
+        is None
+    )
+
+    # Test TABLE with different function - should not be transformed
+    assert (
+        sqlglot.parse_one("SELECT * FROM TABLE(SOME_OTHER_FUNC('123'))", read="snowflake")
+        .transform(result_scan)
+        .args.get("result_scan_sfqid")
+        is None
+    )
+
+    # Test with columns specified - should still work
+    assert (
+        sqlglot.parse_one("SELECT col1, col2 FROM TABLE(RESULT_SCAN('uuid-123'))", read="snowflake")
+        .transform(result_scan)
+        .args.get("result_scan_sfqid")
+        == "uuid-123"
+    )
+
+    # Test with WHERE clause - should still work
+    assert (
+        sqlglot.parse_one("SELECT * FROM TABLE(RESULT_SCAN('test-id')) WHERE col > 0", read="snowflake")
+        .transform(result_scan)
+        .args.get("result_scan_sfqid")
+        == "test-id"
+    )
+
+    # Test SQL output remains unchanged
+    expr = sqlglot.parse_one("SELECT * FROM TABLE(RESULT_SCAN('12345'))", read="snowflake")
+    original_sql = expr.sql()
+    transformed_sql = expr.transform(result_scan).sql()
+    assert original_sql == transformed_sql == "SELECT * FROM TABLE(RESULT_SCAN('12345'))"
