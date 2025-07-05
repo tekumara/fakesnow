@@ -1,10 +1,12 @@
 image: python:3.9-slim
-command_prefix: set -euo pipefail
+# add uv to PATH
+command_prefix: set -euo pipefail && export PATH="/root/.local/bin/:$PATH"
 tasks:
   install-packages:
-    command:
-    # gcc python3-dev needed to build psutil
+    command: |
+      # gcc python3-dev needed to build psutil
       apt-get update && apt-get install -y curl git make gcc python3-dev
+      curl -LsSf https://astral.sh/uv/install.sh | sh
   install-node:
     dependencies:
       - install-packages
@@ -21,10 +23,10 @@ tasks:
       - pyproject.toml
       - package.json
       - .pre-commit-config.yaml
-    environment:
-      # don't install hooks
-      CI: true
-    command: make install
+    command: |
+      # needed to install hooks
+      git init . --initial-branch=main
+      make install
   hooks:
     description: make hooks
     dependencies:
@@ -36,6 +38,5 @@ tasks:
       - tests/
     command: |
       # needed for pre-commit to work and see files
-      git init . --initial-branch=main
       git add fakesnow tests
       make hooks
