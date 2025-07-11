@@ -329,19 +329,14 @@ class FakeSnowflakeCursor:
         if not sql:
             raise NotImplementedError(transformed.sql(dialect="snowflake"))
 
-        if transformed.args.get("result_scan_sfqid"):
-            sfqid = transformed.args["result_scan_sfqid"]
+        if sfqid := transformed.args.get("result_scan_sfqid"):
             value = self._conn.results_cache.get(sfqid)
             if value is None:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"Query with SFQID {sfqid} not found.", errno=2003, sqlstate="02000"
                 )
             # Restore the cached result data
-            self._arrow_table = value[0]
-            self._rowcount = value[1]
-            self._last_sql = value[2]
-            self._last_params = value[3]
-            self._last_transformed = value[4]
+            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed = value
             self._sfqid = sfqid
             self._arrow_table_fetch_index = None
             return
@@ -502,13 +497,13 @@ class FakeSnowflakeCursor:
         self._last_params = None if result_sql else params
         self._last_transformed = transformed
 
-        self._conn.results_cache[self._sfqid] = [
+        self._conn.results_cache[self._sfqid] = (
             self._arrow_table,
             self._rowcount,
             self._last_sql,
             self._last_params,
             self._last_transformed,
-        ]
+        )
 
     def executemany(
         self,

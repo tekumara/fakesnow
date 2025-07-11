@@ -432,28 +432,27 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     ]
 
 
-def test_server_async_query_with_retrieval(server: dict) -> None:
-    """Test asynchronous query execution and result retrieval using sfqid."""
-    with snowflake.connector.connect(**server, database="db", schema="sh") as conn, conn.cursor() as cur:
-        # Execute an async query
-        cur.execute_async("select 42 as answer, 'hello world' as message")
-        async_sfqid = cur.sfqid
-        assert async_sfqid is not None
+def test_server_async_query_with_retrieval(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur = scur
+    # Execute an async query
+    cur.execute_async("select 42 as answer, 'hello world' as message")
+    async_sfqid = cur.sfqid
+    assert async_sfqid
 
-        # Execute a regular query
-        cur.execute("select 'regular query' as type")
-        regular_sfqid = cur.sfqid
-        assert regular_sfqid is not None
+    # Execute a regular query
+    cur.execute("select 'regular query' as type")
+    regular_sfqid = cur.sfqid
+    assert regular_sfqid
 
-        # Test to retrieve results from the async query
-        cur.get_results_from_sfqid(async_sfqid)
-        async_results = cur.fetchall()
-        assert async_results == [(42, "hello world")]
+    # Test to retrieve results from the async query
+    cur.get_results_from_sfqid(async_sfqid)
+    async_results = cur.fetchall()
+    assert async_results == [(42, "hello world")]
 
-        # Test to retrieve results from the regular query
-        cur.get_results_from_sfqid(regular_sfqid)
-        regular_results = cur.fetchall()
-        assert regular_results == [("regular query",)]
+    # Test to retrieve results from the regular query
+    cur.get_results_from_sfqid(regular_sfqid)
+    regular_results = cur.fetchall()
+    assert regular_results == [("regular query",)]
 
 
 def test_server_monitoring_endpoint_error(server: dict) -> None:

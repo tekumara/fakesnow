@@ -23,7 +23,7 @@ class FakeSnowflakeConnection:
     def __init__(
         self,
         duck_conn: DuckDBPyConnection,
-        results_cache: dict[str, list],
+        results_cache: dict[str, tuple],
         database: str | None = None,
         schema: str | None = None,
         create_database: bool = True,

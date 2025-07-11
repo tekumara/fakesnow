@@ -270,12 +270,19 @@ def test_transactions(conn: snowflake.connector.SnowflakeConnection):
 
 
 def test_execute_async_and_get_results_from_sfqid(cur: snowflake.connector.cursor.SnowflakeCursor):
-    # Test the execute_async and get_results_from_sfqid methods
     cur.execute_async("SELECT 1 AS col1, 2 AS col2")
     sfqid = cur.sfqid
     assert sfqid
     cur.get_results_from_sfqid(sfqid)
     assert cur.fetchall() == [(1, 2)]
+    assert cur.description
+
+    cur.execute_async("SELECT 1 AS col1, 2 AS col2 where 1=0")
+    sfqid = cur.sfqid
+    assert sfqid
+    cur.get_results_from_sfqid(sfqid)
+    assert cur.fetchall() == []
+    assert cur.description
 
 
 def test_get_results_from_sfqid_not_found(cur: snowflake.connector.cursor.SnowflakeCursor):
