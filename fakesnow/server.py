@@ -198,6 +198,17 @@ async def session(request: Request) -> JSONResponse:
         )
 
 
+def monitoring_query(request: Request) -> JSONResponse:
+    token = to_token(request)
+    conn = to_conn(token)
+
+    sfqid = request.path_params["sfqid"]
+    if not conn.results_cache.get(sfqid):
+        return JSONResponse({"data": {"queries": []}, "success": True})
+
+    return JSONResponse({"data": {"queries": [{"status": "SUCCESS"}]}, "success": True})
+
+
 routes = [
     Route(
         "/session/v1/login-request",
@@ -211,6 +222,7 @@ routes = [
         methods=["POST"],
     ),
     Route("/queries/v1/abort-request", lambda _: JSONResponse({"success": True}), methods=["POST"]),
+    Route("/monitoring/queries/{sfqid}", monitoring_query, methods=["GET"]),
 ]
 
 app = Starlette(debug=True, routes=routes)

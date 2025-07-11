@@ -4,6 +4,7 @@ import datetime
 import os
 import tempfile
 from decimal import Decimal
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -430,3 +431,38 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
             2,
         )
     ]
+
+
+def test_server_async_query_with_retrieval(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur = scur
+    # Execute an async query
+    cur.execute_async("select 42 as answer, 'hello world' as message")
+    async_sfqid = cur.sfqid
+    assert async_sfqid
+
+    # Execute a regular query
+    cur.execute("select 'regular query' as type")
+    regular_sfqid = cur.sfqid
+    assert regular_sfqid
+
+    # Test to retrieve results from the async query
+    cur.get_results_from_sfqid(async_sfqid)
+    async_results = cur.fetchall()
+    assert async_results == [(42, "hello world")]
+
+    # Test to retrieve results from the regular query
+    cur.get_results_from_sfqid(regular_sfqid)
+    regular_results = cur.fetchall()
+    assert regular_results == [("regular query",)]
+
+
+# avoid retries to shorten test time
+@patch("snowflake.connector.cursor.ASYNC_RETRY_PATTERN", [0])
+def test_server_monitoring_endpoint_error(scur: snowflake.connector.cursor.SnowflakeCursor):
+    cur = scur
+    cur.get_results_from_sfqid("00000000-0000-0000-0000-000000000000")
+    with pytest.raises(
+        snowflake.connector.errors.DatabaseError, match="Cannot retrieve data on the status of this query"
+    ) as exc:
+        cur.fetchall()
+    assert exc.value.errno == -1

@@ -1325,3 +1325,25 @@ def sha256(expression: exp.Expression) -> exp.Expression:
         return exp.Unhex(this=SHA256(this=expression.expressions[0]))
 
     return expression
+
+
+def result_scan(expression: exp.Expression) -> exp.Expression:
+    """
+    Transform SELECT * FROM TABLE(RESULT_SCAN('sfqid')) to mark it for special handling.
+
+    This allows the cursor to fetch results from the results cache instead of executing
+    the query against DuckDB.
+    """
+    if (
+        isinstance(expression, exp.Select)
+        and (from_ := expression.args.get("from"))
+        and isinstance(from_.this, exp.TableFromRows)
+        and isinstance(from_.this.this, exp.Anonymous)
+        and from_.this.this.name.upper() == "RESULT_SCAN"
+        and from_.this.this.expressions
+        and isinstance(from_.this.this.expressions[0], exp.Literal)
+    ):
+        sfqid = from_.this.this.expressions[0].this
+        # Attach the sfqid to the expression for the cursor to handle
+        expression.args["result_scan_sfqid"] = sfqid
+    return expression

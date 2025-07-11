@@ -33,6 +33,7 @@ from fakesnow.transforms import (
     random,
     regex_replace,
     regex_substr,
+    result_scan,
     sample,
     semi_structured_types,
     set_schema,
@@ -995,4 +996,13 @@ def test_sha256_binary() -> None:
     assert (
         sqlglot.parse_one("insert into table1 (name) select sha2_binary('foo', 256, 'wtf')").transform(sha256).sql()
         == "INSERT INTO table1 (name) SELECT SHA2_BINARY('foo', 256, 'wtf')"
+    )
+
+
+def test_result_scan() -> None:
+    assert (
+        sqlglot.parse_one("SELECT * FROM TABLE(RESULT_SCAN('12345'))", read="snowflake")
+        .transform(result_scan)
+        .args.get("result_scan_sfqid")
+        == "12345"
     )

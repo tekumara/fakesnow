@@ -4,7 +4,7 @@ import os
 import re
 import sys
 import uuid
-from collections.abc import Iterator, Sequence
+from collections.abc import Callable, Iterator, Sequence
 from string import Template
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, cast
@@ -88,6 +88,7 @@ class FakeSnowflakeCursor:
         self._rowcount = None
         self._sfqid = None
         self._converter = snowflake.connector.converter.SnowflakeConverter()
+        self._prefetch_hook: Callable[[], None] | None = None
 
     def __enter__(self) -> Self:
         return self
@@ -192,6 +193,31 @@ class FakeSnowflakeCursor:
             msg = f"{e} not implemented. Please raise an issue via https://github.com/tekumara/fakesnow/issues/new"
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=9999, sqlstate="99999") from e
 
+    def execute_async(
+        self,
+        command: str,
+        params: Sequence[Any] | dict[Any, Any] | None = None,
+        *args: Any,
+        **kwargs: Any,
+    ) -> FakeSnowflakeCursor:
+        return self.execute(command, params, *args, **kwargs)
+
+    def get_results_from_sfqid(self, sfqid: str) -> None:
+        def prefetch() -> None:
+            value = self._conn.results_cache.get(sfqid)
+            if value is None:
+                raise snowflake.connector.errors.DatabaseError(
+                    "Cannot retrieve data on the status of this query. "
+                    "No information returned from server for query '{}'"
+                )
+            # Restore the cached result data
+            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed = value
+            self._sfqid = sfqid
+            self._arrow_table_fetch_index = None
+            self._prefetch_hook = None
+
+        self._prefetch_hook = prefetch
+
     def _put_files(self, put_stage_data: stage.UploadCommandDict) -> None:
         results = stage.upload_files(put_stage_data)
         _df = pyarrow.Table.from_pylist(results)
@@ -244,6 +270,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.flatten)
             .transform(transforms.regex_replace)
             .transform(transforms.regex_substr)
+            .transform(transforms.result_scan)
             .transform(transforms.values_columns)
             .transform(transforms.to_date)
             .transform(transforms.to_decimal)
@@ -303,6 +330,18 @@ class FakeSnowflakeCursor:
 
         if not sql:
             raise NotImplementedError(transformed.sql(dialect="snowflake"))
+
+        if sfqid := transformed.args.get("result_scan_sfqid"):
+            value = self._conn.results_cache.get(sfqid)
+            if value is None:
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg=f"Statement {sfqid} not found", errno=709, sqlstate="02000"
+                )
+            # Restore the cached result data
+            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed = value
+            self._sfqid = sfqid
+            self._arrow_table_fetch_index = None
+            return
 
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
             sql = f"SELECT setseed({seed}); {sql}"
@@ -460,6 +499,14 @@ class FakeSnowflakeCursor:
         self._last_params = None if result_sql else params
         self._last_transformed = transformed
 
+        self._conn.results_cache[self._sfqid] = (
+            self._arrow_table,
+            self._rowcount,
+            self._last_sql,
+            self._last_params,
+            self._last_transformed,
+        )
+
     def executemany(
         self,
         command: str,
@@ -480,12 +527,16 @@ class FakeSnowflakeCursor:
         return self
 
     def fetchall(self) -> list[tuple] | list[dict]:
+        if self._prefetch_hook is not None:
+            self._prefetch_hook()
         if self._arrow_table is None:
             # mimic snowflake python connector error type
             raise TypeError("No open result set")
         return self.fetchmany(self._arrow_table.num_rows)
 
     def fetch_pandas_all(self, **kwargs: dict[str, Any]) -> pd.DataFrame:
+        if self._prefetch_hook is not None:
+            self._prefetch_hook()
         if self._arrow_table is None:
             # mimic snowflake python connector error type
             raise snowflake.connector.NotSupportedError("No open result set")
@@ -499,6 +550,8 @@ class FakeSnowflakeCursor:
         # https://peps.python.org/pep-0249/#fetchmany
         size = size or self._arraysize
 
+        if self._prefetch_hook is not None:
+            self._prefetch_hook()
         if self._arrow_table is None:
             # mimic snowflake python connector error type
             raise TypeError("No open result set")
