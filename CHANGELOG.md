@@ -5,6 +5,11 @@
 ## [0.9.45](https://github.com/tekumara/fakesnow/compare/v0.9.44...v0.9.45) (2025-07-11)
 
 
+### Features
+
+* Add support for async queries ([#238](https://github.com/tekumara/fakesnow/issues/238)) ([5343558](https://github.com/tekumara/fakesnow/commit/5343558be9ed3911861ddcacdd51e4e3d0b581e7))
+
+
 ### Bug Fixes
 
 * support snowflake-connector-python==3.16.0 ([7061490](https://github.com/tekumara/fakesnow/commit/706149052c7aabe6ebebfa691926bd12f216f515))
