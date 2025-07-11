@@ -199,21 +199,14 @@ async def session(request: Request) -> JSONResponse:
 
 
 def monitoring_query(request: Request) -> JSONResponse:
-    try:
-        token = to_token(request)
-        conn = to_conn(token)
+    token = to_token(request)
+    conn = to_conn(token)
 
-        sfqid = request.path_params["sfqid"]
-        if not conn.results_cache.get(sfqid):
-            raise ServerError(status_code=404, code="250003", message=f"Query with SFQID {sfqid} not found.")
+    sfqid = request.path_params["sfqid"]
+    if not conn.results_cache.get(sfqid):
+        return JSONResponse({"data": {"queries": []}, "success": True})
 
-        return JSONResponse({"data": {"queries": [{"status": "SUCCESS"}]}, "success": True})
-
-    except ServerError as e:
-        return JSONResponse(
-            {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
-            status_code=e.status_code,
-        )
+    return JSONResponse({"data": {"queries": [{"status": "SUCCESS"}]}, "success": True})
 
 
 routes = [

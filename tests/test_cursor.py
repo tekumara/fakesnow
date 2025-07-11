@@ -286,7 +286,9 @@ def test_execute_async_and_get_results_from_sfqid(cur: snowflake.connector.curso
 
 
 def test_get_results_from_sfqid_not_found(cur: snowflake.connector.cursor.SnowflakeCursor):
-    # Test that get_results_from_sfqid raises an error if the SFQID is not found
-    with pytest.raises(snowflake.connector.errors.ProgrammingError, match="Query with SFQID 0000 not found.") as exc:
-        cur.get_results_from_sfqid("0000")
-    assert exc.value.errno == 2003
+    cur.get_results_from_sfqid("00000000-0000-0000-0000-000000000000")
+    with pytest.raises(
+        snowflake.connector.errors.DatabaseError, match="Cannot retrieve data on the status of this query"
+    ) as exc:
+        cur.fetchall()
+    assert exc.value.errno == -1

@@ -4,6 +4,7 @@ import datetime
 import os
 import tempfile
 from decimal import Decimal
+from unittest.mock import patch
 
 import numpy as np
 import pandas as pd
@@ -455,11 +456,13 @@ def test_server_async_query_with_retrieval(scur: snowflake.connector.cursor.Snow
     assert regular_results == [("regular query",)]
 
 
-def test_server_monitoring_endpoint_error(server: dict) -> None:
-    """Test error response from monitoring query endpoint for non-existent query IDs."""
-    fake_sfqid = "00000000-0000-0000-0000-000000000000"
-
-    with snowflake.connector.connect(**server, database="db", schema="sh") as conn, conn.cursor() as cur:
-        with pytest.raises(snowflake.connector.errors.InterfaceError) as excinfo:
-            cur.get_results_from_sfqid(fake_sfqid)
-        assert excinfo.value.errno == 250003
+# avoid retries to shorten test time
+@patch("snowflake.connector.cursor.ASYNC_RETRY_PATTERN", [0])
+def test_server_monitoring_endpoint_error(scur: snowflake.connector.cursor.SnowflakeCursor):
+    cur = scur
+    cur.get_results_from_sfqid("00000000-0000-0000-0000-000000000000")
+    with pytest.raises(
+        snowflake.connector.errors.DatabaseError, match="Cannot retrieve data on the status of this query"
+    ) as exc:
+        cur.fetchall()
+    assert exc.value.errno == -1
