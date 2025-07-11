@@ -723,6 +723,11 @@ def test_to_timestamp() -> None:
         == "SELECT _FS_TO_TIMESTAMP(0)"
     )
 
+    assert (
+        sqlglot.parse_one("SELECT to_timestamp(1752253006000, 3)", read="snowflake").transform(to_timestamp).sql(dialect="duckdb")
+        == "SELECT _FS_TO_TIMESTAMP(1752253006000, 3)"
+    )
+
 
 def test_use() -> None:
     assert (

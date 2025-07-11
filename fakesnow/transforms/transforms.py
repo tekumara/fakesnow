@@ -1114,7 +1114,7 @@ def to_timestamp(expression: exp.Expression) -> exp.Expression:
 
     # to_timestamp used with a Literal
     if isinstance(expression, exp.UnixToTime):
-        return exp.Anonymous(this="_fs_to_timestamp", expressions=[expression.this])
+        return exp.Anonymous(this="_fs_to_timestamp", expressions=[expression.this, expression.args.get("scale", 0)])
     # to_timestamp used with a Column
     elif isinstance(expression, exp.Anonymous) and expression.name.upper() in ["TO_TIMESTAMP", "TO_TIMESTAMP_NTZ"]:
         return exp.Anonymous(this="_fs_to_timestamp", expressions=expression.expressions)

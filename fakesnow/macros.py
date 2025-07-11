@@ -41,10 +41,17 @@ CREATE OR REPLACE MACRO ${catalog}.array_construct_compact(list) AS (
 
 FS_TO_TIMESTAMP = Template(
     """
-CREATE OR REPLACE MACRO ${catalog}._fs_to_timestamp(val) AS (
+CREATE OR REPLACE MACRO ${catalog}._fs_to_timestamp(val, scale) AS (
     CASE
         WHEN try_cast(val AS BIGINT) IS NOT NULL
-            THEN CAST(to_timestamp(val::BIGINT) AS TIMESTAMP)
+            THEN 
+                CASE
+                    WHEN scale = 0 THEN to_timestamp(val::BIGINT)
+                    WHEN scale = 3 THEN to_timestamp(val::BIGINT / 1000)
+                    WHEN scale = 6 THEN to_timestamp(val::BIGINT / 1000000)
+                    WHEN scale = 9 THEN to_timestamp(val::BIGINT / 1000000000)
+                    ELSE NULL
+                END
         ELSE CAST(val AS TIMESTAMP)
     END
 );
