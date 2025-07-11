@@ -2,6 +2,19 @@
 
 # Changelog
 
+## [0.9.45](https://github.com/tekumara/fakesnow/compare/v0.9.44...v0.9.45) (2025-07-11)
+
+
+### Bug Fixes
+
+* support snowflake-connector-python==3.16.0 ([7061490](https://github.com/tekumara/fakesnow/commit/706149052c7aabe6ebebfa691926bd12f216f515))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.401 to 1.1.402 ([#234](https://github.com/tekumara/fakesnow/issues/234)) ([466a9f6](https://github.com/tekumara/fakesnow/commit/466a9f60346af5fa932441281b5cb65111dda181))
+* **deps:** update sqlglot requirement from ~=26.24.0 to ~=26.33.0 ([#233](https://github.com/tekumara/fakesnow/issues/233)) ([9cfcf6d](https://github.com/tekumara/fakesnow/commit/9cfcf6d091640167c2150b37a506f1a8e829fac9))
+
 ## [0.9.44](https://github.com/tekumara/fakesnow/compare/v0.9.43...v0.9.44) (2025-06-29)
 
 
