@@ -720,7 +720,14 @@ def test_try_to_decimal() -> None:
 def test_to_timestamp() -> None:
     assert (
         sqlglot.parse_one("SELECT to_timestamp(0)", read="snowflake").transform(to_timestamp).sql(dialect="duckdb")
-        == "SELECT _FS_TO_TIMESTAMP(0)"
+        == "SELECT _FS_TO_TIMESTAMP(0, 0)"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT to_timestamp(1752253006000, 3)", read="snowflake")
+        .transform(to_timestamp)
+        .sql(dialect="duckdb")
+        == "SELECT _FS_TO_TIMESTAMP(1752253006000, 3)"
     )
 
 
