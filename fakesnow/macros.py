@@ -44,12 +44,12 @@ FS_TO_TIMESTAMP = Template(
 CREATE OR REPLACE MACRO ${catalog}._fs_to_timestamp(val, scale) AS (
     CASE
         WHEN try_cast(val AS BIGINT) IS NOT NULL
-            THEN 
+            THEN
                 CASE
-                    WHEN scale = 0 THEN to_timestamp(val::BIGINT)
-                    WHEN scale = 3 THEN to_timestamp(val::BIGINT / 1000)
-                    WHEN scale = 6 THEN to_timestamp(val::BIGINT / 1000000)
-                    WHEN scale = 9 THEN to_timestamp(val::BIGINT / 1000000000)
+                    WHEN scale = 0 THEN cast(to_timestamp(val::BIGINT) as TIMESTAMP)
+                    WHEN scale = 3 THEN cast(to_timestamp(val::BIGINT / 1000) as TIMESTAMP)
+                    WHEN scale = 6 THEN cast(to_timestamp(val::BIGINT / 1000000) as TIMESTAMP)
+                    WHEN scale = 9 THEN cast(to_timestamp(val::BIGINT / 1000000000) as TIMESTAMP)
                     ELSE NULL
                 END
         ELSE CAST(val AS TIMESTAMP)
