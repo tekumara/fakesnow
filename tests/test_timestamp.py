@@ -32,6 +32,18 @@ def test_int_seconds_to_timestamp(cur: snowflake.connector.cursor.SnowflakeCurso
     ]
 
 
+def test_milliseconds_to_timestamp_with_scale(cur: snowflake.connector.cursor.SnowflakeCursor):
+    assert cur.execute("select to_timestamp(1748179630122, 3)").fetchall() == [
+        (datetime.datetime(2025, 5, 25, 13, 27, 10, microsecond=122000),)
+    ]
+
+
+def test_microseconds_to_timestamp_with_scale(cur: snowflake.connector.cursor.SnowflakeCursor):
+    assert cur.execute("select to_timestamp_ntz(1748179630212333, 6)").fetchall() == [
+        (datetime.datetime(2025, 5, 25, 13, 27, 10, microsecond=212333),)
+    ]
+
+
 def test_string_seconds_to_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.execute("select '1748179630'::timestamp").fetchall() == [(datetime.datetime(2025, 5, 25, 13, 27, 10),)]
 

@@ -1111,19 +1111,21 @@ def to_timestamp(expression: exp.Expression) -> exp.Expression:
 
     See https://docs.snowflake.com/en/sql-reference/functions/to_timestamp
     """
-
+    default_scale = exp.Literal(this="0", is_string=False)
     # to_timestamp used with a Literal
     if isinstance(expression, exp.UnixToTime):
-        return exp.Anonymous(this="_fs_to_timestamp", expressions=[expression.this])
+        return exp.Anonymous(
+            this="_fs_to_timestamp", expressions=[expression.this, expression.args.get("scale") or default_scale]
+        )
     # to_timestamp used with a Column
     elif isinstance(expression, exp.Anonymous) and expression.name.upper() in ["TO_TIMESTAMP", "TO_TIMESTAMP_NTZ"]:
-        return exp.Anonymous(this="_fs_to_timestamp", expressions=expression.expressions)
+        return exp.Anonymous(this="_fs_to_timestamp", expressions=[*expression.expressions, default_scale])
     # casting to timestamp or timestamp_ntz
     elif isinstance(expression, exp.Cast) and expression.to.this in (
         exp.DataType.Type.TIMESTAMP,
         exp.DataType.Type.TIMESTAMPNTZ,
     ):
-        return exp.Anonymous(this="_fs_to_timestamp", expressions=[expression.this])
+        return exp.Anonymous(this="_fs_to_timestamp", expressions=[expression.this, default_scale])
 
     return expression
 
