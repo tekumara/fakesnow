@@ -1271,9 +1271,6 @@ def create_table_as(expression: exp.Expression, duck_conn: DuckDBPyConnection) -
         select_query = expression.expression
 
         if any(isinstance(expr, exp.Star) for expr in select_query.expressions):
-            if len(select_query.expressions) != 1:
-                raise NotImplementedError(f"CTAS with {select_query.expressions=}")
-
             # convert SELECT * to SELECT <col1>, <col2>, ...
             duck_conn.execute(f"DESCRIBE {select_query}")
             select_query.set(
