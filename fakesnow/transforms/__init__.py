@@ -28,6 +28,7 @@ from fakesnow.transforms.transforms import (
     array_size as array_size,
     create_clone as create_clone,
     create_database as create_database,
+    create_table_as as create_table_as,
     create_user as create_user,
     dateadd_date_cast as dateadd_date_cast,
     dateadd_string_literal_timestamp_cast as dateadd_string_literal_timestamp_cast,

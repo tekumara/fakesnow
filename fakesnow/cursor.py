@@ -311,6 +311,7 @@ class FakeSnowflakeCursor:
             .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.list_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.put_stage(e, self._conn.database, self._conn.schema, params))
+            .transform(lambda e: transforms.create_table_as(e, self._duck_conn))
         )
 
     def _transform_explode(self, expression: exp.Expression) -> list[exp.Expression]:

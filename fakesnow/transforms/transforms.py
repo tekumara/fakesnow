@@ -4,7 +4,9 @@ from pathlib import Path
 from string import Template
 from typing import ClassVar, cast
 
+import snowflake.connector.errors
 import sqlglot
+from duckdb import DuckDBPyConnection
 from sqlglot import exp
 
 from fakesnow.params import MutableParams, pop_qmark_param
@@ -1250,6 +1252,57 @@ def values_columns(expression: exp.Expression) -> exp.Expression:
         num_columns = len(values.expressions)
         columns = [exp.Identifier(this=f"COLUMN{i + 1}", quoted=True) for i in range(num_columns)]
         expression.set("alias", exp.TableAlias(this=exp.Identifier(this="_", quoted=False), columns=columns))
+
+    return expression
+
+
+def create_table_as(expression: exp.Expression, duck_conn: DuckDBPyConnection) -> exp.Expression:
+    if (
+        isinstance(expression, exp.Create)
+        and expression.kind == "TABLE"
+        and isinstance(expression.expression, exp.Select)
+        and isinstance(expression.this, exp.Schema)
+        and len(expression.this.expressions) > 0
+    ):
+        # Extract the column definitions from the schema
+        schema = expression.this
+        create_col_defs: list[exp.ColumnDef] = schema.expressions
+
+        select_query = expression.expression
+
+        if any(isinstance(expr, exp.Star) for expr in select_query.expressions):
+            if len(select_query.expressions) != 1:
+                raise NotImplementedError(f"CTAS with {select_query.expressions=}")
+
+            # convert SELECT * to SELECT <col1>, <col2>, ...
+            duck_conn.execute(f"DESCRIBE {select_query}")
+            select_query.set(
+                "expressions",
+                [exp.Column(this=exp.Identifier(this=col[0], quoted=False)) for col in duck_conn.fetchall()],
+            )
+
+        if len(select_query.expressions) != len(create_col_defs):
+            raise snowflake.connector.errors.ProgrammingError(
+                msg="SQL compilation error:\nInvalid column definition list", errno=2026, sqlstate="42601"
+            )
+
+        # Transform the SELECT to add casting and aliasing based on the schema
+        new_expressions = []
+        for i, col_def in enumerate(create_col_defs):
+            create_col_id = col_def.this
+            assert isinstance(create_col_id, exp.Identifier), f"Expected Identifier, got {type(create_col_id)}"
+            create_col_type = col_def.kind
+            select_col = select_query.expressions[i]
+
+            cast_expr = exp.Cast(this=select_col, to=create_col_type)
+            aliased_expr = exp.Alias(this=cast_expr, alias=create_col_id)
+
+            new_expressions.append(aliased_expr)
+
+        select_query.set("expressions", new_expressions)
+
+        # Remove the schema from the CREATE statement - just keep the table identifier
+        expression.set("this", schema.this)
 
     return expression
 

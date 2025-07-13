@@ -11,7 +11,6 @@ from decimal import Decimal
 import pytest
 import snowflake.connector
 import snowflake.connector.cursor
-import snowflake.connector.pandas_tools
 from snowflake.connector.errors import ProgrammingError
 
 import fakesnow
@@ -135,6 +134,16 @@ def test_create_database_respects_if_not_exists() -> None:
             cursor.execute("CREATE DATABASE db2")  # Fails as db already exists.
 
         cursor.execute("CREATE DATABASE IF NOT EXISTS db2")
+
+
+def test_create_table_as(dcur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    dcur.execute("create or replace table t1(id varchar) as select column1 from values (1)")
+    dcur.execute("select * from t1")
+    assert dcur.fetchall() == [{"ID": "1"}]
+
+    dcur.execute("create or replace table t1(id varchar) as select * from values (1)")
+    dcur.execute("select * from t1")
+    assert dcur.fetchall() == [{"ID": "1"}]
 
 
 def test_dateadd_date_cast(dcur: snowflake.connector.DictCursor):
