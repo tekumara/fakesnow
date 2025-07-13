@@ -2,6 +2,20 @@
 
 # Changelog
 
+## [0.9.46](https://github.com/tekumara/fakesnow/compare/v0.9.45...v0.9.46) (2025-07-13)
+
+
+### Features
+
+* CREATE TABLE AS with schema ([e56aa65](https://github.com/tekumara/fakesnow/commit/e56aa65f77453cfd8448702231377461a3763512)), closes [#235](https://github.com/tekumara/fakesnow/issues/235)
+* support scale argument in to_timestamp function ([#240](https://github.com/tekumara/fakesnow/issues/240)) ([be2cb62](https://github.com/tekumara/fakesnow/commit/be2cb62f56a56772fd77dc47e53d17ad0775a4e3))
+
+
+### Chores
+
+* bump duckdb 1.3.2 ([009c492](https://github.com/tekumara/fakesnow/commit/009c49283c4eb8ce9d83d3c75cf6cefbbeace5c1))
+* bump sqlglot~=27.0.0 ([2ed1139](https://github.com/tekumara/fakesnow/commit/2ed1139f943b9715eee90a035c7dbd9c16c2e6ba))
+
 ## [0.9.45](https://github.com/tekumara/fakesnow/compare/v0.9.44...v0.9.45) (2025-07-11)
 
 
