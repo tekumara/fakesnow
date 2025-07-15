@@ -1260,7 +1260,7 @@ def create_table_as(expression: exp.Expression, duck_conn: DuckDBPyConnection) -
     if (
         isinstance(expression, exp.Create)
         and expression.kind == "TABLE"
-        and isinstance(expression.expression, exp.Select)
+        and isinstance(expression.expression, (exp.Select, exp.Subquery))
         and isinstance(expression.this, exp.Schema)
         and len(expression.this.expressions) > 0
     ):
@@ -1268,7 +1268,10 @@ def create_table_as(expression: exp.Expression, duck_conn: DuckDBPyConnection) -
         schema = expression.this
         create_col_defs: list[exp.ColumnDef] = schema.expressions
 
-        select_query = expression.expression
+        if isinstance(expression.expression, exp.Subquery):
+            select_query = expression.expression.unnest()
+        else:
+            select_query = expression.expression
 
         if any(isinstance(expr, exp.Star) for expr in select_query.expressions):
             # convert SELECT * to SELECT <col1>, <col2>, ...
