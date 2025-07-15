@@ -145,6 +145,14 @@ def test_create_table_as(dcur: snowflake.connector.cursor.SnowflakeCursor) -> No
     dcur.execute("select * from t1")
     assert dcur.fetchall() == [{"ID": "1"}]
 
+    dcur.execute("create or replace table t1(id varchar) as (select column1 from values (1))")
+    dcur.execute("select * from t1")
+    assert dcur.fetchall() == [{"ID": "1"}]
+
+    dcur.execute("create or replace table t1(id varchar) as (select * from values (1))")
+    dcur.execute("select * from t1")
+    assert dcur.fetchall() == [{"ID": "1"}]
+
 
 def test_dateadd_date_cast(dcur: snowflake.connector.DictCursor):
     q = """
