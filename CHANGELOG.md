@@ -9,6 +9,11 @@
 
 * support * anywhere  in CREATE TABLE AS .. SELECT *, .. ([deb0706](https://github.com/tekumara/fakesnow/commit/deb070658f78d1bb853dc9e4352189488817f0b1))
 
+
+### Bug Fixes
+
+* Support subqueries in CTAS with column list ([#243](https://github.com/tekumara/fakesnow/issues/243)) ([9e61fb6](https://github.com/tekumara/fakesnow/commit/9e61fb65b17742e9824c9a2e12d5b5c169753c1d))
+
 ## [0.9.46](https://github.com/tekumara/fakesnow/compare/v0.9.45...v0.9.46) (2025-07-13)
 
 
