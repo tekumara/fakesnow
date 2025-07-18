@@ -214,12 +214,12 @@ def test_dateadd_date_cast() -> None:
         == "SELECT col + INTERVAL 3 DAY AS D"
     )
 
-    # WEEk
+    # WEEK
     assert (
         sqlglot.parse_one("SELECT DATEADD(WEEK, 3, '2023-03-03'::DATE) as D", read="snowflake")
         .transform(dateadd_date_cast)
         .sql(dialect="duckdb")
-        == "SELECT CAST(CAST('2023-03-03' AS DATE) + (7 * INTERVAL 3 DAY) AS DATE) AS D"
+        == "SELECT CAST(CAST('2023-03-03' AS DATE) + INTERVAL 3 WEEK AS DATE) AS D"
     )
 
     assert (
@@ -229,21 +229,21 @@ def test_dateadd_date_cast() -> None:
         )
         .transform(dateadd_date_cast)
         .sql(dialect="duckdb")
-        == "SELECT CAST(CAST('2023-04-02' AS DATE) + (7 * INTERVAL (col - 1) DAY) AS DATE)"
+        == "SELECT CAST(CAST('2023-04-02' AS DATE) + INTERVAL (col - 1) WEEK AS DATE)"
     )
 
     assert (
         sqlglot.parse_one("SELECT DATEADD(week, 3, col::DATE) as D", read="snowflake")
         .transform(dateadd_date_cast)
         .sql(dialect="duckdb")
-        == "SELECT CAST(CAST(col AS DATE) + (7 * INTERVAL 3 DAY) AS DATE) AS D"
+        == "SELECT CAST(CAST(col AS DATE) + INTERVAL 3 WEEK AS DATE) AS D"
     )
 
     assert (
         sqlglot.parse_one("SELECT DATEADD(week, 3, col) as D", read="snowflake")
         .transform(dateadd_date_cast)
         .sql(dialect="duckdb")
-        == "SELECT col + (7 * INTERVAL 3 DAY) AS D"
+        == "SELECT col + INTERVAL 3 WEEK AS D"
     )
 
     # MONTH
