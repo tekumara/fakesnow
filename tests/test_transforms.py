@@ -685,6 +685,7 @@ def test_tag() -> None:
         sqlglot.parse_one("CREATE TAG cost_center COMMENT = 'cost_center tag'", read="snowflake").transform(tag)
         == SUCCESS_NOP
     )
+    assert sqlglot.parse_one("DROP TAG test_tag", read="snowflake").transform(tag) == SUCCESS_NOP
 
 
 def test_timestamp_ntz_ns() -> None:

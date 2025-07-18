@@ -447,6 +447,7 @@ def test_tags_noop(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("ALTER TABLE table1 SET TAG foo='bar'")
     cur.execute("ALTER TABLE table1 MODIFY COLUMN name1 SET TAG foo='bar'")
     cur.execute("CREATE TAG cost_center COMMENT = 'cost_center tag'")
+    cur.execute("DROP TAG cost_center")
 
 
 def test_to_date(cur: snowflake.connector.cursor.SnowflakeCursor):

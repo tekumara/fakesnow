@@ -977,7 +977,7 @@ def tag(expression: exp.Expression) -> exp.Expression:
         # alter table modify column set tag
         return SUCCESS_NOP
     elif (
-        isinstance(expression, exp.Create)
+        isinstance(expression, (exp.Create, exp.Drop))
         and (kind := expression.args.get("kind"))
         and isinstance(kind, str)
         and kind.upper() == "TAG"
