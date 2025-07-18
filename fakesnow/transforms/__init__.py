@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from fakesnow.transforms.ddl import (
+    alter_table_add_multiple_columns as alter_table_add_multiple_columns,
+)
 from fakesnow.transforms.merge import merge as merge
 from fakesnow.transforms.show import (
     show_columns as show_columns,
