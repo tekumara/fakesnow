@@ -2,6 +2,19 @@
 
 # Changelog
 
+## [0.9.48](https://github.com/tekumara/fakesnow/compare/v0.9.47...v0.9.48) (2025-07-19)
+
+
+### Features
+
+* Add support for multi-column ALTER TABLE ADD COLUMN statements ([#247](https://github.com/tekumara/fakesnow/issues/247)) ([4423059](https://github.com/tekumara/fakesnow/commit/4423059179cfc4708ee79f295ae894b047983c48)), closes [#244](https://github.com/tekumara/fakesnow/issues/244)
+* support DROP TAG as nop ([5ac11ca](https://github.com/tekumara/fakesnow/commit/5ac11ca54ec1b5a6daf0ddc9020d408320a3dedc)), closes [#245](https://github.com/tekumara/fakesnow/issues/245)
+
+
+### Chores
+
+* **deps:** bump sqlglot~=27.1.0 ([2529fef](https://github.com/tekumara/fakesnow/commit/2529fef2f55647c3211693d86657f9781ce07839))
+
 ## [0.9.47](https://github.com/tekumara/fakesnow/compare/v0.9.46...v0.9.47) (2025-07-15)
 
 
