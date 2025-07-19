@@ -317,7 +317,19 @@ class FakeSnowflakeCursor:
     def _transform_explode(self, expression: exp.Expression) -> list[exp.Expression]:
         # Applies transformations that require splitting the expression into multiple expressions
         # Split transforms have limited support at the moment.
-        return transforms.merge(expression)
+
+        # Try merge transform first
+        merge_result = transforms.merge(expression)
+        if len(merge_result) > 1:
+            return merge_result
+
+        # If merge didn't split the expression, try alter_table_add_multiple_columns
+        alter_result = transforms.alter_table_add_multiple_columns(expression)
+        if len(alter_result) > 1:
+            return alter_result
+
+        # Return original expression if no transform applied
+        return [expression]
 
     def _execute(self, transformed: exp.Expression, params: MutableParams | None = None) -> None:
         self._arrow_table = None
