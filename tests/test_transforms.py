@@ -7,7 +7,6 @@ from sqlglot import exp
 from fakesnow.transforms import (
     SUCCESS_NOP,
     alias_in_join,
-    alter_table_strip_cluster_by,
     array_agg,
     array_agg_within_group,
     array_size,
@@ -83,13 +82,6 @@ def test_alias_in_join() -> None:
         .transform(alias_in_join)
         .sql()
         == "SELECT R.MY_DATE AS R_DATE /* aliased column has table identifier */ FROM REVENUES AS R LEFT JOIN FXRATES AS F ON R.R_DATE = F.MY_DATE"  # noqa: E501
-    )
-
-
-def test_alter_table_strip_cluster_by() -> None:
-    assert (
-        sqlglot.parse_one("alter table table1 cluster by (name)").transform(alter_table_strip_cluster_by).sql()
-        == "SELECT 'Statement executed successfully.' AS status"
     )
 
 

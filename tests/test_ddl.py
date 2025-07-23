@@ -1,6 +1,6 @@
 import sqlglot
 
-from fakesnow.transforms.ddl import alter_table_add_multiple_columns
+from fakesnow.transforms.ddl import alter_table_add_multiple_columns, alter_table_strip_cluster_by
 
 
 def test_alter_table_add_multiple_columns() -> None:
@@ -20,3 +20,10 @@ def test_alter_table_add_multiple_columns() -> None:
     assert len(result_if_not_exists) == 2
     assert result_if_not_exists[0].sql() == "ALTER TABLE IF EXISTS tab1 ADD COLUMN IF NOT EXISTS col1 INT"
     assert result_if_not_exists[1].sql() == "ALTER TABLE IF EXISTS tab1 ADD COLUMN IF NOT EXISTS col2 VARCHAR(50)"
+
+
+def test_alter_table_strip_cluster_by() -> None:
+    assert (
+        sqlglot.parse_one("alter table table1 cluster by (name)").transform(alter_table_strip_cluster_by).sql()
+        == "SELECT 'Statement executed successfully.' AS status"
+    )

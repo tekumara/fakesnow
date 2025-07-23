@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from fakesnow.transforms.ddl import (
     alter_table_add_multiple_columns as alter_table_add_multiple_columns,
+    alter_table_strip_cluster_by as alter_table_strip_cluster_by,
 )
 from fakesnow.transforms.merge import merge as merge
 from fakesnow.transforms.show import (
@@ -24,7 +25,6 @@ from fakesnow.transforms.stage import (
 from fakesnow.transforms.transforms import (
     SUCCESS_NOP as SUCCESS_NOP,
     alias_in_join as alias_in_join,
-    alter_table_strip_cluster_by as alter_table_strip_cluster_by,
     array_agg as array_agg,
     array_agg_within_group as array_agg_within_group,
     array_construct_etc as array_construct_etc,
