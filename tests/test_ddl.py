@@ -13,10 +13,10 @@ def test_alter_table_add_multiple_columns() -> None:
     assert result[1].sql() == "ALTER TABLE tab1 ADD COLUMN col2 VARCHAR(50)"
     assert result[2].sql() == "ALTER TABLE tab1 ADD COLUMN col3 BOOLEAN"
 
-    # Test multiple columns with IF EXISTS clause
-    sql_if_exists = "alter table if exists tab1 add column col1 int, col2 varchar(50)"
-    result_if_exists = alter_table_add_multiple_columns(sqlglot.parse_one(sql_if_exists, dialect="snowflake"))
+    # Test multiple columns with IF EXISTS table and IF NOT EXISTS columns
+    sql_if_not_exists = "alter table if exists tab1 add column if not exists col1 int, col2 varchar(50)"
+    result_if_not_exists = alter_table_add_multiple_columns(sqlglot.parse_one(sql_if_not_exists, dialect="snowflake"))
 
-    assert len(result_if_exists) == 2
-    assert result_if_exists[0].sql() == "ALTER TABLE IF EXISTS tab1 ADD COLUMN col1 INT"
-    assert result_if_exists[1].sql() == "ALTER TABLE IF EXISTS tab1 ADD COLUMN col2 VARCHAR(50)"
+    assert len(result_if_not_exists) == 2
+    assert result_if_not_exists[0].sql() == "ALTER TABLE IF EXISTS tab1 ADD COLUMN IF NOT EXISTS col1 INT"
+    assert result_if_not_exists[1].sql() == "ALTER TABLE IF EXISTS tab1 ADD COLUMN IF NOT EXISTS col2 VARCHAR(50)"

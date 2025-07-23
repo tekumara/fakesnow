@@ -40,7 +40,8 @@ def test_alter_table(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("create table table1 (id int)")
     dcur.execute("alter table table1 add column name varchar(20)")
     dcur.execute("alter table if exists table1 add column col1 int, col2 varchar(50)")
-    dcur.execute("select id,name,col1,col2 from table1")
+    dcur.execute("alter table if exists table1 add column if not exists col3 int, col2 varchar(50)")
+    dcur.execute("select id, name, col1, col2, col3 from table1")
     assert dcur.execute("alter table table1 cluster by (name)").fetchall() == [
         {"status": "Statement executed successfully."}
     ]

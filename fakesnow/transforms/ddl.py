@@ -19,7 +19,7 @@ from sqlglot import exp
 def alter_table_add_multiple_columns(expression: exp.Expression) -> list[exp.Expression]:
     """Transform ALTER TABLE ADD COLUMN with multiple columns into separate statements.
 
-    Snowflake supports: ALTER TABLE tab1 ADD COLUMN col1 INT, col2 VARCHAR(50), col3 BOOLEAN;
+    Snowflake supports: ALTER TABLE IF EXISTS tab1 ADD COLUMN IF NOT EXISTS col1 INT, col2 VARCHAR(50), col3 BOOLEAN;
     DuckDB requires separate statements for each column.
 
     Args:
@@ -43,12 +43,27 @@ def alter_table_add_multiple_columns(expression: exp.Expression) -> list[exp.Exp
 
     # Create separate ALTER statements for each column
     alter_statements = []
+    # Check if any column has IF NOT EXISTS - in Snowflake, this applies to all columns
+    column_if_not_exists = any(action.args.get("exists", False) for action in actions)
+
     for action in actions:
+        # If any column has IF NOT EXISTS, apply it to all columns
+        if column_if_not_exists and not action.args.get("exists", False):
+            # Create a new ColumnDef with exists=True
+            new_action = exp.ColumnDef(
+                this=action.this,
+                kind=action.kind,
+                constraints=action.args.get("constraints", []),
+                exists=True,
+            )
+        else:
+            new_action = action
+
         new_alter = exp.Alter(
             this=expression.this,
             kind=expression.args.get("kind"),
             exists=expression.args.get("exists"),
-            actions=[action],
+            actions=[new_action],
         )
         alter_statements.append(new_alter)
 
