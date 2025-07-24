@@ -36,18 +36,6 @@ def alias_in_join(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
-    """Turn alter table cluster by into a no-op"""
-    if (
-        isinstance(expression, exp.Alter)
-        and (actions := expression.args.get("actions"))
-        and len(actions) == 1
-        and (isinstance(actions[0], exp.Cluster))
-    ):
-        return SUCCESS_NOP
-    return expression
-
-
 def array_construct_etc(expression: exp.Expression) -> exp.Expression:
     """Handle ARRAY_CONSTRUCT_* and ARRAY_CAT
 

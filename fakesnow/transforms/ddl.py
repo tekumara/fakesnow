@@ -15,6 +15,8 @@ from __future__ import annotations
 
 from sqlglot import exp
 
+from fakesnow.transforms.transforms import SUCCESS_NOP
+
 
 def alter_table_add_multiple_columns(expression: exp.Expression) -> list[exp.Expression]:
     """Transform ALTER TABLE ADD COLUMN with multiple columns into separate statements.
@@ -68,3 +70,15 @@ def alter_table_add_multiple_columns(expression: exp.Expression) -> list[exp.Exp
         alter_statements.append(new_alter)
 
     return alter_statements
+
+
+def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
+    """Turn alter table cluster by into a no-op"""
+    if (
+        isinstance(expression, exp.Alter)
+        and (actions := expression.args.get("actions"))
+        and len(actions) == 1
+        and (isinstance(actions[0], exp.Cluster))
+    ):
+        return SUCCESS_NOP
+    return expression
