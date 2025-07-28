@@ -2,6 +2,18 @@
 
 # Changelog
 
+## [0.9.49](https://github.com/tekumara/fakesnow/compare/v0.9.48...v0.9.49) (2025-07-28)
+
+
+### Features
+
+* **server:** support nop_regexes ([4d4154a](https://github.com/tekumara/fakesnow/commit/4d4154abc5b520efc9efa44e3a534622ab4d3abd)), closes [#251](https://github.com/tekumara/fakesnow/issues/251)
+
+
+### Bug Fixes
+
+* ALTER TABLE ADD COLUMN IF NOT EXISTS for multiple columns ([#248](https://github.com/tekumara/fakesnow/issues/248)) ([82ac939](https://github.com/tekumara/fakesnow/commit/82ac939a3b77e6b4d3c54ff1552bb6d07c8dcf94))
+
 ## [0.9.48](https://github.com/tekumara/fakesnow/compare/v0.9.47...v0.9.48) (2025-07-19)
 
 
