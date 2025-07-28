@@ -47,6 +47,8 @@ async def login_request(request: Request) -> JSONResponse:
         body = gzip.decompress(body)
     body_json = json.loads(body)
     session_params: dict[str, Any] = body_json["data"]["SESSION_PARAMETERS"]
+    nop_regexes = session_params.get("nop_regexes")
+
     if db_path := session_params.get("FAKESNOW_DB_PATH"):
         # isolated creates a new in-memory database, rather than using the shared in-memory database
         # so this connection won't share any tables with other connections
@@ -55,8 +57,8 @@ async def login_request(request: Request) -> JSONResponse:
         # share the in-memory database across connections
         fs = shared_fs
     token = secrets.token_urlsafe(32)
-    logger.info(f"Session login {database=} {schema=}")
-    sessions[token] = fs.connect(database, schema)
+    logger.info(f"Session login {database=} {schema=} {nop_regexes=}")
+    sessions[token] = fs.connect(database, schema, nop_regexes=nop_regexes)
     return JSONResponse(
         {
             "data": {

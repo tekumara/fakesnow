@@ -195,6 +195,13 @@ def test_server_no_gzip(server: dict) -> None:
     assert response.json()["success"]
 
 
+def test_server_nop_regexes(server: dict) -> None:
+    with snowflake.connector.connect(**server | {"session_parameters": {"nop_regexes": ["^CALL.*"]}}) as conn:
+        cur = conn.cursor()
+        cur.execute("call this_procedure_does_not_exist('foo', 'bar');")
+        assert cur.fetchall() == [("Statement executed successfully.",)]
+
+
 def test_server_put_list(sdcur: snowflake.connector.cursor.DictCursor) -> None:
     dcur = sdcur
 

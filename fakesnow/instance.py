@@ -38,7 +38,11 @@ class FakeSnow:
         self.duck_conn.execute("SET GLOBAL TimeZone = 'UTC'")
 
     def connect(
-        self, database: str | None = None, schema: str | None = None, **kwargs: Any
+        self,
+        database: str | None = None,
+        schema: str | None = None,
+        nop_regexes: list[str] | None = None,
+        **kwargs: Any,
     ) -> fakes.FakeSnowflakeConnection:
         # every time we connect, create a new cursor (ie: connection) so we can isolate each connection's
         # schema setting see
@@ -53,6 +57,6 @@ class FakeSnow:
             create_database=self.create_database_on_connect,
             create_schema=self.create_schema_on_connect,
             db_path=self.db_path,
-            nop_regexes=self.nop_regexes,
+            nop_regexes=nop_regexes or self.nop_regexes,
             **kwargs,
         )
