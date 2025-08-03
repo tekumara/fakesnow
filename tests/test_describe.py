@@ -222,7 +222,7 @@ def test_description_create_drop_database(dcur: snowflake.connector.cursor.DictC
     # TODO: support drop database
     # dcur.execute("drop database example")
     # assert dcur.fetchall() == [{"status": "EXAMPLE successfully dropped."}]
-    # assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    # assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]
 
 
 def test_description_create_drop_schema(dcur: snowflake.connector.cursor.DictCursor):
