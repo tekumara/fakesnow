@@ -59,6 +59,7 @@ from fakesnow.transforms.transforms import (
     result_scan as result_scan,
     sample as sample,
     semi_structured_types as semi_structured_types,
+    sequence_nextval as sequence_nextval,
     set_schema as set_schema,
     sha256 as sha256,
     split as split,

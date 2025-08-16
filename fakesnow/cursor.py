@@ -43,6 +43,7 @@ if TYPE_CHECKING:
 SCHEMA_UNSET = "schema_unset"
 SQL_SUCCESS = "SELECT 'Statement executed successfully.' as 'status'"
 SQL_CREATED_DATABASE = Template("SELECT 'Database ${name} successfully created.' as 'status'")
+SQL_CREATED_SEQUENCE = Template("SELECT 'Sequence ${name} successfully created.' as 'status'")
 SQL_CREATED_SCHEMA = Template("SELECT 'Schema ${name} successfully created.' as 'status'")
 SQL_CREATED_SECRET = Template("SELECT 'Secret ${name} successfully created.' as 'status'")
 SQL_CREATED_TABLE = Template("SELECT 'Table ${name} successfully created.' as 'status'")
@@ -271,6 +272,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.regex_replace)
             .transform(transforms.regex_substr)
             .transform(transforms.result_scan)
+            .transform(transforms.sequence_nextval)
             .transform(transforms.values_columns)
             .transform(transforms.to_date)
             .transform(transforms.to_decimal)
@@ -453,6 +455,9 @@ class FakeSnowflakeCursor:
             ident = eid.name
             if cmd == "CREATE SCHEMA" and ident:
                 result_sql = SQL_CREATED_SCHEMA.substitute(name=ident)
+
+            elif cmd == "CREATE SEQUENCE" and ident:
+                result_sql = SQL_CREATED_SEQUENCE.substitute(name=ident)
 
             elif cmd == "CREATE TABLE" and ident:
                 result_sql = SQL_CREATED_TABLE.substitute(name=ident)

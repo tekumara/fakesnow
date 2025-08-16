@@ -1390,3 +1390,36 @@ def result_scan(expression: exp.Expression) -> exp.Expression:
         # Attach the sfqid to the expression for the cursor to handle
         expression.args["result_scan_sfqid"] = sfqid
     return expression
+
+
+def sequence_nextval(expression: exp.Expression) -> exp.Expression:
+    """Transform Snowflake sequence nextval syntax to DuckDB syntax.
+
+    Converts "sequence_name.nextval" to "nextval('sequence_name')".
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("SELECT seq_01.nextval").transform(sequence_nextval).sql()
+        "SELECT NEXTVAL('seq_01') AS NEXTVAL"
+    """
+    # Check if this is a Column with nextval
+    if (
+        isinstance(expression, exp.Column)
+        and isinstance(expression.this, exp.Identifier)
+        and expression.this.this.upper() == "NEXTVAL"
+        and expression.table
+    ):
+        table_name = expression.table
+        nextval = exp.Anonymous(this="nextval", expressions=[exp.Literal(this=table_name, is_string=True)])
+
+        # Already aliased
+        if isinstance(expression.parent, exp.Alias):
+            return nextval
+
+        # Non-aliased case: seq_01.nextval -> nextval('seq_01') AS NEXTVAL
+        return exp.Alias(
+            this=nextval,
+            alias=exp.Identifier(this="NEXTVAL", quoted=False),
+        )
+
+    return expression
