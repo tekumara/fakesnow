@@ -16,6 +16,11 @@ pip-wheel-metadata/
 .venv/
 duckdb
 notebooks/.ipynb_checkpoints
+notebooks/
 tests/vcr
 # ignore uv.lock so we are always testing with the latest versions
 uv.lock
+.claude
+CLAUDE.md
+.windsurf
+TODO.md
