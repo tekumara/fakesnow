@@ -80,26 +80,25 @@ def test_describe_view_columns(dcur: snowflake.connector.cursor.DictCursor):
     # fmt: on
 
 
-def test_info_schema_columns(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("CREATE TABLE foo (id INTEGER, name VARCHAR)")
-        cur.execute("CREATE DATABASE db2")
-        # should not be returned
-        cur.execute("CREATE SCHEMA db2.schema2")
-        cur.execute("CREATE TABLE db2.schema2.bar (id INTEGER)")
+def test_info_schema_columns(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("CREATE TABLE foo (id INTEGER, name VARCHAR)")
+    dcur.execute("CREATE DATABASE db2")
+    # should not be returned
+    dcur.execute("CREATE SCHEMA db2.schema2")
+    dcur.execute("CREATE TABLE db2.schema2.bar (id INTEGER)")
 
-        cur.execute(
-            "SELECT table_catalog, table_schema, table_name, column_name FROM information_schema.columns where column_name = 'ID'"
-        )
+    dcur.execute(
+        "SELECT table_catalog, table_schema, table_name, column_name FROM information_schema.columns where column_name = 'ID'"
+    )
 
-        assert cur.fetchall() == [
-            {
-                "table_catalog": "DB1",
-                "table_schema": "SCHEMA1",
-                "table_name": "FOO",
-                "column_name": "ID",
-            }
-        ]
+    assert dcur.fetchall() == [
+        {
+            "table_catalog": "DB1",
+            "table_schema": "SCHEMA1",
+            "table_name": "FOO",
+            "column_name": "ID",
+        }
+    ]
 
 
 def test_info_schema_columns_numeric(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -194,81 +193,79 @@ def test_info_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCurso
     ]
 
 
-def test_info_schema_databases(conn: snowflake.connector.SnowflakeConnection):
+def test_info_schema_databases(dcur: snowflake.connector.cursor.DictCursor):
     # see https://docs.snowflake.com/en/sql-reference/info-schema/databases
 
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("create database db2")
-        cur.execute("select * from information_schema.databases")
+    dcur.execute("create database db2")
+    dcur.execute("select * from information_schema.databases")
 
-        assert cur.fetchall() == [
-            {
-                "database_name": "DB1",
-                "database_owner": "SYSADMIN",
-                "is_transient": "NO",
-                "comment": None,
-                "created": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-                "last_altered": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-                "retention_time": 1,
-                "type": "STANDARD",
-            },
-            {
-                "database_name": "DB2",
-                "database_owner": "SYSADMIN",
-                "is_transient": "NO",
-                "comment": None,
-                "created": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-                "last_altered": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-                "retention_time": 1,
-                "type": "STANDARD",
-            },
-        ]
+    assert dcur.fetchall() == [
+        {
+            "database_name": "DB1",
+            "database_owner": "SYSADMIN",
+            "is_transient": "NO",
+            "comment": None,
+            "created": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "last_altered": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "retention_time": 1,
+            "type": "STANDARD",
+        },
+        {
+            "database_name": "DB2",
+            "database_owner": "SYSADMIN",
+            "is_transient": "NO",
+            "comment": None,
+            "created": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "last_altered": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "retention_time": 1,
+            "type": "STANDARD",
+        },
+    ]
 
 
-def test_info_schema_tables(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("CREATE TABLE foo (id INTEGER)")
-        cur.execute("INSERT INTO foo (id) VALUES (1)")
-        cur.execute("CREATE DATABASE db2")
-        # should not be returned
-        cur.execute("CREATE SCHEMA db2.schema2")
-        cur.execute("CREATE TABLE db2.schema2.bar (name VARCHAR)")
+def test_info_schema_tables(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("CREATE TABLE foo (id INTEGER)")
+    dcur.execute("INSERT INTO foo (id) VALUES (1)")
+    dcur.execute("CREATE DATABASE db2")
+    # should not be returned
+    dcur.execute("CREATE SCHEMA db2.schema2")
+    dcur.execute("CREATE TABLE db2.schema2.bar (name VARCHAR)")
 
-        cur.execute("SELECT * FROM information_schema.tables")
+    dcur.execute("SELECT * FROM information_schema.tables")
 
-        assert cur.fetchall() == [
-            {
-                "TABLE_CATALOG": "DB1",
-                "TABLE_SCHEMA": "SCHEMA1",
-                "TABLE_NAME": "FOO",
-                "TABLE_OWNER": "SYSADMIN",
-                "TABLE_TYPE": "BASE TABLE",
-                "IS_TRANSIENT": "NO",
-                "CLUSTERING_KEY": None,
-                "ROW_COUNT": 1,
-                "BYTES": 0,
-                "RETENTION_TIME": 1,
-                "SELF_REFERENCING_COLUMN_NAME": None,
-                "REFERENCE_GENERATION": None,
-                "USER_DEFINED_TYPE_CATALOG": None,
-                "USER_DEFINED_TYPE_SCHEMA": None,
-                "USER_DEFINED_TYPE_NAME": None,
-                "IS_INSERTABLE_INTO": "YES",
-                "IS_TYPED": "YES",
-                "COMMIT_ACTION": None,
-                "CREATED": IsDatetime(),
-                "LAST_ALTERED": IsDatetime(),
-                "LAST_DDL": IsDatetime(),
-                "LAST_DDL_BY": "SYSADMIN",
-                "AUTO_CLUSTERING_ON": "NO",
-                "COMMENT": None,
-                "IS_TEMPORARY": "NO",
-                "IS_ICEBERG": "NO",
-                "IS_DYNAMIC": "NO",
-                "IS_IMMUTABLE": "NO",
-                "IS_HYBRID": "NO",
-            }
-        ]
+    assert dcur.fetchall() == [
+        {
+            "TABLE_CATALOG": "DB1",
+            "TABLE_SCHEMA": "SCHEMA1",
+            "TABLE_NAME": "FOO",
+            "TABLE_OWNER": "SYSADMIN",
+            "TABLE_TYPE": "BASE TABLE",
+            "IS_TRANSIENT": "NO",
+            "CLUSTERING_KEY": None,
+            "ROW_COUNT": 1,
+            "BYTES": 0,
+            "RETENTION_TIME": 1,
+            "SELF_REFERENCING_COLUMN_NAME": None,
+            "REFERENCE_GENERATION": None,
+            "USER_DEFINED_TYPE_CATALOG": None,
+            "USER_DEFINED_TYPE_SCHEMA": None,
+            "USER_DEFINED_TYPE_NAME": None,
+            "IS_INSERTABLE_INTO": "YES",
+            "IS_TYPED": "YES",
+            "COMMIT_ACTION": None,
+            "CREATED": IsDatetime(),
+            "LAST_ALTERED": IsDatetime(),
+            "LAST_DDL": IsDatetime(),
+            "LAST_DDL_BY": "SYSADMIN",
+            "AUTO_CLUSTERING_ON": "NO",
+            "COMMENT": None,
+            "IS_TEMPORARY": "NO",
+            "IS_ICEBERG": "NO",
+            "IS_DYNAMIC": "NO",
+            "IS_IMMUTABLE": "NO",
+            "IS_HYBRID": "NO",
+        }
+    ]
 
 
 def test_info_schema_views_empty(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -277,36 +274,35 @@ def test_info_schema_views_empty(cur: snowflake.connector.cursor.SnowflakeCursor
     assert result.fetchall() == []
 
 
-def test_info_schema_views(conn: snowflake.connector.SnowflakeConnection):
-    with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        cur.execute("CREATE TABLE foo (id INTEGER, name VARCHAR)")
-        cur.execute("CREATE VIEW bar AS SELECT * FROM foo WHERE id > 5")
-        cur.execute("CREATE DATABASE db2")
-        # should not be returned
-        cur.execute("CREATE SCHEMA db2.schema2")
-        cur.execute("CREATE TABLE db2.schema2.foo (id INTEGER, name VARCHAR)")
-        cur.execute("CREATE VIEW db2.schema2.baz AS SELECT * FROM db2.schema2.foo WHERE id > 5")
+def test_info_schema_views(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("CREATE TABLE foo (id INTEGER, name VARCHAR)")
+    dcur.execute("CREATE VIEW bar AS SELECT * FROM foo WHERE id > 5")
+    dcur.execute("CREATE DATABASE db2")
+    # should not be returned
+    dcur.execute("CREATE SCHEMA db2.schema2")
+    dcur.execute("CREATE TABLE db2.schema2.foo (id INTEGER, name VARCHAR)")
+    dcur.execute("CREATE VIEW db2.schema2.baz AS SELECT * FROM db2.schema2.foo WHERE id > 5")
 
-        cur.execute("SELECT * FROM information_schema.views")
+    dcur.execute("SELECT * FROM information_schema.views")
 
-        assert cur.fetchall() == [
-            {
-                "table_catalog": "DB1",
-                "table_schema": "SCHEMA1",
-                "table_name": "BAR",
-                "table_owner": "SYSADMIN",
-                "view_definition": "CREATE VIEW SCHEMA1.BAR AS SELECT * FROM FOO WHERE (ID > 5);",
-                "check_option": "NONE",
-                "is_updatable": "NO",
-                "insertable_into": "NO",
-                "is_secure": "NO",
-                "created": datetime(1970, 1, 1, tzinfo=pytz.utc),
-                "last_altered": datetime(1970, 1, 1, tzinfo=pytz.utc),
-                "last_ddl": datetime(1970, 1, 1, tzinfo=pytz.utc),
-                "last_ddl_by": "SYSADMIN",
-                "comment": None,
-            }
-        ]
+    assert dcur.fetchall() == [
+        {
+            "table_catalog": "DB1",
+            "table_schema": "SCHEMA1",
+            "table_name": "BAR",
+            "table_owner": "SYSADMIN",
+            "view_definition": "CREATE VIEW SCHEMA1.BAR AS SELECT * FROM FOO WHERE (ID > 5);",
+            "check_option": "NONE",
+            "is_updatable": "NO",
+            "insertable_into": "NO",
+            "is_secure": "NO",
+            "created": datetime(1970, 1, 1, tzinfo=pytz.utc),
+            "last_altered": datetime(1970, 1, 1, tzinfo=pytz.utc),
+            "last_ddl": datetime(1970, 1, 1, tzinfo=pytz.utc),
+            "last_ddl_by": "SYSADMIN",
+            "comment": None,
+        }
+    ]
 
 
 def test_type_column_is_not_null(
