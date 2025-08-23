@@ -3,6 +3,7 @@ from __future__ import annotations
 from fakesnow.transforms.ddl import (
     alter_table_add_multiple_columns as alter_table_add_multiple_columns,
     alter_table_strip_cluster_by as alter_table_strip_cluster_by,
+    create_table_autoincrement as create_table_autoincrement,
 )
 from fakesnow.transforms.merge import merge as merge
 from fakesnow.transforms.show import (

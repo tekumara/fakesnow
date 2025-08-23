@@ -1,7 +1,41 @@
+import re
+
 import snowflake.connector.cursor
 import sqlglot
 
-from fakesnow.transforms import sequence_nextval
+from fakesnow.transforms import create_table_autoincrement, sequence_nextval
+
+
+def test_autoincrement(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("CREATE TABLE test_table (id NUMERIC NOT NULL AUTOINCREMENT, name VARCHAR)")
+    cur.execute("insert into test_table(name) values ('foo'), ('bar')")
+    cur.execute("select * from test_table")
+    assert cur.fetchall() == [(1, "foo"), (2, "bar")]
+
+    # recreate the table with a different sequence
+    cur.execute(
+        "CREATE or replace TABLE test_table(id NUMERIC NOT NULL IDENTITY start 10 increment 5 order, name VARCHAR)"
+    )
+    cur.execute("insert into test_table(name) values ('foo'), ('bar')")
+    cur.execute("select * from test_table")
+    assert cur.fetchall() == [(10, "foo"), (15, "bar")]
+
+
+def test_autoincrement_transform() -> None:
+    expr = sqlglot.parse_one(
+        "create table test_table (id numeric autoincrement start 10 increment 5 order)",
+        dialect="snowflake",
+    )
+    seq_stmt, table_stmt = create_table_autoincrement(expr)
+    seq_sql = seq_stmt.sql()
+    table_sql = table_stmt.sql()
+
+    m_seq = re.search(r"CREATE SEQUENCE (\S+) START WITH 10 INCREMENT BY 5", seq_sql)
+    assert m_seq, f"Unexpected SEQUENCE SQL: {seq_sql}"
+    seq_name = m_seq.group(1)
+    assert re.match(r"^_fs_seq_test_table_id_[0-9a-f]{8}$", seq_name)
+
+    assert table_sql == f"CREATE TABLE test_table (id DECIMAL(38, 0) DEFAULT NEXTVAL('{seq_name}'))"
 
 
 def test_sequence(dcur: snowflake.connector.cursor.SnowflakeCursor):
