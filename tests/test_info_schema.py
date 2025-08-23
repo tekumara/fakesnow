@@ -32,8 +32,8 @@ def test_info_schema_columns_describe(cur: snowflake.connector.cursor.SnowflakeC
     cur.execute("select column_name, ordinal_position from information_schema.columns")
     # fmt: off
     expected_metadata = [
-        ResultMetadata(name='column_name', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='ordinal_position', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)
+        ResultMetadata(name='COLUMN_NAME', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='ORDINAL_POSITION', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)
     ]
     # fmt: on
 
@@ -60,7 +60,7 @@ def test_describe_view_columns(dcur: snowflake.connector.cursor.DictCursor):
     assert list(result[0].keys()) == cols
     names = [r["name"] for r in result]
     # should contain snowflake-specific columns
-    assert "comment" in names
+    assert "COMMENT" in names
     # fmt: off
     assert dcur.description[:-1] == [
         ResultMetadata(name='name', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
@@ -93,10 +93,10 @@ def test_info_schema_columns(dcur: snowflake.connector.cursor.DictCursor):
 
     assert dcur.fetchall() == [
         {
-            "table_catalog": "DB1",
-            "table_schema": "SCHEMA1",
-            "table_name": "FOO",
-            "column_name": "ID",
+            "TABLE_CATALOG": "DB1",
+            "TABLE_SCHEMA": "SCHEMA1",
+            "TABLE_NAME": "FOO",
+            "COLUMN_NAME": "ID",
         }
     ]
 
@@ -201,24 +201,24 @@ def test_info_schema_databases(dcur: snowflake.connector.cursor.DictCursor):
 
     assert dcur.fetchall() == [
         {
-            "database_name": "DB1",
-            "database_owner": "SYSADMIN",
-            "is_transient": "NO",
-            "comment": None,
-            "created": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "last_altered": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "retention_time": 1,
-            "type": "STANDARD",
+            "DATABASE_NAME": "DB1",
+            "DATABASE_OWNER": "SYSADMIN",
+            "IS_TRANSIENT": "NO",
+            "COMMENT": None,
+            "CREATED": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "LAST_ALTERED": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "RETENTION_TIME": 1,
+            "TYPE": "STANDARD",
         },
         {
-            "database_name": "DB2",
-            "database_owner": "SYSADMIN",
-            "is_transient": "NO",
-            "comment": None,
-            "created": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "last_altered": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
-            "retention_time": 1,
-            "type": "STANDARD",
+            "DATABASE_NAME": "DB2",
+            "DATABASE_OWNER": "SYSADMIN",
+            "IS_TRANSIENT": "NO",
+            "COMMENT": None,
+            "CREATED": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "LAST_ALTERED": datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "RETENTION_TIME": 1,
+            "TYPE": "STANDARD",
         },
     ]
 
@@ -287,20 +287,20 @@ def test_info_schema_views(dcur: snowflake.connector.cursor.DictCursor):
 
     assert dcur.fetchall() == [
         {
-            "table_catalog": "DB1",
-            "table_schema": "SCHEMA1",
-            "table_name": "BAR",
-            "table_owner": "SYSADMIN",
-            "view_definition": "CREATE VIEW SCHEMA1.BAR AS SELECT * FROM FOO WHERE (ID > 5);",
-            "check_option": "NONE",
-            "is_updatable": "NO",
-            "insertable_into": "NO",
-            "is_secure": "NO",
-            "created": datetime(1970, 1, 1, tzinfo=pytz.utc),
-            "last_altered": datetime(1970, 1, 1, tzinfo=pytz.utc),
-            "last_ddl": datetime(1970, 1, 1, tzinfo=pytz.utc),
-            "last_ddl_by": "SYSADMIN",
-            "comment": None,
+            "TABLE_CATALOG": "DB1",
+            "TABLE_SCHEMA": "SCHEMA1",
+            "TABLE_NAME": "BAR",
+            "TABLE_OWNER": "SYSADMIN",
+            "VIEW_DEFINITION": "CREATE VIEW SCHEMA1.BAR AS SELECT * FROM FOO WHERE (ID > 5);",
+            "CHECK_OPTION": "NONE",
+            "IS_UPDATABLE": "NO",
+            "INSERTABLE_INTO": "NO",
+            "IS_SECURE": "NO",
+            "CREATED": datetime(1970, 1, 1, tzinfo=pytz.utc),
+            "LAST_ALTERED": datetime(1970, 1, 1, tzinfo=pytz.utc),
+            "LAST_DDL": datetime(1970, 1, 1, tzinfo=pytz.utc),
+            "LAST_DDL_BY": "SYSADMIN",
+            "COMMENT": None,
         }
     ]
 

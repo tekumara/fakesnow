@@ -23,9 +23,9 @@ def fs_global_creation_sql() -> str:
 SQL_CREATE_VIEW_SHOW_COLUMNS = """
 create view if not exists _fs_global._fs_information_schema._fs_show_columns as
 SELECT
-    table_name,
+    table_name as "table_name",
     table_schema as "schema_name",
-    column_name,
+    column_name as "column_name",
     CASE
         WHEN data_type = 'NUMBER' THEN
             '{"type":"FIXED","precision":' || numeric_precision || ',"scale":' || numeric_scale || ',"nullable":true}'

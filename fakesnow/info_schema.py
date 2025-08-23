@@ -84,13 +84,13 @@ select * from _fs_global._fs_information_schema._fs_columns where table_catalog 
 SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_VIEW = """
 create view if not exists _fs_global._fs_information_schema._fs_columns AS
 select
-    columns.table_catalog AS table_catalog,
-    columns.table_schema AS table_schema,
-    columns.table_name AS table_name,
-    columns.column_name AS column_name,
-    columns.ordinal_position AS ordinal_position,
-    columns.column_default AS column_default,
-    columns.is_nullable AS is_nullable,
+    columns.table_catalog AS TABLE_CATALOG,
+    columns.table_schema AS TABLE_SCHEMA,
+    columns.table_name AS TABLE_NAME,
+    columns.column_name AS COLUMN_NAME,
+    columns.ordinal_position AS ORDINAL_POSITION,
+    columns.column_default AS COLUMN_DEFAULT,
+    columns.is_nullable AS IS_NULLABLE,
 case when starts_with(columns.data_type, 'DECIMAL') or columns.data_type='BIGINT' then 'NUMBER'
      when columns.data_type='VARCHAR' then 'TEXT'
      when columns.data_type='DOUBLE' then 'FLOAT'
@@ -98,19 +98,19 @@ case when starts_with(columns.data_type, 'DECIMAL') or columns.data_type='BIGINT
      when columns.data_type='TIMESTAMP' then 'TIMESTAMP_NTZ'
      when columns.data_type='TIMESTAMP WITH TIME ZONE' then 'TIMESTAMP_TZ'
      when columns.data_type='JSON' then 'VARIANT'
-     else columns.data_type end as data_type,
-ext_character_maximum_length as character_maximum_length, ext_character_octet_length as character_octet_length,
+     else columns.data_type end as DATA_TYPE,
+ext_character_maximum_length as CHARACTER_MAXIMUM_LENGTH, ext_character_octet_length as CHARACTER_OCTET_LENGTH,
 case when columns.data_type='BIGINT' then 38
      when columns.data_type='DOUBLE' then NULL
-    else columns.numeric_precision end as numeric_precision,
+    else columns.numeric_precision end as NUMERIC_PRECISION,
 case when columns.data_type='BIGINT' then 10
     when columns.data_type='DOUBLE' then NULL
-    else columns.numeric_precision_radix end as numeric_precision_radix,
-case when columns.data_type='DOUBLE' then NULL else columns.numeric_scale end as numeric_scale,
-collation_name, is_identity, identity_generation, identity_cycle,
-    ddb_columns.comment as comment,
-    null::VARCHAR as identity_start,
-    null::VARCHAR as identity_increment,
+    else columns.numeric_precision_radix end as NUMERIC_PRECISION_RADIX,
+case when columns.data_type='DOUBLE' then NULL else columns.numeric_scale end as NUMERIC_SCALE,
+COLLATION_NAME, IS_IDENTITY, IDENTITY_GENERATION, IDENTITY_CYCLE,
+    ddb_columns.comment as COMMENT,
+    null::VARCHAR as IDENTITY_START,
+    null::VARCHAR as IDENTITY_INCREMENT,
 from system.information_schema.columns columns
 left join _fs_global._fs_information_schema._fs_columns_ext ext
   on ext_table_catalog = columns.table_catalog
@@ -131,14 +131,14 @@ SQL_CREATE_INFORMATION_SCHEMA_DATABASES_VIEW = Template(
     """
 create view if not exists ${catalog}._fs_information_schema.databases AS
 select
-    catalog_name as database_name,
-    'SYSADMIN' as database_owner,
-    'NO' as is_transient,
-    null::VARCHAR as comment,
-    to_timestamp(0)::timestamptz as created,
-    to_timestamp(0)::timestamptz as last_altered,
-    1 as retention_time,
-    'STANDARD' as type
+    catalog_name as DATABASE_NAME,
+    'SYSADMIN' as DATABASE_OWNER,
+    'NO' as IS_TRANSIENT,
+    null::VARCHAR as COMMENT,
+    to_timestamp(0)::timestamptz as CREATED,
+    to_timestamp(0)::timestamptz as LAST_ALTERED,
+    1 as RETENTION_TIME,
+    'STANDARD' as TYPE
 from system.information_schema.schemata
 where catalog_name not in ('memory', 'system', 'temp', '_fs_global')
   and schema_name = 'main'
@@ -194,20 +194,20 @@ SQL_CREATE_INFORMATION_SCHEMA_VIEWS_VIEW = Template(
     """
 create view if not exists ${catalog}._fs_information_schema._fs_views AS
 select
-    database_name as table_catalog,
-    schema_name as table_schema,
-    view_name as table_name,
-    'SYSADMIN' as table_owner,
-    sql as view_definition,
-    'NONE' as check_option,
-    'NO' as is_updatable,
-    'NO' as insertable_into,
-    'NO' as is_secure,
-    to_timestamp(0)::timestamptz as created,
-    to_timestamp(0)::timestamptz as last_altered,
-    to_timestamp(0)::timestamptz as last_ddl,
-    'SYSADMIN' as last_ddl_by,
-    null::VARCHAR as comment
+    database_name as TABLE_CATALOG,
+    schema_name as TABLE_SCHEMA,
+    view_name as TABLE_NAME,
+    'SYSADMIN' as TABLE_OWNER,
+    sql as VIEW_DEFINITION,
+    'NONE' as CHECK_OPTION,
+    'NO' as IS_UPDATABLE,
+    'NO' as INSERTABLE_INTO,
+    'NO' as IS_SECURE,
+    to_timestamp(0)::timestamptz as CREATED,
+    to_timestamp(0)::timestamptz as LAST_ALTERED,
+    to_timestamp(0)::timestamptz as LAST_DDL,
+    'SYSADMIN' as LAST_DDL_BY,
+    null::VARCHAR as COMMENT
 from duckdb_views
 where database_name = '${catalog}'
   and schema_name != '_fs_information_schema'
