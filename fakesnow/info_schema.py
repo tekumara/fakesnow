@@ -149,14 +149,43 @@ where catalog_name not in ('memory', 'system', 'temp', '_fs_global')
 SQL_CREATE_INFORMATION_SCHEMA_TABLES_VIEW = Template(
     """
 create view if not exists ${catalog}._fs_information_schema._fs_tables AS
-select *
-from system.information_schema.tables tables
+select
+    tables.database_name AS "TABLE_CATALOG",
+    tables.schema_name AS "TABLE_SCHEMA",
+    tables.table_name AS "TABLE_NAME",
+    'SYSADMIN' AS "TABLE_OWNER",
+    'BASE TABLE' AS "TABLE_TYPE",
+    'NO' AS "IS_TRANSIENT",
+    NULL::VARCHAR AS "CLUSTERING_KEY",
+    tables.estimated_size AS "ROW_COUNT",
+    0 AS "BYTES",
+    1 AS "RETENTION_TIME",
+    NULL::VARCHAR AS "SELF_REFERENCING_COLUMN_NAME",
+    NULL::VARCHAR AS "REFERENCE_GENERATION",
+    NULL::VARCHAR AS "USER_DEFINED_TYPE_CATALOG",
+    NULL::VARCHAR AS "USER_DEFINED_TYPE_SCHEMA",
+    NULL::VARCHAR AS "USER_DEFINED_TYPE_NAME",
+    'YES' AS "IS_INSERTABLE_INTO",
+    'YES' AS "IS_TYPED",
+    NULL::VARCHAR AS "COMMIT_ACTION",
+    to_timestamp(0)::timestamptz AS "CREATED",
+    to_timestamp(0)::timestamptz AS "LAST_ALTERED",
+    to_timestamp(0)::timestamptz AS "LAST_DDL",
+    'SYSADMIN' AS "LAST_DDL_BY",
+    'NO' AS "AUTO_CLUSTERING_ON",
+    _fs_tables_ext.comment AS "COMMENT",
+    'NO' AS "IS_TEMPORARY",
+    'NO' AS "IS_ICEBERG",
+    'NO' AS "IS_DYNAMIC",
+    'NO' AS "IS_IMMUTABLE",
+    'NO' AS "IS_HYBRID"
+from duckdb_tables tables
 left join _fs_global._fs_information_schema._fs_tables_ext on
-    tables.table_catalog = _fs_tables_ext.ext_table_catalog AND
-    tables.table_schema = _fs_tables_ext.ext_table_schema AND
+    tables.database_name = _fs_tables_ext.ext_table_catalog AND
+    tables.schema_name = _fs_tables_ext.ext_table_schema AND
     tables.table_name = _fs_tables_ext.ext_table_name
-where table_catalog = '${catalog}'
-  and table_schema != '_fs_information_schema'
+where tables.database_name = '${catalog}'
+  and tables.schema_name != '_fs_information_schema'
 """
 )
 

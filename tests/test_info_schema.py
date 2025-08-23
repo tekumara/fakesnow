@@ -4,6 +4,7 @@ from datetime import datetime
 
 import pytz
 import snowflake.connector.cursor
+from dirty_equals import IsDatetime
 from snowflake.connector.cursor import ResultMetadata
 
 
@@ -227,18 +228,45 @@ def test_info_schema_databases(conn: snowflake.connector.SnowflakeConnection):
 def test_info_schema_tables(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
         cur.execute("CREATE TABLE foo (id INTEGER)")
+        cur.execute("INSERT INTO foo (id) VALUES (1)")
         cur.execute("CREATE DATABASE db2")
         # should not be returned
         cur.execute("CREATE SCHEMA db2.schema2")
         cur.execute("CREATE TABLE db2.schema2.bar (name VARCHAR)")
 
-        cur.execute("SELECT table_catalog, table_schema, table_name FROM information_schema.tables")
+        cur.execute("SELECT * FROM information_schema.tables")
 
         assert cur.fetchall() == [
             {
-                "table_catalog": "DB1",
-                "table_schema": "SCHEMA1",
-                "table_name": "FOO",
+                "TABLE_CATALOG": "DB1",
+                "TABLE_SCHEMA": "SCHEMA1",
+                "TABLE_NAME": "FOO",
+                "TABLE_OWNER": "SYSADMIN",
+                "TABLE_TYPE": "BASE TABLE",
+                "IS_TRANSIENT": "NO",
+                "CLUSTERING_KEY": None,
+                "ROW_COUNT": 1,
+                "BYTES": 0,
+                "RETENTION_TIME": 1,
+                "SELF_REFERENCING_COLUMN_NAME": None,
+                "REFERENCE_GENERATION": None,
+                "USER_DEFINED_TYPE_CATALOG": None,
+                "USER_DEFINED_TYPE_SCHEMA": None,
+                "USER_DEFINED_TYPE_NAME": None,
+                "IS_INSERTABLE_INTO": "YES",
+                "IS_TYPED": "YES",
+                "COMMIT_ACTION": None,
+                "CREATED": IsDatetime(),
+                "LAST_ALTERED": IsDatetime(),
+                "LAST_DDL": IsDatetime(),
+                "LAST_DDL_BY": "SYSADMIN",
+                "AUTO_CLUSTERING_ON": "NO",
+                "COMMENT": None,
+                "IS_TEMPORARY": "NO",
+                "IS_ICEBERG": "NO",
+                "IS_DYNAMIC": "NO",
+                "IS_IMMUTABLE": "NO",
+                "IS_HYBRID": "NO",
             }
         ]
 
@@ -281,7 +309,9 @@ def test_info_schema_views(conn: snowflake.connector.SnowflakeConnection):
         ]
 
 
-def test_type_column_is_not_null(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+def test_type_column_is_not_null(
+    cur: snowflake.connector.cursor.SnowflakeCursor,
+) -> None:
     for table in [
         "information_schema.databases",
         "information_schema.views",
