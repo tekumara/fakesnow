@@ -2,6 +2,35 @@
 
 # Changelog
 
+## [0.10.0](https://github.com/tekumara/fakesnow/compare/v0.9.49...v0.10.0) (2025-08-23)
+
+
+### ⚠ BREAKING CHANGES
+
+* **info schema:** uppercase column names
+
+### Features
+
+* **info schema:** tables includes last_altered and row_count ([6230f28](https://github.com/tekumara/fakesnow/commit/6230f2826b7b074a8f80e2ca61372b645ca07ae7)), closes [#134](https://github.com/tekumara/fakesnow/issues/134)
+* support AUTOINCREMENT when creating table ([5eedff2](https://github.com/tekumara/fakesnow/commit/5eedff249719ea8f8a6d2729f98205ee29df9beb)), closes [#184](https://github.com/tekumara/fakesnow/issues/184)
+* support sequences ([79abda1](https://github.com/tekumara/fakesnow/commit/79abda1ec00175d3b2be5e8248c54e7504cc55bc)), closes [#44](https://github.com/tekumara/fakesnow/issues/44)
+
+
+### Bug Fixes
+
+* **info schema:** uppercase column names ([b05ee7f](https://github.com/tekumara/fakesnow/commit/b05ee7ffdfe62c91ae3b57ed261b4bc27549abc7))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.402 to 1.1.403 ([#253](https://github.com/tekumara/fakesnow/issues/253)) ([74c8126](https://github.com/tekumara/fakesnow/commit/74c812616fa75cb7b14657c513b18b24b600f119))
+* **deps:** bump pyarrow-stubs from 17.19 to 20.0.0.20250716 ([#256](https://github.com/tekumara/fakesnow/issues/256)) ([f2506cf](https://github.com/tekumara/fakesnow/commit/f2506cff61f3f306d72289ef2eca3dd5e6c2d6f1))
+* **deps:** bump pyright from 1.1.399 to 1.1.403 ([#255](https://github.com/tekumara/fakesnow/issues/255)) ([92a96bf](https://github.com/tekumara/fakesnow/commit/92a96bf326742fba4a0204015e1478f61ba8ee7f))
+* **deps:** update ruff requirement from ~=0.11.2 to ~=0.12.7 ([#254](https://github.com/tekumara/fakesnow/issues/254)) ([291390d](https://github.com/tekumara/fakesnow/commit/291390d58d25edb3a60c7181d3b6471473fccc2c))
+* **deps:** update sqlglot requirement from ~=27.2.0 to ~=27.6.0 ([#252](https://github.com/tekumara/fakesnow/issues/252)) ([dcd256a](https://github.com/tekumara/fakesnow/commit/dcd256a8dcda1cf196dc6de9d69e54b43474849c))
+* remove notebooks/ from .gitignore ([69c715a](https://github.com/tekumara/fakesnow/commit/69c715a29d4e695acdc84a8b02c4e0b35e2fa586))
+* update .gitignore ([c5d3779](https://github.com/tekumara/fakesnow/commit/c5d377996e54edf95c9da06e31df9506750a2e5f))
+
 ## [0.9.49](https://github.com/tekumara/fakesnow/compare/v0.9.48...v0.9.49) (2025-07-28)
 
 
