@@ -32,7 +32,7 @@ dev = [
     "pandas-stubs",
     "pre-commit~=4.0",
     "pyarrow-stubs==20.0.0.20250716",
-    "pyright==1.1.403",
+    "pyright==1.1.404",
     "pytest~=8.0",
     "ruff~=0.12.7",
     # include compatible version of pandas, and secure-local-storage for token caching
