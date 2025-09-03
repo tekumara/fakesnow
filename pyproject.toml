@@ -11,7 +11,7 @@ dependencies = [
     "duckdb~=1.3.2",
     "pyarrow",
     "snowflake-connector-python",
-    "sqlglot~=27.7.0",
+    "sqlglot~=27.10.0",
 ]
 
 [project.urls]
@@ -31,8 +31,8 @@ dev = [
     # to fix https://github.com/pandas-dev/pandas/issues/56995
     "pandas-stubs",
     "pre-commit~=4.0",
-    "pyarrow-stubs==20.0.0.20250716",
-    "pyright==1.1.403",
+    "pyarrow-stubs==20.0.0.20250825",
+    "pyright==1.1.404",
     "pytest~=8.0",
     "ruff~=0.12.7",
     # include compatible version of pandas, and secure-local-storage for token caching
