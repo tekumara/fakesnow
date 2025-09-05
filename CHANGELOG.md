@@ -2,6 +2,21 @@
 
 # Changelog
 
+## [0.10.1](https://github.com/tekumara/fakesnow/compare/v0.10.0...v0.10.1) (2025-09-05)
+
+
+### Features
+
+* alter session QUOTED_IDENTIFIERS_IGNORE_CASE is no-op ([89b45a9](https://github.com/tekumara/fakesnow/commit/89b45a9d1e78a03d20e71730b8f865a18c14444b)), closes [#264](https://github.com/tekumara/fakesnow/issues/264)
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.403 to 1.1.404 ([#262](https://github.com/tekumara/fakesnow/issues/262)) ([c726762](https://github.com/tekumara/fakesnow/commit/c7267627d716e5640103d5ea517e38f6e844c958))
+* **deps:** bump pyarrow-stubs from 20.0.0.20250716 to 20.0.0.20250825 ([#260](https://github.com/tekumara/fakesnow/issues/260)) ([0b91898](https://github.com/tekumara/fakesnow/commit/0b9189839d03c85740288d86108977050e030266))
+* **deps:** bump pyright from 1.1.403 to 1.1.404 ([#259](https://github.com/tekumara/fakesnow/issues/259)) ([cd59c2f](https://github.com/tekumara/fakesnow/commit/cd59c2f8af439fa98346a2d64c83d122beb30b0a))
+* **deps:** update sqlglot requirement from ~=27.7.0 to ~=27.10.0 ([#261](https://github.com/tekumara/fakesnow/issues/261)) ([8deb200](https://github.com/tekumara/fakesnow/commit/8deb200e86d29c1d2265079a5ae5a4396e5ea834))
+
 ## [0.10.0](https://github.com/tekumara/fakesnow/compare/v0.9.49...v0.10.0) (2025-08-23)
 
 
