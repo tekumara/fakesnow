@@ -1315,6 +1315,43 @@ def create_user(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def alter_session_quoted_identifiers_ignore_case(expression: exp.Expression) -> exp.Expression:
+    """Handle ALTER SESSION quoted_identifiers_ignore_case.
+
+    - SET ... = false      => NOP success
+    - UNSET ...            => NOP success
+    - SET ... = true       => Not implemented
+    - other session params => Not implemented
+    """
+
+    if (
+        isinstance(expression, exp.Alter)
+        and expression.kind == "SESSION"
+        and (alter_session := expression.find(exp.AlterSession))
+    ):
+        items = alter_session.args.get("expressions") or []
+        if (
+            items
+            and isinstance(items[0], exp.SetItem)
+            and (ident := items[0].find(exp.Identifier))
+            and (ident.this.upper() == "QUOTED_IDENTIFIERS_IGNORE_CASE")
+            and (
+                bool(alter_session.args.get("unset"))
+                or (
+                    isinstance(items[0].this, exp.EQ)
+                    and (rhs := items[0].this.args.get("expression"))
+                    and isinstance(rhs, exp.Boolean)
+                    and rhs.this is False
+                )
+            )
+        ):
+            return SUCCESS_NOP
+
+        raise NotImplementedError(expression.sql(dialect="snowflake"))
+
+    return expression
+
+
 def update_variables(
     expression: exp.Expression,
     variables: Variables,

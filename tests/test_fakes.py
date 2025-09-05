@@ -344,6 +344,31 @@ def test_percentile_cont(conn: snowflake.connector.SnowflakeConnection):
     ]
 
 
+def test_quoted_identifiers_ignore_case(dcur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    # no op
+    dcur.execute("alter session set quoted_identifiers_ignore_case = false")
+    assert dcur.fetchall() == [{"status": "Statement executed successfully."}]
+
+    # no op
+    dcur.execute("alter session unset quoted_identifiers_ignore_case")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        dcur.execute("alter session set quoted_identifiers_ignore_case = true")
+
+    assert "not implemented" in str(excinfo.value)
+
+    # other alter session params not implemented
+    with pytest.raises(ProgrammingError) as excinfo:
+        dcur.execute("alter session set JSON_INDENT = 1")
+
+    assert "not implemented" in str(excinfo.value)
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        dcur.execute("alter session unset JSON_INDENT")
+
+    assert "not implemented" in str(excinfo.value)
+
+
 def test_regex(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select regexp_replace('abc123', '\\\\D', '')")
     assert cur.fetchone() == ("123",)

@@ -26,6 +26,7 @@ from fakesnow.transforms.stage import (
 from fakesnow.transforms.transforms import (
     SUCCESS_NOP as SUCCESS_NOP,
     alias_in_join as alias_in_join,
+    alter_session_quoted_identifiers_ignore_case as alter_session_quoted_identifiers_ignore_case,
     array_agg as array_agg,
     array_agg_within_group as array_agg_within_group,
     array_construct_etc as array_construct_etc,
