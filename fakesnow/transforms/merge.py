@@ -105,7 +105,8 @@ def _mutations(merge_expr: exp.Merge) -> list[exp.Expression]:
     """
     target_tbl = merge_expr.this
     source = merge_expr.args.get("using")
-    source_tbl = source.alias if isinstance(source, exp.Subquery) else source
+    assert isinstance(source, exp.Expression)
+    source_tbl = source.alias_or_name
     join_expr = merge_expr.args.get("on")
 
     statements: list[exp.Expression] = []

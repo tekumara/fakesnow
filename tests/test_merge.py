@@ -69,7 +69,7 @@ def test_transform_merge() -> None:
     ]
 
 
-def test_transform_merge_table_alias() -> None:
+def test_transform_merge_table_alias_target() -> None:
     assert [
         e.sql(dialect="duckdb")
         for e in transforms.merge(
@@ -116,6 +116,65 @@ def test_transform_merge_table_alias() -> None:
             AND t2.merge_op = 2"""),
         strip("""
             INSERT INTO table1 AS t1(t1Key, val, status)
+            SELECT t2.t2Key, 'newVal', t2.newStatus
+            FROM merge_candidates AS t2
+            WHERE t2.merge_op = 3"""),
+        strip("""
+            SELECT
+              COUNT_IF(merge_op IN (3)) AS "number of rows inserted",
+              COUNT_IF(merge_op IN (1, 2)) AS "number of rows updated",
+              COUNT_IF(merge_op IN (0)) AS "number of rows deleted"
+            FROM merge_candidates"""),
+    ]
+
+
+def test_transform_merge_table_alias_source() -> None:
+    assert [
+        e.sql(dialect="duckdb")
+        for e in transforms.merge(
+            sqlglot.parse_one(
+                """
+                MERGE INTO t1 USING table2 as t2 ON t1.t1Key = t2.t2Key
+                    WHEN MATCHED AND t2.marked = 1 THEN DELETE
+                    WHEN MATCHED AND t2.isNewStatus = 1 THEN UPDATE SET t1.val = t2.newVal, status = 'new'
+                    WHEN MATCHED THEN UPDATE SET val = t2.newVal
+                    WHEN NOT MATCHED THEN INSERT (t1Key, val, status) VALUES (t2.t2Key, 'newVal', t2.newStatus);
+                """
+            )
+        )
+    ] == [
+        strip("""
+            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            SELECT t2.newStatus, t2.newVal, t2.t2Key,
+                CASE
+                    WHEN t1.t1Key = t2.t2Key AND t2.marked = 1 THEN 0
+                    WHEN t1.t1Key = t2.t2Key AND t2.isNewStatus = 1 THEN 1
+                    WHEN t1.t1Key = t2.t2Key THEN 2
+                    WHEN t1.rowid IS NULL THEN 3
+                    ELSE NULL
+                END AS MERGE_OP
+                FROM t1
+            FULL OUTER JOIN table2 AS t2 ON t1.t1Key = t2.t2Key
+            WHERE NOT MERGE_OP IS NULL"""),
+        strip("""
+            DELETE FROM t1
+            USING merge_candidates AS t2
+            WHERE t1.t1Key = t2.t2Key
+            AND t2.merge_op = 0"""),
+        strip("""
+            UPDATE t1
+            SET val = t2.newVal, status = 'new'
+            FROM merge_candidates AS t2
+            WHERE t1.t1Key = t2.t2Key
+            AND t2.merge_op = 1"""),
+        strip("""
+            UPDATE t1
+            SET val = t2.newVal
+            FROM merge_candidates AS t2
+            WHERE t1.t1Key = t2.t2Key
+            AND t2.merge_op = 2"""),
+        strip("""
+            INSERT INTO t1 (t1Key, val, status)
             SELECT t2.t2Key, 'newVal', t2.newStatus
             FROM merge_candidates AS t2
             WHERE t2.merge_op = 3"""),
