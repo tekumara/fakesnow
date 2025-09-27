@@ -12,6 +12,7 @@ from tests.utils import strip
 def test_transform_lateral_flatten() -> None:
     # sqlglot introduces the identifiers SEQ, KEY, PATH, INDEX, VALUE, THIS
     # for lineage tracking see https://github.com/tobymao/sqlglot/pull/2417
+    # standalone LATERAL FLATTEN (no cross join) uses default order (no reverse_order)
     expected = strip("SELECT * FROM _FS_FLATTEN([1, 2]) AS F(SEQ, KEY, PATH, INDEX, VALUE, THIS)")
 
     assert (
@@ -110,4 +111,5 @@ def test_flatten_index(cur: snowflake.connector.cursor.SnowflakeCursor):
 def test_flatten_value_cast_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("SELECT VALUE::VARCHAR FROM LATERAL FLATTEN(input => ['a','b'])")
     # should be raw string not json string with double quotes
+    # standalone LATERAL FLATTEN (no cross join) uses default order (ascending)
     assert cur.fetchall() == [("a",), ("b",)]
