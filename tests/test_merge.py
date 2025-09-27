@@ -310,6 +310,65 @@ def test_transform_merge_source_subquery() -> None:
     ]
 
 
+def test_transform_merge_join_function() -> None:
+    assert [
+        e.sql(dialect="duckdb")
+        for e in transforms.merge(
+            sqlglot.parse_one(
+                """
+                MERGE INTO t1 USING t2 ON EQUAL_NULL(t1.t1Key, t2.t2Key)
+                    WHEN MATCHED AND t2.marked = 1 THEN DELETE
+                    WHEN MATCHED AND t2.isNewStatus = 1 THEN UPDATE SET t1.val = t2.newVal, status = 'new'
+                    WHEN MATCHED THEN UPDATE SET val = t2.newVal
+                    WHEN NOT MATCHED THEN INSERT (t1Key, val, status) VALUES (t2.t2Key, 'newVal', t2.newStatus);
+                """
+            )
+        )
+    ] == [
+        strip("""
+            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            SELECT t2.newStatus, t2.newVal, t2.t2Key,
+                CASE
+                    WHEN EQUAL_NULL(t1.t1Key, t2.t2Key) AND t2.marked = 1 THEN 0
+                    WHEN EQUAL_NULL(t1.t1Key, t2.t2Key) AND t2.isNewStatus = 1 THEN 1
+                    WHEN EQUAL_NULL(t1.t1Key, t2.t2Key) THEN 2
+                    WHEN t1.rowid IS NULL THEN 3
+                    ELSE NULL
+                END AS MERGE_OP
+                FROM t1
+            FULL OUTER JOIN t2 ON EQUAL_NULL(t1.t1Key, t2.t2Key)
+            WHERE NOT MERGE_OP IS NULL"""),
+        strip("""
+            DELETE FROM t1
+            USING merge_candidates AS t2
+            WHERE EQUAL_NULL(t1.t1Key, t2.t2Key)
+            AND t2.merge_op = 0"""),
+        strip("""
+            UPDATE t1
+            SET val = t2.newVal, status = 'new'
+            FROM merge_candidates AS t2
+            WHERE EQUAL_NULL(t1.t1Key, t2.t2Key)
+            AND t2.merge_op = 1"""),
+        strip("""
+            UPDATE t1
+            SET val = t2.newVal
+            FROM merge_candidates AS t2
+            WHERE EQUAL_NULL(t1.t1Key, t2.t2Key)
+            AND t2.merge_op = 2"""),
+        strip("""
+            INSERT INTO t1 (t1Key, val, status)
+            SELECT t2.t2Key, 'newVal', t2.newStatus
+            FROM merge_candidates AS t2
+            WHERE t2.merge_op = 3"""),
+        strip("""
+            SELECT
+              COUNT_IF(merge_op IN (3)) AS "number of rows inserted",
+              COUNT_IF(merge_op IN (1, 2)) AS "number of rows updated",
+              COUNT_IF(merge_op IN (0)) AS "number of rows deleted"
+            FROM merge_candidates"""),
+    ]
+
+
 # TODO: Also consider nondeterministic config for throwing errors when multiple source criteria match a target row
 # https://docs.snowflake.com/en/sql-reference/sql/merge#nondeterministic-results-for-update-and-delete
 def test_merge(conn: snowflake.connector.SnowflakeConnection):
@@ -404,7 +463,7 @@ def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnecti
     ]
 
 
-def test_merge_complex_join_keys(conn: snowflake.connector.SnowflakeConnection):
+def test_merge_join_complex(conn: snowflake.connector.SnowflakeConnection):
     *_, dcur = conn.execute_string(
         """
         CREATE OR REPLACE TABLE t1 (
@@ -428,6 +487,43 @@ def test_merge_complex_join_keys(conn: snowflake.connector.SnowflakeConnection):
         (2, 'Kiwi', 'insert me');
 
         MERGE INTO t1 USING t2 ON t1.id = t2.id AND t1.name = t2.name
+            WHEN MATCHED AND t1.status = 'old' THEN DELETE
+            WHEN NOT MATCHED THEN INSERT VALUES (t2.id, t2.name, 'new');
+        """,
+        cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
+    )
+
+    assert dcur.fetchall() == [{"number of rows inserted": 1, "number of rows deleted": 1}]
+
+    dcur.execute("select * from t1 order by id")
+    res = dcur.fetchall()
+    assert res == [{"ID": 1, "NAME": "Banana", "STATUS": "keep"}, {"ID": 2, "NAME": "Kiwi", "STATUS": "new"}]
+
+
+def test_merge_join_function(conn: snowflake.connector.SnowflakeConnection):
+    *_, dcur = conn.execute_string(
+        """
+        CREATE OR REPLACE TABLE t1 (
+            id INT,
+            name VARCHAR(50),
+            status VARCHAR(20)
+        );
+
+        CREATE OR REPLACE TABLE t2 (
+            id INT,
+            name VARCHAR(50),
+            status VARCHAR(20)
+        );
+
+        INSERT INTO t1 VALUES
+        (1, NULL, 'old'),
+        (1, 'Banana', 'keep');
+
+        INSERT INTO t2 VALUES
+        (1, NULL, 'older'),
+        (2, 'Kiwi', 'insert me');
+
+        MERGE INTO t1 USING t2 ON t1.id = t2.id AND equal_null(t1.name, t2.name)
             WHEN MATCHED AND t1.status = 'old' THEN DELETE
             WHEN NOT MATCHED THEN INSERT VALUES (t2.id, t2.name, 'new');
         """,

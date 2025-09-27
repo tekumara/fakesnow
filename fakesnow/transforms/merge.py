@@ -26,7 +26,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> exp.Expression:
     assert isinstance(source_id, exp.Identifier)
 
     join_expr = merge_expr.args.get("on")
-    assert isinstance(join_expr, exp.Binary)
+    assert isinstance(join_expr, exp.Expression)
 
     case_when_clauses: list[str] = []
     values: set[str] = set()
