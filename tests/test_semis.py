@@ -124,9 +124,7 @@ def test_object_construct(conn: snowflake.connector.SnowflakeConnection):
 
         result = cur.fetchone()
         assert isinstance(result, tuple)
-        assert json.loads(result[1]) == json.loads(
-            '{\n  "k1": "v1",\n  "k2": "v2",\n  "k3": "v3"\n}'
-        )
+        assert json.loads(result[1]) == json.loads('{\n  "k1": "v1",\n  "k2": "v2",\n  "k3": "v3"\n}')
 
 
 def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):

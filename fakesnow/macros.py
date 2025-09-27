@@ -10,7 +10,7 @@ CREATE MACRO IF NOT EXISTS ${catalog}.equal_null(a, b) AS a IS NOT DISTINCT FROM
 # see https://docs.snowflake.com/en/sql-reference/functions/flatten.html
 FS_FLATTEN = Template(
     """
-CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input) AS TABLE
+CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input, reverse_order := false) AS TABLE
     SELECT
         NULL AS SEQ, -- TODO use a sequence and nextval
         CAST(NULL AS VARCHAR) AS KEY,
@@ -18,12 +18,8 @@ CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input) AS TABLE
         idx - 1 AS INDEX,
         value AS VALUE,
         TO_JSON(input) AS THIS
-    FROM (
-        SELECT
-            value,
-            row_number() OVER () AS idx
-        FROM UNNEST(CAST(TO_JSON(input) AS JSON [])) AS t(value)
-    ) AS numbered
+    FROM UNNEST(CAST(TO_JSON(input) AS JSON [])) WITH ORDINALITY AS t(value, idx)
+    ORDER BY CASE WHEN reverse_order THEN -idx ELSE idx END
     """
 )
 
@@ -46,12 +42,7 @@ CREATE OR REPLACE MACRO ${catalog}._fs_object_construct(keys, vals, keep_nulls) 
         SELECT
             key,
             list_extract(vals, idx) AS value
-        FROM (
-            SELECT
-                key,
-                row_number() OVER () AS idx
-            FROM UNNEST(keys) AS t(key)
-        ) AS numbered
+        FROM UNNEST(keys) WITH ORDINALITY AS u(key, idx)
         ORDER BY idx
     )
     SELECT json_group_object(key, value) AS obj
