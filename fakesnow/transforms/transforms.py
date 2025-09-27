@@ -756,36 +756,49 @@ def sample(expression: exp.Expression) -> exp.Expression:
 
 
 def object_construct(expression: exp.Expression) -> exp.Expression:
-    """Convert OBJECT_CONSTRUCT to TO_JSON.
+    """Convert OBJECT_CONSTRUCT/OBJECT_CONSTRUCT_KEEP_NULL to _FS_OBJECT_CONSTRUCT."""
 
-    Internally snowflake stores OBJECT types as a json string, so the Duckdb JSON type most closely matches.
+    items: list[tuple[exp.Expression, exp.Expression]] = []
 
-    See https://docs.snowflake.com/en/sql-reference/functions/object_construct
-    """
+    if isinstance(expression, exp.Struct):
+        # OBJECT_CONSTRUCT
+        keep_nulls = False
 
-    if not isinstance(expression, exp.Struct):
+        for prop in expression.expressions:
+            assert isinstance(prop, exp.PropertyEQ)
+            items.append((prop.left.copy(), prop.right.copy()))
+
+    elif isinstance(expression, exp.JSONObject):
+        # OBJECT_CONSTRUCT_KEEP_NULL
+        keep_nulls = True
+
+        for kv in expression.expressions:
+            assert isinstance(kv, exp.JSONKeyValue)
+            items.append((kv.this.copy(), kv.expression.copy()))
+
+    else:
         return expression
 
-    non_null_expressions = []
-    for e in expression.expressions:
-        if not (isinstance(e, exp.PropertyEQ)):
-            non_null_expressions.append(e)
-            continue
+    keys: list[exp.Expression] = []
+    values: list[exp.Expression] = []
 
-        left = e.left
-        right = e.right
+    for key, value in items:
+        if isinstance(key, exp.Identifier):
+            key = exp.Literal(this=key.name, is_string=True)
 
-        left_is_null = isinstance(left, exp.Null)
-        right_is_null = isinstance(right, exp.Null)
+        keys.append(key)
 
-        if left_is_null or right_is_null:
-            continue
+        # convert values to JSON, because lists need to have elements of the same type
+        values.append(exp.Anonymous(this="TO_JSON", expressions=[value]))
 
-        non_null_expressions.append(e)
-
-    new_struct = expression.copy()
-    new_struct.set("expressions", non_null_expressions)
-    return exp.Anonymous(this="TO_JSON", expressions=[new_struct])
+    return exp.Anonymous(
+        this="_FS_OBJECT_CONSTRUCT",
+        expressions=[
+            exp.Array(expressions=keys),
+            exp.Array(expressions=values),
+            exp.true() if keep_nulls else exp.false(),
+        ],
+    )
 
 
 def regex_replace(expression: exp.Expression) -> exp.Expression:

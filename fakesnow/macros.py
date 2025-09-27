@@ -39,6 +39,30 @@ CREATE OR REPLACE MACRO ${catalog}.array_construct_compact(list) AS (
 """
 )
 
+# use json_group_object instead of json_object because it filters out keys that are null
+# see https://github.com/duckdb/duckdb/issues/19357
+FS_OBJECT_CONSTRUCT = Template(
+    """
+CREATE OR REPLACE MACRO ${catalog}._fs_object_construct(keys, vals, keep_nulls) AS (
+    WITH kv AS (
+        SELECT
+            key,
+            list_extract(vals, idx) AS value
+        FROM (
+            SELECT
+                key,
+                row_number() OVER () AS idx
+            FROM UNNEST(keys) AS t(key)
+        ) AS numbered
+        ORDER BY idx
+    )
+    SELECT json_group_object(key, value) AS obj
+    FROM kv
+    WHERE keep_nulls OR value IS NOT NULL
+);
+"""
+)
+
 FS_TO_TIMESTAMP = Template(
     """
 CREATE OR REPLACE MACRO ${catalog}._fs_to_timestamp(val, scale) AS (
@@ -64,5 +88,6 @@ def creation_sql(catalog: str) -> str:
         {EQUAL_NULL.substitute(catalog=catalog)};
         {FS_FLATTEN.substitute(catalog=catalog)};
         {ARRAY_CONSTRUCT_COMPACT.substitute(catalog=catalog)};
+        {FS_OBJECT_CONSTRUCT.substitute(catalog=catalog)};
         {FS_TO_TIMESTAMP.substitute(catalog=catalog)};
     """

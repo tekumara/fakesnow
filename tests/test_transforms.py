@@ -559,12 +559,12 @@ def test_json_extract_precedence() -> None:
 def test_object_construct() -> None:
     assert (
         sqlglot.parse_one(
-            "SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB','c',null,'d',PARSE_JSON('NULL'), null, 'foo')",
+            "SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB','c',null,'d',PARSE_JSON('NULL'),null,'foo')",
             read="snowflake",
         )
         .transform(object_construct)
         .sql(dialect="duckdb")
-        == "SELECT TO_JSON({'a': 1, 'b': 'BBBB', 'd': JSON('NULL')})"
+        == "SELECT _FS_OBJECT_CONSTRUCT(['a', 'b', 'c', 'd', NULL], [TO_JSON(1), TO_JSON('BBBB'), TO_JSON(NULL), TO_JSON(JSON('NULL')), TO_JSON('foo')], FALSE)"  # noqa: E501
     )
 
     assert (
@@ -574,7 +574,27 @@ def test_object_construct() -> None:
         )
         .transform(object_construct)
         .sql(dialect="duckdb")
-        == "SELECT TO_JSON({'k1': 'v1', 'k2': CASE WHEN CASE WHEN col IS NULL THEN 0 ELSE col END + 1 >= 2 THEN 'v2' ELSE NULL END, 'k3': 'v3'})"  # noqa: E501
+        == "SELECT _FS_OBJECT_CONSTRUCT(['k1', 'k2', 'k3'], [TO_JSON('v1'), TO_JSON(CASE WHEN CASE WHEN col IS NULL THEN 0 ELSE col END + 1 >= 2 THEN 'v2' ELSE NULL END), TO_JSON('v3')], FALSE)"  # noqa: E501
+    )
+
+    assert (
+        sqlglot.parse_one(
+            "SELECT OBJECT_CONSTRUCT_KEEP_NULL('a',1,'b','BBBB','c',null,'d',PARSE_JSON('NULL'),null,'foo')",
+            read="snowflake",
+        )
+        .transform(object_construct)
+        .sql(dialect="duckdb")
+        == "SELECT _FS_OBJECT_CONSTRUCT(['a', 'b', 'c', 'd', NULL], [TO_JSON(1), TO_JSON('BBBB'), TO_JSON(NULL), TO_JSON(JSON('NULL')), TO_JSON('foo')], TRUE)"  # noqa: E501
+    )
+
+    assert (
+        sqlglot.parse_one(
+            "select {'K1': {'K2': 1}}",
+            read="snowflake",
+        )
+        .transform(object_construct)
+        .sql(dialect="duckdb")
+        == "SELECT _FS_OBJECT_CONSTRUCT(['K1'], [TO_JSON({'K2': 1})], FALSE)"
     )
 
 

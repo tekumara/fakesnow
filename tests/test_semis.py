@@ -97,20 +97,16 @@ def test_object_construct(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("SELECT OBJECT_CONSTRUCT('a',1,'b','BBBB', 'c',null)")
 
-        # TODO: strip null within duckdb via python UDF
-        def strip_none_values(d: dict) -> dict:
-            return {k: v for k, v in d.items() if v}
-
         result = cur.fetchone()
         assert isinstance(result, tuple)
-        assert strip_none_values(json.loads(result[0])) == json.loads('{\n  "a": 1,\n  "b": "BBBB"\n}')
+        assert json.loads(result[0]) == json.loads('{\n  "a": 1,\n  "b": "BBBB"\n}')
 
     with conn.cursor() as cur:
         cur.execute("SELECT OBJECT_CONSTRUCT('a', 1, null, 'nulkeyed') as col")
 
         result = cur.fetchone()
         assert isinstance(result, tuple)
-        assert strip_none_values(json.loads(result[0])) == json.loads('{\n  "a": 1\n}')
+        assert json.loads(result[0]) == json.loads('{\n  "a": 1\n}')
 
     with conn.cursor() as cur:
         cur.execute(
@@ -119,7 +115,7 @@ def test_object_construct(conn: snowflake.connector.SnowflakeConnection):
 
         result = cur.fetchone()
         assert isinstance(result, tuple)
-        assert strip_none_values(json.loads(result[1])) == json.loads('{\n  "k1": "v1",\n  "k3": "v3"\n}')
+        assert json.loads(result[1]) == json.loads('{\n  "k1": "v1",\n  "k3": "v3"\n}')
 
     with conn.cursor() as cur:
         cur.execute(
@@ -128,7 +124,7 @@ def test_object_construct(conn: snowflake.connector.SnowflakeConnection):
 
         result = cur.fetchone()
         assert isinstance(result, tuple)
-        assert strip_none_values(json.loads(result[1])) == json.loads(
+        assert json.loads(result[1]) == json.loads(
             '{\n  "k1": "v1",\n  "k2": "v2",\n  "k3": "v3"\n}'
         )
 
