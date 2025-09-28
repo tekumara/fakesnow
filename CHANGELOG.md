@@ -2,6 +2,14 @@
 
 # Changelog
 
+## [0.10.2](https://github.com/tekumara/fakesnow/compare/v0.10.1...v0.10.2) (2025-09-27)
+
+
+### Bug Fixes
+
+* MERGE support for expression in the join condition ([27e88ae](https://github.com/tekumara/fakesnow/commit/27e88ae9a4a2fe60dde8ae1a8888e72f81843d50)), closes [#266](https://github.com/tekumara/fakesnow/issues/266)
+* MERGE when using alias on source table ([8798484](https://github.com/tekumara/fakesnow/commit/8798484cf680d801f9200f7f4707c6b9fc42e262)), closes [#265](https://github.com/tekumara/fakesnow/issues/265)
+
 ## [0.10.1](https://github.com/tekumara/fakesnow/compare/v0.10.0...v0.10.1) (2025-09-05)
 
 
