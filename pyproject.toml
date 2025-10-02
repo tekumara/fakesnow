@@ -34,7 +34,7 @@ dev = [
     "pyarrow-stubs==20.0.0.20250825",
     "pyright==1.1.405",
     "pytest~=8.0",
-    "ruff~=0.12.7",
+    "ruff~=0.13.2",
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
     "snowflake-sqlalchemy~=1.7.0",
