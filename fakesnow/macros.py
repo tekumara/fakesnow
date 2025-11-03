@@ -14,18 +14,16 @@ CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input) AS TABLE
     SELECT
         NULL AS SEQ, -- TODO use a sequence and nextval
         CAST(NULL AS VARCHAR) AS KEY,
-        '[' || GENERATE_SUBSCRIPTS(
-            CAST(TO_JSON(input) AS JSON []),
-            1
-        ) - 1 || ']' AS PATH,
-        GENERATE_SUBSCRIPTS(
-            CAST(TO_JSON(input) AS JSON []),
-            1
-        ) - 1 AS INDEX,
-        UNNEST(
-            CAST(TO_JSON(input) AS JSON [])
-        ) AS VALUE,
-        TO_JSON(input) AS THIS;
+        '[' || (idx - 1) || ']' AS PATH,
+        idx - 1 AS INDEX,
+        value AS VALUE,
+        TO_JSON(input) AS THIS
+    FROM (
+        SELECT
+            value,
+            row_number() OVER () AS idx
+        FROM UNNEST(CAST(TO_JSON(input) AS JSON [])) AS t(value)
+    ) AS numbered
     """
 )
 
