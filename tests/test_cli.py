@@ -1,3 +1,4 @@
+import os
 import signal
 import subprocess
 import time
@@ -45,18 +46,30 @@ def test_run_path(capsys: CaptureFixture) -> None:
 def test_run_server() -> None:
     # Start uvicorn server
     proc = subprocess.Popen(["fakesnow", "-s"], stderr=subprocess.PIPE, text=True)
+    print("start")
 
-    # Wait for startup then hit CTRL+C
-    time.sleep(1)
+    assert proc.stderr
+
+    # Set stderr pipe to non-blocking mode
+    os.set_blocking(proc.stderr.fileno(), False)
+
+    # Collect stderr output
+    stderr = ""
+    while not stderr:
+        chunk = proc.stderr.read(4096)
+        stderr += chunk
+
+        print("Waiting for stderr")
+        time.sleep(1)
+
+    print(stderr)
+
+    # Send SIGINT to stop uvicorn
     proc.send_signal(signal.SIGINT)
     exit_code = proc.wait()
 
-    # Collect stderr output
-    assert proc.stderr
-    stderr_output = proc.stderr.read()
-
     # Check if test passed
-    assert "Application startup complete" in stderr_output
+    assert "Application startup complete" in stderr
     assert exit_code == 0
 
 
