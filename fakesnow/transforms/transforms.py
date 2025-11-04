@@ -491,11 +491,7 @@ def flatten(expression: exp.Expression) -> exp.Expression:
             expression.this.this.expression if isinstance(expression.this.this, exp.Kwarg) else expression.this.this
         )
         alias = expression.args.get("alias")
-        # For lateral joins with cross joins (FROM table, LATERAL FLATTEN), pass reverse_order=true
-        # to ensure deterministic ordering. Standalone LATERAL FLATTEN (no cross join) uses default order.
-        reverse_order = isinstance(expression, exp.Lateral) and isinstance(expression.parent, exp.Join)
-        expressions = [input_, exp.true()] if reverse_order else [input_]
-        return exp.Table(this=exp.Anonymous(this="_fs_flatten", expressions=expressions), alias=alias)
+        return exp.Table(this=exp.Anonymous(this="_fs_flatten", expressions=[input_]), alias=alias)
 
     return expression
 
