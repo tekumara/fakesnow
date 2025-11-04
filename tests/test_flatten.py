@@ -90,10 +90,10 @@ def test_flatten_json(cur: snowflake.connector.cursor.SnowflakeCursor):
             union
             select 2, parse_json('[{"fruit":"coconut"}, {"fruit":"durian"}]')
         ) as t(id, fruits), lateral flatten(input => t.fruits) AS flat
-        order by id
+        order by id, index
         """
-        # duckdb lateral join order is non-deterministic so order by id
-        # within an id the order of fruits should match the json array
+        # unlike Snowflake, duckdb cross join doesn't preserve order of json array
+        # so we need to order by index (after id) to preserve the order of fruits
     )
     assert cur.fetchall() == [(1, '"banana"'), (2, '"coconut"'), (2, '"durian"')]
 
@@ -102,8 +102,10 @@ def test_flatten_index(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("""
         select id, f.value::varchar as v, f.index as i
         from (select column1 as id, column2 as col from (values (1, 's1,s3,s2'), (2, 's2,s1'))) as t
-        , lateral flatten(input => split(t.col, ',')) as f order by id;
-        """)
+        , lateral flatten(input => split(t.col, ',')) as f order by id, index
+        """
+        # as above we need to define order to get a natural ordering
+    )
 
     assert cur.fetchall() == [(1, "s1", 0), (1, "s3", 1), (1, "s2", 2), (2, "s2", 0), (2, "s1", 1)]
 

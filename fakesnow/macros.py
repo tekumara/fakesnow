@@ -10,7 +10,7 @@ CREATE MACRO IF NOT EXISTS ${catalog}.equal_null(a, b) AS a IS NOT DISTINCT FROM
 # see https://docs.snowflake.com/en/sql-reference/functions/flatten.html
 FS_FLATTEN = Template(
     """
-CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input, reverse_order := false) AS TABLE
+CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input) AS TABLE
     SELECT
         NULL AS SEQ, -- TODO use a sequence and nextval
         CAST(NULL AS VARCHAR) AS KEY,
@@ -19,7 +19,6 @@ CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input, reverse_order := false) AS
         value AS VALUE,
         TO_JSON(input) AS THIS
     FROM UNNEST(CAST(TO_JSON(input) AS JSON [])) WITH ORDINALITY AS t(value, idx)
-    ORDER BY CASE WHEN reverse_order THEN -idx ELSE idx END
     """
 )
 
