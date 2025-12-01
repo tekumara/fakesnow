@@ -31,7 +31,7 @@ dev = [
     # to fix https://github.com/pandas-dev/pandas/issues/56995
     "pandas-stubs",
     "pre-commit~=4.0",
-    "pyarrow-stubs==20.0.0.20250928",
+    "pyarrow-stubs==20.0.0.20251107",
     "pyright==1.1.407",
     "pytest~=8.0",
     "ruff~=0.14.3",
