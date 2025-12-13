@@ -16,7 +16,7 @@ help:
 
 # delete the venv
 clean:
-	rm -rf .venv
+	rm -rf uv.lock .venv
 
 ## create venv and install this package and hooks
 install: .uv .sync $(if $(value CI),,install-hooks)
