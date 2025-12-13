@@ -56,7 +56,7 @@ def test_describe_view_columns(dcur: snowflake.connector.cursor.DictCursor):
         "privacy domain",
     ]
     dcur.execute("describe view information_schema.columns")
-    result: list[dict] = dcur.fetchall()  # type: ignore
+    result: list[dict] = dcur.fetchall()
     assert list(result[0].keys()) == cols
     names = [r["name"] for r in result]
     # should contain snowflake-specific columns
