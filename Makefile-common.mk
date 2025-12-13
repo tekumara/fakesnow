@@ -12,7 +12,7 @@ help:
 	@uv --version || { echo 'Please install uv: https://docs.astral.sh/uv/getting-started/installation/' && exit 13 ;}
 
 .sync:
-	uv sync --extra server $(if $(value CI),,--group notebook)
+	uv sync $(if $(value CI),,--group notebook)
 
 # delete the venv
 clean:
