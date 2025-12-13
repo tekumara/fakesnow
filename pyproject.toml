@@ -27,6 +27,7 @@ dev = [
     "boto3-stubs[s3,sts]",
     "build~=1.0",
     "dirty-equals",
+    "fakesnow[server]",
     "moto[server] >= 5",
     # to fix https://github.com/pandas-dev/pandas/issues/56995
     "pandas-stubs",
