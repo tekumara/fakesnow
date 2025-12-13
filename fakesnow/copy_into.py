@@ -213,7 +213,7 @@ def _from_source(expr: exp.Copy) -> str:
     from_ = expr.args["files"][0].this
 
     if isinstance(from_, exp.Select):
-        from_table = from_.args["from"]
+        from_table = from_.args.get("from_")
         # if a subquery is used in the FROM clause it must be loaded from a stage not an external location
         assert isinstance(from_table, exp.From), f"{from_table.__class__} is not a From"
         assert isinstance(from_table.this, exp.Table), f"{from_table.__class__} is not a Table"

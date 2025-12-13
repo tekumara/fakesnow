@@ -118,7 +118,7 @@ def create_clone(expression: exp.Expression) -> exp.Expression:
                 expressions=[
                     exp.Star(),
                 ],
-                **{"from": exp.From(this=clone.this)},
+                from_=exp.From(this=clone.this),
             ),
         )
     return expression
@@ -1429,7 +1429,7 @@ def result_scan(expression: exp.Expression) -> exp.Expression:
     """
     if (
         isinstance(expression, exp.Select)
-        and (from_ := expression.args.get("from"))
+        and (from_ := expression.args.get("from_"))
         and isinstance(from_.this, exp.TableFromRows)
         and isinstance(from_.this.this, exp.Anonymous)
         and from_.this.this.name.upper() == "RESULT_SCAN"

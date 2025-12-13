@@ -617,7 +617,7 @@ def test_regex_substr() -> None:
         sqlglot.parse_one("SELECT regexp_substr(string1, 'the\\\\W+\\\\w+')", read="snowflake")
         .transform(regex_substr)
         .sql(dialect="duckdb")
-        == "SELECT REGEXP_EXTRACT_ALL(string1[1 : ], 'the\\W+\\w+', 0, '')[1]"
+        == "SELECT REGEXP_EXTRACT_ALL(string1[1:], 'the\\W+\\w+', 0, '')[1]"
     )
 
 

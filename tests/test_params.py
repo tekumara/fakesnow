@@ -11,7 +11,7 @@ def test_index_of_placeholder_found():
         read="snowflake",
     )
     identifier_ph = expression.this.this.expressions[0]
-    from_ph = expression.args["files"][0].this.args["from"].this.this
+    from_ph = expression.args["files"][0].this.args.get("from_").this.this
     on_error_ph = expression.args["params"][0].expression
 
     assert index_of_placeholder(expression, identifier_ph) == 0
