@@ -5,7 +5,7 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, NamedTuple, Protocol, Union, cast
+from typing import Any, NamedTuple, Protocol, cast
 from urllib.parse import urlparse, urlunparse
 
 import duckdb
@@ -17,7 +17,7 @@ import fakesnow.transforms.stage as stage
 from fakesnow import logger
 from fakesnow.params import MutableParams, pop_qmark_param
 
-Params = Union[Sequence[Any], dict[Any, Any]]
+Params = Sequence[Any] | dict[Any, Any]
 
 
 class LoadHistoryRecord(NamedTuple):
@@ -86,7 +86,7 @@ def copy_into(
     try:
         check_sql = "SELECT 1 FROM _fs_information_schema._fs_load_history WHERE FILE_NAME = ? LIMIT 1"
 
-        for i, url in zip(inserts, urls):
+        for i, url in zip(inserts, urls, strict=False):
             # Check if file has been loaded into any table before
             duck_conn.execute(check_sql, [url])
             if duck_conn.fetchone() and not cparams.force:

@@ -1,5 +1,5 @@
 import re
-from typing import Optional, TypedDict
+from typing import TypedDict
 
 from snowflake.connector.cursor import ResultMetadata
 
@@ -11,11 +11,11 @@ class ColumnInfo(TypedDict):
     table: str
     nullable: bool
     type: str
-    byteLength: Optional[int]
-    length: Optional[int]
-    scale: Optional[int]
-    precision: Optional[int]
-    collation: Optional[str]
+    byteLength: int | None
+    length: int | None
+    scale: int | None
+    precision: int | None
+    collation: str | None
 
 
 duckdb_to_sf_type = {

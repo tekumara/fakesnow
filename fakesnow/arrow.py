@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import cast
-
 import pyarrow as pa
 import pyarrow.compute as pc
 
@@ -76,14 +74,14 @@ def to_sf(table: pa.Table, rowtype: list[ColumnInfo]) -> pa.Table:
 def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:
     if isinstance(ts, pa.ChunkedArray):
         # combine because pa.StructArray.from_arrays doesn't support ChunkedArray
-        ts = cast(pa.Array, ts.combine_chunks())  # see https://github.com/zen-xu/pyarrow-stubs/issues/46
+        ts = ts.combine_chunks()
 
     if not isinstance(ts.type, pa.TimestampType):
         raise ValueError(f"Expected TimestampArray, got {type(ts)}")
 
     # Round to seconds, ie: strip subseconds
-    tsa_without_us = pc.floor_temporal(ts, unit="second")  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/45
-    epoch = pc.divide(tsa_without_us.cast(pa.int64()), 1_000_000)
+    tsa_without_us = pc.floor_temporal(ts, unit="second")
+    epoch = pc.divide(tsa_without_us.cast(pa.int64()), 1_000_000)  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/278
 
     # Calculate fractional part as nanoseconds
     fraction = pc.multiply(pc.subsecond(ts), 1_000_000_000).cast(pa.int32())  # type: ignore

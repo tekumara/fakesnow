@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import json
 from collections.abc import Sequence
-from typing import TYPE_CHECKING, Any, Literal, Optional
+from typing import TYPE_CHECKING, Any, Literal
 
 from duckdb import DuckDBPyConnection
 
@@ -21,10 +21,10 @@ CopyResult = tuple[
     int,
     int,
     int,
-    Optional[str],
-    Optional[int],
-    Optional[int],
-    Optional[str],
+    str | None,
+    int | None,
+    int | None,
+    str | None,
 ]
 
 WritePandasResult = tuple[

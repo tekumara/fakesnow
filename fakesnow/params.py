@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import Any, Union
+from typing import Any
 
 from sqlglot import exp
 
-MutableParams = Union[list[Any], dict[Any, Any]]
+MutableParams = list[Any] | dict[Any, Any]
 
 
 def pop_qmark_param(params: MutableParams | None, expr: exp.Expression, pl: exp.Placeholder) -> Any:  # noqa: ANN401

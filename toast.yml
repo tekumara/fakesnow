@@ -1,4 +1,4 @@
-image: python:3.9-slim
+image: python:3.10-slim
 # add uv to PATH
 command_prefix: set -euo pipefail && export PATH="/root/.local/bin/:$PATH"
 tasks:
