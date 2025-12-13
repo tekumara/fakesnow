@@ -13,7 +13,7 @@ jobs:
       id: setup-python
       uses: actions/setup-python@v6
     - name: Install uv
-      uses: astral-sh/setup-uv@v3
+      uses: astral-sh/setup-uv@v7
     - name: Cache virtualenv
       id: cache-venv
       uses: actions/cache@v5
