@@ -22,7 +22,7 @@ jobs:
         uses: astral-sh/setup-uv@v3
       - name: Cache virtualenv
         id: cache-venv
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: .venv
           # same as used in the ci workflow for reuse across workflows
