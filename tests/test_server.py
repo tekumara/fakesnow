@@ -88,6 +88,38 @@ def test_server_connect(sconn: snowflake.connector.SnowflakeConnection) -> None:
     assert conn.schema == "SCHEMA2"
 
 
+def test_server_connect_autocommit_false(server: dict) -> None:
+    # connect with autocommit=False
+    with (
+        snowflake.connector.connect(**server | {"autocommit": False}, database="db1", schema="schema1") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create table test_commit (i int)")
+        cur.execute("insert into test_commit values (1)")
+
+        # verify row is present in current transaction
+        cur.execute("select count(*) from test_commit")
+        row = cur.fetchone()
+        assert row and row[0] == 1
+
+        # rollback
+        conn.rollback()
+
+        # verify row is gone
+        cur.execute("select count(*) from test_commit")
+        row = cur.fetchone()
+        assert row and row[0] == 0
+
+        # insert again
+        cur.execute("insert into test_commit values (1)")
+        conn.commit()
+
+        # verify row is present
+        cur.execute("select count(*) from test_commit")
+        row = cur.fetchone()
+        assert row and row[0] == 1
+
+
 def test_server_client_session_keep_alive(server: dict) -> None:
     with snowflake.connector.connect(**server | {"client_session_keep_alive": True}):
         # shouldn't error
@@ -352,6 +384,18 @@ def test_server_response_params(server: dict) -> None:
 
     # expected by the .NET connector
     assert "sessionInfo" in response.json()["data"]
+
+    # set autocommit=False
+    response = requests.post(
+        f"http://{server['host']}:{server['port']}/session/v1/login-request",
+        headers=headers,
+        json=login_payload | {"data": {"SESSION_PARAMETERS": {"AUTOCOMMIT": False}}},
+        timeout=5,
+    )
+    assert response.status_code == 200
+    assert response.json()["success"]
+
+    assert {"name": "AUTOCOMMIT", "value": False} in response.json()["data"]["parameters"]
 
 
 def test_server_rowcount(scur: snowflake.connector.cursor.SnowflakeCursor):

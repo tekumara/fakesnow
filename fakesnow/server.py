@@ -48,6 +48,7 @@ async def login_request(request: Request) -> JSONResponse:
     body_json = json.loads(body)
     session_params: dict[str, Any] = body_json["data"]["SESSION_PARAMETERS"]
     nop_regexes = session_params.get("nop_regexes")
+    autocommit = session_params.get("AUTOCOMMIT", True)
 
     if db_path := session_params.get("FAKESNOW_DB_PATH"):
         # isolated creates a new in-memory database, rather than using the shared in-memory database
@@ -58,13 +59,13 @@ async def login_request(request: Request) -> JSONResponse:
         fs = shared_fs
     token = secrets.token_urlsafe(32)
     logger.info(f"Session login {database=} {schema=} {nop_regexes=}")
-    sessions[token] = fs.connect(database, schema, nop_regexes=nop_regexes)
+    sessions[token] = fs.connect(database, schema, nop_regexes=nop_regexes, autocommit=autocommit)
     return JSONResponse(
         {
             "data": {
                 "token": token,
                 "parameters": [
-                    {"name": "AUTOCOMMIT", "value": True},
+                    {"name": "AUTOCOMMIT", "value": autocommit},
                     {"name": "CLIENT_SESSION_KEEP_ALIVE_HEARTBEAT_FREQUENCY", "value": 3600},
                 ],
                 "sessionInfo": {

@@ -1328,13 +1328,16 @@ def create_user(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def alter_session_quoted_identifiers_ignore_case(expression: exp.Expression) -> exp.Expression:
-    """Handle ALTER SESSION quoted_identifiers_ignore_case.
+def alter_session(expression: exp.Expression) -> exp.Expression:
+    """Handle ALTER SESSION.
 
-    - SET ... = false      => NOP success
-    - UNSET ...            => NOP success
-    - SET ... = true       => Not implemented
-    - other session params => Not implemented
+    Supported parameters:
+    - QUOTED_IDENTIFIERS_IGNORE_CASE:
+        - SET ... = false      => NOP success
+        - UNSET ...            => NOP success
+        - SET ... = true       => Not implemented
+    - AUTOCOMMIT:
+        - SET ... = true/false => success (returns NOP success with side effect arg)
     """
 
     if (
@@ -1343,12 +1346,11 @@ def alter_session_quoted_identifiers_ignore_case(expression: exp.Expression) -> 
         and (alter_session := expression.find(exp.AlterSession))
     ):
         items = alter_session.args.get("expressions") or []
-        if (
-            items
-            and isinstance(items[0], exp.SetItem)
-            and (ident := items[0].find(exp.Identifier))
-            and (ident.this.upper() == "QUOTED_IDENTIFIERS_IGNORE_CASE")
-            and (
+
+        if items and isinstance(items[0], exp.SetItem) and (ident := items[0].find(exp.Identifier)):
+            name = ident.this.upper()
+
+            if name == "QUOTED_IDENTIFIERS_IGNORE_CASE" and (
                 bool(alter_session.args.get("unset"))
                 or (
                     isinstance(items[0].this, exp.EQ)
@@ -1356,9 +1358,18 @@ def alter_session_quoted_identifiers_ignore_case(expression: exp.Expression) -> 
                     and isinstance(rhs, exp.Boolean)
                     and rhs.this is False
                 )
-            )
-        ):
-            return SUCCESS_NOP
+            ):
+                return SUCCESS_NOP
+
+            elif (
+                name == "AUTOCOMMIT"
+                and isinstance(items[0].this, exp.EQ)
+                and (rhs := items[0].this.args.get("expression"))
+                and isinstance(rhs, exp.Boolean)
+            ):
+                new = SUCCESS_NOP.copy()
+                new.args["set_autocommit"] = rhs.this
+                return new
 
         raise NotImplementedError(expression.sql(dialect="snowflake"))
 

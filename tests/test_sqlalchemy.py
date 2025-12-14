@@ -28,6 +28,9 @@ def test_metadata_create_all(snowflake_engine: Engine):
 
 
 def test_reflect(snowflake_engine: Engine):
+    # runs with autocommit=False
+    # when the connection is closed, any open transactions are rolled back
+    # and the connection is returned to the pool for reuse
     with snowflake_engine.connect() as conn:
         conn.execute(TextClause("CREATE TABLE foo (id INTEGER, name VARCHAR)"))
 

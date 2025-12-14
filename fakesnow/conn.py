@@ -53,6 +53,8 @@ class FakeSnowflakeConnection:
         self._paramstyle = kwargs.get("paramstyle", snowflake.connector.paramstyle)
         self.variables = Variables()
         self.results_cache = results_cache
+        self._autocommit = kwargs.get("autocommit", True)
+        self._in_transaction = False
 
         # create database if needed
         if (
@@ -119,13 +121,23 @@ class FakeSnowflakeConnection:
         self,
         exc_type: type[BaseException] | None,
         exc_value: BaseException | None,
-        traceback: TracebackType | None,
+        exc_tb: TracebackType | None,
     ) -> None:
-        pass
+        if not self._autocommit:
+            if exc_tb is None:
+                self.commit()
+            else:
+                self.rollback()
 
-    def autocommit(self, _mode: bool) -> None:
-        # autcommit is always on in duckdb
-        pass
+        self.close()
+
+    def autocommit(self, mode: bool) -> None:
+        # see https://docs.snowflake.com/en/sql-reference/transactions#autocommit
+        if not self._autocommit:
+            self._duck_conn.commit()
+            self._in_transaction = False
+
+        self._autocommit = mode
 
     def close(self, retry: bool = True) -> None:
         self._duck_conn.close()

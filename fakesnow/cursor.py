@@ -1,3 +1,5 @@
+# ruff: noqa: SLF001
+
 from __future__ import annotations
 
 import os
@@ -138,7 +140,7 @@ class FakeSnowflakeCursor:
         with self._conn.cursor() as cur:
             # TODO: can we replace with self._duck_conn.description?
             expression = sqlglot.parse_one(f"DESCRIBE {self._last_sql}", read="duckdb")
-            cur._execute(expression, self._last_params)  # noqa: SLF001
+            cur._execute(expression, self._last_params)
             return cur.fetchall()
 
     def execute(
@@ -248,7 +250,7 @@ class FakeSnowflakeCursor:
         return (
             expression.transform(lambda e: transforms.identifier(e, params))
             .transform(transforms.upper_case_unquoted_identifiers)
-            .transform(transforms.alter_session_quoted_identifiers_ignore_case)
+            .transform(transforms.alter_session)
             .transform(transforms.update_variables, variables=self._conn.variables)
             .transform(transforms.set_schema, current_database=self._conn.database)
             .transform(transforms.create_database, db_path=self._conn.db_path)
@@ -366,6 +368,35 @@ class FakeSnowflakeCursor:
 
         result_sql = None
 
+        if not self._conn._autocommit:
+            # Snowflake implicitly commits the active transaction before executing DDL statements
+            # This will also cause the DDL statement to run in its own transaction and commit
+            # see https://docs.snowflake.com/en/sql-reference/transactions#ddl
+            # and https://docs.snowflake.com/en/sql-reference/sql-ddl-summary
+            # TODO: include DESCRIBE, SHOW, USE in this list of DDL statements
+            if isinstance(transformed, (exp.Alter, exp.Comment, exp.Create, exp.Drop)) or transformed.args.get(
+                "create_stage_name"
+            ):
+                self._duck_conn.commit()
+                self._conn._in_transaction = False
+
+            # Start implicit transaction for DML (INSERT, UPDATE, DELETE, MERGE, COPY)
+            # see https://docs.snowflake.com/en/sql-reference/transactions#autocommit
+            # don't treat CREATE STAGE as a DML statement (its transformed to an INSERT)
+            elif (
+                isinstance(transformed, (exp.Insert, exp.Update, exp.Delete, exp.Merge, exp.Copy))
+                and not transformed.args.get("create_stage_name")
+                and not self._conn._in_transaction
+            ):
+                self._duck_conn.begin()
+                self._conn._in_transaction = True
+
+            # In transaction book keeping
+            elif isinstance(transformed, exp.Transaction):
+                self._conn._in_transaction = True
+            elif isinstance(transformed, (exp.Commit, exp.Rollback)):
+                self._conn._in_transaction = False
+
         try:
             if isinstance(transformed, exp.Copy):
                 sql = copy_into(self._duck_conn, self._conn.database, self._conn.schema, transformed, params)
@@ -401,9 +432,12 @@ class FakeSnowflakeCursor:
             result_sql = SQL_SUCCESS
 
         elif set_schema := transformed.args.get("set_schema"):
-            self._conn._schema = set_schema  # noqa: SLF001
+            self._conn._schema = set_schema
             self._conn.schema_set = True
             result_sql = SQL_SUCCESS
+
+        elif (set_autocommit := transformed.args.get("set_autocommit")) is not None:
+            self._conn.autocommit(set_autocommit)
 
         elif create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions
@@ -444,10 +478,10 @@ class FakeSnowflakeCursor:
             (affected_count,) = self._duck_conn.fetchall()[0]
             result_sql = SQL_DELETED_ROWS.substitute(count=affected_count)
 
-        elif cmd == "TRUNCATETABLE":
+        elif cmd in {"TRUNCATETABLE", "COMMIT", "ROLLBACK"}:
             result_sql = SQL_SUCCESS
 
-        elif cmd in ("DESCRIBE TABLE", "DESCRIBE VIEW"):
+        elif cmd in {"DESCRIBE TABLE", "DESCRIBE VIEW"}:
             # DESCRIBE TABLE/VIEW has already been run above to detect and error if the table exists
             # We now rerun DESCRIBE TABLE/VIEW but transformed with columns to match Snowflake
             result_sql = transformed.transform(
@@ -477,10 +511,10 @@ class FakeSnowflakeCursor:
                 # if dropping the current database/schema then reset conn metadata
                 if cmd == "DROP DATABASE" and ident == self._conn.database:
                     self._conn.database = None
-                    self._conn._schema = None  # noqa: SLF001
+                    self._conn._schema = None
 
                 elif cmd == "DROP SCHEMA" and ident == self._conn.schema:
-                    self._conn._schema = None  # noqa: SLF001
+                    self._conn._schema = None
         elif (
             cmd == "CREATE"
             and isinstance(transformed, exp.Command)
@@ -607,7 +641,7 @@ class FakeSnowflakeCursor:
         command: str,
         params: Sequence[Any] | dict[Any, Any] | None = None,
     ) -> tuple[str, Sequence[Any] | dict[Any, Any] | None]:
-        if params and self._conn._paramstyle in ("pyformat", "format"):  # noqa: SLF001
+        if params and self._conn._paramstyle in ("pyformat", "format"):
             # handle client-side in the same manner as the snowflake python connector
 
             def convert(param: Any) -> Any:  # noqa: ANN401
