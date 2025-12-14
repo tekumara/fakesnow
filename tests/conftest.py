@@ -48,7 +48,7 @@ def snowflake_engine(_fakesnow: None) -> Engine:
 
 
 @pytest.fixture(scope="session")
-def server() -> Iterator[dict]:
+def _server_conn_kwargs() -> Iterator[dict]:
     # isolate each session to a separate instance to avoid sharing tables between tests
     with fakesnow.server(
         session_parameters={
@@ -56,6 +56,16 @@ def server() -> Iterator[dict]:
         }
     ) as conn_kwargs:
         yield conn_kwargs
+
+
+@pytest.fixture
+def server(_server_conn_kwargs: dict) -> dict:
+    # snowflake connector modifies session_parameters in place
+    # so we yield a copy to avoid side effects between tests
+    # see https://github.com/snowflakedb/snowflake-connector-python/issues/2716
+    copy = _server_conn_kwargs.copy()
+    copy["session_parameters"] = copy.get("session_parameters", {}).copy()
+    return copy
 
 
 @pytest.fixture
