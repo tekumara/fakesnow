@@ -65,7 +65,7 @@ def to_sf(table: pa.Table, rowtype: list[ColumnInfo]) -> pa.Table:
             return timestamp_to_sf_struct(col)
         elif pa.types.is_time(col.type):
             # as nanoseconds
-            return pc.multiply(col.cast(pa.int64()), 1000)  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/44
+            return pc.multiply(col.cast(pa.int64()), 1000)
         return col
 
     return pa.Table.from_arrays([to_sf_col(c) for c in table.columns], schema=to_sf_schema(table.schema, rowtype))
@@ -81,7 +81,7 @@ def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:
 
     # Round to seconds, ie: strip subseconds
     tsa_without_us = pc.floor_temporal(ts, unit="second")
-    epoch = pc.divide(tsa_without_us.cast(pa.int64()), 1_000_000)  # type: ignore https://github.com/zen-xu/pyarrow-stubs/issues/278
+    epoch = pc.divide(tsa_without_us.cast(pa.int64()), 1_000_000)
 
     # Calculate fractional part as nanoseconds
     fraction = pc.multiply(pc.subsecond(ts), 1_000_000_000).cast(pa.int32())  # type: ignore
