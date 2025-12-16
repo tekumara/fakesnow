@@ -2,6 +2,44 @@
 
 # Changelog
 
+## [0.11.0](https://github.com/tekumara/fakesnow/compare/v0.10.2...v0.11.0) (2025-12-15)
+
+
+### ⚠ BREAKING CHANGES
+
+* remove support for python 3.9 because its EOL
+
+### Features
+
+* support disabling autocommit ([4705108](https://github.com/tekumara/fakesnow/commit/4705108fccfe5da762e524b38f91850623432f8e)), closes [#280](https://github.com/tekumara/fakesnow/issues/280)
+
+
+### Bug Fixes
+
+* OBJECT_CONSTRUCT - drop null expressions ([085aa4d](https://github.com/tekumara/fakesnow/commit/085aa4dfdd5c1cb90a26a1872e2e5339dd23f8a3))
+
+
+### Chores
+
+* bump duckdb 1.4.1 ([73121bf](https://github.com/tekumara/fakesnow/commit/73121bf691e0dced10856fd93d27580163ada13c))
+* bump sqlglot~=28.3.0 ([10fd18f](https://github.com/tekumara/fakesnow/commit/10fd18fbd97b9fd244ae7afbb5b1b6880dc09fc6))
+* **deps-dev:** bump pyarrow-stubs from 20.0.0.20250928 to 20.0.0.20251107 in the pip group ([#278](https://github.com/tekumara/fakesnow/issues/278)) ([b4613de](https://github.com/tekumara/fakesnow/commit/b4613de2610a8959eb2cb887be363b465384d7a8))
+* **deps-dev:** bump pyright from 1.1.404 to 1.1.406 ([#268](https://github.com/tekumara/fakesnow/issues/268)) ([c265221](https://github.com/tekumara/fakesnow/commit/c265221b14d236bd9224f6105bb031ce1a07ba72))
+* **deps-dev:** bump pyright from 1.1.406 to 1.1.407 ([#274](https://github.com/tekumara/fakesnow/issues/274)) ([a382ec9](https://github.com/tekumara/fakesnow/commit/a382ec98b5436003a41fa9c6b564b16a660fa975))
+* **deps-dev:** bump the pip group with 2 updates ([#275](https://github.com/tekumara/fakesnow/issues/275)) ([be6b599](https://github.com/tekumara/fakesnow/commit/be6b599b9342251925e625b7fe3132587254ba55))
+* **deps-dev:** bump the pip group with 2 updates ([#287](https://github.com/tekumara/fakesnow/issues/287)) ([9bf2776](https://github.com/tekumara/fakesnow/commit/9bf277685d8f210669c85382550bd9f104464a47))
+* **deps:** bump actions/cache from 4 to 5 ([#284](https://github.com/tekumara/fakesnow/issues/284)) ([68d9a97](https://github.com/tekumara/fakesnow/commit/68d9a97051247882cde371f1c10d900584918bd9))
+* **deps:** bump actions/checkout from 4 to 6 ([#282](https://github.com/tekumara/fakesnow/issues/282)) ([d060d2a](https://github.com/tekumara/fakesnow/commit/d060d2abf10e88e8fb9bfaaf740201d62102947d))
+* **deps:** bump actions/create-github-app-token from 1 to 2 ([#285](https://github.com/tekumara/fakesnow/issues/285)) ([f7d85d2](https://github.com/tekumara/fakesnow/commit/f7d85d28bec4ca025cdbfbdb649720b9162ed6c6))
+* **deps:** bump actions/setup-python from 5 to 6 ([#286](https://github.com/tekumara/fakesnow/issues/286)) ([6ba1025](https://github.com/tekumara/fakesnow/commit/6ba10258d19b74afec16ba2dab2a0038c11b40d7))
+* **deps:** bump astral-sh/setup-uv from 3 to 7 ([#283](https://github.com/tekumara/fakesnow/issues/283)) ([e24c5ef](https://github.com/tekumara/fakesnow/commit/e24c5efd4fa6a2749caebdde79eeaadb48fac7f9))
+* **deps:** bump pyarrow-stubs from 20.0.0.20250825 to 20.0.0.20250928 ([#271](https://github.com/tekumara/fakesnow/issues/271)) ([50fd34f](https://github.com/tekumara/fakesnow/commit/50fd34f63086a77abb88916cd86e26a9ffbe0b96))
+* **deps:** bump pyright from 1.1.404 to 1.1.405 ([#272](https://github.com/tekumara/fakesnow/issues/272)) ([a3eac9d](https://github.com/tekumara/fakesnow/commit/a3eac9dd2fcae31be9abbe0d5542345c3e74b72b))
+* **deps:** update ruff requirement from ~=0.12.7 to ~=0.13.2 ([#273](https://github.com/tekumara/fakesnow/issues/273)) ([caacf93](https://github.com/tekumara/fakesnow/commit/caacf93ee07398ce279b42a98facc4e032fda869))
+* **deps:** update sqlglot requirement from ~=27.12.0 to ~=27.20.0 ([#270](https://github.com/tekumara/fakesnow/issues/270)) ([073d0c3](https://github.com/tekumara/fakesnow/commit/073d0c31eb6ae803bb976fadfff718fa2b840c4e))
+* **deps:** update sqlglot requirement from ~=27.20.0 to ~=27.29.0 ([#276](https://github.com/tekumara/fakesnow/issues/276)) ([f1472c6](https://github.com/tekumara/fakesnow/commit/f1472c6943b4907d44abd29078244f57c38ec81e))
+* remove support for python 3.9 because its EOL ([45c7578](https://github.com/tekumara/fakesnow/commit/45c7578ce018312a0bdcb890fa446f8124ea77d8))
+
 ## [0.10.2](https://github.com/tekumara/fakesnow/compare/v0.10.1...v0.10.2) (2025-09-27)
 
 
