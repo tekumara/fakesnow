@@ -620,6 +620,13 @@ def test_regex_substr() -> None:
         == "SELECT REGEXP_EXTRACT_ALL(string1[1:], 'the\\W+\\w+', 0, '')[1]"
     )
 
+    assert (
+        sqlglot.parse_one("SELECT regexp_substr('abc123', '([a-z]+)', 1, 1, 'e')", read="snowflake")
+        .transform(regex_substr)
+        .sql(dialect="duckdb")
+        == "SELECT REGEXP_EXTRACT_ALL('abc123'[1:], '([a-z]+)', 1, '')[1]"
+    )
+
 
 def test_sample() -> None:
     assert (

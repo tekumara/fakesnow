@@ -852,18 +852,24 @@ def regex_substr(expression: exp.Expression) -> exp.Expression:
         # so we need to compensate by subtracting 1
         occurrence = exp.Literal(this=str(occurrence - 1), is_string=False)
 
+        has_e_param = False
         if parameters := expression.args["parameters"]:
+            # Check for 'e' parameter BEFORE removing it
+            if isinstance(parameters.this, str) and "e" in parameters.this:
+                has_e_param = True
             # 'e' parameter doesn't make sense for duckdb
             regex_parameters = exp.Literal(this=parameters.this.replace("e", ""), is_string=True)
         else:
             regex_parameters = exp.Literal(is_string=True)
 
-        group_num = expression.args["group"]
-        if not group_num:
-            if isinstance(regex_parameters.this, str) and "e" in regex_parameters.this:
-                group_num = exp.Literal(this="1", is_string=False)
-            else:
-                group_num = exp.Literal(this="0", is_string=False)
+        # sqlglot defaults group to 0 if missing.
+        group_num = expression.args.get("group")
+        assert group_num
+
+        # If 'e' is present, and group num is not, then default to 1 (the first group)
+        # see https://docs.snowflake.com/en/sql-reference/functions/regexp_substr#:~:text=then%20the%20group_num-,defaults%20to%201,-(the%20first%20group
+        if isinstance(group_num, exp.Literal) and group_num.this == "0" and has_e_param:
+            group_num = exp.Literal(this="1", is_string=False)
 
         expression = exp.Bracket(
             this=exp.Anonymous(

@@ -387,6 +387,11 @@ def test_regex_substr(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute(f"select regexp_substr('{string1}', 'the\\\\W+(\\\\w+)', 1, 2, 'e', 1)")
     assert cur.fetchone() == ("worst",)
 
+    # test for 'e' parameter without explicit group_num
+    # see https://github.com/tekumara/fakesnow/issues/289
+    cur.execute(f"select regexp_substr('{string1}', 'the\\\\W+(\\\\w+)', 1, 1, 'e')")
+    assert cur.fetchone() == ("best",)
+
 
 def test_random(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select random(420)")
