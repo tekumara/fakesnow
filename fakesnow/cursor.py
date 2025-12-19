@@ -309,6 +309,7 @@ class FakeSnowflakeCursor:
             .transform(lambda e: transforms.show_keys(e, self._conn.database, kind="FOREIGN"))
             .transform(transforms.show_users)
             .transform(transforms.create_user)
+            .transform(transforms.hex_string)
             .transform(transforms.sha256)
             .transform(transforms.create_clone)
             .transform(transforms.alias_in_join)

@@ -46,6 +46,7 @@ from fakesnow.transforms.transforms import (
     flatten as flatten,
     flatten_value_cast_as_varchar as flatten_value_cast_as_varchar,
     float_to_double as float_to_double,
+    hex_string as hex_string,
     identifier as identifier,
     indices_to_json_extract as indices_to_json_extract,
     information_schema_databases as information_schema_databases,

@@ -528,6 +528,17 @@ def float_to_double(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def hex_string(expression: exp.Expression) -> exp.Expression:
+    """Convert HexString to from_hex().
+
+    Snowflake X'...' literals are binary values.
+    DuckDB from_hex('...') creates binary values.
+    """
+    if isinstance(expression, exp.HexString):
+        return exp.Anonymous(this="from_hex", expressions=[exp.Literal.string(expression.this)])
+    return expression
+
+
 def identifier(expression: exp.Expression, params: MutableParams | None) -> exp.Expression:
     """Convert identifier function to an identifier or table.
 

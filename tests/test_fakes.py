@@ -1,5 +1,5 @@
 # ruff: noqa: E501
-# pyright: reportOptionalMemberAccess=false
+# pyright: reportOptionalMemberAccess=false, reportOptionalSubscript=false
 
 from __future__ import annotations
 
@@ -282,6 +282,15 @@ def test_hex_decode_binary(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("SELECT HEX_DECODE_BINARY('EDF1439075A83A447FB8B630DDC9C8DE')")
     # NB: Snowflake returns bytesarray instead of bytes
     assert cur.fetchall() == [(b"\xed\xf1C\x90u\xa8:D\x7f\xb8\xb60\xdd\xc9\xc8\xde",)]
+
+
+def test_hex_string(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("SELECT x'48656C6C6F'")
+    assert cur.fetchone()[0] == bytearray(b"Hello")
+
+    # binary parameters are converted to X'...' literals
+    cur.execute("SELECT %s", (b"Hello",))
+    assert cur.fetchone()[0] == bytearray(b"Hello")
 
 
 def test_identifier(cur: snowflake.connector.cursor.SnowflakeCursor):
