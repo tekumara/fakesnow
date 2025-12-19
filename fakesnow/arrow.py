@@ -84,7 +84,7 @@ def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:
     epoch = pc.divide(tsa_without_us.cast(pa.int64()), 1_000_000)
 
     # Calculate fractional part as nanoseconds
-    fraction = pc.multiply(pc.subsecond(ts), 1_000_000_000).cast(pa.int32())  # type: ignore
+    fraction = pc.round(pc.multiply(pc.subsecond(ts), 1_000_000_000)).cast(pa.int32())  # type: ignore
 
     if ts.type.tz:
         assert ts.type.tz == "UTC", f"Timezone {ts.type.tz} not yet supported"

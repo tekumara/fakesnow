@@ -90,6 +90,20 @@ def test_timestamp_to_sf_struct():
     )
 
 
+def test_timestamp_to_sf_struct_rounded() -> None:
+    # 7843 microseconds = 0.007843 secs = 7843000 nanoseconds
+    # but float value 0.007843 x 1_000_000_000 = 7842999.999...
+    # so we need to round to the nearest nanosecond
+
+    timestamp = datetime.datetime(2023, 1, 1, 12, 0, 0, 7843)
+    timestamp_array = pa.array([timestamp], type=pa.timestamp("us"))
+
+    # This should not raise ArrowInvalid
+    result = timestamp_to_sf_struct(timestamp_array)
+
+    assert result[0]["fraction"].as_py() == 7843000
+
+
 def test_read_base64_from_actual_snowflake_result() -> None:
     # select
     #         true, 1::int, 2.0::float, to_decimal('12.3456', 10,2), 'hello', 'hello'::varchar(20),
