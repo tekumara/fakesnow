@@ -1068,26 +1068,12 @@ def _get_to_number_args(e: exp.ToNumber) -> tuple[exp.Expression | None, exp.Exp
     return _format, _precision, _scale
 
 
-def _to_decimal(expression: exp.Expression, cast_node: type[exp.Cast]) -> exp.Expression:
-    expressions: list[exp.Expression] = expression.expressions
-
-    if len(expressions) > 1 and expressions[1].is_string:
-        # see https://docs.snowflake.com/en/sql-reference/functions/to_decimal#arguments
-        raise NotImplementedError(f"{expression.this} with format argument")
-
-    precision = expressions[1] if len(expressions) > 1 else exp.Literal(this="38", is_string=False)
-    scale = expressions[2] if len(expressions) > 2 else exp.Literal(this="0", is_string=False)
-
-    return cast_node(
-        this=expressions[0],
-        to=exp.DataType(this=exp.DataType.Type.DECIMAL, expressions=[precision, scale], nested=False, prefix=False),
-    )
-
-
 def to_decimal(expression: exp.Expression) -> exp.Expression:
-    """Transform to_decimal, to_number, to_numeric expressions from snowflake to duckdb.
+    """Transform to_decimal, to_number, to_numeric, try_to_decimal, try_to_number, try_to_numeric
+    expressions from snowflake to duckdb.
 
     See https://docs.snowflake.com/en/sql-reference/functions/to_decimal
+    and https://docs.snowflake.com/en/sql-reference/functions/try_to_decimal
     """
 
     if isinstance(expression, exp.ToNumber):
@@ -1100,28 +1086,14 @@ def to_decimal(expression: exp.Expression) -> exp.Expression:
         if not scale:
             scale = exp.Literal(this="0", is_string=False)
 
-        return exp.Cast(
+        # Use TryCast for try_to_* functions (safe=True), Cast for regular to_* functions
+        is_safe = expression.args.get("safe")
+        cast_class = exp.TryCast if is_safe else exp.Cast
+
+        return cast_class(
             this=expression.this,
             to=exp.DataType(this=exp.DataType.Type.DECIMAL, expressions=[precision, scale], nested=False, prefix=False),
         )
-
-    if isinstance(expression, exp.Anonymous) and expression.name.upper() in ["TO_DECIMAL", "TO_NUMERIC"]:
-        return _to_decimal(expression, exp.Cast)
-
-    return expression
-
-
-def try_to_decimal(expression: exp.Expression) -> exp.Expression:
-    """Transform try_to_decimal, try_to_number, try_to_numeric expressions from snowflake to duckdb.
-    See https://docs.snowflake.com/en/sql-reference/functions/try_to_decimal
-    """
-
-    if isinstance(expression, exp.Anonymous) and expression.name.upper() in [
-        "TRY_TO_DECIMAL",
-        "TRY_TO_NUMBER",
-        "TRY_TO_NUMERIC",
-    ]:
-        return _to_decimal(expression, exp.TryCast)
 
     return expression
 
