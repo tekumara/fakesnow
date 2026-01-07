@@ -133,7 +133,7 @@ def server(port: int | None = None, session_parameters: dict[str, str | int | bo
             user="fake",
             password="snow",
             account="fakesnow",
-            host="localhost",
+            host="127.0.0.1",
             port=port,
             protocol="http",
             # disable telemetry

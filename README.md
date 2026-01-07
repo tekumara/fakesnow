@@ -153,7 +153,7 @@ The server is available via HTTP and accepts any username/password/account combi
 user: fake
 password: snow
 account: fakesnow
-host: localhost
+host: 127.0.0.1
 port: <port number from server startup>
 protocol: http
 ```
@@ -165,7 +165,7 @@ Additional parameters that may be helpful:
 For example, with the Snowflake CLI:
 
 ```
-snowsql -a fakesnow -u fake -p snow -h localhost -P <port> --protocol http
+snowsql -a fakesnow -u fake -p snow -h 127.0.0.1 -P <port> --protocol http
 ```
 
 ### pytest fixtures
