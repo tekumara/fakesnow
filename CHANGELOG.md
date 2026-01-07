@@ -2,6 +2,23 @@
 
 # Changelog
 
+## [0.11.1](https://github.com/tekumara/fakesnow/compare/v0.11.0...v0.11.1) (2026-01-07)
+
+
+### Bug Fixes
+
+* ArrowInvalid when returning timestamps ([de621c9](https://github.com/tekumara/fakesnow/commit/de621c97777f2dc7cedc56c79481b343b21b1900))
+* do not propagate IF NOT EXISTS in ALTER TABLE to all columns ([967fab6](https://github.com/tekumara/fakesnow/commit/967fab6141ac722f970547a79c5fb252d053a133)), closes [#296](https://github.com/tekumara/fakesnow/issues/296)
+* regex_substr when e parameter is used with no group_num ([785b61e](https://github.com/tekumara/fakesnow/commit/785b61e84749af7fed109b44adb174a41ea0df77)), closes [#289](https://github.com/tekumara/fakesnow/issues/289)
+* treat hex strings as binary ([f907bbb](https://github.com/tekumara/fakesnow/commit/f907bbb3790bb1e66cf147214afc13fd91616ce5)), closes [#301](https://github.com/tekumara/fakesnow/issues/301)
+* use 127.0.0.1 instead of localhost when connecting to server ([f0bdf0e](https://github.com/tekumara/fakesnow/commit/f0bdf0e17c99add019d26d2b5441897bfb052842)), closes [#300](https://github.com/tekumara/fakesnow/issues/300)
+
+
+### Chores
+
+* **deps-dev:** bump the pip group with 2 updates ([#298](https://github.com/tekumara/fakesnow/issues/298)) ([eab8957](https://github.com/tekumara/fakesnow/commit/eab895739de0810f4b359bd00100ce8e03ca5021))
+* **deps:** update sqlglot requirement from ~=28.3.0 to ~=28.5.0 ([#302](https://github.com/tekumara/fakesnow/issues/302)) ([1083d19](https://github.com/tekumara/fakesnow/commit/1083d19a513f9bbc19e938f9f133c49179478d98))
+
 ## [0.11.0](https://github.com/tekumara/fakesnow/compare/v0.10.2...v0.11.0) (2025-12-15)
 
 
