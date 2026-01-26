@@ -94,11 +94,14 @@ def patch(
 
 
 @contextmanager
-def server(port: int | None = None, session_parameters: dict[str, str | int | bool] | None = None) -> Iterator[dict]:
+def server(
+    port: int | None = None, host: str = "127.0.0.1", session_parameters: dict[str, str | int | bool] | None = None
+) -> Iterator[dict]:
     """Start a fake snowflake server in a separate thread and yield connection kwargs.
 
     Args:
         port (int | None, optional): Port to run the server on. If None, an available port is chosen. Defaults to None.
+        host (str): Host to run the server on. Defaults to "127.0.0.1".
 
     Yields:
         Iterator[dict]: Connection parameters for the fake snowflake server.
@@ -114,11 +117,11 @@ def server(port: int | None = None, session_parameters: dict[str, str | int | bo
     # find an unused TCP port between 1024-65535
     if not port:
         with contextlib.closing(socket.socket(type=socket.SOCK_STREAM)) as sock:
-            sock.bind(("127.0.0.1", 0))
+            sock.bind((host, 0))
             port = sock.getsockname()[1]
 
     assert port
-    server = uvicorn.Server(uvicorn.Config(fakesnow.server.app, port=port, log_level="info"))
+    server = uvicorn.Server(uvicorn.Config(fakesnow.server.app, host=host, port=port, log_level="info"))
     thread = threading.Thread(target=server.run, name="fakesnow server", daemon=True)
     thread.start()
 
