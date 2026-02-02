@@ -29,6 +29,14 @@ def arg_parser() -> argparse.ArgumentParser:
         default=argparse.SUPPRESS,
         help="Port to run the HTTP server on (default: random available port)",
     )
+    parser.add_argument(
+        "-o",
+        "--host",
+        type=str,
+        # suppress default so we can customise how it appears in the help message
+        default=argparse.SUPPRESS,
+        help="Host to run the HTTP server on (default: 127.0.0.1)",
+    )
     parser.add_argument("path", type=str, nargs="?", help="target path")
     parser.add_argument("targs", nargs="*", help="target args")
     return parser
@@ -70,7 +78,7 @@ def main(args: Sequence[str] = sys.argv[1:]) -> int:
         signal.signal(signal.SIGINT, signal_handler)
 
         try:
-            with fakesnow.server(port=getattr(pargs, "port", None)):
+            with fakesnow.server(port=getattr(pargs, "port", None), host=getattr(pargs, "host", "127.0.0.1")):
                 # wait for SIGINT
                 stop.wait()
         except RuntimeError:
