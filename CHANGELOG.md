@@ -2,6 +2,20 @@
 
 # Changelog
 
+## [0.11.2](https://github.com/tekumara/fakesnow/compare/v0.11.1...v0.11.2) (2026-02-14)
+
+
+### Features
+
+* COPY INTO with MATCH_BY_COLUMN_NAME ([#307](https://github.com/tekumara/fakesnow/issues/307)) ([7ee426c](https://github.com/tekumara/fakesnow/commit/7ee426cc978b3be1d21c804f89ab35a44eb3b4b2))
+* **server:** provide option to set host address ([#304](https://github.com/tekumara/fakesnow/issues/304)) ([2b9097c](https://github.com/tekumara/fakesnow/commit/2b9097ce3ee319cec19708c072ea591d7eb8a965))
+
+
+### Chores
+
+* **deps-dev:** bump pyright from 1.1.407 to 1.1.408 in the pip group ([#305](https://github.com/tekumara/fakesnow/issues/305)) ([65f5381](https://github.com/tekumara/fakesnow/commit/65f53811165d96fd23b333db9813a01b9618671e))
+* **deps:** update sqlglot requirement from ~=28.5.0 to ~=28.7.0 ([#306](https://github.com/tekumara/fakesnow/issues/306)) ([1c4c46c](https://github.com/tekumara/fakesnow/commit/1c4c46c502bba959f697e75f34585ec7a2747578))
+
 ## [0.11.1](https://github.com/tekumara/fakesnow/compare/v0.11.0...v0.11.1) (2026-01-07)
 
 
