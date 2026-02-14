@@ -30,7 +30,6 @@ def arg_parser() -> argparse.ArgumentParser:
         help="Port to run the HTTP server on (default: random available port)",
     )
     parser.add_argument(
-        "-o",
         "--host",
         type=str,
         # suppress default so we can customise how it appears in the help message
