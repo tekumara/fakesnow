@@ -40,13 +40,13 @@ def array_construct_etc(expression: exp.Expression) -> exp.Expression:
     """Handle ARRAY_CONSTRUCT_* and ARRAY_CAT
 
     Convert ARRAY_CONSTRUCT args to json_array.
-    Convert ARRAY_CONSTRUCT_COMPACT args to a list.
-    Because the macro expects a single argument to use with UNNEST.
 
-    TODO: fix ARRAY_CONSTRUCT_COMPACT to handle args of differing types.
+    Cast ARRAY_CONSTRUCT_COMPACT result to JSON, from LIST.
     """
     if isinstance(expression, exp.ArrayConstructCompact):
-        return exp.ArrayConstructCompact(expressions=[exp.Array(expressions=expression.expressions)])
+        # sqlglot natively transpiles ArrayConstructCompact to LIST_FILTER in duckdb dialect,
+        # but we need to cast to JSON to match Snowflake's return type
+        return exp.Cast(this=expression, to=exp.DataType(this=exp.DataType.Type.JSON))
     elif isinstance(expression, exp.Array) and isinstance(expression.parent, exp.Select):
         return exp.Anonymous(this="json_array", expressions=expression.expressions)
     elif isinstance(expression, exp.ArrayConcat) and isinstance(expression.parent, exp.Select):

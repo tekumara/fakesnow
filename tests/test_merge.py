@@ -329,31 +329,31 @@ def test_transform_merge_join_function() -> None:
             CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
             SELECT t2.newStatus, t2.newVal, t2.t2Key,
                 CASE
-                    WHEN EQUAL_NULL(t1.t1Key, t2.t2Key) AND t2.marked = 1 THEN 0
-                    WHEN EQUAL_NULL(t1.t1Key, t2.t2Key) AND t2.isNewStatus = 1 THEN 1
-                    WHEN EQUAL_NULL(t1.t1Key, t2.t2Key) THEN 2
+                    WHEN t1.t1Key IS NOT DISTINCT FROM t2.t2Key AND t2.marked = 1 THEN 0
+                    WHEN t1.t1Key IS NOT DISTINCT FROM t2.t2Key AND t2.isNewStatus = 1 THEN 1
+                    WHEN t1.t1Key IS NOT DISTINCT FROM t2.t2Key THEN 2
                     WHEN t1.rowid IS NULL THEN 3
                     ELSE NULL
                 END AS MERGE_OP
                 FROM t1
-            FULL OUTER JOIN t2 ON EQUAL_NULL(t1.t1Key, t2.t2Key)
+            FULL OUTER JOIN t2 ON t1.t1Key IS NOT DISTINCT FROM t2.t2Key
             WHERE NOT MERGE_OP IS NULL"""),
         strip("""
             DELETE FROM t1
             USING merge_candidates AS t2
-            WHERE EQUAL_NULL(t1.t1Key, t2.t2Key)
+            WHERE t1.t1Key IS NOT DISTINCT FROM t2.t2Key
             AND t2.merge_op = 0"""),
         strip("""
             UPDATE t1
             SET val = t2.newVal, status = 'new'
             FROM merge_candidates AS t2
-            WHERE EQUAL_NULL(t1.t1Key, t2.t2Key)
+            WHERE t1.t1Key IS NOT DISTINCT FROM t2.t2Key
             AND t2.merge_op = 1"""),
         strip("""
             UPDATE t1
             SET val = t2.newVal
             FROM merge_candidates AS t2
-            WHERE EQUAL_NULL(t1.t1Key, t2.t2Key)
+            WHERE t1.t1Key IS NOT DISTINCT FROM t2.t2Key
             AND t2.merge_op = 2"""),
         strip("""
             INSERT INTO t1 (t1Key, val, status)

@@ -337,7 +337,7 @@ def test_datediff_string_literal_timestamp_cast() -> None:
         sqlglot.parse_one("SELECT DATEDIFF(week, '2023-04-02', '2023-03-02') AS D", read="snowflake")
         .transform(datediff_string_literal_timestamp_cast)
         .sql(dialect="duckdb")
-        == "SELECT DATE_DIFF('WEEK', CAST('2023-04-02' AS TIMESTAMP), CAST('2023-03-02' AS TIMESTAMP)) AS D"
+        == "SELECT DATE_DIFF('WEEK', DATE_TRUNC('WEEK', CAST('2023-04-02' AS TIMESTAMP)), DATE_TRUNC('WEEK', CAST('2023-03-02' AS TIMESTAMP))) AS D"  # noqa: E501
     )
 
     assert (
