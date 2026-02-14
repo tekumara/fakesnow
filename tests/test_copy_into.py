@@ -19,6 +19,7 @@ from sqlglot import exp
 
 from fakesnow import logger
 from fakesnow.copy_into import CopyParams, _from_source, _params, _source_urls, _strip_json_extract
+from tests.utils import dindent
 
 
 class Case(NamedTuple):
@@ -449,7 +450,7 @@ def test_copy_parquet_match_by_column_name_case_sensitive(
     Unmatched columns get NULL values.
     """
     create_table(dcur)
-    parquet_data = pd.DataFrame({"B": [10, 20], "c": [1, 2]}).to_parquet()
+    parquet_data = pd.DataFrame({"B": [10, 20], "a": [1, 2]}).to_parquet()
     bucket = upload_file(s3_client, parquet_data, key="data.parquet")
     dcur.execute(f"CREATE STAGE stage1 url='s3://{bucket}/'")
 
@@ -467,7 +468,7 @@ def test_copy_parquet_match_by_column_name_case_sensitive(
     assert result[0]["status"] == "LOADED"
     assert result[0]["rows_loaded"] == 2
 
-    # A should be NULL because 'c' doesn't match 'A' (case-sensitive)
+    # A should be NULL because 'a' doesn't match 'A' (case-sensitive)
     dcur.execute("SELECT * FROM schema1.table1 ORDER BY B")
     assert dcur.fetchall() == [{"A": None, "B": 10}, {"A": None, "B": 20}]
 
@@ -545,11 +546,11 @@ def test_copy_parquet_single_variant_column(dcur: snowflake.connector.cursor.Dic
     assert result[0]["status"] == "LOADED"
     assert result[0]["rows_loaded"] == 2
 
-    dcur.execute("SELECT data FROM schema1.variant_table ORDER BY data:A")
-    rows = dcur.fetchall()
-    # Each row should be a JSON object with the parquet columns
-    assert rows[0]["DATA"] == '{"A":1,"B":10}'
-    assert rows[1]["DATA"] == '{"A":2,"B":20}'
+    dcur.execute("SELECT data FROM variant_table ORDER BY data:A")
+    assert dindent(dcur.fetchall()) == [
+        {"DATA": '{\n  "A": 1,\n  "B": 10\n}'},
+        {"DATA": '{\n  "A": 2,\n  "B": 20\n}'},
+    ]
 
 
 def test_copy_parquet_match_by_column_name_none_with_variant(
@@ -582,10 +583,11 @@ def test_copy_parquet_match_by_column_name_none_with_variant(
     assert result[0]["status"] == "LOADED"
     assert result[0]["rows_loaded"] == 2
 
-    dcur.execute("SELECT data FROM schema1.variant_table ORDER BY data:A")
-    rows = dcur.fetchall()
-    assert rows[0]["DATA"] == '{"A":1,"B":10}'
-    assert rows[1]["DATA"] == '{"A":2,"B":20}'
+    dcur.execute("SELECT data FROM variant_table ORDER BY data:A")
+    assert dindent(dcur.fetchall()) == [
+        {"DATA": '{\n  "A": 1,\n  "B": 10\n}'},
+        {"DATA": '{\n  "A": 2,\n  "B": 20\n}'},
+    ]
 
 
 def test_force(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:

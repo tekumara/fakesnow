@@ -60,39 +60,32 @@ def copy_into(
         duck_conn.execute(sql)
         return sql
 
-    is_single_variant = False
-    if isinstance(cparams.file_format, ReadParquet):
-        from_ = expr.args["files"][0]
-        # Parquet requires either:
-        # 1. A copy transformation (subquery), e.g. FROM (SELECT $1:col FROM @stage)
-        # 2. MATCH_BY_COLUMN_NAME option to match parquet columns to table columns by name
-        # 3. A dest table with a single VARIANT column (loads entire row as JSON)
-        if not isinstance(from_, exp.Subquery) and cparams.match_by_column_name == MatchByColumnName.NONE:
-            is_single_variant = _is_single_variant_column_table(expr.this, duck_conn, current_database, current_schema)
-            if not is_single_variant:
-                raise snowflake.connector.errors.ProgrammingError(
-                    msg="SQL compilation error:\nPARQUET file format can produce one and only one column of type variant, object, or array. Load data into separate columns using the MATCH_BY_COLUMN_NAME copy option or copy with transformation.",  # noqa: E501
-                    errno=2019,
-                    sqlstate="0A000",
-                )
-
-    table = expr.this
-    if isinstance(expr.this, exp.Table):
-        table = expr.this
-    elif isinstance(expr.this, exp.Schema) and isinstance(expr.this.this, exp.Table):
-        table = expr.this.this
-    else:
-        raise AssertionError(f"copy into {expr.this.__class__} is not Table or Schema")
-
+    table = _extract_table(expr.this)
     schema = table.db or current_schema
     assert schema
 
-    target_columns = (
-        _get_table_columns(table, duck_conn, current_database, schema)
-        if cparams.match_by_column_name != MatchByColumnName.NONE
-        else None
-    )
-    inserts = _inserts(expr, cparams, urls, target_columns, duck_conn, is_single_variant)
+    parquet_info = None
+    if isinstance(cparams.file_format, ReadParquet):
+        from_ = expr.args["files"][0]
+        if not isinstance(from_, exp.Subquery):
+            if cparams.match_by_column_name != MatchByColumnName.NONE:
+                target_cols = _get_table_columns(table, duck_conn, current_database, schema)
+                parquet_columns = {url: _get_parquet_column_names(url, duck_conn) for url in urls}
+                parquet_info = ParquetLoadInfo(parquet_columns, target_columns=target_cols)
+            else:
+                # Parquet without MATCH_BY_COLUMN_NAME or subquery requires a single VARIANT column
+                columns = _describe_table(table, duck_conn, current_database, schema)
+                is_single_variant = len(columns) == 1 and columns[0][1] == "JSON"
+                if not is_single_variant:
+                    raise snowflake.connector.errors.ProgrammingError(
+                        msg="SQL compilation error:\nPARQUET file format can produce one and only one column of type variant, object, or array. Load data into separate columns using the MATCH_BY_COLUMN_NAME copy option or copy with transformation.",  # noqa: E501
+                        errno=2019,
+                        sqlstate="0A000",
+                    )
+                parquet_columns = {url: _get_parquet_column_names(url, duck_conn) for url in urls}
+                parquet_info = ParquetLoadInfo(parquet_columns, is_single_variant=True)
+
+    inserts = _inserts(expr, cparams, urls, parquet_info)
 
     histories: list[LoadHistoryRecord] = []
     load_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
@@ -175,6 +168,15 @@ def _result_file_name(url: str) -> str:
     return f"{parts[-2].lower()}/{parts[-1]}"
 
 
+def _extract_table(target: exp.Expression) -> exp.Table:
+    """Extract the Table node from a COPY INTO target (which may be Table or Schema)."""
+    if isinstance(target, exp.Table):
+        return target
+    if isinstance(target, exp.Schema) and isinstance(target.this, exp.Table):
+        return target.this
+    raise AssertionError(f"copy into {target.__class__} is not Table or Schema")
+
+
 def _describe_table(
     table: exp.Table,
     duck_conn: DuckDBPyConnection,
@@ -189,23 +191,6 @@ def _describe_table(
     result = duck_conn.execute(f"DESCRIBE {qualified_name}").fetchall()
     return [(row[0], row[1]) for row in result]
 
-
-def _is_single_variant_column_table(
-    target: exp.Expression,
-    duck_conn: DuckDBPyConnection,
-    current_database: str | None,
-    current_schema: str | None,
-) -> bool:
-    """Check if target table has exactly one column of type VARIANT (stored as JSON in DuckDB)."""
-    if isinstance(target, exp.Table):
-        table = target
-    elif isinstance(target, exp.Schema) and isinstance(target.this, exp.Table):
-        table = target.this
-    else:
-        return False
-
-    columns = _describe_table(table, duck_conn, current_database, current_schema)
-    return len(columns) == 1 and columns[0][1] == "JSON"
 
 
 def _get_table_columns(
@@ -372,9 +357,7 @@ def _inserts(
     expr: exp.Copy,
     params: CopyParams,
     urls: list[str],
-    target_columns: list[str] | None = None,
-    duck_conn: DuckDBPyConnection | None = None,
-    is_single_variant: bool = False,
+    parquet_info: ParquetLoadInfo | None = None,
 ) -> list[exp.Expression]:
     """Generate INSERT statements for COPY INTO."""
     # INTO expression
@@ -397,14 +380,14 @@ def _inserts(
             for url in urls
         ]
 
-    if is_single_variant and duck_conn:
+    if parquet_info and parquet_info.is_single_variant:
         # Single VARIANT column: convert entire parquet row to JSON
         inserts = []
         for url in urls:
-            parquet_col_names = _get_parquet_column_names(url, duck_conn)
+            parquet_col_names = parquet_info.parquet_columns[url]
 
             # Build json_object call: json_object('col1', col1, 'col2', col2, ...)
-            json_args = []
+            json_args: list[exp.Expression] = []
             for col in parquet_col_names:
                 json_args.append(exp.Literal.string(col))
                 json_args.append(exp.Column(this=exp.Identifier(this=col, quoted=True)))
@@ -422,13 +405,16 @@ def _inserts(
             )
         return inserts
 
-    if target_columns and duck_conn:
+    if parquet_info and parquet_info.target_columns:
         # MATCH_BY_COLUMN_NAME: match parquet columns to table columns
+        target_columns = parquet_info.target_columns
         inserts = []
         for url in urls:
-            matched_columns = _match_parquet_columns(url, target_columns, params.match_by_column_name, duck_conn)
+            matched_columns = _match_parquet_columns(
+                parquet_info.parquet_columns[url], target_columns, params.match_by_column_name
+            )
             # Create SELECT with matched columns (matching cols) and NULLs (unmatched table cols)
-            select_exprs = []
+            select_exprs: list[exp.Expression] = []
             for target_col in target_columns:
                 if target_col in matched_columns:
                     parquet_col = matched_columns[target_col]
@@ -483,11 +469,19 @@ class MatchByColumnName(Enum):
     CASE_INSENSITIVE = "CASE_INSENSITIVE"
 
 
+@dataclass
+class ParquetLoadInfo:
+    """Pre-resolved column info for non-subquery parquet loads."""
+
+    parquet_columns: dict[str, list[str]]  # url -> column names
+    target_columns: list[str] | None = None  # set when MATCH_BY_COLUMN_NAME is active
+    is_single_variant: bool = False  # set when dest is a single VARIANT column
+
+
 def _match_parquet_columns(
-    url: str,
+    parquet_col_names: list[str],
     target_columns: list[str],
     match_mode: MatchByColumnName,
-    duck_conn: DuckDBPyConnection,
 ) -> dict[str, str]:
     """Match parquet columns to target table columns.
 
@@ -495,21 +489,13 @@ def _match_parquet_columns(
         Dict mapping target column name (uppercase) to parquet column name.
         Empty dict if match_mode is NONE.
     """
-    match match_mode:
-        case MatchByColumnName.NONE:
-            return {}
-        case MatchByColumnName.CASE_SENSITIVE:
-            parquet_col_names = _get_parquet_column_names(url, duck_conn)
-            return {col: col for col in target_columns if col in parquet_col_names}
-        case MatchByColumnName.CASE_INSENSITIVE:
-            parquet_col_names = _get_parquet_column_names(url, duck_conn)
-            matched: dict[str, str] = {}
-            for target_col in target_columns:
-                for parquet_col in parquet_col_names:
-                    if parquet_col.upper() == target_col:
-                        matched[target_col] = parquet_col
-                        break
-            return matched
+    if match_mode == MatchByColumnName.NONE:
+        return {}
+    if match_mode == MatchByColumnName.CASE_SENSITIVE:
+        return {col: col for col in target_columns if col in parquet_col_names}
+    # CASE_INSENSITIVE
+    parquet_lookup = {name.upper(): name for name in parquet_col_names}
+    return {tc: parquet_lookup[tc] for tc in target_columns if tc in parquet_lookup}
 
 
 def _strip_json_extract(expr: exp.Select) -> exp.Select:
