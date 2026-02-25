@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.11.3](https://github.com/tekumara/fakesnow/compare/v0.11.2...v0.11.3) (2026-02-25)
+
+
+### Bug Fixes
+
+* bracket access for object keys containing special characters (e.g. periods) ([#309](https://github.com/tekumara/fakesnow/issues/309)) ([a4d8f3f](https://github.com/tekumara/fakesnow/commit/a4d8f3f39b2bf7ecbd7cff7bf6d4ae0f2a5dd9c7))
+
 ## [0.11.2](https://github.com/tekumara/fakesnow/compare/v0.11.1...v0.11.2) (2026-02-14)
 
 
