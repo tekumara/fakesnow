@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from string import Template
 from typing import ClassVar, cast
@@ -583,6 +584,18 @@ def identifier(expression: exp.Expression, params: MutableParams | None) -> exp.
     return expression
 
 
+_SIMPLE_JSON_KEY = re.compile(r"^[A-Za-z0-9_]+$")
+
+# Snowflake string-like types that warrant using JSONExtractScalar (->>)
+# to return an unquoted string rather than a JSON-encoded value.
+# ::varchar -> VARCHAR, ::string / ::text -> TEXT, ::nvarchar -> NVARCHAR
+_STRING_CAST_TYPES = {
+    exp.DataType.Type.VARCHAR,
+    exp.DataType.Type.TEXT,
+    exp.DataType.Type.NVARCHAR,
+}
+
+
 def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
     """Convert indices on objects and arrays to json_extract or json_extract_string
 
@@ -603,14 +616,19 @@ def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
         and isinstance(index, exp.Literal)
         and index.this
     ):
-        if isinstance(expression.parent, exp.Cast) and expression.parent.to.this == exp.DataType.Type.VARCHAR:
-            # If the parent is a cast to varchar, we need to use JSONExtractScalar
-            # to get the unquoted string value.
+        if isinstance(expression.parent, exp.Cast) and expression.parent.to.this in _STRING_CAST_TYPES:
+            # If the parent is a cast to a string type (::varchar, ::string, ::text, ::nvarchar),
+            # use JSONExtractScalar to return an unquoted string value.
             klass = exp.JSONExtractScalar
         else:
             klass = exp.JSONExtract
         if index.is_string:
-            return klass(this=expression.this, expression=exp.Literal(this=f"$.{index.this}", is_string=True))
+            key = index.this
+            # Simple identifiers use standard JSONPath dot notation ($.key).
+            # Keys with special characters (e.g. periods) are passed without the $. prefix so
+            # DuckDB treats the value as a direct key lookup, bypassing JSONPath path separation.
+            path = f"$.{key}" if _SIMPLE_JSON_KEY.match(key) else key
+            return klass(this=expression.this, expression=exp.Literal(this=path, is_string=True))
         else:
             return klass(this=expression.this, expression=exp.Literal(this=f"$[{index.this}]", is_string=True))
 

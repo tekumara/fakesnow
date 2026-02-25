@@ -162,6 +162,23 @@ def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     ]
 
 
+def test_object_key_with_period(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # Keys that contain periods must be treated as literal key names, not JSONPath expressions.
+    # e.g. obj['a.b'] is a single key containing a period, not a nested path a -> b.
+    cur.execute("""create or replace table dotkeys (obj variant)""")
+    cur.execute("""insert into dotkeys select parse_json('{"a.b": "val1"}')""")
+
+    cur.execute("select obj['a.b'] from dotkeys")
+    assert cur.fetchall() == [('"val1"',)]
+
+    cur.execute("select obj['a.b']::string from dotkeys")
+    assert cur.fetchall() == [("val1",)]
+
+    # A missing key should return NULL, not raise an error
+    cur.execute("select obj['x.y']::string from dotkeys")
+    assert cur.fetchall() == [(None,)]
+
+
 def test_try_parse_json(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("""SELECT TRY_PARSE_JSON('{"first":"foo", "last":"bar"}') AS j""")
     assert dindent(dcur.fetchall()) == [{"J": '{\n  "first": "foo",\n  "last": "bar"\n}'}]
