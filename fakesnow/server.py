@@ -140,8 +140,12 @@ async def query_request(request: Request) -> JSONResponse:
         if cur._arrow_table:  # noqa: SLF001
             batch_bytes = to_ipc(to_sf(cur._arrow_table, rowtype))  # noqa: SLF001
             rowset_b64 = b64encode(batch_bytes).decode("utf-8")
+            # Convert arrow table to array of arrays for Node.js SDK
+            # SDK expects [[val1, val2], [val1, val2], ...], not [{col: val}, ...]
+            rowset_json = [list(row.values()) for row in cur._arrow_table.to_pylist()]  # noqa: SLF001
         else:
             rowset_b64 = ""
+            rowset_json = []
 
         # Cache the result data (limit to 50 most recent)
         cache_data = {
@@ -149,10 +153,14 @@ async def query_request(request: Request) -> JSONResponse:
                 {"name": "TIMEZONE", "value": "Etc/UTC"},
             ],
             "rowtype": rowtype,
-            "rowsetBase64": rowset_b64,
+            "rowsetBase64": rowset_b64,  # For Python SDK
+            "rowset": rowset_json,  # For Node.js SDK
             "total": cur._rowcount,  # noqa: SLF001
+            "returned": cur._rowcount,  # noqa: SLF001  # Node.js SDK needs this
             "queryId": cur.sfqid,
             "queryResultFormat": "arrow",
+            "version": 1,  # Node.js SDK requires version field
+            "chunks": [],  # Node.js SDK expects chunks field (empty list, not None)
             "finalDatabaseName": conn.database,
             "finalSchemaName": conn.schema,
         }
