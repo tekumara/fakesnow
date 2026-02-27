@@ -164,6 +164,11 @@ async def query_request(request: Request) -> JSONResponse:
             "finalDatabaseName": conn.database,
             "finalSchemaName": conn.schema,
         }
+        
+        # Store in cache, maintaining max 50 entries (LRU)
+        conn.results_cache[cur.sfqid] = cache_data
+        if len(conn.results_cache) > 50:
+            conn.results_cache.popitem(last=False)  # Remove oldest item
 
         # Return cache_data with both rowset and rowsetBase64
         response = {
@@ -173,6 +178,53 @@ async def query_request(request: Request) -> JSONResponse:
         return JSONResponse(response)
 
     except ServerError as e:
+        return JSONResponse(
+            {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
+            status_code=e.status_code,
+        )
+
+async def get_cached_query_result(request: Request) -> JSONResponse:
+    try:
+        token = to_token(request)
+        conn = to_conn(token)
+        
+        # Extract query_id from path: /queries/{query_id}/result
+        query_id = request.path_params.get("query_id")
+        request_guid = request.query_params.get("request_guid", "unknown")
+        disable_offline_chunks = request.query_params.get("disableOfflineChunks", "unknown")
+        
+        logger.info(f"[GET_RESULT] START query_id={query_id} request_guid={request_guid} disableOfflineChunks={disable_offline_chunks} client={request.client.host if request.client else 'unknown'}")
+        
+        if not query_id:
+            logger.error(f"[GET_RESULT] Missing query_id in request path")
+            raise ServerError(status_code=400, code="002003", message="Missing query_id in request path")
+        
+        # Retrieve from cache
+        cached_result = conn.results_cache.get(query_id)
+
+        if not cached_result:
+            logger.error(f"[GET_RESULT] Query results not found for query_id={query_id}, cache keys: {list(conn.results_cache.keys())}")
+            raise ServerError(status_code=404, code="000604", message=f"Query results not found for query_id: {query_id}")
+
+        rowtype = cached_result.get('rowtype')
+        has_rowset_b64 = bool(cached_result.get('rowsetBase64'))
+        rowset_count = len(cached_result.get('rowset', []))
+        total_rows = cached_result.get('total', 0)
+        
+        logger.info(f"[GET_RESULT] Found cached result: rowtype={rowtype}, rows={rowset_count}/{total_rows}, has_rowset_b64={has_rowset_b64}")
+
+        # For GET /queries/{query_id}/result endpoint:
+        # Return cached result with both rowset (JSON) and rowsetBase64 (Arrow)
+        response = {
+            "data": cached_result,
+            "code": "0",  # 0 = Success, results ready immediately
+            "success": True,
+        }
+        logger.info(f"[GET_RESULT] END query_id={query_id} status=success code=0 rows={rowset_count}")
+        return JSONResponse(response)
+        
+    except ServerError as e:
+        logger.error(f"[GET_RESULT] ServerError: code={e.code} message={e.message}")
         return JSONResponse(
             {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
             status_code=e.status_code,
@@ -234,6 +286,11 @@ routes = [
         "/queries/v1/query-request",
         query_request,
         methods=["POST"],
+    ),
+    Route(
+        "/queries/{query_id}/result",
+        get_cached_query_result,
+        methods=["GET"],
     ),
     Route("/queries/v1/abort-request", lambda _: JSONResponse({"success": True}), methods=["POST"]),
     Route("/monitoring/queries/{sfqid}", monitoring_query, methods=["GET"]),
