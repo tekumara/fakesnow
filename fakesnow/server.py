@@ -28,6 +28,14 @@ logger = logging.getLogger("fakesnow.server")
 logger.handlers = logging.getLogger("uvicorn").handlers
 logger.setLevel(logging.INFO)
 
+
+class SafeJSONResponse(JSONResponse):
+    """JSONResponse that handles non-serializable types like datetime."""
+
+    def render(self, content: Any) -> bytes:
+        return json.dumps(content, default=str).encode("utf-8")
+
+
 shared_fs = FakeSnow()
 sessions: dict[str, FakeSnowflakeConnection] = {}
 
@@ -60,22 +68,21 @@ async def login_request(request: Request) -> JSONResponse:
     token = secrets.token_urlsafe(32)
     logger.info(f"Session login {database=} {schema=} {nop_regexes=}")
     sessions[token] = fs.connect(database, schema, nop_regexes=nop_regexes, autocommit=autocommit)
-    return JSONResponse(
-        {
-            "data": {
-                "token": token,
-                "parameters": [
-                    {"name": "AUTOCOMMIT", "value": autocommit},
-                    {"name": "CLIENT_SESSION_KEEP_ALIVE_HEARTBEAT_FREQUENCY", "value": 3600},
-                ],
-                "sessionInfo": {
-                    "databaseName": database,
-                    "schemaName": schema,
-                },
+    response = {
+        "data": {
+            "token": token,
+            "parameters": [
+                {"name": "AUTOCOMMIT", "value": autocommit},
+                {"name": "CLIENT_SESSION_KEEP_ALIVE_HEARTBEAT_FREQUENCY", "value": 3600},
+            ],
+            "sessionInfo": {
+                "databaseName": database,
+                "schemaName": schema,
             },
-            "success": True,
-        }
-    )
+        },
+        "success": True,
+    }
+    return SafeJSONResponse(response)
 
 
 async def query_request(request: Request) -> JSONResponse:
@@ -108,7 +115,7 @@ async def query_request(request: Request) -> JSONResponse:
             assert expr
             if put_stage_data := expr.args.get("put_stage_data"):
                 # this is a PUT command, so return the stage data
-                return JSONResponse(
+                return SafeJSONResponse(
                     {
                         "data": put_stage_data,
                         "success": True,
@@ -118,17 +125,16 @@ async def query_request(request: Request) -> JSONResponse:
         except snowflake.connector.errors.ProgrammingError as e:
             logger.info(f"{sql_text=} ProgrammingError {e}")
             code = f"{e.errno:06d}"
-            return JSONResponse(
-                {
-                    "data": {
-                        "errorCode": code,
-                        "sqlState": e.sqlstate,
-                    },
-                    "code": code,
-                    "message": e.msg,
-                    "success": False,
-                }
-            )
+            response = {
+                "data": {
+                    "errorCode": code,
+                    "sqlState": e.sqlstate,
+                },
+                "code": code,
+                "message": e.msg,
+                "success": False,
+            }
+            return SafeJSONResponse(response)
         except Exception as e:
             # we have a bug or use of an unsupported feature
             msg = f"{sql_text=} {params=} Unhandled exception"
@@ -175,10 +181,10 @@ async def query_request(request: Request) -> JSONResponse:
             "data": cache_data,
             "success": True,
         }
-        return JSONResponse(response)
+        return SafeJSONResponse(response)
 
     except ServerError as e:
-        return JSONResponse(
+        return SafeJSONResponse(
             {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
             status_code=e.status_code,
         )
@@ -221,11 +227,11 @@ async def get_cached_query_result(request: Request) -> JSONResponse:
             "success": True,
         }
         logger.info(f"[GET_RESULT] END query_id={query_id} status=success code=0 rows={rowset_count}")
-        return JSONResponse(response)
+        return SafeJSONResponse(response)
         
     except ServerError as e:
         logger.error(f"[GET_RESULT] ServerError: code={e.code} message={e.message}")
-        return JSONResponse(
+        return SafeJSONResponse(
             {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
             status_code=e.status_code,
         )
@@ -235,7 +241,8 @@ def to_token(request: Request) -> str:
     if not (auth := request.headers.get("Authorization")):
         raise ServerError(status_code=401, code="390101", message="Authorization header not found in the request data.")
 
-    return auth[17:-1]
+    token = auth[17:-1]
+    return token
 
 
 def to_conn(token: str) -> FakeSnowflakeConnection:
@@ -253,26 +260,32 @@ async def session(request: Request) -> JSONResponse:
         if bool(request.query_params.get("delete")):
             del sessions[token]
 
-        return JSONResponse(
+        return SafeJSONResponse(
             {"data": None, "code": None, "message": None, "success": True},
         )
 
     except ServerError as e:
-        return JSONResponse(
+        return SafeJSONResponse(
             {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
             status_code=e.status_code,
         )
 
 
 def monitoring_query(request: Request) -> JSONResponse:
-    token = to_token(request)
-    conn = to_conn(token)
+    try:
+        token = to_token(request)
+        conn = to_conn(token)
 
-    sfqid = request.path_params["sfqid"]
-    if not conn.results_cache.get(sfqid):
-        return JSONResponse({"data": {"queries": []}, "success": True})
+        sfqid = request.path_params["sfqid"]
+        if not conn.results_cache.get(sfqid):
+            return SafeJSONResponse({"data": {"queries": []}, "success": True})
 
-    return JSONResponse({"data": {"queries": [{"status": "SUCCESS"}]}, "success": True})
+        return SafeJSONResponse({"data": {"queries": [{"status": "SUCCESS"}]}, "success": True})
+    except ServerError as e:
+        return SafeJSONResponse(
+            {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
+            status_code=e.status_code,
+        )
 
 
 routes = [
@@ -292,7 +305,7 @@ routes = [
         get_cached_query_result,
         methods=["GET"],
     ),
-    Route("/queries/v1/abort-request", lambda _: JSONResponse({"success": True}), methods=["POST"]),
+    Route("/queries/v1/abort-request", lambda _: SafeJSONResponse({"success": True}), methods=["POST"]),
     Route("/monitoring/queries/{sfqid}", monitoring_query, methods=["GET"]),
 ]
 
