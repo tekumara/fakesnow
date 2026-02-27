@@ -143,23 +143,26 @@ async def query_request(request: Request) -> JSONResponse:
         else:
             rowset_b64 = ""
 
-        return JSONResponse(
-            {
-                "data": {
-                    "parameters": [
-                        {"name": "TIMEZONE", "value": "Etc/UTC"},
-                    ],
-                    "rowtype": rowtype,
-                    "rowsetBase64": rowset_b64,
-                    "total": cur._rowcount,  # noqa: SLF001
-                    "queryId": cur.sfqid,
-                    "queryResultFormat": "arrow",
-                    "finalDatabaseName": conn.database,
-                    "finalSchemaName": conn.schema,
-                },
-                "success": True,
-            }
-        )
+        # Cache the result data (limit to 50 most recent)
+        cache_data = {
+            "parameters": [
+                {"name": "TIMEZONE", "value": "Etc/UTC"},
+            ],
+            "rowtype": rowtype,
+            "rowsetBase64": rowset_b64,
+            "total": cur._rowcount,  # noqa: SLF001
+            "queryId": cur.sfqid,
+            "queryResultFormat": "arrow",
+            "finalDatabaseName": conn.database,
+            "finalSchemaName": conn.schema,
+        }
+
+        # Return cache_data with both rowset and rowsetBase64
+        response = {
+            "data": cache_data,
+            "success": True,
+        }
+        return JSONResponse(response)
 
     except ServerError as e:
         return JSONResponse(
