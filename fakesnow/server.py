@@ -66,7 +66,7 @@ async def login_request(request: Request) -> JSONResponse:
         # share the in-memory database across connections
         fs = shared_fs
     token = secrets.token_urlsafe(32)
-    logger.info(f"Session login {database=} {schema=} {nop_regexes=}")
+    logger.info(f"[LOGIN] database={database} schema={schema} autocommit={autocommit} nop_regexes={nop_regexes}")
     sessions[token] = fs.connect(database, schema, nop_regexes=nop_regexes, autocommit=autocommit)
     response = {
         "data": {
@@ -88,6 +88,8 @@ async def login_request(request: Request) -> JSONResponse:
 async def query_request(request: Request) -> JSONResponse:
     try:
         conn = to_conn(to_token(request))
+        request_id = request.query_params.get("requestId", "unknown")
+        logger.debug(f"[QUERY_REQUEST] START requestId={request_id} host={request.client.host if request.client else 'unknown'}")
 
         body = await request.body()
         if request.headers.get("Content-Encoding") == "gzip":
@@ -96,11 +98,12 @@ async def query_request(request: Request) -> JSONResponse:
         body_json = json.loads(body)
 
         sql_text = body_json["sqlText"]
+        logger.debug(f"[QUERY_REQUEST] SQL: {sql_text}")
 
         if bindings := body_json.get("bindings"):
             # Convert parameters like {'1': {'type': 'FIXED', 'value': '10'}, ...} to tuple (10, ...)
             params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
-            logger.debug(f"Bindings: {params}")
+            logger.debug(f"[QUERY_REQUEST] Bindings: {params}")
         else:
             params = None
 
@@ -108,13 +111,17 @@ async def query_request(request: Request) -> JSONResponse:
 
         try:
             # only a single sql statement is sent at a time by the python snowflake connector
+            logger.debug(f"[QUERY_REQUEST] Executing SQL with params={params}")
             cur = await run_in_threadpool(conn.cursor().execute, sql_text, binding_params=params, server=True)
+            logger.info(f"[QUERY_REQUEST] SQL execution completed, queryId={cur.sfqid}, rowcount={cur._rowcount}")  # noqa: SLF001
+            
             rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
             expr = cur._last_transformed  # noqa: SLF001
             assert expr
             if put_stage_data := expr.args.get("put_stage_data"):
                 # this is a PUT command, so return the stage data
+                logger.info(f"[QUERY_REQUEST] PUT command detected, returning stage data")
                 return SafeJSONResponse(
                     {
                         "data": put_stage_data,
@@ -123,7 +130,7 @@ async def query_request(request: Request) -> JSONResponse:
                 )
 
         except snowflake.connector.errors.ProgrammingError as e:
-            logger.info(f"{sql_text=} ProgrammingError {e}")
+            logger.error(f"[QUERY_REQUEST] ProgrammingError: {sql_text=} errno={e.errno} {e.msg}")
             code = f"{e.errno:06d}"
             response = {
                 "data": {
@@ -134,11 +141,12 @@ async def query_request(request: Request) -> JSONResponse:
                 "message": e.msg,
                 "success": False,
             }
+            logger.error(f"[QUERY_REQUEST] Returning error response: code={code}")
             return SafeJSONResponse(response)
         except Exception as e:
             # we have a bug or use of an unsupported feature
             msg = f"{sql_text=} {params=} Unhandled exception"
-            logger.error(msg, exc_info=e)
+            logger.error(f"[QUERY_REQUEST] {msg}", exc_info=e)
             # my guess at mimicking a 500 error as per https://docs.snowflake.com/en/developer-guide/sql-api/reference
             # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318
             raise ServerError(status_code=500, code="261000", message=msg) from None
@@ -149,9 +157,11 @@ async def query_request(request: Request) -> JSONResponse:
             # Convert arrow table to array of arrays for Node.js SDK
             # SDK expects [[val1, val2], [val1, val2], ...], not [{col: val}, ...]
             rowset_json = [list(row.values()) for row in cur._arrow_table.to_pylist()]  # noqa: SLF001
+            logger.debug(f"[QUERY_REQUEST] Arrow table: {len(rowset_json)} rows, rowset_b64 length={len(rowset_b64)}")
         else:
             rowset_b64 = ""
             rowset_json = []
+            logger.debug(f"[QUERY_REQUEST] No arrow table, empty result")
 
         # Cache the result data (limit to 50 most recent)
         cache_data = {
@@ -175,15 +185,18 @@ async def query_request(request: Request) -> JSONResponse:
         conn.results_cache[cur.sfqid] = cache_data
         if len(conn.results_cache) > 50:
             conn.results_cache.popitem(last=False)  # Remove oldest item
+        logger.debug(f"[QUERY_REQUEST] Cached result for queryId={cur.sfqid}, cache size={len(conn.results_cache)}")
 
         # Return cache_data with both rowset and rowsetBase64
         response = {
             "data": cache_data,
             "success": True,
         }
+        logger.debug(f"[QUERY_REQUEST] END requestId={request_id} queryId={cur.sfqid} rows={cur._rowcount} status=success code=0")  # noqa: SLF001
         return SafeJSONResponse(response)
 
     except ServerError as e:
+        logger.error(f"[QUERY_REQUEST] ServerError: code={e.code} message={e.message}")
         return SafeJSONResponse(
             {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
             status_code=e.status_code,
@@ -217,7 +230,7 @@ async def get_cached_query_result(request: Request) -> JSONResponse:
         rowset_count = len(cached_result.get('rowset', []))
         total_rows = cached_result.get('total', 0)
         
-        logger.info(f"[GET_RESULT] Found cached result: rowtype={rowtype}, rows={rowset_count}/{total_rows}, has_rowset_b64={has_rowset_b64}")
+        logger.debug(f"[GET_RESULT] Found cached result: rowtype={rowtype}, rows={rowset_count}/{total_rows}, has_rowset_b64={has_rowset_b64}")
 
         # For GET /queries/{query_id}/result endpoint:
         # Return cached result with both rowset (JSON) and rowsetBase64 (Arrow)
@@ -226,7 +239,7 @@ async def get_cached_query_result(request: Request) -> JSONResponse:
             "code": "0",  # 0 = Success, results ready immediately
             "success": True,
         }
-        logger.info(f"[GET_RESULT] END query_id={query_id} status=success code=0 rows={rowset_count}")
+        logger.debug(f"[GET_RESULT] END query_id={query_id} status=success code=0 rows={rowset_count}")
         return SafeJSONResponse(response)
         
     except ServerError as e:
@@ -239,16 +252,20 @@ async def get_cached_query_result(request: Request) -> JSONResponse:
 
 def to_token(request: Request) -> str:
     if not (auth := request.headers.get("Authorization")):
+        logger.error(f"[AUTH] Authorization header not found")
         raise ServerError(status_code=401, code="390101", message="Authorization header not found in the request data.")
 
     token = auth[17:-1]
+    logger.debug(f"[AUTH] Token extracted from Authorization header")
     return token
 
 
 def to_conn(token: str) -> FakeSnowflakeConnection:
     if not (conn := sessions.get(token)):
+        logger.error(f"[AUTH] Session not found for token, available sessions: {len(sessions)}")
         raise ServerError(status_code=401, code="390104", message="User must login again to access the service.")
 
+    logger.debug(f"[AUTH] Session found, database={conn.database} schema={conn.schema}")
     return conn
 
 
@@ -258,13 +275,17 @@ async def session(request: Request) -> JSONResponse:
         _ = to_conn(token)
 
         if bool(request.query_params.get("delete")):
+            logger.info(f"[SESSION] DELETE session")
             del sessions[token]
+        else:
+            logger.debug(f"[SESSION] HEARTBEAT")
 
         return SafeJSONResponse(
             {"data": None, "code": None, "message": None, "success": True},
         )
 
     except ServerError as e:
+        logger.error(f"[SESSION] ServerError: code={e.code} message={e.message}")
         return SafeJSONResponse(
             {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
             status_code=e.status_code,
@@ -278,10 +299,13 @@ def monitoring_query(request: Request) -> JSONResponse:
 
         sfqid = request.path_params["sfqid"]
         if not conn.results_cache.get(sfqid):
+            logger.debug(f"[MONITORING] query {sfqid} not found in cache")
             return SafeJSONResponse({"data": {"queries": []}, "success": True})
 
+        logger.debug(f"[MONITORING] query {sfqid} status=SUCCESS")
         return SafeJSONResponse({"data": {"queries": [{"status": "SUCCESS"}]}, "success": True})
     except ServerError as e:
+        logger.error(f"[MONITORING] ServerError: code={e.code} message={e.message}")
         return SafeJSONResponse(
             {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
             status_code=e.status_code,
