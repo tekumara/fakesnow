@@ -190,6 +190,7 @@ async def query_request(request: Request) -> JSONResponse:
         # Return cache_data with both rowset and rowsetBase64
         response = {
             "data": cache_data,
+            "code": "0",  # 0 = Success, results ready immediately
             "success": True,
         }
         logger.debug(f"[QUERY_REQUEST] END requestId={request_id} queryId={cur.sfqid} rows={cur._rowcount} status=success code=0")  # noqa: SLF001
