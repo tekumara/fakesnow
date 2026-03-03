@@ -30,7 +30,7 @@ import fakesnow.transforms as transforms
 from fakesnow import logger
 from fakesnow.copy_into import copy_into
 from fakesnow.params import MutableParams
-from fakesnow.rowtype import describe_as_result_metadata
+from fakesnow.rowtype import describe_as_result_metadata, describe_as_rowtype
 from fakesnow.transforms import stage
 
 if TYPE_CHECKING:
@@ -554,12 +554,24 @@ class FakeSnowflakeCursor:
         self._last_params = None if result_sql else params
         self._last_transformed = transformed
 
+        # Compute rowtype for cache (needed by GET endpoint to generate rowsetBase64)
+        # Skip for DESCRIBE queries to avoid infinite recursion
+        try:
+            if cmd not in {"DESCRIBE TABLE", "DESCRIBE VIEW", "DESCRIBE"}:
+                rowtype = describe_as_rowtype(self._describe_last_sql())
+            else:
+                rowtype = []
+        except Exception:
+            # If rowtype computation fails, use empty list as fallback
+            rowtype = []
+
         self._conn.results_cache[self._sfqid] = (
             self._arrow_table,
             self._rowcount,
             self._last_sql,
             self._last_params,
             self._last_transformed,
+            rowtype,  # 6th element - required for result_scan() and get_results_from_sfqid()
         )
 
     def executemany(
