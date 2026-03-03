@@ -162,10 +162,38 @@ Additional parameters that may be helpful:
 - Session parameter `CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED` set to `false`
 - Network timeout set to 1 second (since retries aren't needed in testing)
 
-For example, with the Snowflake CLI:
+#### Connecting from the Snowflake CLI
 
+Update Snowflake's [config.toml](https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-cli):
+
+```toml
+[connections.fakesnow]
+host = "localhost"
+port = <port number from server startup>
+account = "fakesnow"
+user = "fake"
+password = "snow"
+protocol = "http"
 ```
-snowsql -a fakesnow -u fake -p snow -h 127.0.0.1 -P <port> --protocol http
+
+> [!WARNING]
+> Make sure to add the `protocol = http` for Fakesnow compatibility.
+
+Use the `-c` flag to specify the above connection: `snow sql -c fakesnow -q "SELECT 'Hello World' as greeting"`.
+
+Or set the default value using `set-default`:
+
+
+```sql
+$ snow connection set-default fakesnow
+Default connection set to: fakesnow
+$ snow sql -q "SELECT 'Hello World' as greeting"
+SELECT 'Hello World' as greeting
++-------------+
+| GREETING    |
+|-------------|
+| Hello World |
++-------------+
 ```
 
 ### pytest fixtures
