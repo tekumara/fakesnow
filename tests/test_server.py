@@ -517,3 +517,170 @@ def test_server_monitoring_endpoint_error(scur: snowflake.connector.cursor.Snowf
     ) as exc:
         cur.fetchall()
     assert exc.value.errno == -1
+
+
+def test_server_result_scan(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    """Test that result_scan() works end-to-end with cached query results."""
+    cur = scur
+
+    # Execute original query
+    cur.execute("select 42 as answer, 'hello world' as message")
+    original_sfqid = cur.sfqid
+    original_result = cur.fetchall()
+
+    # Use result_scan to retrieve cached results
+    cur.execute(f"SELECT * FROM TABLE(RESULT_SCAN('{original_sfqid}'))")
+    cached_result = cur.fetchall()
+
+    # Verify results match
+    assert cached_result == original_result
+    assert cached_result == [(42, "hello world")]
+
+
+def test_server_get_cached_query_result(server: dict) -> None:
+    """Test the GET /queries/{query_id}/result endpoint directly."""
+    # Connect and execute a query
+    with snowflake.connector.connect(**server, database="db1", schema="schema1") as conn, conn.cursor() as cur:
+        cur.execute("select 123 as number, 'test data' as text")
+        query_id = cur.sfqid
+        _ = cur.fetchall()  # Consume results to ensure they're cached
+
+        # Get the token for authentication
+        assert conn.rest and conn.rest.token
+
+        # Make direct HTTP GET request to the endpoint
+        response = requests.get(
+            f"http://{server['host']}:{server['port']}/queries/{query_id}/result",
+            headers={"Authorization": f'Snowflake Token="{conn.rest.token}"'},
+            timeout=5,
+        )
+
+        assert response.status_code == 200
+        json_response = response.json()
+
+        # Verify response structure
+        assert json_response["success"] is True
+        assert json_response["code"] == "0"  # Success code
+        assert "data" in json_response
+
+        # Verify data fields are present
+        data = json_response["data"]
+        assert "rowtype" in data
+        assert "rowset" in data
+        assert "rowsetBase64" in data
+        assert "total" in data
+        assert "returned" in data
+
+        # Verify data matches original query results
+        assert data["total"] == 1
+        assert data["returned"] == 1
+        assert len(data["rowset"]) == 1
+        assert data["rowset"][0] == [123, "test data"]
+
+
+def test_server_cache_eviction(sconn: snowflake.connector.SnowflakeConnection) -> None:
+    """Test LRU cache behavior when >50 entries."""
+    cur = sconn.cursor()
+
+    # Execute 52 distinct queries to trigger eviction
+    query_ids = []
+    for i in range(52):
+        cur.execute(f"select {i} as value")
+        query_ids.append(cur.sfqid)
+
+    # Verify first query is evicted from cache
+    with pytest.raises(
+        snowflake.connector.errors.ProgrammingError,
+        match="Statement.*not found|Cannot retrieve data on the status of this query",
+    ):
+        cur.execute(f"SELECT * FROM TABLE(RESULT_SCAN('{query_ids[0]}'))")
+
+    # Verify 51st and 52nd queries are still in cache
+    cur.execute(f"SELECT * FROM TABLE(RESULT_SCAN('{query_ids[50]}'))")
+    assert cur.fetchall() == [(50,)]
+
+    cur.execute(f"SELECT * FROM TABLE(RESULT_SCAN('{query_ids[51]}'))")
+    assert cur.fetchall() == [(51,)]
+
+
+def test_server_cache_empty_results(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    """Test caching of queries with no results."""
+    cur = scur
+
+    # Execute query returning 0 rows
+    cur.execute("SELECT * FROM (SELECT 1 AS id) WHERE 1=0")
+    empty_sfqid = cur.sfqid
+    assert cur.fetchall() == []
+    assert cur.rowcount == 0
+
+    # Use result_scan to retrieve cached empty results
+    cur.execute(f"SELECT * FROM TABLE(RESULT_SCAN('{empty_sfqid}'))")
+    cached_result = cur.fetchall()
+
+    # Verify empty result set is handled correctly
+    assert cached_result == []
+    assert cur.rowcount == 0
+
+
+def test_server_multiple_cached_queries(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    """Test multiple queries cached independently without cross-contamination."""
+    cur = scur
+
+    # Execute 3 different queries with distinct results
+    cur.execute("select 1 as first_query")
+    query_id_1 = cur.sfqid
+    result_1 = cur.fetchall()
+
+    cur.execute("select 'second' as second_query, 999 as number")
+    query_id_2 = cur.sfqid
+    result_2 = cur.fetchall()
+
+    cur.execute("select true as bool_col, 3.14 as pi")
+    query_id_3 = cur.sfqid
+    result_3 = cur.fetchall()
+
+    # Retrieve results in random order using result_scan
+    cur.execute(f"SELECT * FROM TABLE(RESULT_SCAN('{query_id_2}'))")
+    assert cur.fetchall() == result_2
+
+    cur.execute(f"SELECT * FROM TABLE(RESULT_SCAN('{query_id_1}'))")
+    assert cur.fetchall() == result_1
+
+    cur.execute(f"SELECT * FROM TABLE(RESULT_SCAN('{query_id_3}'))")
+    assert cur.fetchall() == result_3
+
+
+def test_server_get_cached_query_result_errors(server: dict) -> None:
+    """Test error handling in GET endpoint."""
+    # Connect to get a valid token
+    with snowflake.connector.connect(**server, database="db1", schema="schema1") as conn:
+        assert conn.rest and conn.rest.token
+        token = conn.rest.token
+
+        # Test 1: Non-existent query ID - should return 404 or error
+        non_existent_uuid = "00000000-0000-0000-0000-000000000000"
+        response = requests.get(
+            f"http://{server['host']}:{server['port']}/queries/{non_existent_uuid}/result",
+            headers={"Authorization": f'Snowflake Token="{token}"'},
+            timeout=5,
+        )
+
+        # The response should indicate the query was not found
+        # Snowflake returns success=false with an error code
+        assert response.status_code in [200, 404]
+        if response.status_code == 200:
+            json_response = response.json()
+            assert json_response["success"] is False
+
+        # Test 2: Invalid query ID format (not a UUID)
+        response = requests.get(
+            f"http://{server['host']}:{server['port']}/queries/not-a-uuid/result",
+            headers={"Authorization": f'Snowflake Token="{token}"'},
+            timeout=5,
+        )
+
+        # Should handle invalid UUID gracefully
+        assert response.status_code in [200, 400, 404]
+        if response.status_code == 200:
+            json_response = response.json()
+            assert json_response["success"] is False

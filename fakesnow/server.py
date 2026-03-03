@@ -192,6 +192,7 @@ async def query_request(request: Request) -> JSONResponse:
             cur._last_sql,  # noqa: SLF001
             cur._last_params,  # noqa: SLF001
             cur._last_transformed,  # noqa: SLF001
+            rowtype,  # rowtype needed for get_cached_query_result()
         )
         if len(conn.results_cache) > 50:
             conn.results_cache.popitem(last=False)  # Remove oldest item
@@ -236,12 +237,11 @@ async def get_cached_query_result(request: Request) -> JSONResponse:
             logger.error(f"[GET_RESULT] Query results not found for query_id={query_id}, cache keys: {list(conn.results_cache.keys())}")
             raise ServerError(status_code=404, code="000604", message=f"Query results not found for query_id: {query_id}")
 
-        # Unpack the cached tuple format (arrow_table, rowcount, last_sql, last_params, last_transformed)
-        arrow_table, rowcount, _, _, last_transformed = cached_tuple
+        # Unpack the cached tuple format (arrow_table, rowcount, last_sql, last_params, last_transformed, rowtype)
+        arrow_table, rowcount, _, _, _, rowtype = cached_tuple
 
         # Reconstruct response data from cached tuple
         if arrow_table:
-            rowtype = describe_as_rowtype(last_transformed) if last_transformed else []
             batch_bytes = to_ipc(to_sf(arrow_table, rowtype))
             rowset_b64 = b64encode(batch_bytes).decode("utf-8")
             rowset_json = [list(row.values()) for row in arrow_table.to_pylist()]

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections import OrderedDict
 from typing import Any
 
 import duckdb
@@ -25,7 +26,7 @@ class FakeSnow:
         self.db_path = db_path
         self.nop_regexes = nop_regexes
 
-        self.results_cache: dict[str, tuple] = {}
+        self.results_cache: OrderedDict[str, tuple] = OrderedDict()
         self.duck_conn = duckdb.connect(database=":memory:")
 
         # create a "global" database for storing objects which span databases.

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from collections import OrderedDict
 from collections.abc import Iterable
 from pathlib import Path
 from types import TracebackType
@@ -23,7 +24,7 @@ class FakeSnowflakeConnection:
     def __init__(
         self,
         duck_conn: DuckDBPyConnection,
-        results_cache: dict[str, tuple],
+        results_cache: OrderedDict[str, tuple],
         database: str | None = None,
         schema: str | None = None,
         create_database: bool = True,

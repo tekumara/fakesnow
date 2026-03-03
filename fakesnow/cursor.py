@@ -81,15 +81,15 @@ class FakeSnowflakeCursor:
         self._conn = conn
         self._duck_conn = duck_conn
         self._use_dict_result = use_dict_result
-        self._last_sql = None
-        self._last_params = None
-        self._last_transformed = None
-        self._sqlstate = None
+        self._last_sql: str | None = None
+        self._last_params: MutableParams | None = None
+        self._last_transformed: exp.Expression | None = None
+        self._sqlstate: str | None = None
         self._arraysize = 1
-        self._arrow_table = None
-        self._arrow_table_fetch_index = None
-        self._rowcount = None
-        self._sfqid = None
+        self._arrow_table: pyarrow.Table | None = None
+        self._arrow_table_fetch_index: int | None = None
+        self._rowcount: int | None = None
+        self._sfqid: str | None = None
         self._converter = snowflake.connector.converter.SnowflakeConverter()
         self._prefetch_hook: Callable[[], None] | None = None
 
@@ -213,8 +213,8 @@ class FakeSnowflakeCursor:
                     "Cannot retrieve data on the status of this query. "
                     "No information returned from server for query '{}'"
                 )
-            # Restore the cached result data
-            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed = value
+            # Restore the cached result data (6-tuple: arrow_table, rowcount, last_sql, last_params, last_transformed, rowtype)
+            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed, _ = value
             self._sfqid = sfqid
             self._arrow_table_fetch_index = None
             self._prefetch_hook = None
@@ -357,8 +357,8 @@ class FakeSnowflakeCursor:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"Statement {sfqid} not found", errno=709, sqlstate="02000"
                 )
-            # Restore the cached result data
-            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed = value
+            # Restore the cached result data (6-tuple: arrow_table, rowcount, last_sql, last_params, last_transformed, rowtype)
+            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed, _ = value
             self._sfqid = sfqid
             self._arrow_table_fetch_index = None
             return
