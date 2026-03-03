@@ -182,7 +182,17 @@ async def query_request(request: Request) -> JSONResponse:
         }
         
         # Store in cache, maintaining max 50 entries (LRU)
-        conn.results_cache[cur.sfqid] = cache_data
+        # Store internal tuple format expected by result_scan() and get_results_from_sfqid()
+        sfqid = cur.sfqid
+        if sfqid is None:
+            raise ServerError(status_code=500, code="261001", message="Missing query id after execution")
+        conn.results_cache[sfqid] = (
+            cur._arrow_table,  # noqa: SLF001
+            cur._rowcount,  # noqa: SLF001
+            cur._last_sql,  # noqa: SLF001
+            cur._last_params,  # noqa: SLF001
+            cur._last_transformed,  # noqa: SLF001
+        )
         if len(conn.results_cache) > 50:
             conn.results_cache.popitem(last=False)  # Remove oldest item
         logger.debug(f"[QUERY_REQUEST] Cached result for queryId={cur.sfqid}, cache size={len(conn.results_cache)}")
@@ -220,18 +230,47 @@ async def get_cached_query_result(request: Request) -> JSONResponse:
             raise ServerError(status_code=400, code="002003", message="Missing query_id in request path")
         
         # Retrieve from cache
-        cached_result = conn.results_cache.get(query_id)
+        cached_tuple = conn.results_cache.get(query_id)
 
-        if not cached_result:
+        if not cached_tuple:
             logger.error(f"[GET_RESULT] Query results not found for query_id={query_id}, cache keys: {list(conn.results_cache.keys())}")
             raise ServerError(status_code=404, code="000604", message=f"Query results not found for query_id: {query_id}")
 
-        rowtype = cached_result.get('rowtype')
-        has_rowset_b64 = bool(cached_result.get('rowsetBase64'))
-        rowset_count = len(cached_result.get('rowset', []))
-        total_rows = cached_result.get('total', 0)
-        
-        logger.debug(f"[GET_RESULT] Found cached result: rowtype={rowtype}, rows={rowset_count}/{total_rows}, has_rowset_b64={has_rowset_b64}")
+        # Unpack the cached tuple format (arrow_table, rowcount, last_sql, last_params, last_transformed)
+        arrow_table, rowcount, _, _, last_transformed = cached_tuple
+
+        # Reconstruct response data from cached tuple
+        if arrow_table:
+            rowtype = describe_as_rowtype(last_transformed) if last_transformed else []
+            batch_bytes = to_ipc(to_sf(arrow_table, rowtype))
+            rowset_b64 = b64encode(batch_bytes).decode("utf-8")
+            rowset_json = [list(row.values()) for row in arrow_table.to_pylist()]
+        else:
+            rowtype = []
+            rowset_b64 = ""
+            rowset_json = []
+
+        has_rowset_b64 = bool(rowset_b64)
+        rowset_count = len(rowset_json)
+
+        logger.debug(f"[GET_RESULT] Found cached result: rowtype={rowtype}, rows={rowset_count}/{rowcount}, has_rowset_b64={has_rowset_b64}")
+
+        cached_result = {
+            "parameters": [
+                {"name": "TIMEZONE", "value": "Etc/UTC"},
+            ],
+            "rowtype": rowtype,
+            "rowsetBase64": rowset_b64,
+            "rowset": rowset_json,
+            "total": rowcount,
+            "returned": rowcount,
+            "queryId": query_id,
+            "queryResultFormat": "arrow",
+            "version": 1,
+            "chunks": [],
+            "finalDatabaseName": conn.database,
+            "finalSchemaName": conn.schema,
+        }
 
         # For GET /queries/{query_id}/result endpoint:
         # Return cached result with both rowset (JSON) and rowsetBase64 (Arrow)
