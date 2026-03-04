@@ -3,6 +3,7 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+import os
 import secrets
 from base64 import b64encode
 from dataclasses import dataclass
@@ -36,7 +37,11 @@ class SafeJSONResponse(JSONResponse):
         return json.dumps(content, default=str).encode("utf-8")
 
 
-shared_fs = FakeSnow()
+# Instantiate a shared in-memory FakeSnow instance, or use the database path
+# specified in the environment variable FAKESNOW_DB_PATH. This allows multiple
+# connections to share the same in-memory database, while still allowing for
+# isolated databases if needed.
+shared_fs = FakeSnow(db_path=os.environ.get("FAKESNOW_DB_PATH"))
 sessions: dict[str, FakeSnowflakeConnection] = {}
 
 
