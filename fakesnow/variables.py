@@ -31,7 +31,7 @@ class Variables:
         return False
 
     def __init__(self) -> None:
-        self._variables = {}
+        self._variables: dict[str, str] = {}
 
     def update_variables(self, expr: exp.Expression) -> None:
         if isinstance(expr, exp.Set):

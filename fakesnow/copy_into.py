@@ -204,7 +204,7 @@ def _get_table_columns(
 
 
 def _params(expr: exp.Copy, params: MutableParams | None = None) -> CopyParams:
-    kwargs = {}
+    kwargs: dict[str, Any] = {}
     force = False
     purge = False
     on_error = "ABORT_STATEMENT"
@@ -381,7 +381,7 @@ def _inserts(
 
     if parquet_info and parquet_info.is_single_variant:
         # Single VARIANT column: convert entire parquet row to JSON
-        inserts = []
+        inserts: list[exp.Expression] = []
         for url in urls:
             parquet_col_names = parquet_info.parquet_columns[url]
 
@@ -543,6 +543,7 @@ class FileTypeHandler(Protocol):
 
     @staticmethod
     def make_eq(name: str, value: list | str | int | bool) -> exp.EQ:
+        expression: exp.Expression
         if isinstance(value, list):
             expression = exp.array(*[exp.Literal(this=str(v), is_string=isinstance(v, str)) for v in value])
         elif isinstance(value, bool):

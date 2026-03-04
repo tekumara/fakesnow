@@ -191,7 +191,7 @@ def show_keys(
 
     https://docs.snowflake.com/en/sql-reference/sql/show-primary-keys
     """
-    snowflake_kind = kind
+    snowflake_kind: str = kind
     if kind == "FOREIGN":
         snowflake_kind = "IMPORTED"
 
@@ -324,6 +324,7 @@ def show_schemas(expression: exp.Expression, current_database: str | None) -> ex
     See https://docs.snowflake.com/en/sql-reference/sql/show-schemas
     """
     if isinstance(expression, exp.Show) and expression.name.upper() == "SCHEMAS":
+        database: str | None
         if (ident := expression.find(exp.Identifier)) and isinstance(ident.this, str):
             database = ident.this
         else:
