@@ -40,6 +40,10 @@ dev = [
     "snowflake-connector-python[pandas, secure-local-storage]",
     "snowflake-sqlalchemy~=1.8.2",
     "twine~=6.1",
+    "types-boto3",
+    "types-pytz",
+    "types-requests",
+    "types-sqlalchemy",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
 notebook = ["duckdb-engine", "ipykernel", "jupysql"]
