@@ -11,6 +11,7 @@ from sqlalchemy.engine import Engine, create_engine
 import fakesnow
 import fakesnow.fixtures
 import tests.fixtures.moto
+from fakesnow.cursor import FakeSnowflakeCursor
 
 pytest_plugins = fakesnow.fixtures.__name__, tests.fixtures.moto.__name__
 
@@ -25,21 +26,21 @@ def conn(_fakesnow: None) -> Iterator[snowflake.connector.SnowflakeConnection]:
 
 
 @pytest.fixture
-def cur(conn: snowflake.connector.SnowflakeConnection) -> Iterator[snowflake.connector.cursor.SnowflakeCursor]:
+def cur(conn: snowflake.connector.SnowflakeConnection) -> Iterator[FakeSnowflakeCursor]:
     """
     Yield a snowflake cursor once per session.
     """
     with conn.cursor() as cur:
-        yield cur
+        yield cast(FakeSnowflakeCursor, cur)
 
 
 @pytest.fixture
-def dcur(conn: snowflake.connector.SnowflakeConnection) -> Iterator[snowflake.connector.cursor.DictCursor]:
+def dcur(conn: snowflake.connector.SnowflakeConnection) -> Iterator[FakeSnowflakeCursor]:
     """
-    Yield a snowflake cursor once per session.
+    Yield a snowflake dict cursor once per session.
     """
     with conn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        yield cast(snowflake.connector.cursor.DictCursor, cur)
+        yield cast(FakeSnowflakeCursor, cur)
 
 
 @pytest.fixture
@@ -81,24 +82,24 @@ def sconn(server: dict) -> Iterator[snowflake.connector.SnowflakeConnection]:
 @pytest.fixture
 def scur(
     sconn: snowflake.connector.SnowflakeConnection,
-) -> Iterator[snowflake.connector.cursor.SnowflakeCursor]:
+) -> Iterator[FakeSnowflakeCursor]:
     with sconn.cursor() as cur:
-        yield cur
+        yield cast(FakeSnowflakeCursor, cur)
 
 
 @pytest.fixture
 def sdcur(
     sconn: snowflake.connector.SnowflakeConnection,
-) -> Iterator[snowflake.connector.cursor.DictCursor]:
+) -> Iterator[FakeSnowflakeCursor]:
     with sconn.cursor(snowflake.connector.cursor.DictCursor) as cur:
-        yield cast(snowflake.connector.cursor.DictCursor, cur)
+        yield cast(FakeSnowflakeCursor, cur)
 
 
 @pytest.fixture()
-def s3_client(moto_session: boto3.Session, cur: snowflake.connector.cursor.SnowflakeCursor) -> S3Client:
+def s3_client(moto_session: boto3.Session, cur: FakeSnowflakeCursor) -> S3Client:
     """Configures duckdb to use the moto session and returns an s3 client."""
 
-    client = moto_session.client("s3")
+    client: S3Client = cast(S3Client, moto_session.client("s3"))
     endpoint_url = client.meta.endpoint_url
 
     creds = moto_session.get_credentials()
