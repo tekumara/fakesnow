@@ -67,20 +67,9 @@ class FakeSnow:
                 continue
 
             logger.info(f"Attaching existing database: {db_name} from {db_file}")
-            try:
-                self.duck_conn.execute(f"ATTACH DATABASE '{db_file}' AS {db_name}")
-            except duckdb.BinderException:
-                logger.error(f"Failed to attach database {db_name} from {db_file}. Continue.")
-            try:
-                self.duck_conn.execute(info_schema.per_db_creation_sql(db_name))
-            except duckdb.BinderException:
-                logger.error(f"Failed to execute info_schema creation SQL for database {db_name}. Continue.")
-            except duckdb.CatalogException:
-                logger.error(f"Failed to execute info_schema creation SQL for database {db_name} due to missing catalog. Continue.")
-            try:
-                self.duck_conn.execute(macros.creation_sql(db_name))
-            except duckdb.BinderException:
-                logger.error(f"Failed to execute macros creation SQL for database {db_name}. Continue.")
+            self.duck_conn.execute(f"ATTACH DATABASE '{db_file}' AS {db_name}")
+            self.duck_conn.execute(info_schema.per_db_creation_sql(db_name))
+            self.duck_conn.execute(macros.creation_sql(db_name))
 
     def connect(
         self,
