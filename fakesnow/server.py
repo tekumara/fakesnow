@@ -24,10 +24,15 @@ from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.rowtype import describe_as_rowtype
 
+# Configure parent logger so all fakesnow.* loggers inherit handlers and level
+fakesnow_logger = logging.getLogger("fakesnow")
+fakesnow_logger.handlers = logging.getLogger("uvicorn").handlers
+if os.environ.get("LOG_LEVEL", "").lower() == "debug":
+    fakesnow_logger.setLevel(logging.DEBUG)
+else:
+    fakesnow_logger.setLevel(logging.INFO)
+
 logger = logging.getLogger("fakesnow.server")
-# use same format as uvicorn
-logger.handlers = logging.getLogger("uvicorn").handlers
-logger.setLevel(logging.INFO)
 
 
 class SafeJSONResponse(JSONResponse):
