@@ -60,9 +60,10 @@ class FakeSnow:
 
             # Skip if already attached
             existing = self.duck_conn.execute(
-                f"SELECT * FROM information_schema.schemata WHERE upper(catalog_name) = '{db_name}'"
+                f"SELECT COUNT(*) FROM information_schema.schemata WHERE upper(catalog_name) = '{db_name}'"
             ).fetchone()
-            if existing:
+            logger.debug(f"Checking existing database {db_name}: [{existing}] attached")
+            if existing and existing[0] > 0:
                 logger.info(f"Database {db_name} already attached, skipping")
                 continue
 
