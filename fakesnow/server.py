@@ -37,11 +37,7 @@ class SafeJSONResponse(JSONResponse):
         return json.dumps(content, default=str).encode("utf-8")
 
 
-# Instantiate a shared in-memory FakeSnow instance, or use the database path
-# specified in the environment variable FAKESNOW_DB_PATH. This allows multiple
-# connections to share the same in-memory database, while still allowing for
-# isolated databases if needed.
-shared_fs = FakeSnow(db_path=os.environ.get("FAKESNOW_DB_PATH"))
+shared_fs = FakeSnow()
 sessions: dict[str, FakeSnowflakeConnection] = {}
 
 
@@ -63,7 +59,9 @@ async def login_request(request: Request) -> JSONResponse:
     nop_regexes = session_params.get("nop_regexes")
     autocommit = session_params.get("AUTOCOMMIT", True)
 
-    if db_path := session_params.get("FAKESNOW_DB_PATH"):
+    # Session parameters take precedence over environment variable for db path, so you can have some sessions share
+    # a database and others use isolated databases
+    if db_path := session_params.get("FAKESNOW_DB_PATH") or os.environ.get("FAKESNOW_DB_PATH"):
         # isolated creates a new in-memory database, rather than using the shared in-memory database
         # so this connection won't share any tables with other connections
         fs = FakeSnow() if db_path == ":isolated:" else FakeSnow(db_path=db_path)
