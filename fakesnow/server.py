@@ -36,7 +36,6 @@ class SafeJSONResponse(JSONResponse):
     def render(self, content: Any) -> bytes:
         return json.dumps(content, default=str).encode("utf-8")
 
-
 shared_fs = FakeSnow()
 sessions: dict[str, FakeSnowflakeConnection] = {}
 
@@ -59,15 +58,23 @@ async def login_request(request: Request) -> JSONResponse:
     nop_regexes = session_params.get("nop_regexes")
     autocommit = session_params.get("AUTOCOMMIT", True)
 
-    # Session parameters take precedence over environment variable for db path, so you can have some sessions share
-    # a database and others use isolated databases
-    if db_path := session_params.get("FAKESNOW_DB_PATH") or os.environ.get("FAKESNOW_DB_PATH"):
-        # isolated creates a new in-memory database, rather than using the shared in-memory database
-        # so this connection won't share any tables with other connections
-        fs = FakeSnow() if db_path == ":isolated:" else FakeSnow(db_path=db_path)
-    else:
-        # share the in-memory database across connections
+    # Session parameters take precedence over environment variable for db path, this allow you to have some sessions
+    # share a database and others use isolated databases
+    db_path = session_params.get("FAKESNOW_DB_PATH") or os.environ.get("FAKESNOW_DB_PATH")
+    if db_path is None:
+        # Use the shared in-memory database. This is shared across all sessions and is cleared when the server restarts.
+        # Useful for sharing data between sessions without needing to manage database files.
         fs = shared_fs
+    elif db_path == ":isolated:":
+        # Explicitly setting FAKESNOW_DB_PATH = ":isolated:", creates a new isolated database in memory for every login.
+        # Connection close is triggered by the context manager when hitting FakeSnowflakeConnection.__exit__()
+        # If used outside of a context manager, users will need to manually close the connection when they're done with
+        # it to release resources.
+        fs = FakeSnow()
+    else:
+        # Use the set value for db_path. This instructs fakesnow to persist databases to the filesystem, making it
+        # persistent across server restarts.
+        fs = FakeSnow(db_path=db_path)
     token = secrets.token_urlsafe(32)
     logger.info(f"[LOGIN] database={database} schema={schema} autocommit={autocommit} nop_regexes={nop_regexes}")
     sessions[token] = fs.connect(database, schema, nop_regexes=nop_regexes, autocommit=autocommit)
@@ -319,6 +326,7 @@ async def session(request: Request) -> JSONResponse:
 
         if bool(request.query_params.get("delete")):
             logger.info(f"[SESSION] DELETE session")
+            sessions[token]._duck_conn.close()  # Close the duckdb connection to release resources
             del sessions[token]
         else:
             logger.debug(f"[SESSION] HEARTBEAT")
