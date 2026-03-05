@@ -59,15 +59,15 @@ class FakeSnow:
             db_name = db_file.stem.upper()
 
             # Skip if already attached
-            if self.duck_conn.execute(
-                f"SELECT * FROM information_schema.schemata WHERE upper(catalog_name) = ?",
-                parameters=(db_name,)
-            ).fetchone():
+            existing = self.duck_conn.execute(
+                f"SELECT * FROM information_schema.schemata WHERE upper(catalog_name) = '{db_name}'"
+            ).fetchone()
+            if existing:
                 logger.info(f"Database {db_name} already attached, skipping")
                 continue
 
             logger.info(f"Attaching existing database: {db_name} from {db_file}")
-            self.duck_conn.execute(f"ATTACH DATABASE ? AS ?", parameters=(str(db_file), db_name))
+            self.duck_conn.execute(f"ATTACH DATABASE '{db_file}' AS {db_name}")
             self.duck_conn.execute(info_schema.per_db_creation_sql(db_name))
             self.duck_conn.execute(macros.creation_sql(db_name))
 
