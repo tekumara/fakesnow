@@ -36,6 +36,7 @@ class SafeJSONResponse(JSONResponse):
     def render(self, content: Any) -> bytes:
         return json.dumps(content, default=str).encode("utf-8")
 
+logger.info(f"Creating shared in-memory database for session")
 shared_fs = FakeSnow()
 sessions: dict[str, FakeSnowflakeConnection] = {}
 
@@ -64,16 +65,19 @@ async def login_request(request: Request) -> JSONResponse:
     if db_path is None:
         # Use the shared in-memory database. This is shared across all sessions and is cleared when the server restarts.
         # Useful for sharing data between sessions without needing to manage database files.
+        logger.info(f"Using shared in-memory database for session")
         fs = shared_fs
     elif db_path == ":isolated:":
         # Explicitly setting FAKESNOW_DB_PATH = ":isolated:", creates a new isolated database in memory for every login.
         # Connection close is triggered by the context manager when hitting FakeSnowflakeConnection.__exit__()
         # If used outside of a context manager, users will need to manually close the connection when they're done with
         # it to release resources.
+        logger.info(f"Using isolated in-memory database for session")
         fs = FakeSnow()
     else:
         # Use the set value for db_path. This instructs fakesnow to persist databases to the filesystem, making it
         # persistent across server restarts.
+        logger.info(f"Using persistent database at {db_path} for session")
         fs = FakeSnow(db_path=db_path)
     token = secrets.token_urlsafe(32)
     logger.info(f"[LOGIN] database={database} schema={schema} autocommit={autocommit} nop_regexes={nop_regexes}")
