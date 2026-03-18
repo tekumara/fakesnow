@@ -55,6 +55,7 @@ from fakesnow.transforms.transforms import (
     json_extract_cased_as_varchar as json_extract_cased_as_varchar,
     json_extract_cast_as_varchar as json_extract_cast_as_varchar,
     json_extract_precedence as json_extract_precedence,
+    object_agg as object_agg,
     object_construct as object_construct,
     random as random,
     regex_replace as regex_replace,

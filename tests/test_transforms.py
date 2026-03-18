@@ -28,6 +28,7 @@ from fakesnow.transforms import (
     json_extract_cased_as_varchar,
     json_extract_cast_as_varchar,
     json_extract_precedence,
+    object_agg,
     object_construct,
     random,
     regex_replace,
@@ -129,6 +130,30 @@ def test_array_agg_within_group() -> None:
     assert (
         sqlglot.parse_one("SELECT ARRAY_AGG(id) FROM example").transform(array_agg_within_group).sql(dialect="duckdb")
         == "SELECT ARRAY_AGG(id) FROM example"
+    )
+
+
+def test_object_agg() -> None:
+    expected = "SELECT TO_JSON(MAP(LIST(key_col) FILTER(WHERE NOT key_col IS NULL AND NOT value_col IS NULL), LIST(value_col) FILTER(WHERE NOT key_col IS NULL AND NOT value_col IS NULL))) FROM test_table"  # noqa: E501
+    assert (
+        sqlglot.parse_one("SELECT OBJECT_AGG(key_col, value_col) FROM test_table")
+        .transform(object_agg)
+        .sql(dialect="duckdb")
+        == expected
+    )
+
+    expected = "SELECT TO_JSON(MAP(LIST(key_col) FILTER(WHERE NOT key_col IS NULL AND NOT value_col IS NULL), LIST(value_col) FILTER(WHERE NOT key_col IS NULL AND NOT value_col IS NULL))) AS obj FROM test_table GROUP BY id"  # noqa: E501
+    assert (
+        sqlglot.parse_one("SELECT OBJECT_AGG(key_col, value_col) AS obj FROM test_table GROUP BY id")
+        .transform(object_agg)
+        .sql(dialect="duckdb")
+        == expected
+    )
+
+    # no transformation when no OBJECT_AGG
+    assert (
+        sqlglot.parse_one("SELECT id FROM test_table").transform(object_agg).sql(dialect="duckdb")
+        == "SELECT id FROM test_table"
     )
 
 
