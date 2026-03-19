@@ -26,6 +26,7 @@ from typing_extensions import Self
 import fakesnow.checks as checks
 import fakesnow.expr as expr
 import fakesnow.info_schema as info_schema
+import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 from fakesnow import logger
 from fakesnow.copy_into import copy_into
@@ -273,6 +274,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.flatten_value_cast_as_varchar)
             .transform(transforms.flatten)
             .transform(transforms.regex_replace)
+            .transform(transforms.regex_like)
             .transform(transforms.regex_substr)
             .transform(transforms.result_scan)
             .transform(transforms.sequence_nextval)
@@ -440,8 +442,9 @@ class FakeSnowflakeCursor:
             self._conn.autocommit(set_autocommit)
 
         elif create_db_name := transformed.args.get("create_db_name"):
-            # we created a new database, so create the info schema extensions
+            # we created a new database, so create the info schema extensions and macros
             self._duck_conn.execute(info_schema.per_db_creation_sql(create_db_name))
+            self._duck_conn.execute(macros.creation_sql(create_db_name))
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
         elif stage_name := transformed.args.get("create_stage_name"):

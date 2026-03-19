@@ -856,6 +856,36 @@ def regex_replace(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def regex_like(expression: exp.Expression) -> exp.Expression:
+    """Transform REGEXP / RLIKE expressions from snowflake to duckdb.
+
+    Snowflake: column REGEXP 'pattern'   /  column RLIKE 'pattern'
+    DuckDB:    regexp_matches(column, 'pattern')
+
+    Also handles NOT REGEXP / NOT RLIKE via exp.Not wrapping.
+    See https://docs.snowflake.com/en/sql-reference/functions/regexp
+    """
+
+    if isinstance(expression, exp.RegexpLike):
+        subject = expression.this
+        pattern = expression.expression
+
+        # snowflake requires escaping backslashes, duckdb doesn't
+        if isinstance(pattern, exp.Literal) and pattern.is_string:
+            pattern = exp.Literal(this=pattern.this.replace("\\\\", "\\"), is_string=True)
+
+        # optional flags parameter (3rd arg)
+        flags = expression.args.get("flag")
+
+        args = [subject, pattern]
+        if flags:
+            args.append(flags)
+
+        return exp.Anonymous(this="regexp_matches", expressions=args)
+
+    return expression
+
+
 def regex_substr(expression: exp.Expression) -> exp.Expression:
     """Transform regex_substr expressions from snowflake to duckdb.
 

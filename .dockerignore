@@ -1,0 +1,113 @@
+# Dockerfile ignore patterns
+
+# Git files
+.git
+.gitignore
+.gitattributes
+
+# GitHub files
+.github/
+
+# Documentation (keep README.md and LICENSE - needed by pyproject.toml)
+CHANGELOG.md
+CONTRIBUTING.md
+docs/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+.env
+.venv/
+venv/
+ENV/
+env.bak/
+venv.bak/
+.pytest_cache/
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+.eggs/
+.coverage
+htmlcov/
+.tox/
+.nox/
+
+# Logs
+*.log
+logs/
+log/
+
+# Database files (exclude existing databases from image)
+databases/
+*.db
+*.sqlite
+*.sqlite3
+
+# Test files
+tests/
+test_*.py
+*_test.py
+
+# Development tools
+.pre-commit-config.yaml
+.ruff.toml
+.mypy.ini
+setup.cfg
+setup.py
+
+# Notebooks (unless needed for examples)
+notebooks/
+*.ipynb
+
+# Docker files (don't include in context)
+Dockerfile*
+docker-compose*.yml
+.dockerignore
+
+# CI/CD
+.travis.yml
+.circleci/
+.gitlab-ci.yml
+Jenkinsfile
+
+# Temporary files
+tmp/
+temp/
+*.tmp
+*.bak
+
+# Virtual environments
+pipenv/
+poetry.lock
+
+# Release files
+release-please-config.json
+toast.yml
+
+# Tools
+tools/
+
+# Makefile (development only)
+Makefile*
