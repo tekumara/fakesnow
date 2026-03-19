@@ -47,6 +47,36 @@ dist:
 publish:
 	uv run twine upload dist/*
 
+## Docker Hub image name (override with DOCKER_IMAGE=myrepo/fakesnow)
+DOCKER_IMAGE ?= so/fakesnow
+DOCKER_VERSION := $(shell grep '^version' pyproject.toml | head -1 | sed 's/version = "//;s/"//')
+DOCKER_COMMIT := $(shell git rev-parse --short HEAD 2>/dev/null || echo unknown)
+
+## build docker image (local, current platform)
+docker-build:
+	docker build \
+		--build-arg VERSION=$(DOCKER_VERSION) \
+		--build-arg GIT_COMMIT=$(DOCKER_COMMIT) \
+		-t $(DOCKER_IMAGE):$(DOCKER_VERSION) \
+		-t $(DOCKER_IMAGE):latest \
+		.
+
+## push docker image to Docker Hub (requires docker login)
+docker-push: docker-build
+	docker push $(DOCKER_IMAGE):$(DOCKER_VERSION)
+	docker push $(DOCKER_IMAGE):latest
+
+## build and push multi-platform image to Docker Hub (requires docker buildx and docker login)
+docker-buildx:
+	docker buildx build \
+		--platform linux/amd64,linux/arm64 \
+		--build-arg VERSION=$(DOCKER_VERSION) \
+		--build-arg GIT_COMMIT=$(DOCKER_COMMIT) \
+		-t $(DOCKER_IMAGE):$(DOCKER_VERSION) \
+		-t $(DOCKER_IMAGE):latest \
+		--push \
+		.
+
 ## run pre-commit git hooks on all files
 hooks:
 	uv run pre-commit run --color=always --all-files --hook-stage push

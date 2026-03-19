@@ -48,6 +48,12 @@ Thumbs.db
 build/
 dist/
 *.egg-info/
+
+# Test and notebook files
+tests/
+notebooks/
+tools/
+
 .eggs/
 .coverage
 htmlcov/

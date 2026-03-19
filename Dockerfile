@@ -1,4 +1,7 @@
 # Multi-stage Dockerfile for fakesnow
+ARG VERSION=dev
+ARG GIT_COMMIT=unknown
+
 FROM python:3.11-slim AS builder
 
 # Install build dependencies
@@ -58,6 +61,16 @@ RUN chmod +x /app/docker-entrypoint.sh
 
 # Switch to non-root user
 USER fakesnow
+
+# OCI image labels
+ARG VERSION
+ARG GIT_COMMIT
+LABEL org.opencontainers.image.title="fakesnow" \
+      org.opencontainers.image.description="Fake Snowflake Connector for Python. Run, mock and test Snowflake DB locally." \
+      org.opencontainers.image.source="https://github.com/tekumara/fakesnow" \
+      org.opencontainers.image.licenses="MIT" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.revision="${GIT_COMMIT}"
 
 # Expose port (default 8080, configurable via environment)
 EXPOSE 8080
