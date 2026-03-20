@@ -1,18 +1,32 @@
 from string import Template
 
-# emulate the Snowflake FLATTEN function for ARRAYs
+# emulate the Snowflake FLATTEN function for ARRAYs and OBJECTTs
 # see https://docs.snowflake.com/en/sql-reference/functions/flatten.html
 FS_FLATTEN = Template(
     """
 CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input) AS TABLE
     SELECT
-        NULL AS SEQ, -- TODO use a sequence and nextval
-        CAST(NULL AS VARCHAR) AS KEY,
-        '[' || (idx - 1) || ']' AS PATH,
-        idx - 1 AS INDEX,
-        value AS VALUE,
+        -- SEQ: hash of input gives same value for all rows from same input, close enough to Snowflake's SEQ
+        hash(TO_JSON(input))::UBIGINT AS SEQ,
+        e.k AS KEY,
+        COALESCE(e.k, '[' || (row_number() OVER () - 1) || ']') AS PATH,
+        CASE WHEN e.k IS NOT NULL THEN NULL ELSE (row_number() OVER () - 1)::BIGINT END AS INDEX,
+        e.v AS VALUE,
         TO_JSON(input) AS THIS
-    FROM UNNEST(CAST(TO_JSON(input) AS JSON [])) WITH ORDINALITY AS t(value, idx)
+    FROM (
+        SELECT UNNEST(
+            CASE WHEN json_type(TO_JSON(input)) = 'OBJECT'
+                 THEN list_transform(
+                    json_keys(TO_JSON(input)),
+                    x -> struct_pack(k := x, v := CAST(TO_JSON(input) -> x AS JSON))
+                 )
+                 ELSE list_transform(
+                    CAST(TO_JSON(input) AS JSON[]),
+                    x -> struct_pack(k := NULL::VARCHAR, v := x)
+                 )
+            END, recursive := true
+        )
+    ) AS e(k, v)
     """
 )
 
