@@ -45,6 +45,15 @@ def test_alter_table(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.execute("alter table table1 cluster by (name)").fetchall() == [
         {"status": "Statement executed successfully."}
     ]
+    assert dcur.execute("alter table table1 resume recluster").fetchall() == [
+        {"status": "Statement executed successfully."}
+    ]
+    assert dcur.execute("alter table table1 suspend recluster").fetchall() == [
+        {"status": "Statement executed successfully."}
+    ]
+    assert dcur.execute("alter table table1 drop clustering key").fetchall() == [
+        {"status": "Statement executed successfully."}
+    ]
 
 
 def test_array_size(cur: snowflake.connector.cursor.SnowflakeCursor):
