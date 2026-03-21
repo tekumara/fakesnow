@@ -45,6 +45,7 @@ from fakesnow.transforms import (
     to_date,
     to_decimal,
     to_timestamp,
+    to_variant,
     trim_cast_varchar,
     try_parse_json,
     upper_case_unquoted_identifiers,
@@ -763,6 +764,20 @@ def test_to_timestamp() -> None:
         .transform(to_timestamp)
         .sql(dialect="duckdb")
         == "SELECT _FS_TO_TIMESTAMP(1752253006000, 3)"
+    )
+
+
+def test_to_variant() -> None:
+    assert (
+        sqlglot.parse_one("SELECT TO_VARIANT('hello')", read="snowflake").transform(to_variant).sql(dialect="duckdb")
+        == "SELECT TO_JSON('hello')"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT TO_VARIANT(OBJECT_CONSTRUCT('a', 1, 'b', 2))", read="snowflake")
+        .transform(to_variant)
+        .sql(dialect="duckdb")
+        == "SELECT TO_JSON({'a': 1, 'b': 2})"
     )
 
 
