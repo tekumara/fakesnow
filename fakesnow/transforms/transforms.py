@@ -1175,14 +1175,6 @@ def to_variant(expression: exp.Expression) -> exp.Expression:
     """Convert to_variant to to_json.
 
     See https://docs.snowflake.com/en/sql-reference/functions/to_variant
-
-    There is no type in DuckDB to resemble Snowflake's VARIANT. VARIANT can store
-    arbitrary data types including structured data. Regardless of the underlying
-    data type, VARIANT columns enable structured access, e.g.:
-
-        SELECT TO_VARIANT('hello') AS D, TYPEOF(D), D:SOMEFIELD;
-
-    No equivalent in DuckDB, so we use JSON instead.
     """
 
     if isinstance(expression, exp.Anonymous) and expression.this.upper() == "TO_VARIANT":

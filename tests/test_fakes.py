@@ -122,7 +122,7 @@ def test_object_agg(dcur: snowflake.connector.cursor.DictCursor):
     values = [(1, "a", "x"), (1, "b", "y"), (2, "c", "z")]
     dcur.executemany("insert into test_table values (%s, %s, %s)", values)
 
-    dcur.execute("select id, object_agg(key_col, value_col) as obj from test_table group by id order by id")
+    dcur.execute("select id, object_agg(key_col, to_variant(value_col)) as obj from test_table group by id order by id")
     assert dindent(dcur.fetchall()) == [
         {"ID": 1, "OBJ": '{\n  "a": "x",\n  "b": "y"\n}'},
         {"ID": 2, "OBJ": '{\n  "c": "z"\n}'},
@@ -134,7 +134,7 @@ def test_object_agg_skips_nulls(dcur: snowflake.connector.cursor.DictCursor):
     values = [(1, "a", "x"), (1, "b", None), (1, "c", "z")]
     dcur.executemany("insert into test_table values (%s, %s, %s)", values)
 
-    dcur.execute("select id, object_agg(key_col, value_col) as obj from test_table group by id order by id")
+    dcur.execute("select id, object_agg(key_col, to_variant(value_col)) as obj from test_table group by id order by id")
     assert dindent(dcur.fetchall()) == [
         {"ID": 1, "OBJ": '{\n  "a": "x",\n  "c": "z"\n}'},
     ]
