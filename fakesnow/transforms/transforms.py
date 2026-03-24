@@ -78,6 +78,37 @@ def array_agg(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
+def object_agg(expression: exp.Expression) -> exp.Expression:
+    """Convert OBJECT_AGG(key, value) to DuckDB equivalent.
+
+    Snowflake's OBJECT_AGG aggregates key-value pairs into a JSON object, skipping rows
+    where the key or value is NULL.
+
+    See https://docs.snowflake.com/en/sql-reference/functions/object_agg
+    """
+    if isinstance(expression, exp.ObjectAgg):
+        key = expression.this.copy()
+        value = expression.expression.copy()
+
+        value_not_null = exp.Not(this=exp.Is(this=value.copy(), expression=exp.Null()))
+        key_not_null = exp.Not(this=exp.Is(this=key.copy(), expression=exp.Null()))
+        not_null = exp.And(this=key_not_null, expression=value_not_null)
+
+        list_key = exp.Filter(
+            this=exp.Anonymous(this="LIST", expressions=[key]),
+            expression=exp.Where(this=not_null),
+        )
+        list_val = exp.Filter(
+            this=exp.Anonymous(this="LIST", expressions=[value]),
+            expression=exp.Where(this=not_null.copy()),
+        )
+
+        map_expr = exp.Anonymous(this="MAP", expressions=[list_key, list_val])
+        return exp.Anonymous(this="TO_JSON", expressions=[map_expr])
+
+    return expression
+
+
 def array_agg_within_group(expression: exp.Expression) -> exp.Expression:
     """Convert ARRAY_AGG(<expr>) WITHIN GROUP (<order-by-clause>) to ARRAY_AGG( <expr> <order-by-clause> )
     Snowflake uses ARRAY_AGG(<expr>) WITHIN GROUP (ORDER BY <order-by-clause>)
@@ -1136,6 +1167,20 @@ def to_timestamp(expression: exp.Expression) -> exp.Expression:
         exp.DataType.Type.TIMESTAMPNTZ,
     ):
         return exp.Anonymous(this="_fs_to_timestamp", expressions=[expression.this, default_scale])
+
+    return expression
+
+
+def to_variant(expression: exp.Expression) -> exp.Expression:
+    """Convert to_variant to to_json.
+
+    See https://docs.snowflake.com/en/sql-reference/functions/to_variant
+    """
+
+    if isinstance(expression, exp.Anonymous) and expression.this.upper() == "TO_VARIANT":
+        new = expression.copy()
+        new.args["this"] = "TO_JSON"
+        return new
 
     return expression
 

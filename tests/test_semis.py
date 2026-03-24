@@ -127,6 +127,26 @@ def test_object_construct(conn: snowflake.connector.SnowflakeConnection):
         assert json.loads(result[1]) == json.loads('{\n  "k1": "v1",\n  "k2": "v2",\n  "k3": "v3"\n}')
 
 
+def test_to_variant(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("SELECT TO_VARIANT('hello')")
+        result = cur.fetchone()
+        assert isinstance(result, tuple)
+        assert json.loads(result[0]) == "hello"
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT TO_VARIANT(OBJECT_CONSTRUCT('a', 1, 'b', 'BBBB'))")
+        result = cur.fetchone()
+        assert isinstance(result, tuple)
+        assert json.loads(result[0]) == {"a": 1, "b": "BBBB"}
+
+    with conn.cursor() as cur:
+        cur.execute("SELECT TO_VARIANT(42)")
+        result = cur.fetchone()
+        assert isinstance(result, tuple)
+        assert json.loads(result[0]) == 42
+
+
 def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table semis (emails array, names object, notes variant)")
     cur.execute(

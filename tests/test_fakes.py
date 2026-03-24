@@ -45,6 +45,15 @@ def test_alter_table(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.execute("alter table table1 cluster by (name)").fetchall() == [
         {"status": "Statement executed successfully."}
     ]
+    assert dcur.execute("alter table table1 resume recluster").fetchall() == [
+        {"status": "Statement executed successfully."}
+    ]
+    assert dcur.execute("alter table table1 suspend recluster").fetchall() == [
+        {"status": "Statement executed successfully."}
+    ]
+    assert dcur.execute("alter table table1 drop clustering key").fetchall() == [
+        {"status": "Statement executed successfully."}
+    ]
 
 
 def test_array_size(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -114,6 +123,29 @@ def test_array_agg_within_group(dcur: snowflake.connector.cursor.DictCursor):
     assert dindent(rows) == [
         {"ID": 1, "AMOUNTS": "[\n  10,\n  20,\n  30\n]"},
         {"ID": 2, "AMOUNTS": "[\n  40,\n  50\n]"},
+    ]
+
+
+def test_object_agg(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create table test_table (id number, key_col varchar, value_col varchar)")
+    values = [(1, "a", "x"), (1, "b", "y"), (2, "c", "z")]
+    dcur.executemany("insert into test_table values (%s, %s, %s)", values)
+
+    dcur.execute("select id, object_agg(key_col, to_variant(value_col)) as obj from test_table group by id order by id")
+    assert dindent(dcur.fetchall()) == [
+        {"ID": 1, "OBJ": '{\n  "a": "x",\n  "b": "y"\n}'},
+        {"ID": 2, "OBJ": '{\n  "c": "z"\n}'},
+    ]
+
+
+def test_object_agg_skips_nulls(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create table test_table (id number, key_col varchar, value_col varchar)")
+    values = [(1, "a", "x"), (1, "b", None), (1, "c", "z")]
+    dcur.executemany("insert into test_table values (%s, %s, %s)", values)
+
+    dcur.execute("select id, object_agg(key_col, to_variant(value_col)) as obj from test_table group by id order by id")
+    assert dindent(dcur.fetchall()) == [
+        {"ID": 1, "OBJ": '{\n  "a": "x",\n  "c": "z"\n}'},
     ]
 
 
