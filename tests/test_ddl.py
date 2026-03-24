@@ -23,7 +23,44 @@ def test_alter_table_add_multiple_columns() -> None:
 
 
 def test_alter_table_strip_cluster_by() -> None:
+    success_sql = "SELECT 'Statement executed successfully.' AS status"
+
+    # ALTER TABLE ... CLUSTER BY
     assert (
         sqlglot.parse_one("alter table table1 cluster by (name)").transform(alter_table_strip_cluster_by).sql()
-        == "SELECT 'Statement executed successfully.' AS status"
+        == success_sql
     )
+
+    # ALTER TABLE ... CLUSTER BY with multiple columns
+    assert (
+        sqlglot.parse_one("alter table table1 cluster by (name, id)").transform(alter_table_strip_cluster_by).sql()
+        == success_sql
+    )
+
+    # ALTER TABLE ... DROP CLUSTERING KEY
+    assert (
+        sqlglot.parse_one("alter table table1 drop clustering key", read="snowflake")
+        .transform(alter_table_strip_cluster_by)
+        .sql()
+        == success_sql
+    )
+
+    # ALTER TABLE ... RESUME RECLUSTER
+    assert (
+        sqlglot.parse_one("alter table table1 resume recluster", read="snowflake")
+        .transform(alter_table_strip_cluster_by)
+        .sql()
+        == success_sql
+    )
+
+    # ALTER TABLE ... SUSPEND RECLUSTER
+    assert (
+        sqlglot.parse_one("alter table table1 suspend recluster", read="snowflake")
+        .transform(alter_table_strip_cluster_by)
+        .sql()
+        == success_sql
+    )
+
+    # Regular ALTER TABLE should not be affected
+    regular_alter = sqlglot.parse_one("alter table table1 add column name varchar(20)")
+    assert regular_alter.transform(alter_table_strip_cluster_by).sql() != success_sql
