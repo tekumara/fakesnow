@@ -28,6 +28,7 @@ from fakesnow.transforms import (
     json_extract_cased_as_varchar,
     json_extract_cast_as_varchar,
     json_extract_precedence,
+    object_agg,
     object_construct,
     random,
     regex_replace,
@@ -45,6 +46,7 @@ from fakesnow.transforms import (
     to_date,
     to_decimal,
     to_timestamp,
+    to_variant,
     trim_cast_varchar,
     try_parse_json,
     upper_case_unquoted_identifiers,
@@ -129,6 +131,30 @@ def test_array_agg_within_group() -> None:
     assert (
         sqlglot.parse_one("SELECT ARRAY_AGG(id) FROM example").transform(array_agg_within_group).sql(dialect="duckdb")
         == "SELECT ARRAY_AGG(id) FROM example"
+    )
+
+
+def test_object_agg() -> None:
+    expected = "SELECT TO_JSON(MAP(LIST(key_col) FILTER(WHERE NOT key_col IS NULL AND NOT value_col IS NULL), LIST(value_col) FILTER(WHERE NOT key_col IS NULL AND NOT value_col IS NULL))) FROM test_table"  # noqa: E501
+    assert (
+        sqlglot.parse_one("SELECT OBJECT_AGG(key_col, value_col) FROM test_table")
+        .transform(object_agg)
+        .sql(dialect="duckdb")
+        == expected
+    )
+
+    expected = "SELECT TO_JSON(MAP(LIST(key_col) FILTER(WHERE NOT key_col IS NULL AND NOT value_col IS NULL), LIST(value_col) FILTER(WHERE NOT key_col IS NULL AND NOT value_col IS NULL))) AS obj FROM test_table GROUP BY id"  # noqa: E501
+    assert (
+        sqlglot.parse_one("SELECT OBJECT_AGG(key_col, value_col) AS obj FROM test_table GROUP BY id")
+        .transform(object_agg)
+        .sql(dialect="duckdb")
+        == expected
+    )
+
+    # no transformation when no OBJECT_AGG
+    assert (
+        sqlglot.parse_one("SELECT id FROM test_table").transform(object_agg).sql(dialect="duckdb")
+        == "SELECT id FROM test_table"
     )
 
 
@@ -763,6 +789,20 @@ def test_to_timestamp() -> None:
         .transform(to_timestamp)
         .sql(dialect="duckdb")
         == "SELECT _FS_TO_TIMESTAMP(1752253006000, 3)"
+    )
+
+
+def test_to_variant() -> None:
+    assert (
+        sqlglot.parse_one("SELECT TO_VARIANT('hello')", read="snowflake").transform(to_variant).sql(dialect="duckdb")
+        == "SELECT TO_JSON('hello')"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT TO_VARIANT(OBJECT_CONSTRUCT('a', 1, 'b', 2))", read="snowflake")
+        .transform(to_variant)
+        .sql(dialect="duckdb")
+        == "SELECT TO_JSON({'a': 1, 'b': 2})"
     )
 
 
