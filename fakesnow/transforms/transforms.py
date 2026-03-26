@@ -512,11 +512,11 @@ def extract_text_length(expression: exp.Expression) -> exp.Expression:
 
 
 def flatten(expression: exp.Expression) -> exp.Expression:
-    """Flatten an array.
+    """Flatten an array or object.
 
     See https://docs.snowflake.com/en/sql-reference/functions/flatten
 
-    TODO: support objects.
+    Supports both JSON arrays and JSON objects via the _fs_flatten macro.
     """
     if (isinstance(expression, (exp.Lateral, exp.TableFromRows))) and isinstance(expression.this, exp.Explode):
         input_ = (
