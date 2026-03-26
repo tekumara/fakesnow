@@ -63,14 +63,53 @@ def alter_table_add_multiple_columns(
     return alter_statements
 
 
+def _is_alter_table_cluster_by(expression: exp.Expression) -> bool:
+    if not isinstance(expression, exp.Alter):
+        return False
+    actions = expression.actions
+    if not actions or len(actions) != 1:
+        return False
+    return isinstance(actions[0], exp.Cluster)
+
+
+def _is_alter_table_drop_clustering_key(expression: exp.Expression) -> bool:
+    if not isinstance(expression, exp.Alter):
+        return False
+    actions = expression.actions
+    if not (actions and len(actions) == 1 and isinstance(actions[0], exp.Command)):
+        return False
+    action = actions[0]
+    return (
+        isinstance(action.this, str)
+        and action.this.upper() == "DROP"
+        and isinstance(action.expression, str)
+        and "CLUSTERING" in action.expression.upper()
+    )
+
+
+def _is_alter_table_recluster(expression: exp.Expression) -> bool:
+    if not (isinstance(expression, exp.Command) and isinstance(expression.this, str)):
+        return False
+    if expression.this.upper() != "ALTER":
+        return False
+    text = expression.expression
+    return isinstance(text, str) and ("RESUME RECLUSTER" in text.upper() or "SUSPEND RECLUSTER" in text.upper())
+
+
 def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
-    """Turn alter table cluster by into a no-op"""
-    if (
-        isinstance(expression, exp.Alter)
-        and (actions := expression.args.get("actions"))
-        and len(actions) == 1
-        and (isinstance(actions[0], exp.Cluster))
-    ):
+    """Turn Snowflake clustering operations into a no-op.
+
+    DuckDB doesn't support clustering, so the following statements are ignored:
+    - ALTER TABLE ... CLUSTER BY (col1, col2)
+    - ALTER TABLE ... DROP CLUSTERING KEY
+    - ALTER TABLE ... RESUME RECLUSTER
+    - ALTER TABLE ... SUSPEND RECLUSTER
+    """
+    if _is_alter_table_cluster_by(expression):
+        return SUCCESS_NOP
+    if _is_alter_table_drop_clustering_key(expression):
+        return SUCCESS_NOP
+    if _is_alter_table_recluster(expression):
         return SUCCESS_NOP
     return expression
 
