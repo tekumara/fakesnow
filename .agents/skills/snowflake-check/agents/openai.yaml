@@ -1,0 +1,7 @@
+interface:
+  display_name: "Snowflake Check"
+  short_description: "Check branch diff tests on live Snowflake"
+  default_prompt: "Use $snowflake-check to inspect the `main...HEAD` diff, identify new tests, validate the live-applicable behavior on real Snowflake, and summarize failures and behavioral differences."
+
+policy:
+  allow_implicit_invocation: true
