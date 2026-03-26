@@ -2,6 +2,21 @@
 
 # Changelog
 
+## [0.11.4](https://github.com/tekumara/fakesnow/compare/v0.11.3...v0.11.4) (2026-03-26)
+
+
+### Features
+
+* add object_agg transformation ([#315](https://github.com/tekumara/fakesnow/issues/315)) ([de8449b](https://github.com/tekumara/fakesnow/commit/de8449bb5df94c8f2dcdc73dad959b8f64f00d81))
+* handle all Snowflake clustering statements as no-ops ([#318](https://github.com/tekumara/fakesnow/issues/318)) ([bcfa183](https://github.com/tekumara/fakesnow/commit/bcfa1830f73e99204082aba5c89b47ab1ecd21aa))
+* support FLATTEN for JSON objects ([#317](https://github.com/tekumara/fakesnow/issues/317)) ([d7a0a3e](https://github.com/tekumara/fakesnow/commit/d7a0a3eb08745e923b155c463801b6047559d196))
+
+
+### Chores
+
+* **deps-dev:** bump the pip group with 2 updates ([#311](https://github.com/tekumara/fakesnow/issues/311)) ([021e082](https://github.com/tekumara/fakesnow/commit/021e08298e84dbd171b4d84aaa6a6ff62f0f3cf6))
+* **deps:** update sqlglot requirement from ~=28.7.0 to ~=29.0.1 ([#312](https://github.com/tekumara/fakesnow/issues/312)) ([dccebd8](https://github.com/tekumara/fakesnow/commit/dccebd811b4f1ca254e10571e3857d9f61e24cf5))
+
 ## [0.11.3](https://github.com/tekumara/fakesnow/compare/v0.11.2...v0.11.3) (2026-02-25)
 
 
