@@ -35,6 +35,7 @@ from fakesnow.transforms.transforms import (
     create_database as create_database,
     create_table_as as create_table_as,
     create_user as create_user,
+    current_version as current_version,
     dateadd_date_cast as dateadd_date_cast,
     dateadd_string_literal_timestamp_cast as dateadd_string_literal_timestamp_cast,
     datediff_string_literal_timestamp_cast as datediff_string_literal_timestamp_cast,

@@ -124,6 +124,13 @@ def test_connect_information_schema():
             cur.execute("SELECT * FROM databases")
 
 
+def test_connect_current_version(cur: snowflake.connector.cursor.SnowflakeCursor):
+    version = cur.execute("SELECT CURRENT_VERSION()").fetchone()
+
+    assert version
+    assert tuple(int(part) for part in version[0].split(".")) == (0, 0, 0)
+
+
 def test_connect_then_unset_schema(_fakesnow: None):
     with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:
         # this will unset the schema

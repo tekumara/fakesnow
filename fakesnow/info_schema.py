@@ -111,6 +111,8 @@ COLLATION_NAME, IS_IDENTITY, IDENTITY_GENERATION, IDENTITY_CYCLE,
     ddb_columns.comment as COMMENT,
     null::VARCHAR as IDENTITY_START,
     null::VARCHAR as IDENTITY_INCREMENT,
+    null::VARCHAR as IDENTITY_ORDERED,
+    null::VARCHAR as DATA_TYPE_ALIAS
 from system.information_schema.columns columns
 left join _fs_global._fs_information_schema._fs_columns_ext ext
   on ext_table_catalog = columns.table_catalog
