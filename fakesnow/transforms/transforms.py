@@ -1440,6 +1440,40 @@ def _is_sha256_length(length: exp.Expression | None) -> bool:
     return isinstance(length, exp.Literal) and str(length.this) == "256"
 
 
+def _sha256_expr(argument: exp.Expression) -> exp.Expression:
+    return exp.Anonymous(this="SHA256", expressions=[argument.copy()])
+
+
+def _sha256_binary_expr(argument: exp.Expression) -> exp.Expression:
+    return exp.Unhex(this=_sha256_expr(argument))
+
+
+def _rewrite_sha_call(
+    argument: exp.Expression,
+    length: exp.Expression | None,
+    fallback_name: str,
+    *,
+    binary: bool = False,
+) -> exp.Expression:
+    length = length or exp.Literal.number(256)
+    if _is_sha256_length(length):
+        return _sha256_binary_expr(argument) if binary else _sha256_expr(argument)
+    return exp.Anonymous(this=fallback_name, expressions=[argument.copy(), length.copy()])
+
+
+def _rewrite_anonymous_sha(expression: exp.Anonymous, name: str, *, binary: bool = False) -> exp.Expression:
+    if expression.this.upper() != name or not expression.expressions:
+        return expression
+
+    if len(expression.expressions) == 1 or (
+        len(expression.expressions) == 2 and _is_sha256_length(expression.expressions[1])
+    ):
+        argument = expression.expressions[0]
+        return _sha256_binary_expr(argument) if binary else _sha256_expr(argument)
+
+    return expression
+
+
 def sha256(expression: exp.Expression) -> exp.Expression:
     """Convert sha2() or sha2_hex() to sha256().
 
@@ -1457,30 +1491,16 @@ def sha256(expression: exp.Expression) -> exp.Expression:
     """
 
     if isinstance(expression, exp.SHA2):
-        length = expression.args.get("length") or exp.Literal.number(256)
-        if _is_sha256_length(length):
-            return exp.Anonymous(this="SHA256", expressions=[expression.this.copy()])
-        return exp.Anonymous(this="SHA2", expressions=[expression.this.copy(), length.copy()])
+        return _rewrite_sha_call(expression.this, expression.args.get("length"), "SHA2")
 
     elif isinstance(expression, exp.SHA2Digest):
-        length = expression.args.get("length") or exp.Literal.number(256)
-        if _is_sha256_length(length):
-            return exp.Unhex(this=exp.Anonymous(this="SHA256", expressions=[expression.this.copy()]))
-        return exp.Anonymous(this="SHA2_BINARY", expressions=[expression.this.copy(), length.copy()])
+        return _rewrite_sha_call(expression.this, expression.args.get("length"), "SHA2_BINARY", binary=True)
 
     elif isinstance(expression, exp.Anonymous) and expression.this.upper() == "SHA2_HEX":
-        if len(expression.expressions) == 1 or (
-            len(expression.expressions) == 2 and _is_sha256_length(expression.expressions[1])
-        ):
-            return exp.Anonymous(this="SHA256", expressions=[expression.expressions[0].copy()])
-        return expression
+        return _rewrite_anonymous_sha(expression, "SHA2_HEX")
 
     elif isinstance(expression, exp.Anonymous) and expression.this.upper() == "SHA2_BINARY":
-        if len(expression.expressions) == 1 or (
-            len(expression.expressions) == 2 and _is_sha256_length(expression.expressions[1])
-        ):
-            return exp.Unhex(this=exp.Anonymous(this="SHA256", expressions=[expression.expressions[0].copy()]))
-        return expression
+        return _rewrite_anonymous_sha(expression, "SHA2_BINARY", binary=True)
 
     return expression
 
