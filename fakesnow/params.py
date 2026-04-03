@@ -2,22 +2,22 @@ from __future__ import annotations
 
 from typing import Any
 
-from sqlglot import exp
+from sqlglot import Expr, exp
 
 MutableParams = list[Any] | dict[Any, Any]
 
 
-def pop_qmark_param(params: MutableParams | None, expr: exp.Expression, pl: exp.Placeholder) -> Any:  # noqa: ANN401
+def pop_qmark_param(params: MutableParams | None, expr: Expr, pl: exp.Placeholder) -> Any:  # noqa: ANN401
     assert isinstance(params, list), "params must be provided as a list or tuple to resolve qmarks"
     i = index_of_placeholder(expr, pl)
     return params.pop(i)
 
 
-def index_of_placeholder(expr: exp.Expression, target: exp.Placeholder) -> int:
+def index_of_placeholder(expr: Expr, target: exp.Placeholder) -> int:
     """Count the number of prior placeholders to determine the index.
 
     Args:
-        expression (exp.Expression): The expression to search.
+        expression (Expr): The expression to search.
         ph (exp.Placeholder): The placeholder to find.
 
     Returns:

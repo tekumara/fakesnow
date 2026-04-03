@@ -1,10 +1,10 @@
 import sqlglot
-from sqlglot import exp
+from sqlglot import Expr
 
 import fakesnow.expr as expr
 
 
-def parse(s: str) -> exp.Expression:
+def parse(s: str) -> Expr:
     return sqlglot.parse_one(s, read="snowflake")
 
 

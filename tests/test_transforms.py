@@ -2,7 +2,7 @@ from pathlib import Path
 
 import pytest
 import sqlglot
-from sqlglot import exp
+from sqlglot import Expr, exp
 
 from fakesnow.transforms import (
     SUCCESS_NOP,
@@ -696,7 +696,7 @@ def test_semi_structured_types() -> None:
 
 
 def test_show_tables_etc() -> None:
-    def _show_tables_etc(e: exp.Expression) -> exp.Expression:
+    def _show_tables_etc(e: Expr) -> Expr:
         return show_tables_etc(e, None, None)
 
     assert (
@@ -716,7 +716,7 @@ def test_show_tables_etc() -> None:
 
 
 def test_show_schemas() -> None:
-    def _show_schemas(e: exp.Expression) -> exp.Expression:
+    def _show_schemas(e: Expr) -> Expr:
         return show_schemas(e, None)
 
     assert (

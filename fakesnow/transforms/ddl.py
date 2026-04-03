@@ -16,14 +16,14 @@ from __future__ import annotations
 import secrets
 
 import sqlglot
-from sqlglot import exp
+from sqlglot import Expr, exp
 
 from fakesnow.transforms.transforms import SUCCESS_NOP
 
 
 def alter_table_add_multiple_columns(
-    expression: exp.Expression,
-) -> list[exp.Expression]:
+    expression: Expr,
+) -> list[Expr]:
     """Transform ALTER TABLE ADD COLUMN with multiple columns into separate statements.
 
     Snowflake supports: ALTER TABLE IF EXISTS tab1 ADD COLUMN IF NOT EXISTS col1 INT, col2 VARCHAR(50), col3 BOOLEAN;
@@ -63,7 +63,7 @@ def alter_table_add_multiple_columns(
     return alter_statements
 
 
-def _is_alter_table_cluster_by(expression: exp.Expression) -> bool:
+def _is_alter_table_cluster_by(expression: Expr) -> bool:
     if not isinstance(expression, exp.Alter):
         return False
     actions = expression.actions
@@ -72,7 +72,7 @@ def _is_alter_table_cluster_by(expression: exp.Expression) -> bool:
     return isinstance(actions[0], exp.Cluster)
 
 
-def _is_alter_table_drop_clustering_key(expression: exp.Expression) -> bool:
+def _is_alter_table_drop_clustering_key(expression: Expr) -> bool:
     if not isinstance(expression, exp.Alter):
         return False
     actions = expression.actions
@@ -87,7 +87,7 @@ def _is_alter_table_drop_clustering_key(expression: exp.Expression) -> bool:
     )
 
 
-def _is_alter_table_recluster(expression: exp.Expression) -> bool:
+def _is_alter_table_recluster(expression: Expr) -> bool:
     if not (isinstance(expression, exp.Command) and isinstance(expression.this, str)):
         return False
     if expression.this.upper() != "ALTER":
@@ -96,7 +96,7 @@ def _is_alter_table_recluster(expression: exp.Expression) -> bool:
     return isinstance(text, str) and ("RESUME RECLUSTER" in text.upper() or "SUSPEND RECLUSTER" in text.upper())
 
 
-def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
+def alter_table_strip_cluster_by(expression: Expr) -> Expr:
     """Turn Snowflake clustering operations into a no-op.
 
     DuckDB doesn't support clustering, so the following statements are ignored:
@@ -115,8 +115,8 @@ def alter_table_strip_cluster_by(expression: exp.Expression) -> exp.Expression:
 
 
 def create_table_autoincrement(
-    expression: exp.Expression,
-) -> list[exp.Expression]:
+    expression: Expr,
+) -> list[Expr]:
     """Split CREATE TABLE with AUTOINCREMENT into CREATE SEQUENCE + CREATE TABLE with DEFAULT NEXTVAL.
 
     Example transform:
@@ -183,7 +183,7 @@ def create_table_autoincrement(
         cd for cd in (new_schema.expressions or []) if isinstance(cd, exp.ColumnDef) and cd.this.name == col_name
     )
 
-    existing_constraints: list[exp.Expression] = target_col.args.get("constraints", []) or []
+    existing_constraints: list[Expr] = target_col.args.get("constraints", []) or []
 
     # Replace the AUTOINCREMENT/IDENTITY constraint in-place with DEFAULT NEXTVAL('<seq_name>')
     for c in existing_constraints:
