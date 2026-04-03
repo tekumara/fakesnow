@@ -156,6 +156,18 @@ def create_clone(expression: Expr) -> Expr:
     return expression
 
 
+def current_version(expression: Expr) -> Expr:
+    """Return a Snowflake-compatible server version string instead of the DuckDB version.
+
+    Needed by sqlalchemy.
+    """
+
+    if isinstance(expression, exp.CurrentVersion):
+        return exp.Literal(this="0.0.0", is_string=True)
+
+    return expression
+
+
 # TODO: move this into a Dialect as a transpilation
 def create_database(expression: Expr, db_path: Path | None = None) -> Expr:
     """Transform create database to attach database.

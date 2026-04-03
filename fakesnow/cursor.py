@@ -252,6 +252,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.upper_case_unquoted_identifiers)
             .transform(transforms.alter_session)
             .transform(transforms.update_variables, variables=self._conn.variables)
+            .transform(transforms.current_version)
             .transform(transforms.set_schema, current_database=self._conn.database)
             .transform(transforms.create_database, db_path=self._conn.db_path)
             .transform(transforms.extract_comment_on_table)
