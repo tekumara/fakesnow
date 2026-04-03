@@ -1177,10 +1177,8 @@ def to_variant(expression: exp.Expression) -> exp.Expression:
     See https://docs.snowflake.com/en/sql-reference/functions/to_variant
     """
 
-    if isinstance(expression, exp.Anonymous) and expression.this.upper() == "TO_VARIANT":
-        new = expression.copy()
-        new.args["this"] = "TO_JSON"
-        return new
+    if isinstance(expression, exp.ToVariant):
+        return exp.Anonymous(this="TO_JSON", expressions=[expression.this.copy()])
 
     return expression
 
