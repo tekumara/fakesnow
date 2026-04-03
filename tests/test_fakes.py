@@ -84,7 +84,7 @@ def test_array_agg(dcur: snowflake.connector.cursor.DictCursor):
             SELECT DISTINCT
                 ID
                 , ANOTHER
-                , ARRAY_AGG(DISTINCT COL) OVER(PARTITION BY ID) AS COLS
+                , ARRAY_AGG(DISTINCT COL) WITHIN GROUP (ORDER BY COL) OVER(PARTITION BY ID) AS COLS
             FROM (select column1 as ID, column2 as COL, column3 as ANOTHER from
             (VALUES (1, 's1', 'c1'),(1, 's2', 'c1'),(1, 's3', 'c1'),(2, 's1', 'c2'), (2,'s2','c2')))
             ORDER BY ID
