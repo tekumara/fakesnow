@@ -11,7 +11,7 @@ from urllib.request import url2pathname
 import snowflake.connector.errors
 import sqlglot
 from snowflake.connector.file_util import SnowflakeFileUtil
-from sqlglot import exp
+from sqlglot import Expr, exp
 
 from fakesnow.expr import normalise_ident
 from fakesnow.params import MutableParams
@@ -37,10 +37,10 @@ class UploadCommandDict(TypedDict):
 
 
 def create_stage(
-    expression: exp.Expression,
+    expression: Expr,
     current_database: str | None,
     current_schema: str | None,
-) -> exp.Expression:
+) -> Expr:
     """Transform CREATE STAGE to an INSERT statement for the fake stages table."""
     if not (
         isinstance(expression, exp.Create)
@@ -104,7 +104,7 @@ def create_stage(
     return transformed
 
 
-def list_stage(expression: exp.Expression, current_database: str | None, current_schema: str | None) -> exp.Expression:
+def list_stage(expression: Expr, current_database: str | None, current_schema: str | None) -> Expr:
     """Transform LIST to list file system operation.
 
     See https://docs.snowflake.com/en/sql-reference/sql/list
@@ -137,11 +137,11 @@ def list_stage(expression: exp.Expression, current_database: str | None, current
 
 
 def put_stage(
-    expression: exp.Expression,
+    expression: Expr,
     current_database: str | None,
     current_schema: str | None,
     params: MutableParams | None,
-) -> exp.Expression:
+) -> Expr:
     """Transform PUT to a SELECT statement to locate the stage.
 
     See https://docs.snowflake.com/en/sql-reference/sql/put

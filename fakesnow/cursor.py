@@ -20,7 +20,7 @@ import sqlglot.errors
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import ResultMetadata
 from snowflake.connector.result_batch import ResultBatch
-from sqlglot import exp, parse_one
+from sqlglot import Expr, exp, parse_one
 from typing_extensions import Self
 
 import fakesnow.checks as checks
@@ -228,7 +228,7 @@ class FakeSnowflakeCursor:
         self._arrow_table = self._duck_conn.fetch_arrow_table()
         self._rowcount = self._arrow_table.num_rows
 
-    def check_db_and_schema(self, expression: exp.Expression) -> None:
+    def check_db_and_schema(self, expression: Expr) -> None:
         no_database, no_schema = checks.is_unqualified_table_expression(expression)
 
         if no_database and not self._conn.database_set:
@@ -246,7 +246,7 @@ class FakeSnowflakeCursor:
                 sqlstate="22000",
             )
 
-    def _transform(self, expression: exp.Expression, params: MutableParams | None) -> exp.Expression:
+    def _transform(self, expression: Expr, params: MutableParams | None) -> Expr:
         return (
             expression.transform(lambda e: transforms.identifier(e, params))
             .transform(transforms.upper_case_unquoted_identifiers)
@@ -321,7 +321,7 @@ class FakeSnowflakeCursor:
             .transform(lambda e: transforms.create_table_as(e, self._duck_conn))
         )
 
-    def _transform_explode(self, expression: exp.Expression) -> list[exp.Expression]:
+    def _transform_explode(self, expression: Expr) -> list[Expr]:
         # Applies transformations that require splitting the expression into multiple expressions
         # Split transforms have limited support at the moment.
 
@@ -340,7 +340,7 @@ class FakeSnowflakeCursor:
         # Return original expression if no transform applied
         return [expression]
 
-    def _execute(self, transformed: exp.Expression, params: MutableParams | None = None) -> None:
+    def _execute(self, transformed: Expr, params: MutableParams | None = None) -> None:
         self._arrow_table = None
         self._arrow_table_fetch_index = None
         self._rowcount = None

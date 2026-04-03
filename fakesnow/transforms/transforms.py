@@ -3,12 +3,12 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from string import Template
-from typing import ClassVar, cast
+from typing import cast
 
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
-from sqlglot import exp
+from sqlglot import Expr, exp
 
 from fakesnow.params import MutableParams, pop_qmark_param
 from fakesnow.variables import Variables
@@ -16,7 +16,7 @@ from fakesnow.variables import Variables
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.' as status")
 
 
-def alias_in_join(expression: exp.Expression) -> exp.Expression:
+def alias_in_join(expression: Expr) -> Expr:
     if (
         isinstance(expression, exp.Select)
         and (aliases := {e.args.get("alias"): e for e in expression.expressions if isinstance(e, exp.Alias)})
@@ -37,7 +37,7 @@ def alias_in_join(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def array_construct_etc(expression: exp.Expression) -> exp.Expression:
+def array_construct_etc(expression: Expr) -> Expr:
     """Handle ARRAY_CONSTRUCT_* and ARRAY_CAT
 
     Convert ARRAY_CONSTRUCT args to json_array.
@@ -55,7 +55,7 @@ def array_construct_etc(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def array_size(expression: exp.Expression) -> exp.Expression:
+def array_size(expression: Expr) -> Expr:
     if isinstance(expression, exp.ArraySize):
         # return null if not json array
         jal = exp.Anonymous(this="json_array_length", expressions=[expression.this])
@@ -68,7 +68,7 @@ def array_size(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def array_agg(expression: exp.Expression) -> exp.Expression:
+def array_agg(expression: Expr) -> Expr:
     if isinstance(expression, exp.ArrayAgg) and not isinstance(expression.parent, exp.Window):
         return exp.Anonymous(this="TO_JSON", expressions=[expression])
 
@@ -78,7 +78,7 @@ def array_agg(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def object_agg(expression: exp.Expression) -> exp.Expression:
+def object_agg(expression: Expr) -> Expr:
     """Convert OBJECT_AGG(key, value) to DuckDB equivalent.
 
     Snowflake's OBJECT_AGG aggregates key-value pairs into a JSON object, skipping rows
@@ -109,7 +109,7 @@ def object_agg(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def array_agg_within_group(expression: exp.Expression) -> exp.Expression:
+def array_agg_within_group(expression: Expr) -> Expr:
     """Convert ARRAY_AGG(<expr>) WITHIN GROUP (<order-by-clause>) to ARRAY_AGG( <expr> <order-by-clause> )
     Snowflake uses ARRAY_AGG(<expr>) WITHIN GROUP (ORDER BY <order-by-clause>)
     to order the array, but DuckDB uses ARRAY_AGG( <expr> <order-by-clause> ).
@@ -135,7 +135,7 @@ def array_agg_within_group(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def create_clone(expression: exp.Expression) -> exp.Expression:
+def create_clone(expression: Expr) -> Expr:
     """Transform create table clone to create table as select."""
 
     if (
@@ -157,7 +157,7 @@ def create_clone(expression: exp.Expression) -> exp.Expression:
 
 
 # TODO: move this into a Dialect as a transpilation
-def create_database(expression: exp.Expression, db_path: Path | None = None) -> exp.Expression:
+def create_database(expression: Expr, db_path: Path | None = None) -> Expr:
     """Transform create database to attach database.
 
     Example:
@@ -165,10 +165,10 @@ def create_database(expression: exp.Expression, db_path: Path | None = None) -> 
         >>> sqlglot.parse_one("CREATE database foo").transform(create_database).sql()
         'ATTACH DATABASE ':memory:' as foo'
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression, with the database name stored in the create_db_name arg.
+        Expr: The transformed expression, with the database name stored in the create_db_name arg.
     """
 
     if isinstance(expression, exp.Create) and str(expression.args.get("kind")).upper() == "DATABASE":
@@ -235,9 +235,7 @@ FROM (DESCRIBE ${view})
 )
 
 
-def describe_table(
-    expression: exp.Expression, current_database: str | None = None, current_schema: str | None = None
-) -> exp.Expression:
+def describe_table(expression: Expr, current_database: str | None = None, current_schema: str | None = None) -> Expr:
     """Redirect to the information_schema._fs_columns to match snowflake.
 
     See https://docs.snowflake.com/en/sql-reference/sql/desc-table
@@ -266,7 +264,7 @@ def describe_table(
     return expression
 
 
-def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:  #
+def drop_schema_cascade(expression: Expr) -> Expr:  #
     """Drop schema cascade.
 
     By default duckdb won't delete a schema if it contains tables, whereas snowflake will.
@@ -277,10 +275,10 @@ def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:  #
         >>> sqlglot.parse_one("DROP SCHEMA schema1").transform(remove_comment).sql()
         'DROP SCHEMA schema1 cascade'
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression.
+        Expr: The transformed expression.
     """
 
     if (
@@ -296,7 +294,7 @@ def drop_schema_cascade(expression: exp.Expression) -> exp.Expression:  #
     return new
 
 
-def dateadd_date_cast(expression: exp.Expression) -> exp.Expression:
+def dateadd_date_cast(expression: Expr) -> Expr:
     """Cast result of DATEADD to DATE if the given expression is a cast to DATE
        and unit is either DAY, WEEK, MONTH or YEAR to mimic Snowflake's DATEADD
        behaviour.
@@ -333,7 +331,7 @@ def dateadd_date_cast(expression: exp.Expression) -> exp.Expression:
     )
 
 
-def dateadd_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Expression:
+def dateadd_string_literal_timestamp_cast(expression: Expr) -> Expr:
     """Snowflake's DATEADD function implicitly casts string literals to
     timestamps regardless of unit.
     """
@@ -356,7 +354,7 @@ def dateadd_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Exp
     return new_dateadd
 
 
-def datediff_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Expression:
+def datediff_string_literal_timestamp_cast(expression: Expr) -> Expr:
     """Snowflake's DATEDIFF function implicitly casts string literals to
     timestamps regardless of unit.
     """
@@ -388,21 +386,21 @@ def datediff_string_literal_timestamp_cast(expression: exp.Expression) -> exp.Ex
     return new_datediff
 
 
-def extract_comment_on_columns(expression: exp.Expression) -> exp.Expression:
+def extract_comment_on_columns(expression: Expr) -> Expr:
     """Extract column comments, removing it from the Expression.
 
     duckdb doesn't support comments. So we remove them from the expression and store them in the column_comment arg.
     We also replace the transform the expression to NOP if the statement can't be executed by duckdb.
 
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression, with any comment stored in the new 'table_comment' arg.
+        Expr: The transformed expression, with any comment stored in the new 'table_comment' arg.
     """
 
     if isinstance(expression, exp.Alter) and (actions := expression.args.get("actions")):
-        new_actions: list[exp.Expression] = []
+        new_actions: list[Expr] = []
         col_comments: list[tuple[str, str]] = []
         for a in actions:
             if isinstance(a, exp.AlterColumn) and (comment := a.args.get("comment")):
@@ -418,17 +416,17 @@ def extract_comment_on_columns(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def extract_comment_on_table(expression: exp.Expression) -> exp.Expression:
+def extract_comment_on_table(expression: Expr) -> Expr:
     """Extract table comment, removing it from the Expression.
 
     duckdb doesn't support comments. So we remove them from the expression and store them in the table_comment arg.
     We also replace the transform the expression to NOP if the statement can't be executed by duckdb.
 
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression, with any comment stored in the new 'table_comment' arg.
+        Expr: The transformed expression, with any comment stored in the new 'table_comment' arg.
     """
 
     if isinstance(expression, exp.Create) and (table := expression.find(exp.Table)):
@@ -468,17 +466,17 @@ def extract_comment_on_table(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def extract_text_length(expression: exp.Expression) -> exp.Expression:
+def extract_text_length(expression: Expr) -> Expr:
     """Extract length of text columns.
 
     duckdb doesn't have fixed-sized text types. So we capture the size of text types and store that in the
     character_maximum_length arg.
 
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The original expression, with any text lengths stored in the new 'text_lengths' arg.
+        Expr: The original expression, with any text lengths stored in the new 'text_lengths' arg.
     """
 
     if isinstance(expression, (exp.Create, exp.Alter)):
@@ -511,7 +509,7 @@ def extract_text_length(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def flatten(expression: exp.Expression) -> exp.Expression:
+def flatten(expression: Expr) -> Expr:
     """Flatten an array or object.
 
     See https://docs.snowflake.com/en/sql-reference/functions/flatten
@@ -528,7 +526,7 @@ def flatten(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def flatten_value_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
+def flatten_value_cast_as_varchar(expression: Expr) -> Expr:
     """Return raw unquoted string when flatten VALUE is cast to varchar.
 
     Returns a raw string using the Duckdb ->> operator, aka the json_extract_string function, see
@@ -547,7 +545,7 @@ def flatten_value_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def float_to_double(expression: exp.Expression) -> exp.Expression:
+def float_to_double(expression: Expr) -> Expr:
     """Convert float to double for 64 bit precision.
 
     Snowflake floats are all 64 bit (ie: double)
@@ -560,7 +558,7 @@ def float_to_double(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def hex_string(expression: exp.Expression) -> exp.Expression:
+def hex_string(expression: Expr) -> Expr:
     """Convert HexString to from_hex().
 
     Snowflake X'...' literals are binary values.
@@ -571,7 +569,7 @@ def hex_string(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def identifier(expression: exp.Expression, params: MutableParams | None) -> exp.Expression:
+def identifier(expression: Expr, params: MutableParams | None) -> Expr:
     """Convert identifier function to an identifier or table.
 
     See https://docs.snowflake.com/en/sql-reference/identifier-literal
@@ -627,7 +625,7 @@ _STRING_CAST_TYPES = {
 }
 
 
-def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
+def indices_to_json_extract(expression: Expr) -> Expr:
     """Convert indices on objects and arrays to json_extract or json_extract_string
 
     Supports Snowflake array indices, see
@@ -666,7 +664,7 @@ def indices_to_json_extract(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def information_schema_fs(expression: exp.Expression) -> exp.Expression:
+def information_schema_fs(expression: Expr) -> Expr:
     """Redirects for
     * _FS_COLUMNS view which has character_maximum_length or character_octet_length.
     * _FS_TABLES to access additional metadata columns (eg: comment).
@@ -686,9 +684,9 @@ def information_schema_fs(expression: exp.Expression) -> exp.Expression:
 
 
 def information_schema_databases(
-    expression: exp.Expression,
+    expression: Expr,
     current_schema: str | None = None,
-) -> exp.Expression:
+) -> Expr:
     if (
         isinstance(expression, exp.Table)
         and (expression.db == "INFORMATION_SCHEMA" or (current_schema and current_schema == "INFORMATION_SCHEMA"))
@@ -707,7 +705,7 @@ NUMBER_38_0 = [
 ]
 
 
-def integer_precision(expression: exp.Expression) -> exp.Expression:
+def integer_precision(expression: Expr) -> Expr:
     """Convert integers and number(38,0) to bigint.
 
     So fetch_all will return int and dataframes will return them with a dtype of int64.
@@ -726,7 +724,7 @@ def integer_precision(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def json_extract_cased_as_varchar(expression: exp.Expression) -> exp.Expression:
+def json_extract_cased_as_varchar(expression: Expr) -> Expr:
     """Convert json to varchar inside JSONExtract.
 
     Snowflake case conversion (upper/lower) turns variant into varchar. This
@@ -749,7 +747,7 @@ def json_extract_cased_as_varchar(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def json_extract_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
+def json_extract_cast_as_varchar(expression: Expr) -> Expr:
     """Return raw unquoted string when casting json extraction to varchar.
 
     Returns a raw string using the Duckdb ->> operator, aka the json_extract_string function, see
@@ -766,7 +764,7 @@ def json_extract_cast_as_varchar(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def json_extract_precedence(expression: exp.Expression) -> exp.Expression:
+def json_extract_precedence(expression: Expr) -> Expr:
     """Associate json extract operands to avoid duckdb operators of higher precedence transforming the expression.
 
     See https://github.com/tekumara/fakesnow/issues/53
@@ -776,7 +774,7 @@ def json_extract_precedence(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def random(expression: exp.Expression) -> exp.Expression:
+def random(expression: Expr) -> Expr:
     """Convert random() and random(seed).
 
     Snowflake random() is an signed 64 bit integer.
@@ -806,7 +804,7 @@ def random(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def sample(expression: exp.Expression) -> exp.Expression:
+def sample(expression: Expr) -> Expr:
     if isinstance(expression, exp.TableSample) and not expression.args.get("method"):
         # set snowflake default (bernoulli) rather than use the duckdb default (system)
         # because bernoulli works better at small row sizes like we have in tests
@@ -815,10 +813,10 @@ def sample(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def object_construct(expression: exp.Expression) -> exp.Expression:
+def object_construct(expression: Expr) -> Expr:
     """Convert OBJECT_CONSTRUCT/OBJECT_CONSTRUCT_KEEP_NULL to _FS_OBJECT_CONSTRUCT."""
 
-    items: list[tuple[exp.Expression, exp.Expression]] = []
+    items: list[tuple[Expr, Expr]] = []
 
     if isinstance(expression, exp.Struct):
         # OBJECT_CONSTRUCT
@@ -839,8 +837,8 @@ def object_construct(expression: exp.Expression) -> exp.Expression:
     else:
         return expression
 
-    keys: list[exp.Expression] = []
-    values: list[exp.Expression] = []
+    keys: list[Expr] = []
+    values: list[Expr] = []
 
     for key, value in items:
         if isinstance(key, exp.Identifier):
@@ -861,7 +859,7 @@ def object_construct(expression: exp.Expression) -> exp.Expression:
     )
 
 
-def regex_replace(expression: exp.Expression) -> exp.Expression:
+def regex_replace(expression: Expr) -> Expr:
     """Transform regex_replace expressions from snowflake to duckdb."""
 
     if isinstance(expression, exp.RegexpReplace) and isinstance(expression.expression, exp.Literal):
@@ -887,7 +885,7 @@ def regex_replace(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def regex_substr(expression: exp.Expression) -> exp.Expression:
+def regex_substr(expression: Expr) -> Expr:
     """Transform regex_substr expressions from snowflake to duckdb.
 
     See https://docs.snowflake.com/en/sql-reference/functions/regexp_substr
@@ -950,7 +948,7 @@ def regex_substr(expression: exp.Expression) -> exp.Expression:
 
 
 # TODO: move this into a Dialect as a transpilation
-def set_schema(expression: exp.Expression, current_database: str | None) -> exp.Expression:
+def set_schema(expression: Expr, current_database: str | None) -> Expr:
     """Transform USE SCHEMA/DATABASE to SET schema.
 
     Example:
@@ -964,10 +962,10 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
 
         See tests for more examples.
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: A SET schema expression if the input is a USE
+        Expr: A SET schema expression if the input is a USE
             expression, otherwise expression is returned as-is.
     """
 
@@ -1005,7 +1003,7 @@ def set_schema(expression: exp.Expression, current_database: str | None) -> exp.
     return expression
 
 
-def split(expression: exp.Expression) -> exp.Expression:
+def split(expression: Expr) -> Expr:
     """
     Convert output of duckdb str_split from varchar[] to JSON array to match Snowflake.
     """
@@ -1015,7 +1013,7 @@ def split(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def tag(expression: exp.Expression) -> exp.Expression:
+def tag(expression: Expr) -> Expr:
     """Handle tags. Transfer tags into upserts of the tag table.
 
     duckdb doesn't support tags. In lieu of a full implementation, for now we make it a NOP.
@@ -1025,10 +1023,10 @@ def tag(expression: exp.Expression) -> exp.Expression:
         >>> sqlglot.parse_one("ALTER TABLE table1 SET TAG foo='bar'").transform(tag).sql()
         "SELECT 'Statement executed successfully.'"
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression.
+        Expr: The transformed expression.
     """
 
     if isinstance(expression, exp.Alter) and (actions := expression.args.get("actions")):
@@ -1054,7 +1052,7 @@ def tag(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def to_date(expression: exp.Expression) -> exp.Expression:
+def to_date(expression: Expr) -> Expr:
     """Convert to_date() to a cast.
 
     See https://docs.snowflake.com/en/sql-reference/functions/to_date
@@ -1064,10 +1062,10 @@ def to_date(expression: exp.Expression) -> exp.Expression:
         >>> sqlglot.parse_one("SELECT to_date(to_timestamp(0))").transform(to_date).sql()
         "SELECT CAST(DATE_TRUNC('day', TO_TIMESTAMP(0)) AS DATE)"
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression.
+        Expr: The transformed expression.
     """
 
     if isinstance(expression, exp.Anonymous) and expression.name.upper() == "TO_DATE":
@@ -1078,7 +1076,7 @@ def to_date(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def _get_to_number_args(e: exp.ToNumber) -> tuple[exp.Expression | None, exp.Expression | None, exp.Expression | None]:
+def _get_to_number_args(e: exp.ToNumber) -> tuple[Expr | None, Expr | None, Expr | None]:
     arg_format = e.args.get("format")
     arg_precision = e.args.get("precision")
     arg_scale = e.args.get("scale")
@@ -1117,7 +1115,7 @@ def _get_to_number_args(e: exp.ToNumber) -> tuple[exp.Expression | None, exp.Exp
     return _format, _precision, _scale
 
 
-def to_decimal(expression: exp.Expression) -> exp.Expression:
+def to_decimal(expression: Expr) -> Expr:
     """Transform to_decimal, to_number, to_numeric, try_to_decimal, try_to_number, try_to_numeric
     expressions from snowflake to duckdb.
 
@@ -1147,7 +1145,7 @@ def to_decimal(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def to_timestamp(expression: exp.Expression) -> exp.Expression:
+def to_timestamp(expression: Expr) -> Expr:
     """Transform to_timestamp, to_timestamp_ntz and casts to _fs_to_timestamp function.
 
     See https://docs.snowflake.com/en/sql-reference/functions/to_timestamp
@@ -1171,21 +1169,19 @@ def to_timestamp(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def to_variant(expression: exp.Expression) -> exp.Expression:
+def to_variant(expression: Expr) -> Expr:
     """Convert to_variant to to_json.
 
     See https://docs.snowflake.com/en/sql-reference/functions/to_variant
     """
 
-    if isinstance(expression, exp.Anonymous) and expression.this.upper() == "TO_VARIANT":
-        new = expression.copy()
-        new.args["this"] = "TO_JSON"
-        return new
+    if isinstance(expression, exp.ToVariant):
+        return exp.Anonymous(this="TO_JSON", expressions=[expression.this.copy()])
 
     return expression
 
 
-def timestamp_ntz(expression: exp.Expression) -> exp.Expression:
+def timestamp_ntz(expression: Expr) -> Expr:
     """Convert timestamp_ntz (snowflake) to timestamp (duckdb).
 
     NB: timestamp_ntz defaults to nanosecond precision (ie: NTZ(9)). The duckdb equivalent is TIMESTAMP_NS.
@@ -1199,7 +1195,7 @@ def timestamp_ntz(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def trim_cast_varchar(expression: exp.Expression) -> exp.Expression:
+def trim_cast_varchar(expression: Expr) -> Expr:
     """Snowflake's TRIM casts input to VARCHAR implicitly."""
 
     if not (isinstance(expression, exp.Trim)):
@@ -1214,7 +1210,7 @@ def trim_cast_varchar(expression: exp.Expression) -> exp.Expression:
     )
 
 
-def try_parse_json(expression: exp.Expression) -> exp.Expression:
+def try_parse_json(expression: Expr) -> Expr:
     """Convert TRY_PARSE_JSON() to TRY_CAST(... as JSON).
 
     Example:
@@ -1222,10 +1218,10 @@ def try_parse_json(expression: exp.Expression) -> exp.Expression:
         >>> sqlglot.parse_one("select try_parse_json('{}')").transform(parse_json).sql()
         "SELECT TRY_CAST('{}' AS JSON)"
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression.
+        Expr: The transformed expression.
     """
 
     if isinstance(expression, exp.Anonymous) and expression.name.upper() == "TRY_PARSE_JSON":
@@ -1238,7 +1234,7 @@ def try_parse_json(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def semi_structured_types(expression: exp.Expression) -> exp.Expression:
+def semi_structured_types(expression: Expr) -> Expr:
     """Convert OBJECT, ARRAY, and VARIANT types to duckdb compatible types.
 
     Example:
@@ -1246,10 +1242,10 @@ def semi_structured_types(expression: exp.Expression) -> exp.Expression:
         >>> sqlglot.parse_one("CREATE TABLE table1 (name object)").transform(semi_structured_types).sql()
         "CREATE TABLE table1 (name JSON)"
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression.
+        Expr: The transformed expression.
     """
 
     if isinstance(expression, exp.DataType) and expression.this in [
@@ -1264,7 +1260,7 @@ def semi_structured_types(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def upper_case_unquoted_identifiers(expression: exp.Expression) -> exp.Expression:
+def upper_case_unquoted_identifiers(expression: Expr) -> Expr:
     """Upper case unquoted identifiers.
 
     Snowflake represents case-insensitivity using upper-case identifiers in cursor results.
@@ -1275,10 +1271,10 @@ def upper_case_unquoted_identifiers(expression: exp.Expression) -> exp.Expressio
         >>> sqlglot.parse_one("select name, name as fname from table1").transform(upper_case_unquoted_identifiers).sql()
         'SELECT NAME, NAME AS FNAME FROM TABLE1'
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression.
+        Expr: The transformed expression.
     """
 
     if isinstance(expression, exp.Identifier) and not expression.quoted and isinstance(expression.this, str):
@@ -1289,7 +1285,7 @@ def upper_case_unquoted_identifiers(expression: exp.Expression) -> exp.Expressio
     return expression
 
 
-def values_columns(expression: exp.Expression) -> exp.Expression:
+def values_columns(expression: Expr) -> Expr:
     """Support column1, column2 expressions in VALUES.
 
     Snowflake uses column1, column2 .. for unnamed columns in VALUES. Whereas duckdb uses col0, col1 ..
@@ -1309,7 +1305,7 @@ def values_columns(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def create_table_as(expression: exp.Expression, duck_conn: DuckDBPyConnection) -> exp.Expression:
+def create_table_as(expression: Expr, duck_conn: DuckDBPyConnection) -> Expr:
     if (
         isinstance(expression, exp.Create)
         and expression.kind == "TABLE"
@@ -1360,7 +1356,7 @@ def create_table_as(expression: exp.Expression, duck_conn: DuckDBPyConnection) -
     return expression
 
 
-def create_user(expression: exp.Expression) -> exp.Expression:
+def create_user(expression: Expr) -> Expr:
     """Transform CREATE USER to a query against the global database's information_schema._fs_users table.
 
     https://docs.snowflake.com/en/sql-reference/sql/create-user
@@ -1380,7 +1376,7 @@ def create_user(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def alter_session(expression: exp.Expression) -> exp.Expression:
+def alter_session(expression: Expr) -> Expr:
     """Handle ALTER SESSION.
 
     Supported parameters:
@@ -1429,21 +1425,54 @@ def alter_session(expression: exp.Expression) -> exp.Expression:
 
 
 def update_variables(
-    expression: exp.Expression,
+    expression: Expr,
     variables: Variables,
-) -> exp.Expression:
+) -> Expr:
     if Variables.is_variable_modifier(expression):
         variables.update_variables(expression)
         return SUCCESS_NOP  # Nothing further to do if its a SET/UNSET operation.
     return expression
 
 
-class SHA256(exp.Func):
-    _sql_names: ClassVar = ["SHA256"]
-    arg_types: ClassVar = {"this": True}
+def _is_sha256_length(length: Expr | None) -> bool:
+    return isinstance(length, exp.Literal) and str(length.this) == "256"
 
 
-def sha256(expression: exp.Expression) -> exp.Expression:
+def _sha256_expr(argument: Expr) -> Expr:
+    return exp.Anonymous(this="SHA256", expressions=[argument.copy()])
+
+
+def _sha256_binary_expr(argument: Expr) -> Expr:
+    return exp.Unhex(this=_sha256_expr(argument))
+
+
+def _rewrite_sha_call(
+    argument: Expr,
+    length: Expr | None,
+    fallback_name: str,
+    *,
+    binary: bool = False,
+) -> Expr:
+    length = length or exp.Literal.number(256)
+    if _is_sha256_length(length):
+        return _sha256_binary_expr(argument) if binary else _sha256_expr(argument)
+    return exp.Anonymous(this=fallback_name, expressions=[argument.copy(), length.copy()])
+
+
+def _rewrite_anonymous_sha(expression: exp.Anonymous, name: str, *, binary: bool = False) -> Expr:
+    if expression.this.upper() != name or not expression.expressions:
+        return expression
+
+    if len(expression.expressions) == 1 or (
+        len(expression.expressions) == 2 and _is_sha256_length(expression.expressions[1])
+    ):
+        argument = expression.expressions[0]
+        return _sha256_binary_expr(argument) if binary else _sha256_expr(argument)
+
+    return expression
+
+
+def sha256(expression: Expr) -> Expr:
     """Convert sha2() or sha2_hex() to sha256().
 
     Convert sha2_binary() to unhex(sha256()).
@@ -1453,37 +1482,28 @@ def sha256(expression: exp.Expression) -> exp.Expression:
         >>> sqlglot.parse_one("insert into table1 (name) select sha2('foo')").transform(sha256).sql()
         "INSERT INTO table1 (name) SELECT SHA256('foo')"
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression.
+        Expr: The transformed expression.
     """
 
-    if isinstance(expression, exp.SHA2) and expression.args.get("length", exp.Literal.number(256)).this == "256":
-        return SHA256(this=expression.this)
-    elif (
-        isinstance(expression, exp.Anonymous)
-        and expression.this.upper() == "SHA2_HEX"
-        and (
-            len(expression.expressions) == 1
-            or (len(expression.expressions) == 2 and expression.expressions[1].this == "256")
-        )
-    ):
-        return SHA256(this=expression.expressions[0])
-    elif (
-        isinstance(expression, exp.Anonymous)
-        and expression.this.upper() == "SHA2_BINARY"
-        and (
-            len(expression.expressions) == 1
-            or (len(expression.expressions) == 2 and expression.expressions[1].this == "256")
-        )
-    ):
-        return exp.Unhex(this=SHA256(this=expression.expressions[0]))
+    if isinstance(expression, exp.SHA2):
+        return _rewrite_sha_call(expression.this, expression.args.get("length"), "SHA2")
+
+    elif isinstance(expression, exp.SHA2Digest):
+        return _rewrite_sha_call(expression.this, expression.args.get("length"), "SHA2_BINARY", binary=True)
+
+    elif isinstance(expression, exp.Anonymous) and expression.this.upper() == "SHA2_HEX":
+        return _rewrite_anonymous_sha(expression, "SHA2_HEX")
+
+    elif isinstance(expression, exp.Anonymous) and expression.this.upper() == "SHA2_BINARY":
+        return _rewrite_anonymous_sha(expression, "SHA2_BINARY", binary=True)
 
     return expression
 
 
-def result_scan(expression: exp.Expression) -> exp.Expression:
+def result_scan(expression: Expr) -> Expr:
     """
     Transform SELECT * FROM TABLE(RESULT_SCAN('sfqid')) to mark it for special handling.
 
@@ -1505,7 +1525,7 @@ def result_scan(expression: exp.Expression) -> exp.Expression:
     return expression
 
 
-def sequence_nextval(expression: exp.Expression) -> exp.Expression:
+def sequence_nextval(expression: Expr) -> Expr:
     """Transform Snowflake sequence nextval syntax to DuckDB syntax.
 
     Converts "sequence_name.nextval" to "nextval('sequence_name')".

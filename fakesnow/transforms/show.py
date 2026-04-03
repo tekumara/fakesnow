@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 import sqlglot
-from sqlglot import exp
+from sqlglot import Expr, exp
 
 
 def fs_global_creation_sql() -> str:
@@ -55,9 +55,7 @@ ORDER BY table_catalog, table_schema, table_name, ordinal_position
 """
 
 
-def show_columns(
-    expression: exp.Expression, current_database: str | None, current_schema: str | None
-) -> exp.Expression:
+def show_columns(expression: Expr, current_database: str | None, current_schema: str | None) -> Expr:
     """Transform SHOW COLUMNS to a query against the fs global information_schema columns table.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-columns
@@ -132,7 +130,7 @@ WHERE database_name NOT IN ('memory', '_fs_global')
 """
 
 
-def show_databases(expression: exp.Expression) -> exp.Expression:
+def show_databases(expression: Expr) -> Expr:
     """Transform SHOW DATABASES to a query against _fs_show_databases.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-databases
@@ -170,7 +168,7 @@ WHERE 0 = 1;
 """
 
 
-def show_functions(expression: exp.Expression) -> exp.Expression:
+def show_functions(expression: Expr) -> Expr:
     """Transform SHOW FUNCTIONS.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-functions
@@ -182,11 +180,11 @@ def show_functions(expression: exp.Expression) -> exp.Expression:
 
 
 def show_keys(
-    expression: exp.Expression,
+    expression: Expr,
     current_database: str | None,
     *,
     kind: Literal["PRIMARY", "UNIQUE", "FOREIGN"],
-) -> exp.Expression:
+) -> Expr:
     """Transform SHOW <kind> KEYS to a query against the duckdb_constraints meta-table.
 
     https://docs.snowflake.com/en/sql-reference/sql/show-primary-keys
@@ -287,7 +285,7 @@ WHERE 0 = 1;
 """
 
 
-def show_procedures(expression: exp.Expression) -> exp.Expression:
+def show_procedures(expression: Expr) -> Expr:
     """Transform SHOW PROCEDURES.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-procedures
@@ -318,7 +316,7 @@ where not catalog_name in ('memory', 'system', 'temp', '_fs_global')
 """
 
 
-def show_schemas(expression: exp.Expression, current_database: str | None) -> exp.Expression:
+def show_schemas(expression: Expr, current_database: str | None) -> Expr:
     """Transform SHOW SCHEMAS to a query against the _fs_show_schemas view.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-schemas
@@ -338,7 +336,7 @@ def show_schemas(expression: exp.Expression, current_database: str | None) -> ex
     return expression
 
 
-def show_stages(expression: exp.Expression, current_database: str | None, current_schema: str | None) -> exp.Expression:
+def show_stages(expression: Expr, current_database: str | None, current_schema: str | None) -> Expr:
     """Transform SHOW STAGES to a select from the fake _fs_stages table."""
     if not (isinstance(expression, exp.Show) and expression.name.upper() == "STAGES"):
         return expression
@@ -462,9 +460,7 @@ where not table_catalog in ('system')
 """
 
 
-def show_tables_etc(
-    expression: exp.Expression, current_database: str | None, current_schema: str | None
-) -> exp.Expression:
+def show_tables_etc(expression: Expr, current_database: str | None, current_schema: str | None) -> Expr:
     """Transform SHOW OBJECTS/TABLES/VIEWS to a query against the _fs_information_schema views."""
     if not (
         isinstance(expression, exp.Show)
@@ -504,11 +500,11 @@ def show_tables_etc(
         where.append(f"database_name = '{catalog}'")
     if schema:
         where.append(f"schema_name = '{schema}'")
-    if (like := expression.args.get("like")) and isinstance(like, exp.Expression):
+    if (like := expression.args.get("like")) and isinstance(like, Expr):
         where.append(f"name ilike {like.sql()}")
     where_clause = " AND ".join(where)
 
-    limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, exp.Expression) else ""
+    limit = limit.sql() if (limit := expression.args.get("limit")) and isinstance(limit, Expr) else ""
 
     query = f"""
         SELECT {columns_clause}
@@ -520,7 +516,7 @@ def show_tables_etc(
     return sqlglot.parse_one(query, read="duckdb")
 
 
-def show_users(expression: exp.Expression) -> exp.Expression:
+def show_users(expression: Expr) -> Expr:
     """Transform SHOW USERS to a query against the global database's information_schema._fs_users table.
 
     https://docs.snowflake.com/en/sql-reference/sql/show-users
@@ -575,7 +571,7 @@ SELECT
 """
 
 
-def show_warehouses(expression: exp.Expression) -> exp.Expression:
+def show_warehouses(expression: Expr) -> Expr:
     """Transform SHOW WAREHOUSES.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-warehouses

@@ -1,18 +1,18 @@
 import re
 
 import snowflake.connector.errors
-from sqlglot import exp
+from sqlglot import Expr, exp
 
 
 # Implements snowflake variables: https://docs.snowflake.com/en/sql-reference/session-variables#using-variables-in-sql
 # [ ] Add support for setting multiple variables in a single statement
 class Variables:
     @classmethod
-    def is_variable_modifier(cls, expr: exp.Expression) -> bool:
+    def is_variable_modifier(cls, expr: Expr) -> bool:
         return cls._is_set_expression(expr) or cls._is_unset_expression(expr)
 
     @classmethod
-    def _is_set_expression(cls, expr: exp.Expression) -> bool:
+    def _is_set_expression(cls, expr: Expr) -> bool:
         if isinstance(expr, exp.Set):
             is_set = not expr.args.get("unset")
             if is_set:  # SET varname = value;
@@ -24,16 +24,16 @@ class Variables:
         return False
 
     @classmethod
-    def _is_unset_expression(cls, expr: exp.Expression) -> bool:
+    def _is_unset_expression(cls, expr: Expr) -> bool:
         if isinstance(expr, exp.Alias):
             this_expr = expr.this.args.get("this")
-            return isinstance(this_expr, exp.Expression) and this_expr.this == "UNSET"
+            return isinstance(this_expr, Expr) and this_expr.this == "UNSET"
         return False
 
     def __init__(self) -> None:
         self._variables = {}
 
-    def update_variables(self, expr: exp.Expression) -> None:
+    def update_variables(self, expr: Expr) -> None:
         if isinstance(expr, exp.Set):
             is_set = not expr.args.get("unset")
             if is_set:  # SET varname = value;

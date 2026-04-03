@@ -1,15 +1,15 @@
 from __future__ import annotations
 
-from sqlglot import exp
+from sqlglot import Expr, exp
 
 
-def key_command(expression: exp.Expression) -> str:
+def key_command(expression: Expr) -> str:
     """Identifies the key SQL command in an expression.
 
     Useful for conditional logic that acts on specific commands.
 
     Args:
-        expression (exp.Expression): Expression to check.
+        expression (Expr): Expression to check.
 
     Returns:
         str: Command, eg: "CREATE SCHEMA", "SELECT", "SET" etc.

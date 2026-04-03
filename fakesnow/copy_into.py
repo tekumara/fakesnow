@@ -12,7 +12,7 @@ from urllib.parse import urlparse, urlunparse
 import duckdb
 import snowflake.connector.errors
 from duckdb import DuckDBPyConnection
-from sqlglot import exp
+from sqlglot import Expr, exp
 
 import fakesnow.transforms.stage as stage
 from fakesnow import logger
@@ -168,7 +168,7 @@ def _result_file_name(url: str) -> str:
     return f"{parts[-2].lower()}/{parts[-1]}"
 
 
-def _extract_table(target: exp.Expression) -> exp.Table:
+def _extract_table(target: Expr) -> exp.Table:
     """Extract the Table node from a COPY INTO target (which may be Table or Schema)."""
     if isinstance(target, exp.Table):
         return target
@@ -357,7 +357,7 @@ def _inserts(
     params: CopyParams,
     urls: list[str],
     parquet_info: ParquetLoadInfo | None = None,
-) -> list[exp.Expression]:
+) -> list[Expr]:
     """Generate INSERT statements for COPY INTO."""
     # INTO expression
     target = expr.this
@@ -386,7 +386,7 @@ def _inserts(
             parquet_col_names = parquet_info.parquet_columns[url]
 
             # Build json_object call: json_object('col1', col1, 'col2', col2, ...)
-            json_args: list[exp.Expression] = []
+            json_args: list[Expr] = []
             for col in parquet_col_names:
                 json_args.append(exp.Literal.string(col))
                 json_args.append(exp.Column(this=exp.Identifier(this=col, quoted=True)))
@@ -413,7 +413,7 @@ def _inserts(
                 parquet_info.parquet_columns[url], target_columns, params.match_by_column_name
             )
             # Create SELECT with matched columns (matching cols) and NULLs (unmatched table cols)
-            select_exprs: list[exp.Expression] = []
+            select_exprs: list[Expr] = []
             for target_col in target_columns:
                 if target_col in matched_columns:
                     parquet_col = matched_columns[target_col]
@@ -539,7 +539,7 @@ def handle_csv(expressions: list[exp.Property]) -> ReadCSV:
 
 @dataclass
 class FileTypeHandler(Protocol):
-    def read_expression(self, url: str) -> exp.Expression: ...
+    def read_expression(self, url: str) -> Expr: ...
 
     @staticmethod
     def make_eq(name: str, value: list | str | int | bool) -> exp.EQ:
@@ -559,7 +559,7 @@ class ReadCSV(FileTypeHandler):
     quote: str | None = None
     delimiter: str = ","
 
-    def read_expression(self, url: str) -> exp.Expression:
+    def read_expression(self, url: str) -> Expr:
         # don't parse header and use as column names, keep them as column0, column1, etc
         args = [self.make_eq("header", False)]
 
@@ -579,7 +579,7 @@ class ReadCSV(FileTypeHandler):
 
 @dataclass
 class ReadParquet(FileTypeHandler):
-    def read_expression(self, url: str) -> exp.Expression:
+    def read_expression(self, url: str) -> Expr:
         return exp.func("read_parquet", exp.Literal(this=url, is_string=True))
 
 

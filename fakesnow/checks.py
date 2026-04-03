@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from sqlglot import exp
+from sqlglot import Expr, exp
 
 
-def is_unqualified_table_expression(expression: exp.Expression) -> tuple[bool, bool]:
+def is_unqualified_table_expression(expression: Expr) -> tuple[bool, bool]:
     """Checks if the table expression is unqualified, eg: no database or schema.
 
     NB: sqlglot treats the identifier in "CREATE SCHEMA schema1" as a table expression.
@@ -19,10 +19,10 @@ def is_unqualified_table_expression(expression: exp.Expression) -> tuple[bool, b
 
         See tests for more examples.
     Args:
-        expression (exp.Expression): the expression that will be transformed.
+        expression (Expr): the expression that will be transformed.
 
     Returns:
-        exp.Expression: The transformed expression.
+        Expr: The transformed expression.
     """
 
     if not (node := expression.find(exp.Table)):
