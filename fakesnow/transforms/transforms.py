@@ -1572,7 +1572,16 @@ def sequence_nextval(expression: Expr) -> Expr:
 
 # Numeric-only aggregate functions that fail on VARCHAR in DuckDB.
 # Snowflake implicitly casts VARCHAR to numeric for these.
-_NUMERIC_ONLY_AGGS = (exp.Sum, exp.Avg, exp.Variance, exp.Stddev, exp.StddevSamp, exp.StddevPop, exp.VariancePop, exp.Median)
+_NUMERIC_ONLY_AGGS = (
+    exp.Sum,
+    exp.Avg,
+    exp.Variance,
+    exp.Stddev,
+    exp.StddevSamp,
+    exp.StddevPop,
+    exp.VariancePop,
+    exp.Median,
+)
 
 
 def numeric_agg_implicit_cast(expression: Expr) -> Expr:
