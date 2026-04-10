@@ -669,3 +669,14 @@ def test_variables(conn: snowflake.connector.SnowflakeConnection):
         ),
     ):
         cur.execute("select $var1;")
+
+
+def test_sum_varchar_implicit_cast(cur: snowflake.connector.cursor.SnowflakeCursor):
+    """Snowflake implicitly casts VARCHAR to numeric for aggregate functions like SUM."""
+    cur.execute("CREATE TABLE t_varchar_agg (amount VARCHAR)")
+    cur.execute("INSERT INTO t_varchar_agg VALUES ('100'), ('200'), ('300')")
+    cur.execute("SELECT SUM(amount) FROM t_varchar_agg")
+    assert cur.fetchall() == [(600.0,)]
+
+    cur.execute("SELECT AVG(amount) FROM t_varchar_agg")
+    assert cur.fetchall() == [(200.0,)]
