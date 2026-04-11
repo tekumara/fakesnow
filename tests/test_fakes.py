@@ -671,12 +671,41 @@ def test_variables(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("select $var1;")
 
 
-def test_sum_varchar_implicit_cast(cur: snowflake.connector.cursor.SnowflakeCursor):
-    """Snowflake implicitly casts VARCHAR to numeric for aggregate functions like SUM."""
-    cur.execute("CREATE TABLE t_varchar_agg (amount VARCHAR)")
-    cur.execute("INSERT INTO t_varchar_agg VALUES ('100'), ('200'), ('300')")
-    cur.execute("SELECT SUM(amount) FROM t_varchar_agg")
-    assert cur.fetchall() == [(600.0,)]
-
-    cur.execute("SELECT AVG(amount) FROM t_varchar_agg")
-    assert cur.fetchall() == [(200.0,)]
+def test_numeric_aggs_varchar_implicit_cast(dcur: snowflake.connector.cursor.DictCursor):
+    """Snowflake implicitly casts VARCHAR to numeric for numeric aggregate functions."""
+    dcur.execute("CREATE TABLE t_varchar_agg (amount VARCHAR)")
+    dcur.execute("INSERT INTO t_varchar_agg VALUES ('100'), ('200'), ('300')")
+    dcur.execute(
+        """
+        SELECT
+            SUM(amount),
+            AVG(amount),
+            VARIANCE(amount),
+            STDDEV(amount),
+            STDDEV_SAMP(amount),
+            STDDEV_POP(amount),
+            VARIANCE_POP(amount),
+            MEDIAN(amount)
+        FROM t_varchar_agg
+        """
+    )
+    row = dcur.fetchone()
+    assert row is not None
+    assert list(row) == [
+        "SUM(AMOUNT)",
+        "AVG(AMOUNT)",
+        "VARIANCE(AMOUNT)",
+        "STDDEV(AMOUNT)",
+        "STDDEV_SAMP(AMOUNT)",
+        "STDDEV_POP(AMOUNT)",
+        "VARIANCE_POP(AMOUNT)",
+        "MEDIAN(AMOUNT)",
+    ]
+    assert row["SUM(AMOUNT)"] == 600.0
+    assert row["AVG(AMOUNT)"] == 200.0
+    assert row["VARIANCE(AMOUNT)"] == 10000.0
+    assert row["STDDEV(AMOUNT)"] == 100.0
+    assert row["STDDEV_SAMP(AMOUNT)"] == 100.0
+    assert row["STDDEV_POP(AMOUNT)"] == 81.64965809277261
+    assert row["VARIANCE_POP(AMOUNT)"] == 6666.666666666667
+    assert row["MEDIAN(AMOUNT)"] == 200.0

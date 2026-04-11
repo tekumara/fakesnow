@@ -1093,16 +1093,16 @@ def test_result_scan() -> None:
 def test_numeric_agg_implicit_cast() -> None:
     from fakesnow.transforms.transforms import numeric_agg_implicit_cast
 
-    # SUM(amount) -> SUM(TRY_CAST(amount AS DOUBLE))
+    # Cast SUM(amount) with column name preserved
     assert (
         sqlglot.parse_one("SELECT SUM(amount) FROM t").transform(numeric_agg_implicit_cast).sql()
-        == "SELECT SUM(TRY_CAST(amount AS DOUBLE)) FROM t"
+        == 'SELECT SUM(TRY_CAST(amount AS DOUBLE)) AS "SUM(AMOUNT)" FROM t'
     )
 
-    # AVG(price) -> AVG(TRY_CAST(price AS DOUBLE))
+    # Cast AVG(price) with column name preserved
     assert (
         sqlglot.parse_one("SELECT AVG(price) FROM t").transform(numeric_agg_implicit_cast).sql()
-        == "SELECT AVG(TRY_CAST(price AS DOUBLE)) FROM t"
+        == 'SELECT AVG(TRY_CAST(price AS DOUBLE)) AS "AVG(PRICE)" FROM t'
     )
 
     # COUNT(name) should NOT be wrapped (not a numeric-only aggregate)
@@ -1120,11 +1120,26 @@ def test_numeric_agg_implicit_cast() -> None:
     # Already-cast args should NOT be double-wrapped
     assert (
         sqlglot.parse_one("SELECT SUM(CAST(amount AS DOUBLE)) FROM t").transform(numeric_agg_implicit_cast).sql()
-        == "SELECT SUM(CAST(amount AS DOUBLE)) FROM t"
+        == 'SELECT SUM(CAST(amount AS DOUBLE)) AS "SUM(CAST(AMOUNT AS DOUBLE))" FROM t'
+    )
+
+    # Existing aliases should win
+    assert (
+        sqlglot.parse_one("SELECT SUM(amount) AS total FROM t").transform(numeric_agg_implicit_cast).sql()
+        == "SELECT SUM(TRY_CAST(amount AS DOUBLE)) AS total FROM t"
     )
 
     # Multiple aggregates in one query
     result = sqlglot.parse_one("SELECT SUM(a), COUNT(b), AVG(c) FROM t").transform(numeric_agg_implicit_cast).sql()
-    assert "SUM(TRY_CAST(a AS DOUBLE))" in result
+    assert 'SUM(TRY_CAST(a AS DOUBLE)) AS "SUM(A)"' in result
     assert "COUNT(b)" in result  # unchanged
-    assert "AVG(TRY_CAST(c AS DOUBLE))" in result
+    assert 'AVG(TRY_CAST(c AS DOUBLE)) AS "AVG(C)"' in result
+
+    # Preserve function names that sqlglot normalizes internally
+    assert (
+        sqlglot.parse_one("SELECT STDDEV_SAMP(amount), VARIANCE_POP(amount) FROM t")
+        .transform(numeric_agg_implicit_cast)
+        .sql()
+        == 'SELECT STDDEV_SAMP(TRY_CAST(amount AS DOUBLE)) AS "STDDEV_SAMP(AMOUNT)", '
+        'VARIANCE_POP(TRY_CAST(amount AS DOUBLE)) AS "VARIANCE_POP(AMOUNT)" FROM t'
+    )

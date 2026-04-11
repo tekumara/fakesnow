@@ -1584,26 +1584,58 @@ _NUMERIC_ONLY_AGGS = (
 )
 
 
+def _numeric_agg_col_name(expression: Expr, arg: Expr) -> str | None:
+    function_name: str | None = None
+
+    if isinstance(expression, exp.Sum):
+        function_name = "SUM"
+    elif isinstance(expression, exp.Avg):
+        function_name = "AVG"
+    elif isinstance(expression, exp.Variance):
+        function_name = "VARIANCE"
+    elif isinstance(expression, exp.StddevSamp):
+        function_name = "STDDEV_SAMP"
+    elif isinstance(expression, exp.StddevPop):
+        function_name = "STDDEV_POP"
+    elif isinstance(expression, exp.Stddev):
+        start = cast(int | None, expression.meta.get("start"))
+        end = cast(int | None, expression.meta.get("end"))
+        function_name = "STDDEV_SAMP" if start is not None and end is not None and end - start + 1 == 11 else "STDDEV"
+    elif isinstance(expression, exp.VariancePop):
+        function_name = "VARIANCE_POP"
+    elif isinstance(expression, exp.Median):
+        function_name = "MEDIAN"
+
+    if function_name is None:
+        return None
+
+    return f"{function_name}({arg.sql(dialect='snowflake').upper()})"
+
+
 def numeric_agg_implicit_cast(expression: Expr) -> Expr:
     """Wrap arguments to numeric aggregate functions with TRY_CAST(... AS DOUBLE).
 
     Snowflake implicitly casts VARCHAR to numeric when used in aggregate functions
     like SUM(), AVG(), MEDIAN(), etc. DuckDB is strict and rejects these. This
-    transform adds an explicit TRY_CAST to match Snowflake's behavior.
+    transform adds an explicit TRY_CAST to match Snowflake's behavior while
+    preserving Snowflake-style column names for rewritten select projections.
 
     Only applies when the argument is not already a Cast/TryCast expression.
 
     Example:
         >>> import sqlglot
         >>> sqlglot.parse_one("SELECT SUM(amount) FROM t").transform(numeric_agg_implicit_cast).sql()
-        "SELECT SUM(TRY_CAST(amount AS DOUBLE)) FROM t"
+        'SELECT SUM(TRY_CAST(amount AS DOUBLE)) AS "SUM(AMOUNT)" FROM t'
     """
     if isinstance(expression, _NUMERIC_ONLY_AGGS):
         arg = expression.this
+        col_name = None if isinstance(expression.parent, exp.Alias) else _numeric_agg_col_name(expression, arg)
         # Don't double-cast if already cast
         if not isinstance(arg, (exp.Cast, exp.TryCast)):
             expression.set(
                 "this",
                 exp.TryCast(this=arg, to=exp.DataType(this=exp.DataType.Type.DOUBLE)),
             )
+        if col_name and isinstance(expression.parent, exp.Select):
+            return exp.alias_(expression, col_name, quoted=True)
     return expression
