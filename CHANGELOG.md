@@ -2,6 +2,25 @@
 
 # Changelog
 
+## [0.11.5](https://github.com/tekumara/fakesnow/compare/v0.11.4...v0.11.5) (2026-04-11)
+
+
+### Features
+
+* implicit VARCHAR-to-numeric cast for aggregate functions ([#326](https://github.com/tekumara/fakesnow/issues/326)) ([3f47c30](https://github.com/tekumara/fakesnow/commit/3f47c30d01872e794185baa6a03daffc070889ed))
+
+
+### Bug Fixes
+
+* implicit VARCHAR-to-number cast matches snowflake column names ([5733c70](https://github.com/tekumara/fakesnow/commit/5733c7045e3e0f1fd43eed8efb8faa75d352bae3))
+
+
+### Chores
+
+* **deps-dev:** update snowflake-sqlalchemy requirement from ~=1.8.2 to ~=1.9.0 in the pip group across 1 directory ([#321](https://github.com/tekumara/fakesnow/issues/321)) ([b8f4ede](https://github.com/tekumara/fakesnow/commit/b8f4edeaa6e8f9667bf66ee81eba090480be4269))
+* **deps:** update duckdb requirement from ~=1.4.1 to ~=1.5.1 ([#323](https://github.com/tekumara/fakesnow/issues/323)) ([e8f49a0](https://github.com/tekumara/fakesnow/commit/e8f49a0fe0a7bf04ee890fa544277d2913e5e194))
+* **deps:** update sqlglot requirement from ~=29.0.1 to ~=30.2.0 ([#322](https://github.com/tekumara/fakesnow/issues/322)) ([3b434fa](https://github.com/tekumara/fakesnow/commit/3b434fabf80e739583b38c5106092b6b338be81b))
+
 ## [0.11.4](https://github.com/tekumara/fakesnow/compare/v0.11.3...v0.11.4) (2026-03-26)
 
 
