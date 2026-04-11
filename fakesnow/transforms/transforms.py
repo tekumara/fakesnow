@@ -1568,3 +1568,42 @@ def sequence_nextval(expression: Expr) -> Expr:
         )
 
     return expression
+
+
+# Numeric-only aggregate functions that fail on VARCHAR in DuckDB.
+# Snowflake implicitly casts VARCHAR to numeric for these.
+_NUMERIC_ONLY_AGGS = (
+    exp.Sum,
+    exp.Avg,
+    exp.Variance,
+    exp.Stddev,
+    exp.StddevSamp,
+    exp.StddevPop,
+    exp.VariancePop,
+    exp.Median,
+)
+
+
+def numeric_agg_implicit_cast(expression: Expr) -> Expr:
+    """Wrap arguments to numeric aggregate functions with TRY_CAST(... AS DOUBLE).
+
+    Snowflake implicitly casts VARCHAR to numeric when used in aggregate functions
+    like SUM(), AVG(), MEDIAN(), etc. DuckDB is strict and rejects these. This
+    transform adds an explicit TRY_CAST to match Snowflake's behavior.
+
+    Only applies when the argument is not already a Cast/TryCast expression.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("SELECT SUM(amount) FROM t").transform(numeric_agg_implicit_cast).sql()
+        "SELECT SUM(TRY_CAST(amount AS DOUBLE)) FROM t"
+    """
+    if isinstance(expression, _NUMERIC_ONLY_AGGS):
+        arg = expression.this
+        # Don't double-cast if already cast
+        if not isinstance(arg, (exp.Cast, exp.TryCast)):
+            expression.set(
+                "this",
+                exp.TryCast(this=arg, to=exp.DataType(this=exp.DataType.Type.DOUBLE)),
+            )
+    return expression

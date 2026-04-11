@@ -1088,3 +1088,43 @@ def test_result_scan() -> None:
         .args.get("result_scan_sfqid")
         == "12345"
     )
+
+
+def test_numeric_agg_implicit_cast() -> None:
+    from fakesnow.transforms.transforms import numeric_agg_implicit_cast
+
+    # SUM(amount) -> SUM(TRY_CAST(amount AS DOUBLE))
+    assert (
+        sqlglot.parse_one("SELECT SUM(amount) FROM t").transform(numeric_agg_implicit_cast).sql()
+        == "SELECT SUM(TRY_CAST(amount AS DOUBLE)) FROM t"
+    )
+
+    # AVG(price) -> AVG(TRY_CAST(price AS DOUBLE))
+    assert (
+        sqlglot.parse_one("SELECT AVG(price) FROM t").transform(numeric_agg_implicit_cast).sql()
+        == "SELECT AVG(TRY_CAST(price AS DOUBLE)) FROM t"
+    )
+
+    # COUNT(name) should NOT be wrapped (not a numeric-only aggregate)
+    assert (
+        sqlglot.parse_one("SELECT COUNT(name) FROM t").transform(numeric_agg_implicit_cast).sql()
+        == "SELECT COUNT(name) FROM t"
+    )
+
+    # MAX(name) should NOT be wrapped
+    assert (
+        sqlglot.parse_one("SELECT MAX(name) FROM t").transform(numeric_agg_implicit_cast).sql()
+        == "SELECT MAX(name) FROM t"
+    )
+
+    # Already-cast args should NOT be double-wrapped
+    assert (
+        sqlglot.parse_one("SELECT SUM(CAST(amount AS DOUBLE)) FROM t").transform(numeric_agg_implicit_cast).sql()
+        == "SELECT SUM(CAST(amount AS DOUBLE)) FROM t"
+    )
+
+    # Multiple aggregates in one query
+    result = sqlglot.parse_one("SELECT SUM(a), COUNT(b), AVG(c) FROM t").transform(numeric_agg_implicit_cast).sql()
+    assert "SUM(TRY_CAST(a AS DOUBLE))" in result
+    assert "COUNT(b)" in result  # unchanged
+    assert "AVG(TRY_CAST(c AS DOUBLE))" in result
