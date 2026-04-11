@@ -93,6 +93,11 @@ def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchall() == []
 
 
+def test_fetchall_duplicate_column_names(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select 1 as duplicate_col, 2 as duplicate_col")
+    assert cur.fetchall() == [(1, 2)]
+
+
 def test_fetchone(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")

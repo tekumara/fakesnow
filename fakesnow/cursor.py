@@ -64,6 +64,16 @@ SQL_COPY_ROWS = Template(
 )
 
 
+def _arrow_rows_by_position(table: pyarrow.Table | pyarrow.RecordBatch) -> list[tuple]:
+    # Preserve tuple cursor semantics by reading Arrow columns positionally.
+    # `to_pylist()` materializes dict rows and drops duplicate column names,
+    # which breaks valid queries like `SELECT 1 AS x, 2 AS x`.
+    columns = [column.to_pylist() for column in table.columns]
+    if not columns:
+        return [tuple() for _ in range(table.num_rows)]
+    return list(zip(*columns))
+
+
 class FakeSnowflakeCursor:
     def __init__(
         self,
@@ -617,14 +627,14 @@ class FakeSnowflakeCursor:
         if self._arrow_table is None:
             # mimic snowflake python connector error type
             raise TypeError("No open result set")
-        tslice = self._arrow_table.slice(offset=self._arrow_table_fetch_index or 0, length=size).to_pylist()
+        tslice = self._arrow_table.slice(offset=self._arrow_table_fetch_index or 0, length=size)
 
         if self._arrow_table_fetch_index is None:
             self._arrow_table_fetch_index = size
         else:
             self._arrow_table_fetch_index += size
 
-        return tslice if self._use_dict_result else [tuple(d.values()) for d in tslice]
+        return tslice.to_pylist() if self._use_dict_result else _arrow_rows_by_position(tslice)
 
     def get_result_batches(self) -> list[ResultBatch] | None:
         if self._arrow_table is None:
@@ -678,7 +688,7 @@ class FakeResultBatch(ResultBatch):
         if self._use_dict_result:
             return iter(self._batch.to_pylist())
 
-        return iter(tuple(d.values()) for d in self._batch.to_pylist())
+        return iter(_arrow_rows_by_position(self._batch))
 
     @property
     def rowcount(self) -> int:
