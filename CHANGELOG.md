@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.11.6](https://github.com/tekumara/fakesnow/compare/v0.11.5...v0.11.6) (2026-04-18)
+
+
+### Bug Fixes
+
+* allow fully-qualified tables in CTEs with there is no current database ([709c17f](https://github.com/tekumara/fakesnow/commit/709c17f44a36731ba4bf94cb1fd4ffed90af7380)), closes [#327](https://github.com/tekumara/fakesnow/issues/327)
+
 ## [0.11.5](https://github.com/tekumara/fakesnow/compare/v0.11.4...v0.11.5) (2026-04-11)
 
 
