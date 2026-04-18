@@ -43,3 +43,23 @@ def test_check_unqualified_database() -> None:
     assert is_unqualified_table_expression(sqlglot.parse_one("CREATE DATABASE marts")) == (False, False)
 
     assert is_unqualified_table_expression(sqlglot.parse_one("USE DATABASE marts")) == (False, False)
+
+
+def test_check_unqualified_select_cte_uses_base_table() -> None:
+    expression = sqlglot.parse_one("WITH cte AS (SELECT * FROM marts.jaffles.customers) SELECT * FROM cte")
+
+    assert is_unqualified_table_expression(expression) == (False, False)
+
+
+def test_check_cte_with_mixed_qualification_uses_all_base_tables() -> None:
+    expression = sqlglot.parse_one(
+        "WITH cte AS (SELECT * FROM marts.jaffles.customers JOIN orders ON TRUE) SELECT * FROM cte"
+    )
+
+    assert is_unqualified_table_expression(expression) == (True, True)
+
+
+def test_check_table_function_does_not_require_current_database() -> None:
+    expression = sqlglot.parse_one("SELECT * FROM table(flatten([1, 2]))", read="snowflake")
+
+    assert is_unqualified_table_expression(expression) == (False, False)

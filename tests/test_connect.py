@@ -200,6 +200,17 @@ def test_connect_without_database(_fakesnow_no_auto_create: None):
         assert cur.description
 
 
+def test_connect_with_fully_qualified_table_in_cte_without_current_database(_fakesnow_no_auto_create: None):
+    with snowflake.connector.connect() as conn, conn.cursor() as cur:
+        cur.execute("CREATE DATABASE IF NOT EXISTS DB1")
+        cur.execute("CREATE SCHEMA IF NOT EXISTS DB1.S1")
+        cur.execute("CREATE TABLE IF NOT EXISTS DB1.S1.T1 (id INT)")
+        cur.execute("INSERT INTO DB1.S1.T1 VALUES (1)")
+
+        assert cur.execute("SELECT id FROM DB1.S1.T1").fetchall() == [(1,)]
+        assert cur.execute("WITH cte AS (SELECT id FROM DB1.S1.T1) SELECT id FROM cte").fetchall() == [(1,)]
+
+
 def test_connect_without_schema(_fakesnow: None):
     # database will be created but not schema
     with snowflake.connector.connect(database="marts") as conn, conn.cursor() as cur:
