@@ -173,7 +173,7 @@ def _counts(merge_expr: exp.Merge) -> Expr:
     """
 
     # Initialize dictionaries to store operation types and their corresponding indices
-    operations = {"inserted": [], "updated": [], "deleted": []}
+    operations: dict[str, list[int]] = {"inserted": [], "updated": [], "deleted": []}
 
     # Iterate through the WHEN clauses to categorize operations
     for w_idx, w in enumerate(merge_expr.args["whens"]):

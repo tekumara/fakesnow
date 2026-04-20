@@ -1,5 +1,6 @@
 import os
 import time
+from collections.abc import Generator
 
 import boto3
 import pytest
@@ -7,7 +8,7 @@ from moto.server import ThreadedMotoServer
 
 
 @pytest.fixture(scope="session")
-def moto_server():
+def moto_server() -> Generator[str, None, None]:
     server = ThreadedMotoServer(port=0)
     server.start()
     host, port = server.get_host_and_port()

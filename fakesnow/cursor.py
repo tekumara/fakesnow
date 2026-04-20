@@ -30,7 +30,7 @@ import fakesnow.transforms as transforms
 from fakesnow import logger
 from fakesnow.copy_into import copy_into
 from fakesnow.params import MutableParams
-from fakesnow.rowtype import describe_as_result_metadata
+from fakesnow.rowtype import describe_as_result_metadata, describe_as_rowtype
 from fakesnow.transforms import stage
 
 if TYPE_CHECKING:
@@ -81,15 +81,15 @@ class FakeSnowflakeCursor:
         self._conn = conn
         self._duck_conn = duck_conn
         self._use_dict_result = use_dict_result
-        self._last_sql = None
-        self._last_params = None
-        self._last_transformed = None
-        self._sqlstate = None
+        self._last_sql: str | None = None
+        self._last_params: MutableParams | None = None
+        self._last_transformed: exp.Expression | None = None
+        self._sqlstate: str | None = None
         self._arraysize = 1
-        self._arrow_table = None
-        self._arrow_table_fetch_index = None
-        self._rowcount = None
-        self._sfqid = None
+        self._arrow_table: pyarrow.Table | None = None
+        self._arrow_table_fetch_index: int | None = None
+        self._rowcount: int | None = None
+        self._sfqid: str | None = None
         self._converter = snowflake.connector.converter.SnowflakeConverter()
         self._prefetch_hook: Callable[[], None] | None = None
 
@@ -213,8 +213,8 @@ class FakeSnowflakeCursor:
                     "Cannot retrieve data on the status of this query. "
                     "No information returned from server for query '{}'"
                 )
-            # Restore the cached result data
-            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed = value
+            # Restore the cached result data (6-tuple: arrow_table, rowcount, last_sql, last_params, last_transformed, rowtype)
+            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed, _ = value
             self._sfqid = sfqid
             self._arrow_table_fetch_index = None
             self._prefetch_hook = None
@@ -361,8 +361,8 @@ class FakeSnowflakeCursor:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"Statement {sfqid} not found", errno=709, sqlstate="02000"
                 )
-            # Restore the cached result data
-            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed = value
+            # Restore the cached result data (6-tuple: arrow_table, rowcount, last_sql, last_params, last_transformed, rowtype)
+            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed, _ = value
             self._sfqid = sfqid
             self._arrow_table_fetch_index = None
             return
@@ -558,12 +558,24 @@ class FakeSnowflakeCursor:
         self._last_params = None if result_sql else params
         self._last_transformed = transformed
 
+        # Compute rowtype for cache (needed by GET endpoint to generate rowsetBase64)
+        # Skip for DESCRIBE queries to avoid infinite recursion
+        try:
+            if cmd not in {"DESCRIBE TABLE", "DESCRIBE VIEW", "DESCRIBE"}:
+                rowtype = describe_as_rowtype(self._describe_last_sql())
+            else:
+                rowtype = []
+        except Exception:
+            # If rowtype computation fails, use empty list as fallback
+            rowtype = []
+
         self._conn.results_cache[self._sfqid] = (
             self._arrow_table,
             self._rowcount,
             self._last_sql,
             self._last_params,
             self._last_transformed,
+            rowtype,  # 6th element - required for result_scan() and get_results_from_sfqid()
         )
 
     def executemany(
