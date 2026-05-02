@@ -824,13 +824,18 @@ def test_use() -> None:
 
 
 def test__get_to_number_args() -> None:
+    default_precision = exp.Literal(this="38", is_string=False)
+    default_scale = exp.Literal(this="0", is_string=False)
+
+    # SQLGlot normalizes omitted TO_NUMBER precision/scale arguments to Snowflake's
+    # defaults, so _get_to_number_args sees 38/0 even when they are not explicit.
     e = sqlglot.parse_one("to_number('100')", read="snowflake")
     assert isinstance(e, exp.ToNumber)
-    assert _get_to_number_args(e) == (None, None, None)
+    assert _get_to_number_args(e) == (None, default_precision, default_scale)
 
     e = sqlglot.parse_one("to_number('100', 10)", read="snowflake")
     assert isinstance(e, exp.ToNumber)
-    assert _get_to_number_args(e) == (None, exp.Literal(this="10", is_string=False), None)
+    assert _get_to_number_args(e) == (None, exp.Literal(this="10", is_string=False), default_scale)
 
     e = sqlglot.parse_one("to_number('100', 10,2)", read="snowflake")
     assert isinstance(e, exp.ToNumber)
@@ -842,14 +847,14 @@ def test__get_to_number_args() -> None:
 
     e = sqlglot.parse_one("to_number('100', 'TM9')", read="snowflake")
     assert isinstance(e, exp.ToNumber)
-    assert _get_to_number_args(e) == (exp.Literal(this="TM9", is_string=True), None, None)
+    assert _get_to_number_args(e) == (exp.Literal(this="TM9", is_string=True), default_precision, default_scale)
 
     e = sqlglot.parse_one("to_number('100', 'TM9', 10)", read="snowflake")
     assert isinstance(e, exp.ToNumber)
     assert _get_to_number_args(e) == (
         exp.Literal(this="TM9", is_string=True),
         exp.Literal(this="10", is_string=False),
-        None,
+        default_scale,
     )
 
     e = sqlglot.parse_one("to_number('100', 'TM9', 10, 2)", read="snowflake")
