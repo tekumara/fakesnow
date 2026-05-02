@@ -25,21 +25,21 @@ fakesnow = "fakesnow.cli:main"
 dev = [
     "boto3",
     "boto3-stubs[s3,sts]",
-    "build~=1.0",
+    "build~=1.5",
     "dirty-equals",
     "fakesnow[server]",
-    "moto[server] >= 5",
+    "moto[server] >= 5.1.22",
     # to fix https://github.com/pandas-dev/pandas/issues/56995
     "pandas-stubs",
-    "pre-commit~=4.0",
+    "pre-commit~=4.6",
     "pyarrow-stubs==20.0.0.20251215",
-    "pyright==1.1.408",
+    "pyright==1.1.409",
     "pytest~=9.0",
-    "ruff~=0.15.4",
+    "ruff~=0.15.12",
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
     "snowflake-sqlalchemy~=1.9.0",
-    "twine~=6.1",
+    "twine~=6.2",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
 notebook = ["duckdb-engine", "ipykernel", "jupysql"]
