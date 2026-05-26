@@ -39,6 +39,7 @@ dev = [
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
     "snowflake-sqlalchemy~=1.9.0",
+    "testcontainers>=4.0.0",
     "twine~=6.2",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
