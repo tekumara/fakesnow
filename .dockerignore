@@ -1,0 +1,131 @@
+# https://github.com/themattrix/python-pypi-template/blob/master/.dockerignore
+# Git
+.git
+.gitignore
+
+# CI
+.codeclimate.yml
+.travis.yml
+.taskcluster.yml
+
+# Docker
+docker-compose.yml
+.docker
+
+# Byte-compiled / optimized / DLL files
+__pycache__/
+*/__pycache__/
+*/*/__pycache__/
+*/*/*/__pycache__/
+*.py[cod]
+*/*.py[cod]
+*/*/*.py[cod]
+*/*/*/*.py[cod]
+
+# C extensions
+*.so
+
+# Distribution / packaging
+.Python
+env/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# PyInstaller
+#  Usually these files are written by a python script from a template
+#  before PyInstaller builds the exe, so as to inject date/other infos into it.
+*.manifest
+*.spec
+
+# Installer logs
+pip-log.txt
+pip-delete-this-directory.txt
+
+# Unit test / coverage reports
+htmlcov/
+.tox/
+.coverage
+.cache
+nosetests.xml
+coverage.xml
+
+# Translations
+*.mo
+*.pot
+
+# Django stuff:
+*.log
+
+# Sphinx documentation
+docs/_build/
+
+# PyBuilder
+target/
+
+# Virtual environment
+.env/
+.venv/
+venv/
+
+# PyCharm
+.idea
+
+# Python mode for VIM
+.ropeproject
+*/.ropeproject
+*/*/.ropeproject
+*/*/*/.ropeproject
+
+# Vim swap files
+*.swp
+*/*.swp
+*/*/*.swp
+*/*/*/*.swp
+
+# GitHub Actions & CI/CD
+.github/
+.agents
+
+# Project-specific config
+.pre-commit-config.yaml
+.python-version
+.release-please-manifest.json
+.typos.toml
+.cruft.json
+release-please-config.json
+toast.yml
+uv.lock
+
+# Development tools
+Makefile
+Makefile-common.mk
+notebooks/
+tools/
+
+# Build/Test artifacts
+.pytest_cache/
+tests/
+
+# Documentation
+*.md
+CHANGELOG.md
+CONTRIBUTING.md
+LICENSE
+
+# macOS
+.DS_Store
+
+# Dockerfile itself
+Dockerfile
+.dockerignore
