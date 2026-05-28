@@ -10,7 +10,7 @@ import sqlglot
 from duckdb import DuckDBPyConnection
 from sqlglot import Expr, exp
 
-from fakesnow.params import MutableParams, pop_qmark_param
+from fakesnow.params import MutableParams, get_named_param, pop_qmark_param
 from fakesnow.variables import Variables
 
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.' as status")
@@ -595,8 +595,11 @@ def identifier(expression: Expr, params: MutableParams | None) -> Expr:
     ):
         arg = expression.this.expressions[0]
 
-        # ? is parsed as exp.Placeholder
-        val: str = pop_qmark_param(params, arg.root(), arg) if isinstance(arg, exp.Placeholder) else arg.this
+        # ? is parsed as exp.Placeholder (qmark); :name is parsed as exp.Placeholder(this=name) (named)
+        if isinstance(arg, exp.Placeholder):
+            val: str = get_named_param(params, arg) if arg.this else pop_qmark_param(params, arg.root(), arg)
+        else:
+            val = arg.this
 
         # If the whole identifier is quoted, treat as a single quoted identifier inside a Table node
         if val.startswith('"') and val.endswith('"'):

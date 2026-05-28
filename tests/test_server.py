@@ -77,6 +77,54 @@ def test_server_binding_qmark(server: dict):
         cur.execute("select * from example where xint = ?", (1,))
 
 
+def test_server_binding_named(server: dict) -> None:
+    base_url = f"http://{server['host']}:{server['port']}"
+
+    # Login to get a session token
+    login_resp = requests.post(
+        f"{base_url}/session/v1/login-request",
+        json={"data": {"SESSION_PARAMETERS": {"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False}}},
+        params={"databaseName": "DB1", "schemaName": "SCHEMA1"},
+    )
+    assert login_resp.status_code == 200
+    token = login_resp.json()["data"]["token"]
+    headers = {"Authorization": f'Snowflake Token="{token}"'}
+
+    def query(sql: str, bindings: dict | None = None) -> dict:
+        body: dict = {"sqlText": sql}
+        if bindings:
+            body["bindings"] = bindings
+        resp = requests.post(f"{base_url}/queries/v1/query-request", json=body, headers=headers)
+        assert resp.status_code == 200
+        return resp.json()
+
+    query("create or replace table customers (id int, name text)")
+    query("insert into customers values (1, 'Jenny'), (2, 'Jasper')")
+
+    # single named binding (FIXED / integer)
+    result = query("select * from customers where id = :myid", bindings={"myid": {"type": "FIXED", "value": "1"}})
+    assert result["success"] is True
+    assert result["data"]["total"] == 1
+
+    # single named binding (TEXT / string)
+    result = query("select * from customers where name = :myname", bindings={"myname": {"type": "TEXT", "value": "Jasper"}})
+    assert result["success"] is True
+    assert result["data"]["total"] == 1
+
+    # multiple named bindings
+    result = query(
+        "select * from customers where id = :myid and name = :myname",
+        bindings={"myid": {"type": "FIXED", "value": "2"}, "myname": {"type": "TEXT", "value": "Jasper"}},
+    )
+    assert result["success"] is True
+    assert result["data"]["total"] == 1
+
+    # no match
+    result = query("select * from customers where id = :myid", bindings={"myid": {"type": "FIXED", "value": "99"}})
+    assert result["success"] is True
+    assert result["data"]["total"] == 0
+
+
 def test_server_connect(sconn: snowflake.connector.SnowflakeConnection) -> None:
     conn = sconn
 

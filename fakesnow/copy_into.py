@@ -16,7 +16,7 @@ from sqlglot import Expr, exp
 
 import fakesnow.transforms.stage as stage
 from fakesnow import logger
-from fakesnow.params import MutableParams, pop_qmark_param
+from fakesnow.params import MutableParams, get_named_param, pop_qmark_param
 
 Params = Sequence[Any] | dict[Any, Any]
 
@@ -237,7 +237,7 @@ def _params(expr: exp.Copy, params: MutableParams | None = None) -> CopyParams:
             if isinstance(param.expression, exp.Var):
                 on_error = param.expression.name.upper()
             elif isinstance(param.expression, exp.Placeholder):
-                on_error = pop_qmark_param(params, expr, param.expression)
+                on_error = get_named_param(params, param.expression) if param.expression.this else pop_qmark_param(params, expr, param.expression)
             else:
                 raise NotImplementedError(f"{param.expression.__class__=}")
 

@@ -91,8 +91,12 @@ async def query_request(request: Request) -> JSONResponse:
         sql_text = body_json["sqlText"]
 
         if bindings := body_json.get("bindings"):
-            # Convert parameters like {'1': {'type': 'FIXED', 'value': '10'}, ...} to tuple (10, ...)
-            params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
+            if all(k.isdigit() for k in bindings):
+                # positional bindings: {'1': {'type': 'FIXED', 'value': '10'}, ...} -> tuple (10, ...)
+                params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
+            else:
+                # named bindings: {'myid': {'type': 'FIXED', 'value': '10'}, ...} -> dict {'myid': 10, ...}
+                params = {name: from_binding(b) for name, b in bindings.items()}
             logger.debug(f"Bindings: {params}")
         else:
             params = None

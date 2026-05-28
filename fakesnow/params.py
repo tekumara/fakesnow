@@ -13,6 +13,12 @@ def pop_qmark_param(params: MutableParams | None, expr: Expr, pl: exp.Placeholde
     return params.pop(i)
 
 
+def get_named_param(params: MutableParams | None, pl: exp.Placeholder) -> Any:  # noqa: ANN401
+    assert isinstance(params, dict), "params must be provided as a dict to resolve named params"
+    assert pl.this, "placeholder must have a name"
+    return params[pl.this]
+
+
 def index_of_placeholder(expr: Expr, target: exp.Placeholder) -> int:
     """Count the number of prior placeholders to determine the index.
 
