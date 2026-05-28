@@ -2,7 +2,9 @@ FROM python:3.10-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir "fakesnow[server]"
+COPY . .
+
+RUN pip install --no-cache-dir ".[server]"
 
 EXPOSE 8080
 
