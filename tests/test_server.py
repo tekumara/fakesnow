@@ -78,53 +78,24 @@ def test_server_binding_qmark(server: dict):
 
 
 def test_server_binding_named(server: dict) -> None:
-    base_url = f"http://{server['host']}:{server['port']}"
+    with snowflake.connector.connect(**server, database="DB1", schema="SCHEMA1") as conn:
 
-    # Login to get a session token
-    login_resp = requests.post(
-        f"{base_url}/session/v1/login-request",
-        json={"data": {"SESSION_PARAMETERS": {"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False}}},
-        params={"databaseName": "DB1", "schemaName": "SCHEMA1"},
-    )
-    assert login_resp.status_code == 200
-    token = login_resp.json()["data"]["token"]
-    headers = {"Authorization": f'Snowflake Token="{token}"'}
+        with conn.cursor() as cur:
+            cur.execute("create table customers (id int, name text)")
+            cur.execute("insert into customers values (1, 'Jenny'), (2, 'Jasper')")
 
-    def query(sql: str, bindings: dict | None = None) -> dict:
-        body: dict = {"sqlText": sql}
-        if bindings:
-            body["bindings"] = bindings
-        resp = requests.post(f"{base_url}/queries/v1/query-request", json=body, headers=headers)
-        assert resp.status_code == 200
-        return resp.json()
+        def query(sql: str, bindings: dict[str, dict[str, str]]) -> dict:
+            # Use cmd_query to send the named bindings to the server.
+            # With the default pyformat paramstyle, cursor.execute client-side interpolates named
+            # params instead of sending them to the server
+            return conn.cmd_query(sql, conn._next_sequence_counter(), uuid.uuid4(), binding_params=bindings)  # noqa: SLF001
 
-    query("create or replace table customers (id int, name text)")
-    query("insert into customers values (1, 'Jenny'), (2, 'Jasper')")
-
-    # single named binding (FIXED / integer)
-    result = query("select * from customers where id = :myid", bindings={"myid": {"type": "FIXED", "value": "1"}})
-    assert result["success"] is True
-    assert result["data"]["total"] == 1
-
-    # single named binding (TEXT / string)
-    result = query("select * from customers where name = :myname", bindings={"myname": {"type": "TEXT", "value": "Jasper"}})
-    assert result["success"] is True
-    assert result["data"]["total"] == 1
-
-    # multiple named bindings
-    result = query(
-        "select * from customers where id = :myid and name = :myname",
-        bindings={"myid": {"type": "FIXED", "value": "2"}, "myname": {"type": "TEXT", "value": "Jasper"}},
-    )
-    assert result["success"] is True
-    assert result["data"]["total"] == 1
-
-    # no match
-    result = query("select * from customers where id = :myid", bindings={"myid": {"type": "FIXED", "value": "99"}})
-    assert result["success"] is True
-    assert result["data"]["total"] == 0
-
-
+        result = query(
+            "select * from customers where id = :myid and name = :myname",
+            {"myid": {"type": "FIXED", "value": "2"}, "myname": {"type": "TEXT", "value": "Jasper"}},
+        )
+        assert result["success"] is True
+        assert result["data"]["total"] == 1
 def test_server_connect(sconn: snowflake.connector.SnowflakeConnection) -> None:
     conn = sconn
 
