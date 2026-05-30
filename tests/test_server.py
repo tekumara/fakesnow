@@ -3,6 +3,7 @@
 import datetime
 import os
 import tempfile
+import uuid
 from decimal import Decimal
 from unittest.mock import patch
 
@@ -75,6 +76,26 @@ def test_server_binding_qmark(server: dict):
         ]
 
         cur.execute("select * from example where xint = ?", (1,))
+
+
+def test_server_binding_named(server: dict) -> None:
+    with snowflake.connector.connect(**server, database="DB1", schema="SCHEMA1") as conn:
+        with conn.cursor() as cur:
+            cur.execute("create table customers (id int, name text)")
+            cur.execute("insert into customers values (1, 'Jenny'), (2, 'Jasper')")
+
+        def query(sql: str, bindings: dict[str, dict[str, str]]) -> dict:
+            # Use cmd_query to send the named bindings to the server.
+            # Because cursor.execute interpolates named params client-side instead of sending them to the server
+            # Server-side named bindings are used in the .NET connector
+            return conn.cmd_query(sql, conn._next_sequence_counter(), uuid.uuid4(), binding_params=bindings)  # noqa: SLF001
+
+        result = query(
+            "select * from customers where id = :myid and name = :myname",
+            {"myid": {"type": "FIXED", "value": "2"}, "myname": {"type": "TEXT", "value": "Jasper"}},
+        )
+        assert result["success"] is True
+        assert result["data"]["total"] == 1
 
 
 def test_server_connect(sconn: snowflake.connector.SnowflakeConnection) -> None:
