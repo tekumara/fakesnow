@@ -8,6 +8,7 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
+    if: ${{ !github.event.release.prerelease }}
     steps:
       - name: Wait for checks to succeed
         uses: poseidon/wait-for-status-checks@v0.6.0
@@ -38,6 +39,8 @@ jobs:
 
   publish-docker:
     runs-on: ubuntu-latest
+    permissions:
+      packages: write
     steps:
       - name: Wait for checks to succeed
         uses: poseidon/wait-for-status-checks@v0.6.0
@@ -61,16 +64,17 @@ jobs:
         run: make install
       - name: Test Docker image
         run: uv run pytest integration_tests/test_docker.py
-      - name: Log in to Docker Hub
+      - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERHUB_USERNAME }}
-          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: tekumara/fakesnow
+          images: ghcr.io/gao-artur/fakesnow
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
