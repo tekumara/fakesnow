@@ -13,13 +13,13 @@ PORT = 8080
 
 @pytest.fixture(scope="session")
 def docker_fakesnow() -> Iterator[DockerContainer]:
-    with DockerImage(path=str(REPO_ROOT), tag="fakesnow-test:latest") as image:
-        with (
-            DockerContainer(str(image))
-            .with_exposed_ports(PORT)
-            .waiting_for(LogMessageWaitStrategy("Application startup complete").with_startup_timeout(30))
-        ) as container:
-            yield container
+    with (
+        DockerImage(path=str(REPO_ROOT), tag="fakesnow-test:latest") as image,
+        DockerContainer(str(image))
+        .with_exposed_ports(PORT)
+        .waiting_for(LogMessageWaitStrategy("Application startup complete").with_startup_timeout(30)) as container,
+    ):
+        yield container
 
 
 def test_docker_select(docker_fakesnow: DockerContainer) -> None:
@@ -36,5 +36,7 @@ def test_docker_select(docker_fakesnow: DockerContainer) -> None:
         session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False},
         network_timeout=5,
     ) as conn:
-        result = conn.cursor().execute("SELECT 'Hello fake world!'").fetchone()
+        cursor = conn.cursor().execute("SELECT 'Hello fake world!'")
+        assert cursor is not None
+        result = cursor.fetchone()
         assert result == ("Hello fake world!",)
