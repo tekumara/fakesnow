@@ -8,7 +8,6 @@ on:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    if: ${{ !github.event.release.prerelease }}
     steps:
       - name: Wait for checks to succeed
         uses: poseidon/wait-for-status-checks@v0.6.0
