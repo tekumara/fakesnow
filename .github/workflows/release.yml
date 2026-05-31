@@ -73,7 +73,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ghcr.io/gao-artur/fakesnow
+          images: ghcr.io/tekumara/fakesnow
           tags: |
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
