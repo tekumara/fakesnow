@@ -1,3 +1,4 @@
+import pytest
 import sqlglot
 
 from fakesnow.checks import is_unqualified_table_expression
@@ -63,3 +64,27 @@ def test_check_table_function_does_not_require_current_database() -> None:
     expression = sqlglot.parse_one("SELECT * FROM table(flatten([1, 2]))", read="snowflake")
 
     assert is_unqualified_table_expression(expression) == (False, False)
+
+
+@pytest.mark.parametrize(
+    "sql,expected",
+    [
+        # inner join
+        ("SELECT * FROM a INNER JOIN b ON a.id = b.id", (True, True)),
+        ("SELECT * FROM marts.jaffles.a INNER JOIN marts.jaffles.b ON a.id = b.id", (False, False)),
+        ("SELECT * FROM marts.jaffles.a INNER JOIN jaffles.b ON a.id = b.id", (True, False)),
+        # cross join
+        ("SELECT * FROM a CROSS JOIN b", (True, True)),
+        ("SELECT * FROM marts.jaffles.a CROSS JOIN marts.jaffles.b", (False, False)),
+        ("SELECT * FROM marts.jaffles.a CROSS JOIN jaffles.b", (True, False)),
+        # outer join
+        ("SELECT * FROM a LEFT OUTER JOIN jaffles.b AS B ON a.id = b.id", (True, True)),
+        ("SELECT * FROM jaffles.a as A FULL OUTER JOIN b ON a.id = b.id", (True, True)),
+        ("SELECT * FROM marts.jaffles.a LEFT OUTER JOIN marts.jaffles.b ON a.id = b.id", (False, False)),
+        ("SELECT * FROM marts.jaffles.a FULL OUTER JOIN marts.jaffles.b ON a.id = b.id", (False, False)),
+        ("SELECT * FROM marts.jaffles.a LEFT OUTER JOIN jaffles.b ON a.id = b.id", (True, False)),
+        ("SELECT * FROM marts.jaffles.a FULL OUTER JOIN jaffles.b ON a.id = b.id", (True, False)),
+    ],
+)
+def test_check_unqualified_joins(sql: str, expected: tuple[bool, bool]) -> None:
+    assert is_unqualified_table_expression(sqlglot.parse_one(sql)) == expected
