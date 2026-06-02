@@ -78,8 +78,8 @@ def test_check_table_function_does_not_require_current_database() -> None:
         ("SELECT * FROM marts.jaffles.a CROSS JOIN marts.jaffles.b", (False, False)),
         ("SELECT * FROM marts.jaffles.a CROSS JOIN jaffles.b", (True, False)),
         # outer join
-        ("SELECT * FROM a LEFT OUTER JOIN b ON a.id = b.id", (True, True)),
-        ("SELECT * FROM a FULL OUTER JOIN b ON a.id = b.id", (True, True)),
+        ("SELECT * FROM a LEFT OUTER JOIN jaffles.b AS B ON a.id = b.id", (True, True)),
+        ("SELECT * FROM jaffles.a as A FULL OUTER JOIN b ON a.id = b.id", (True, True)),
         ("SELECT * FROM marts.jaffles.a LEFT OUTER JOIN marts.jaffles.b ON a.id = b.id", (False, False)),
         ("SELECT * FROM marts.jaffles.a FULL OUTER JOIN marts.jaffles.b ON a.id = b.id", (False, False)),
         ("SELECT * FROM marts.jaffles.a LEFT OUTER JOIN jaffles.b ON a.id = b.id", (True, False)),
