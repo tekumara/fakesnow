@@ -28,17 +28,17 @@ dev = [
     "build~=1.5",
     "dirty-equals",
     "fakesnow[server]",
-    "moto[server] >= 5.1.22",
+    "moto[server] >= 5.2.1",
     # to fix https://github.com/pandas-dev/pandas/issues/56995
     "pandas-stubs",
     "pre-commit~=4.6",
     "pyarrow-stubs==20.0.0.20251215",
-    "pyright==1.1.409",
+    "pyright==1.1.410",
     "pytest~=9.0",
-    "ruff~=0.15.12",
+    "ruff~=0.15.15",
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
-    "snowflake-sqlalchemy~=1.9.0",
+    "snowflake-sqlalchemy~=1.10.0",
     "twine~=6.2",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
