@@ -2,6 +2,24 @@
 
 # Changelog
 
+## [0.11.7](https://github.com/tekumara/fakesnow/compare/v0.11.6...v0.11.7) (2026-06-02)
+
+
+### Features
+
+* Add named params support in server mode ([#334](https://github.com/tekumara/fakesnow/issues/334)) ([fbe2848](https://github.com/tekumara/fakesnow/commit/fbe28486b4871ac6c8c6a3cb9db1458e8d8c2641))
+
+
+### Bug Fixes
+
+* Handle join expressions in _missing_qualifiers ([#337](https://github.com/tekumara/fakesnow/issues/337)) ([910adaf](https://github.com/tekumara/fakesnow/commit/910adaf6f8fb9b8b44a6da7494c4dc413d5355a8))
+
+
+### Chores
+
+* **deps-dev:** bump the pip group with 6 updates ([#329](https://github.com/tekumara/fakesnow/issues/329)) ([639c41c](https://github.com/tekumara/fakesnow/commit/639c41c0ad4e5b53eec0548de6a5481044c515b7))
+* **deps:** update duckdb requirement from ~=1.5.1 to ~=1.5.2 ([#330](https://github.com/tekumara/fakesnow/issues/330)) ([10dcbb6](https://github.com/tekumara/fakesnow/commit/10dcbb6156b4c9587564997831e224c368f423b2))
+
 ## [0.11.6](https://github.com/tekumara/fakesnow/compare/v0.11.5...v0.11.6) (2026-04-18)
 
 
