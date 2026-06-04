@@ -6,6 +6,6 @@ COPY . .
 
 RUN pip install --no-cache-dir ".[server]"
 
-EXPOSE 8080
+EXPOSE 64616
 
-CMD ["fakesnow", "-s", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["fakesnow", "-s", "--host", "0.0.0.0", "--port", "64616"]

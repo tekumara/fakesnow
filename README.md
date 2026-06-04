@@ -93,7 +93,7 @@ For scenarios where patching won't work (like subprocesses or non-Python clients
 #### Using Docker
 
 ```shell
-docker run -p 8080:8080 ghcr.io/tekumara/fakesnow:latest
+docker run -p 64616:64616 ghcr.io/tekumara/fakesnow:latest
 ```
 
 #### From the command line

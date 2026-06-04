@@ -8,7 +8,7 @@ from testcontainers.core.image import DockerImage
 from testcontainers.core.wait_strategies import LogMessageWaitStrategy
 
 REPO_ROOT = Path(__file__).parent.parent
-PORT = 8080
+PORT = 64616
 
 
 @pytest.fixture(scope="session")
