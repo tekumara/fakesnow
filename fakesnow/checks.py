@@ -72,6 +72,9 @@ def _missing_qualifiers(node: exp.Table) -> tuple[bool, bool]:
 
     assert node.parent, f"No parent for table expression {node.sql()}"
 
+    if node.parent.key == "join":
+        return not node.args.get("catalog"), not node.args.get("db")
+
     if (parent_kind := node.parent.args.get("kind")) and isinstance(parent_kind, str):
         if parent_kind.upper() == "DATABASE":
             # "CREATE/DROP DATABASE"

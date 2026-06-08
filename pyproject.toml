@@ -1,17 +1,17 @@
 [project]
 name = "fakesnow"
 description = "Fake Snowflake Connector for Python. Run, mock and test Snowflake DB locally."
-version = "0.11.6"
+version = "0.11.7"
 readme = "README.md"
 license = { file = "LICENSE" }
 classifiers = ["License :: OSI Approved :: MIT License"]
 keywords = ["snowflake", "snowflakedb", "fake", "local", "mock", "testing"]
 requires-python = ">=3.10"
 dependencies = [
-    "duckdb~=1.5.2",
+    "duckdb~=1.5.3",
     "pyarrow",
     "snowflake-connector-python",
-    "sqlglot~=30.6.0",
+    "sqlglot~=30.8.0",
 ]
 
 [project.urls]
@@ -28,17 +28,17 @@ dev = [
     "build~=1.5",
     "dirty-equals",
     "fakesnow[server]",
-    "moto[server] >= 5.1.22",
+    "moto[server] >= 5.2.1",
     # to fix https://github.com/pandas-dev/pandas/issues/56995
     "pandas-stubs",
     "pre-commit~=4.6",
     "pyarrow-stubs==20.0.0.20251215",
-    "pyright==1.1.409",
+    "pyright==1.1.410",
     "pytest~=9.0",
-    "ruff~=0.15.12",
+    "ruff~=0.15.15",
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
-    "snowflake-sqlalchemy~=1.9.0",
+    "snowflake-sqlalchemy~=1.10.0",
     "testcontainers>=4.0.0",
     "twine~=6.2",
 ]
