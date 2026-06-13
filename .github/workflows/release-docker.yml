@@ -9,7 +9,9 @@ jobs:
   publish-docker:
     runs-on: ubuntu-latest
     permissions:
+      contents: read
       packages: write
+      checks: read
     steps:
       - name: Wait for checks to succeed
         uses: poseidon/wait-for-status-checks@v0.6.0
@@ -33,6 +35,8 @@ jobs:
         run: make install
       - name: Test Docker image
         run: uv run pytest integration_tests/test_docker.py
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
       - name: Log in to GitHub Container Registry
         uses: docker/login-action@v3
         with:
@@ -53,3 +57,6 @@ jobs:
           context: .
           push: true
           tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          sbom: true
+          provenance: true
