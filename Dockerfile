@@ -8,10 +8,10 @@ ENV UV_COMPILE_BYTECODE=1 \
     UV_LINK_MODE=copy \
     UV_PYTHON_DOWNLOADS=never
 
-COPY pyproject.toml uv.lock README.md LICENSE ./
+COPY pyproject.toml README.md LICENSE ./
 COPY fakesnow/ ./fakesnow/
 
-RUN uv sync --locked --no-dev --extra server --no-editable
+RUN uv sync --no-dev --extra server --no-editable
 
 FROM cgr.dev/chainguard/python:latest
 
