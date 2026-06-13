@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.11.9](https://github.com/tekumara/fakesnow/compare/v0.11.8...v0.11.9) (2026-06-13)
+
+
+### Features
+
+* publish linux/arm64 docker image ([24f1a57](https://github.com/tekumara/fakesnow/commit/24f1a57486837a49c3d63a76701b58d5aa92040f))
+
 ## [0.11.8](https://github.com/tekumara/fakesnow/compare/v0.11.7...v0.11.8) (2026-06-13)
 
 
