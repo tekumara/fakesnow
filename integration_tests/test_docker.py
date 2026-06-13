@@ -1,23 +1,38 @@
+import os
+import subprocess
 from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 import snowflake.connector
 from testcontainers.core.container import DockerContainer
-from testcontainers.core.image import DockerImage
 from testcontainers.core.wait_strategies import LogMessageWaitStrategy
 
 REPO_ROOT = Path(__file__).parent.parent
 PORT = 64616
+IMAGE_TAG = "fakesnow-test:latest"
 
 
 @pytest.fixture(scope="session")
-def docker_fakesnow() -> Iterator[DockerContainer]:
+def docker_image() -> Iterator[str]:
+    # testcontainers-python uses docker-py, which does not expose BuildKit; use the Docker CLI instead.
+    subprocess.run(
+        ["docker", "build", "--tag", IMAGE_TAG, str(REPO_ROOT)],
+        check=True,
+        env={**os.environ, "DOCKER_BUILDKIT": "1"},
+    )
+    try:
+        yield IMAGE_TAG
+    finally:
+        subprocess.run(["docker", "image", "rm", "--force", IMAGE_TAG], check=False)
+
+
+@pytest.fixture(scope="session")
+def docker_fakesnow(docker_image: str) -> Iterator[DockerContainer]:
     with (
-        DockerImage(path=str(REPO_ROOT), tag="fakesnow-test:latest") as image,
-        DockerContainer(str(image))
+        DockerContainer(docker_image)
         .with_exposed_ports(PORT)
-        .waiting_for(LogMessageWaitStrategy("Application startup complete").with_startup_timeout(30)) as container,
+        .waiting_for(LogMessageWaitStrategy("Application startup complete").with_startup_timeout(30)) as container
     ):
         yield container
 
