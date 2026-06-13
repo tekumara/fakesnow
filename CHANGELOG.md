@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.11.8](https://github.com/tekumara/fakesnow/compare/v0.11.7...v0.11.8) (2026-06-13)
+
+
+### Features
+
+* publish docker image ([#333](https://github.com/tekumara/fakesnow/issues/333)) ([d09ef30](https://github.com/tekumara/fakesnow/commit/d09ef3052c5faaa71e26a31d6b77373e6120fbbd))
+
 ## [0.11.7](https://github.com/tekumara/fakesnow/compare/v0.11.6...v0.11.7) (2026-06-02)
 
 
