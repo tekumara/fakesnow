@@ -11,6 +11,9 @@ jobs:
     permissions:
       contents: read
       packages: write
+      attestations: write
+      artifact-metadata: write
+      id-token: write
       checks: read
     steps:
       - name: Wait for checks to succeed
@@ -52,6 +55,7 @@ jobs:
             type=semver,pattern={{version}}
             type=raw,value=latest,enable=${{ !github.event.release.prerelease }}
       - name: Build and push Docker image
+        id: push
         uses: docker/build-push-action@v6
         with:
           context: .
@@ -60,3 +64,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           sbom: true
           provenance: true
+      - name: Generate artifact attestation
+        uses: actions/attest@v4
+        with:
+          subject-name: ghcr.io/tekumara/fakesnow
+          subject-digest: ${{ steps.push.outputs.digest }}
+          push-to-registry: true
