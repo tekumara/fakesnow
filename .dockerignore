@@ -1,0 +1,18 @@
+# Keep the Docker build context minimal so only files required to install are copied by `COPY . .`.
+**
+
+# Build/install metadata required by pyproject.toml
+!pyproject.toml
+!uv.lock
+!README.md
+!LICENSE
+
+# Runtime package files
+!fakesnow/
+
+# Python cache artifacts in subdirs
+**/__pycache__/
+**/*.pyc
+
+# macOS in subdirs
+**/.DS_Store

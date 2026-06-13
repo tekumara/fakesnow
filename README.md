@@ -90,6 +90,12 @@ with fakesnow.patch(db_path="databases/"):
 
 For scenarios where patching won't work (like subprocesses or non-Python clients), you can run fakesnow as an HTTP server.
 
+#### Using Docker
+
+```shell
+docker run -p 64616:64616 ghcr.io/tekumara/fakesnow:latest
+```
+
 #### From the command line
 
 Using [uv](https://docs.astral.sh/uv/):

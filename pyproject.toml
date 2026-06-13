@@ -39,6 +39,7 @@ dev = [
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
     "snowflake-sqlalchemy~=1.10.0",
+    "testcontainers>=4.0.0",
     "twine~=6.2",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
@@ -70,6 +71,7 @@ reportMatchNotExhaustive = true
 reportUnnecessaryTypeIgnoreComment = true
 
 [tool.pytest.ini_options]
+testpaths = ["tests"]
 # error on unhandled exceptions in background threads
 # useful for catching errors in server or snowflake connector threads
 filterwarnings = [
@@ -120,6 +122,7 @@ force-wrap-aliases = true
 [tool.ruff.lint.per-file-ignores]
 # test functions don't need return types
 "tests/*" = ["ANN201", "ANN202"]
+"integration_tests/*" = ["ANN201", "ANN202"]
 
 [tool.ruff.lint.flake8-annotations]
 # allow *args: Any, **kwargs: Any
