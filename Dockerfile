@@ -1,3 +1,8 @@
+FROM cgr.dev/chainguard/python:latest-dev AS tzdata
+
+USER root
+RUN apk add --no-cache tzdata
+
 FROM cgr.dev/chainguard/python:latest-dev AS builder
 
 COPY --from=ghcr.io/astral-sh/uv:latest /uv /uvx /usr/bin/
@@ -15,11 +20,13 @@ RUN uv sync --no-dev --extra server --no-editable
 
 FROM cgr.dev/chainguard/python:latest
 
+COPY --from=tzdata /usr/share/zoneinfo /usr/share/zoneinfo
 COPY --from=builder /app/.venv /app/.venv
 
 WORKDIR /app
 
-ENV PATH="/app/.venv/bin:$PATH"
+ENV PATH="/app/.venv/bin:$PATH" \
+    TZDIR="/usr/share/zoneinfo"
 
 EXPOSE 64616
 ENTRYPOINT []

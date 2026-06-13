@@ -1,3 +1,4 @@
+import datetime
 import os
 import subprocess
 from collections.abc import Iterator
@@ -37,11 +38,11 @@ def docker_fakesnow(docker_image: str) -> Iterator[DockerContainer]:
         yield container
 
 
-def test_docker_select(docker_fakesnow: DockerContainer) -> None:
+def docker_connect(docker_fakesnow: DockerContainer) -> snowflake.connector.SnowflakeConnection:
     host = docker_fakesnow.get_container_host_ip()
     port = int(docker_fakesnow.get_exposed_port(PORT))
 
-    with snowflake.connector.connect(
+    return snowflake.connector.connect(
         user="fake",
         password="snow",
         account="fakesnow",
@@ -50,8 +51,21 @@ def test_docker_select(docker_fakesnow: DockerContainer) -> None:
         protocol="http",
         session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False},
         network_timeout=5,
-    ) as conn:
+    )
+
+
+def test_docker_select(docker_fakesnow: DockerContainer) -> None:
+    with docker_connect(docker_fakesnow) as conn:
         cursor = conn.cursor().execute("SELECT 'Hello fake world!'")
         assert cursor is not None
         result = cursor.fetchone()
         assert result == ("Hello fake world!",)
+
+
+def test_docker_timestamp_tz(docker_fakesnow: DockerContainer) -> None:
+    with docker_connect(docker_fakesnow) as conn:
+        cursor = conn.cursor().execute("SELECT to_timestamp_tz('2013-04-05 01:02:03.123456')")
+        assert cursor is not None
+        result = cursor.fetchone()
+        assert result and isinstance(result[0], datetime.datetime)
+        assert result[0].tzinfo is not None
