@@ -72,6 +72,7 @@ from fakesnow.transforms.transforms import (
     set_schema as set_schema,
     sha256 as sha256,
     split as split,
+    sum_to_fakesnow_sum as sum_to_fakesnow_sum,
     tag as tag,
     timestamp_ntz as timestamp_ntz,
     to_date as to_date,

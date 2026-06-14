@@ -55,7 +55,10 @@ build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
-exclude = ["tests*", "build*"]
+exclude = ["tests*", "build*", "duckdb_extension*"]
+
+[tool.setuptools.package-data]
+fakesnow = ["_duckdb_extension/*.duckdb_extension"]
 
 [tool.pyright]
 venvPath = "."

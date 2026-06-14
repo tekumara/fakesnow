@@ -25,3 +25,7 @@ CLAUDE.md
 TODO.md
 notebooks/*.ipynb
 .realsnow.toml
+/duckdb_extension/cmake_build/
+/duckdb_extension/configure/
+/duckdb_extension/build/
+/fakesnow/_duckdb_extension/

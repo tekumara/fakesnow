@@ -67,9 +67,8 @@ SQL_COPY_ROWS = Template(
 def _fixed_zero_scale_field_names(table: pyarrow.Table | pyarrow.RecordBatch) -> set[str]:
     """Return decimal field names Snowflake exposes as Python ints.
 
-    Snowflake's connector converts FIXED values with scale=0 to int. DuckDB
-    returns SUM(integer) as a decimal128(38, 0), so apply the same conversion
-    when materialising Python rows.
+    Snowflake's connector converts FIXED values with scale=0 to int, so apply
+    the same conversion when materialising Python rows.
     """
     return {
         field.name
@@ -353,6 +352,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.alias_in_join)
             .transform(transforms.alter_table_strip_cluster_by)
             .transform(transforms.numeric_agg_implicit_cast_except_sum)
+            .transform(transforms.sum_to_fakesnow_sum)
             .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.list_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.put_stage(e, self._conn.database, self._conn.schema, params))
@@ -445,23 +445,7 @@ class FakeSnowflakeCursor:
                 self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]
-            if isinstance(transformed, exp.Copy) or "No function matches the given name and argument types" not in msg:
-                raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from e
-
-            retry_transformed = transformed.copy().transform(transforms.numeric_agg_implicit_cast)
-            retry_sql = retry_transformed.sql(dialect="duckdb")
-            if retry_sql == sql:
-                raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from e
-
-            try:
-                logger.log_sql(retry_sql, params)
-                self._duck_conn.execute(retry_sql, params)
-            except duckdb.BinderException as retry_e:
-                msg = retry_e.args[0]
-                raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from retry_e
-
-            sql = retry_sql
-            transformed = retry_transformed
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from e
         except duckdb.CatalogException as e:
             # minimal processing to make it look like a snowflake exception, message content may differ
             msg = cast(str, e.args[0]).split("\n")[0]

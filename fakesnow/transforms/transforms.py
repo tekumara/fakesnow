@@ -1643,6 +1643,13 @@ def numeric_agg_alias(expression: Expr) -> Expr:
     return expression
 
 
+def sum_to_fakesnow_sum(expression: Expr) -> Expr:
+    """Rewrite SUM to the fakesnow DuckDB extension aggregate."""
+    if isinstance(expression, exp.Sum):
+        return exp.Anonymous(this="_fs_sum", expressions=[expression.this.copy()])
+    return expression
+
+
 def numeric_agg_implicit_cast_except_sum(expression: Expr) -> Expr:
     """Cast numeric aggregate arguments, except SUM where result type must be preserved."""
     if isinstance(expression, exp.Sum):
