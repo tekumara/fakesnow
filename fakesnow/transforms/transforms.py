@@ -1632,6 +1632,24 @@ def _numeric_agg_col_name(expression: Expr, arg: Expr) -> str | None:
     return f"{function_name}({arg.sql(dialect='snowflake').upper()})"
 
 
+def numeric_agg_alias(expression: Expr) -> Expr:
+    """Preserve Snowflake-style column names for numeric aggregate projections."""
+    if isinstance(expression, _NUMERIC_ONLY_AGGS):
+        col_name = (
+            None if isinstance(expression.parent, exp.Alias) else _numeric_agg_col_name(expression, expression.this)
+        )
+        if col_name and isinstance(expression.parent, exp.Select):
+            return exp.alias_(expression, col_name, quoted=True)
+    return expression
+
+
+def numeric_agg_implicit_cast_except_sum(expression: Expr) -> Expr:
+    """Cast numeric aggregate arguments, except SUM where result type must be preserved."""
+    if isinstance(expression, exp.Sum):
+        return numeric_agg_alias(expression)
+    return numeric_agg_implicit_cast(expression)
+
+
 def numeric_agg_implicit_cast(expression: Expr) -> Expr:
     """Wrap arguments to numeric aggregate functions with TRY_CAST(... AS DOUBLE).
 
