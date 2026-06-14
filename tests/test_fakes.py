@@ -357,6 +357,14 @@ def test_number_38_0_is_int(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert isinstance(results[0][0], int)
 
 
+def test_sum_of_integer_expression_returns_int(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("SELECT SUM(x) FROM (SELECT 1 AS x)")
+    result = cur.fetchone()[0]
+
+    assert result == 1
+    assert isinstance(result, int)
+
+
 def test_non_existent_table_throws_snowflake_exception(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as _:
         cur.execute("select * from this_table_does_not_exist")
