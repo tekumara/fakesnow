@@ -528,6 +528,13 @@ class FakeSnowflakeCursor:
             match = re.search(r"SECRET\s+(\w+)\s*\(", transformed.expression, re.IGNORECASE)
             secret_name = match[1].upper() if match else "UNKNOWN"
             result_sql = SQL_CREATED_SECRET.substitute(name=secret_name)
+        elif (
+            cmd == "CREATE"
+            and isinstance(transformed, exp.Command)
+            and isinstance(transformed.expression, str)
+            and re.search(r"\bMACRO\b", transformed.expression, re.IGNORECASE)
+        ):
+            result_sql = SQL_SUCCESS
 
         if table_comment := cast(tuple[exp.Table, str], transformed.args.get("table_comment")):
             # record table comment
