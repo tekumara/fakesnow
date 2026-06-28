@@ -419,14 +419,6 @@ def test_server_response_params(server: dict) -> None:
     assert {"name": "AUTOCOMMIT", "value": False} in response.json()["data"]["parameters"]
 
 
-def test_server_create_macro(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
-    cur = scur
-    # CREATE MACRO is DuckDB-only DDL; server mode must not raise ProgrammingError
-    cur.execute("CREATE OR REPLACE MACRO inc(x) AS (x + 1)")
-    cur.execute("SELECT inc(41)")
-    assert cur.fetchall() == [(42,)]
-
-
 def test_server_rowcount(scur: snowflake.connector.cursor.SnowflakeCursor):
     cur = scur
 

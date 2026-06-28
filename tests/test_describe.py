@@ -315,3 +315,9 @@ def test_description_update(dcur: snowflake.connector.cursor.DictCursor):
         ResultMetadata(name='number of multi-joined rows updated', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)
     ]
     # fmt: on
+
+
+def test_description_create_macro(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("create or replace macro inc(x) as (x + 1)")
+    assert dcur.fetchall() == [{"status": "Statement executed successfully."}]
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
