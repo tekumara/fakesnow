@@ -355,6 +355,17 @@ class FakeSnowflakeCursor:
         if not sql:
             raise NotImplementedError(transformed.sql(dialect="snowflake"))
 
+        if (
+            cmd == "CREATE"
+            and isinstance(transformed, exp.Command)
+            and re.search(r"\bMACRO\b", transformed.expression, re.IGNORECASE)
+        ):
+            raise snowflake.connector.errors.ProgrammingError(
+                msg="SQL compilation error:\nUnsupported feature 'CREATE MACRO'.",
+                errno=2,
+                sqlstate="0A000",
+            )
+
         if sfqid := transformed.args.get("result_scan_sfqid"):
             value = self._conn.results_cache.get(sfqid)
             if value is None:
