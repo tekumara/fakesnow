@@ -7,25 +7,17 @@
 
 Run, mock and test fake Snowflake databases locally.
 
-## Install
+## Usage
+
+fakesnow offers two main approaches for faking Snowflake: [in-process patching](#in-process-patching-python) of the Snowflake Connector for Python or a [standalone HTTP server](#run-fakesnow-as-a-server) for use with connectors from any language.
+
+### In-process patching (Python)
+
+Install:
 
 ```
 pip install fakesnow
 ```
-
-Or to install with the server:
-
-```
-pip install fakesnow[server]
-```
-
-## Usage
-
-fakesnow offers two main approaches for faking Snowflake: [in-process patching](#in-process-patching) of the Snowflake Connector for Python or a [standalone HTTP server](#run-fakesnow-as-a-server).
-
-Patching only applies to the current Python process. If a subprocess is spawned it won't be patched. For subprocesses, or for non-Python clients, use the server instead.
-
-### In-process patching
 
 To run script.py with patching:
 
@@ -62,6 +54,8 @@ The following standard imports are automatically patched:
 - `import snowflake.connector.connect`
 - `import snowflake.connector.pandas_tools.write_pandas`
 
+Patching only applies to the current Python process. If a subprocess is spawned it won't be patched. For subprocesses, or for non-Python clients, use the server instead.
+
 #### Handling "from ... import" Statements
 
 To patch modules that use the `from ... import` syntax, you need to manually specify them, eg: if _mymodule.py_ contains:
@@ -90,12 +84,6 @@ with fakesnow.patch(db_path="databases/"):
 
 For scenarios where patching won't work (like subprocesses or non-Python clients), you can run fakesnow as an HTTP server.
 
-#### Using Docker
-
-```shell
-docker run -p 64616:64616 ghcr.io/tekumara/fakesnow:latest
-```
-
 #### From the command line
 
 Using [uv](https://docs.astral.sh/uv/):
@@ -111,6 +99,12 @@ fakesnow -s
 ```
 
 By default the server listens on a random available port. Use `-p` to specify a port.
+
+Using docker, fakesnow server is configured to run on port 64616:
+
+```shell
+docker run -p 64616:64616 ghcr.io/tekumara/fakesnow:latest
+```
 
 #### Within your python program
 
@@ -165,6 +159,7 @@ protocol: http
 ```
 
 Additional parameters that may be helpful:
+
 - Session parameter `CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED` set to `false`
 - Network timeout set to 1 second (since retries aren't needed in testing)
 
@@ -188,7 +183,6 @@ protocol = "http"
 Use the `-c` flag to specify the above connection: `snow sql -c fakesnow -q "SELECT 'Hello World' as greeting"`.
 
 Or set the default value using `set-default`:
-
 
 ```sql
 $ snow connection set-default fakesnow
