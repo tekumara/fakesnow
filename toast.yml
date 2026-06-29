@@ -21,7 +21,6 @@ tasks:
       - Makefile-common.mk
       - .python-version
       - pyproject.toml
-      - package.json
       - .pre-commit-config.yaml
     command: |
       # needed to install hooks
