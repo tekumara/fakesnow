@@ -310,6 +310,16 @@ def test_floats_are_64bit(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(1.23, 1.23, 1.23, 1.23, 1.23)]
 
 
+def test_haversine(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # San Francisco (37.7749, -122.4194) to Los Angeles (34.0522, -118.2437) ~ 559 km
+    cur.execute("SELECT ROUND(HAVERSINE(37.7749, -122.4194, 34.0522, -118.2437), 0)")
+    assert cur.fetchone()[0] == 559.0
+
+    # same point -> 0 km
+    cur.execute("SELECT HAVERSINE(0, 0, 0, 0)")
+    assert cur.fetchone()[0] == 0.0
+
+
 def test_hex_decode_binary(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("SELECT HEX_DECODE_BINARY('EDF1439075A83A447FB8B630DDC9C8DE')")
     # NB: Snowflake returns bytesarray instead of bytes

@@ -69,9 +69,22 @@ CREATE OR REPLACE MACRO ${catalog}._fs_to_timestamp(val, scale) AS (
 )
 
 
+FS_HAVERSINE = Template(
+    """
+CREATE OR REPLACE MACRO ${catalog}._fs_haversine(lat1, lon1, lat2, lon2) AS (
+    2 * 6371 * ASIN(SQRT(
+        POWER(SIN(RADIANS(lat2 - lat1) / 2), 2) +
+        COS(RADIANS(lat1)) * COS(RADIANS(lat2)) * POWER(SIN(RADIANS(lon2 - lon1) / 2), 2)
+    ))
+);
+"""
+)
+
+
 def creation_sql(catalog: str) -> str:
     return f"""
         {FS_FLATTEN.substitute(catalog=catalog)};
+        {FS_HAVERSINE.substitute(catalog=catalog)};
         {FS_OBJECT_CONSTRUCT.substitute(catalog=catalog)};
         {FS_TO_TIMESTAMP.substitute(catalog=catalog)};
     """
