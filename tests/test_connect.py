@@ -87,6 +87,25 @@ def test_connect_db_path_can_create_database() -> None:
         cursor.execute("CREATE DATABASE db2")
 
 
+def test_create_database_registers_macros() -> None:
+    # _fs_* macros must be registered for databases created via CREATE DATABASE,
+    # not only for databases passed at connect time (issue #347)
+    with fakesnow.patch(), snowflake.connector.connect() as conn:
+        cur = conn.cursor()
+        cur.execute("CREATE DATABASE foo")
+        cur.execute("USE DATABASE foo")
+        cur.execute("CREATE SCHEMA foo.bar")
+        cur.execute("USE SCHEMA foo.bar")
+        # TO_TIMESTAMP_NTZ relies on _fs_to_timestamp macro
+        result = cur.execute("SELECT TO_TIMESTAMP_NTZ('1672531200', 0)").fetchone()
+        assert result is not None
+        # LATERAL FLATTEN relies on _fs_flatten macro
+        cur.execute("CREATE TABLE foo.bar.t (arr ARRAY)")
+        cur.execute("INSERT INTO foo.bar.t SELECT ARRAY_CONSTRUCT(1, 2, 3)")
+        rows = cur.execute("SELECT value FROM foo.bar.t, LATERAL FLATTEN(INPUT => arr)").fetchall()
+        assert len(rows) == 3
+
+
 def test_connect_db_path_reuse():
     with tempfile.TemporaryDirectory(prefix="fakesnow-test") as db_path:
         with (

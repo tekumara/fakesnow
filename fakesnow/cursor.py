@@ -26,6 +26,7 @@ from typing_extensions import Self
 import fakesnow.checks as checks
 import fakesnow.expr as expr
 import fakesnow.info_schema as info_schema
+import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 from fakesnow import logger
 from fakesnow.copy_into import copy_into
@@ -447,6 +448,7 @@ class FakeSnowflakeCursor:
         elif create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions
             self._duck_conn.execute(info_schema.per_db_creation_sql(create_db_name))
+            self._duck_conn.execute(macros.creation_sql(create_db_name))
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
         elif stage_name := transformed.args.get("create_stage_name"):
