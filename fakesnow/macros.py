@@ -30,7 +30,7 @@ CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input) AS TABLE
     """
 )
 
-# use json_group_object instead of json_object because it filters out keys that are null
+# use json_group_object instead of json_object because it allows filtering pairs before construction
 # see https://github.com/duckdb/duckdb/issues/19357
 FS_OBJECT_CONSTRUCT = Template(
     """
@@ -42,9 +42,9 @@ CREATE OR REPLACE MACRO ${catalog}._fs_object_construct(keys, vals, keep_nulls) 
         FROM UNNEST(keys) WITH ORDINALITY AS u(key, idx)
         ORDER BY idx
     )
-    SELECT json_group_object(key, value) AS obj
+    SELECT COALESCE(json_group_object(key, value), '{}'::JSON) AS obj
     FROM kv
-    WHERE keep_nulls OR value IS NOT NULL
+    WHERE key IS NOT NULL AND (keep_nulls OR value IS NOT NULL)
 );
 """
 )

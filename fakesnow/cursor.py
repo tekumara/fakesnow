@@ -12,7 +12,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Any, cast
 
 import duckdb
-import pyarrow  # needed by fetch_arrow_table()
+import pyarrow  # needed by to_arrow_table()
 import snowflake.connector.converter
 import snowflake.connector.errors
 import sqlglot
@@ -225,7 +225,7 @@ class FakeSnowflakeCursor:
         results = stage.upload_files(put_stage_data)
         _df = pyarrow.Table.from_pylist(results)
         self._duck_conn.execute("select * from _df")
-        self._arrow_table = self._duck_conn.fetch_arrow_table()
+        self._arrow_table = self._duck_conn.to_arrow_table()
         self._rowcount = self._arrow_table.num_rows
 
     def check_db_and_schema(self, expression: Expr) -> None:
@@ -460,7 +460,7 @@ class FakeSnowflakeCursor:
             result_sql = SQL_CREATED_STAGE.substitute(name=stage_name)
 
         elif stage_name := transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
-            if self._duck_conn.fetch_arrow_table().num_rows != 1:
+            if self._duck_conn.to_arrow_table().num_rows != 1:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"SQL compilation error:\nStage '{stage_name}' does not exist or not authorized.",
                     errno=2003,
@@ -551,7 +551,7 @@ class FakeSnowflakeCursor:
             logger.log_sql(result_sql)
             self._duck_conn.execute(result_sql)
 
-        self._arrow_table = self._duck_conn.fetch_arrow_table()
+        self._arrow_table = self._duck_conn.to_arrow_table()
         self._rowcount = affected_count or self._arrow_table.num_rows
         self._sfqid = str(uuid.uuid4())
 
