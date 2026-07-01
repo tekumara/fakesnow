@@ -12,7 +12,7 @@ from types import TracebackType
 from typing import TYPE_CHECKING, Any, cast
 
 import duckdb
-import pyarrow  # needed by fetch_arrow_table()
+import pyarrow  # needed by to_arrow_table()
 import snowflake.connector.converter
 import snowflake.connector.errors
 import sqlglot
@@ -26,6 +26,7 @@ from typing_extensions import Self
 import fakesnow.checks as checks
 import fakesnow.expr as expr
 import fakesnow.info_schema as info_schema
+import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 from fakesnow import logger
 from fakesnow.copy_into import copy_into
@@ -225,7 +226,7 @@ class FakeSnowflakeCursor:
         results = stage.upload_files(put_stage_data)
         _df = pyarrow.Table.from_pylist(results)
         self._duck_conn.execute("select * from _df")
-        self._arrow_table = self._duck_conn.fetch_arrow_table()
+        self._arrow_table = self._duck_conn.to_arrow_table()
         self._rowcount = self._arrow_table.num_rows
 
     def check_db_and_schema(self, expression: Expr) -> None:
@@ -311,6 +312,7 @@ class FakeSnowflakeCursor:
             .transform(lambda e: transforms.show_keys(e, self._conn.database, kind="FOREIGN"))
             .transform(transforms.show_users)
             .transform(transforms.create_user)
+            .transform(transforms.haversine)
             .transform(transforms.hex_string)
             .transform(transforms.sha256)
             .transform(transforms.create_clone)
@@ -457,6 +459,7 @@ class FakeSnowflakeCursor:
         elif create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions
             self._duck_conn.execute(info_schema.per_db_creation_sql(create_db_name))
+            self._duck_conn.execute(macros.creation_sql(create_db_name))
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
         elif stage_name := transformed.args.get("create_stage_name"):
@@ -470,7 +473,7 @@ class FakeSnowflakeCursor:
             result_sql = SQL_CREATED_STAGE.substitute(name=stage_name)
 
         elif stage_name := transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
-            if self._duck_conn.fetch_arrow_table().num_rows != 1:
+            if self._duck_conn.to_arrow_table().num_rows != 1:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"SQL compilation error:\nStage '{stage_name}' does not exist or not authorized.",
                     errno=2003,
@@ -561,7 +564,7 @@ class FakeSnowflakeCursor:
             logger.log_sql(result_sql)
             self._duck_conn.execute(result_sql)
 
-        self._arrow_table = self._duck_conn.fetch_arrow_table()
+        self._arrow_table = self._duck_conn.to_arrow_table()
         self._rowcount = affected_count or self._arrow_table.num_rows
         self._sfqid = str(uuid.uuid4())
 

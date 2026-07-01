@@ -581,6 +581,16 @@ def hex_string(expression: Expr) -> Expr:
     return expression
 
 
+def haversine(expression: Expr) -> Expr:
+    """Transform HAVERSINE to the _fs_haversine macro.
+
+    See https://docs.snowflake.com/en/sql-reference/functions/haversine
+    """
+    if isinstance(expression, exp.Anonymous) and expression.name.upper() == "HAVERSINE":
+        return exp.Anonymous(this="_fs_haversine", expressions=expression.expressions)
+    return expression
+
+
 def identifier(expression: Expr, params: MutableParams | None) -> Expr:
     """Convert identifier function to an identifier or table.
 
