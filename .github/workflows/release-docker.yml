@@ -34,7 +34,7 @@ jobs:
         uses: docker/setup-buildx-action@v4
       - name: Cache virtualenv
         id: cache-venv
-        uses: actions/cache@v5
+        uses: actions/cache@v6
         with:
           path: .venv
           # same as used in the ci workflow for reuse across workflows
@@ -44,7 +44,7 @@ jobs:
       - name: Test Docker image
         run: uv run pytest integration_tests/test_docker.py
       - name: Log in to GitHub Container Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
