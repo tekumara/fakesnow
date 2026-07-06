@@ -2,6 +2,24 @@
 
 # Changelog
 
+## [0.11.10](https://github.com/tekumara/fakesnow/compare/v0.11.9...v0.11.10) (2026-07-06)
+
+
+### Features
+
+* implement HAVERSINE function ([#348](https://github.com/tekumara/fakesnow/issues/348)) ([248aef6](https://github.com/tekumara/fakesnow/commit/248aef657a792cc3521dd977119107f07f6b22dd))
+
+
+### Bug Fixes
+
+* create macros for runtime-created databases ([#349](https://github.com/tekumara/fakesnow/issues/349)) ([24a8f8f](https://github.com/tekumara/fakesnow/commit/24a8f8f1e060368628922bea870aa1c5a65b0727))
+
+
+### Chores
+
+* replace deprecated DuckDB arrow fetch ([7455967](https://github.com/tekumara/fakesnow/commit/7455967dfa214cac7673c0e48b83797c23b1d053))
+* support duckdb 1.5.4 ([ee65ea9](https://github.com/tekumara/fakesnow/commit/ee65ea90ee21d14496b9a7e3e634559c49f64efc))
+
 ## [0.11.9](https://github.com/tekumara/fakesnow/compare/v0.11.8...v0.11.9) (2026-06-13)
 
 
