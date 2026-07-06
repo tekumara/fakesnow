@@ -69,7 +69,7 @@ def _is_alter_table_cluster_by(expression: Expr) -> bool:
     actions = expression.actions
     if not actions or len(actions) != 1:
         return False
-    return isinstance(actions[0], exp.Cluster)
+    return isinstance(actions[0], (exp.Cluster, exp.ClusterProperty))
 
 
 def _is_alter_table_drop_clustering_key(expression: Expr) -> bool:

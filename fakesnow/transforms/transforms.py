@@ -597,42 +597,52 @@ def identifier(expression: Expr, params: MutableParams | None) -> Expr:
     See https://docs.snowflake.com/en/sql-reference/identifier-literal
     """
 
+    if not isinstance(expression, exp.Table):
+        return expression
+
     if (
-        isinstance(expression, exp.Table)
-        and isinstance(expression.this, exp.Anonymous)
+        isinstance(expression.this, exp.Anonymous)
         and isinstance(expression.this.this, str)
         and expression.this.this.upper() == "IDENTIFIER"
     ):
         arg = expression.this.expressions[0]
+    elif isinstance(expression.this, exp.DynamicIdentifier):
+        arg = expression.this.this
+    else:
+        return expression
 
-        # ? is parsed as exp.Placeholder
-        val: str = pop_qmark_param(params, arg.root(), arg) if isinstance(arg, exp.Placeholder) else arg.this
+    # ? is parsed as exp.Placeholder
+    if isinstance(arg, exp.Placeholder):
+        val = str(pop_qmark_param(params, arg.root(), arg))
+    elif isinstance(arg, Expr):
+        val = arg.name
+    else:
+        val = str(arg)
 
-        # If the whole identifier is quoted, treat as a single quoted identifier inside a Table node
-        if val.startswith('"') and val.endswith('"'):
-            return exp.Table(this=exp.Identifier(this=val[1:-1], quoted=True))
+    # If the whole identifier is quoted, treat as a single quoted identifier inside a Table node
+    if val.startswith('"') and val.endswith('"'):
+        return exp.Table(this=exp.Identifier(this=val[1:-1], quoted=True))
 
-        # Split a dotted identifier string into parts, identifying and stripping quoted segments
-        parts = [(p[1:-1], True) if p.startswith('"') and p.endswith('"') else (p, False) for p in val.split(".")]
-        if len(parts) == 1:
-            return exp.Table(this=exp.Identifier(this=parts[0][0], quoted=parts[0][1]))
-        elif len(parts) == 2:
-            # db.table
-            return exp.Table(
-                this=exp.Identifier(this=parts[1][0], quoted=parts[1][1]),
-                db=exp.Identifier(this=parts[0][0], quoted=parts[0][1]),
-            )
-        elif len(parts) == 3:
-            # catalog.db.table
-            return exp.Table(
-                this=exp.Identifier(this=parts[2][0], quoted=parts[2][1]),
-                db=exp.Identifier(this=parts[1][0], quoted=parts[1][1]),
-                catalog=exp.Identifier(this=parts[0][0], quoted=parts[0][1]),
-            )
-        else:
-            # fallback: treat as a single identifier
-            return exp.Table(this=exp.Identifier(this=val, quoted=False))
-    return expression
+    # Split a dotted identifier string into parts, identifying and stripping quoted segments
+    parts = [(p[1:-1], True) if p.startswith('"') and p.endswith('"') else (p, False) for p in val.split(".")]
+    if len(parts) == 1:
+        return exp.Table(this=exp.Identifier(this=parts[0][0], quoted=parts[0][1]))
+    elif len(parts) == 2:
+        # db.table
+        return exp.Table(
+            this=exp.Identifier(this=parts[1][0], quoted=parts[1][1]),
+            db=exp.Identifier(this=parts[0][0], quoted=parts[0][1]),
+        )
+    elif len(parts) == 3:
+        # catalog.db.table
+        return exp.Table(
+            this=exp.Identifier(this=parts[2][0], quoted=parts[2][1]),
+            db=exp.Identifier(this=parts[1][0], quoted=parts[1][1]),
+            catalog=exp.Identifier(this=parts[0][0], quoted=parts[0][1]),
+        )
+    else:
+        # fallback: treat as a single identifier
+        return exp.Table(this=exp.Identifier(this=val, quoted=False))
 
 
 _SIMPLE_JSON_KEY = re.compile(r"^[A-Za-z0-9_]+$")
