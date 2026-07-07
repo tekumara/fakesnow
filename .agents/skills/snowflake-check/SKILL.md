@@ -28,7 +28,7 @@ Prefer reproducing the behavior in a small one-off script over patching the repo
 
 3. Discover the real Snowflake connection path that already exists.
 
-- Check the current shell environment for `SNOWFLAKE_*` variables and any repo-local `.env` files.
+- Check the current shell environment for `SNOWFLAKE_*` variables, any repo-local `.env` files, and `.realsnow.toml` for real Snowflake connection info.
 - Search for hard-coded or example live connection dictionaries in the repo.
 - Reuse the repo's known account, role, warehouse, database, schema, and authenticator values when possible.
 - If the repo uses `externalbrowser`, expect sandboxed runs to fail before reaching Snowflake because the connector needs a local callback socket.
