@@ -10,7 +10,7 @@ def test_index_of_placeholder_found():
             ON_ERROR = ?""",
         read="snowflake",
     )
-    identifier_ph = expression.this.this.expressions[0]
+    identifier_ph = expression.this.this.this
     from_ph = expression.args["files"][0].this.args.get("from_").this.this
     on_error_ph = expression.args["params"][0].expression
 
