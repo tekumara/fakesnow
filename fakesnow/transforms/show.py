@@ -169,11 +169,22 @@ WHERE 0 = 1;
 
 
 def show_functions(expression: Expr) -> Expr:
-    """Transform SHOW FUNCTIONS.
+    """Transform SHOW FUNCTIONS / SHOW USER FUNCTIONS.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-functions
+    See https://docs.snowflake.com/en/sql-reference/sql/show-user-functions
     """
     if isinstance(expression, exp.Show) and expression.name.upper() == "FUNCTIONS":
+        return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_show_functions", read="duckdb")
+
+    # sqlglot falls back to Command for SHOW USER FUNCTIONS
+    if (
+        isinstance(expression, exp.Command)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "SHOW"
+        and isinstance(expression.expression, str)
+        and expression.expression.upper().lstrip().startswith("USER FUNCTIONS")
+    ):
         return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_show_functions", read="duckdb")
 
     return expression

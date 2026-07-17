@@ -9,7 +9,7 @@ Run, mock and test fake Snowflake databases locally.
 
 ## Usage
 
-fakesnow offers two main approaches for faking Snowflake: [in-process patching](#in-process-patching-python) of the Snowflake Connector for Python or a [standalone HTTP server](#run-fakesnow-as-a-server) for use with connectors from any language.
+fakesnow offers two approaches for faking Snowflake: [in-process patching](#in-process-patching-python) of the Snowflake Connector for Python or a [standalone HTTP server](#run-fakesnow-as-a-server) for use with connectors from any language.
 
 ### In-process patching (Python)
 

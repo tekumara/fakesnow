@@ -451,11 +451,7 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
 
 def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("show functions")
-    dcur.fetchall()
-
-    # Check for expected column names in description
-    assert [r.name for r in dcur.description] == [
+    expected_columns = [
         "created_on",
         "name",
         "schema_name",
@@ -478,6 +474,13 @@ def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "is_data_metric",
     ]
 
+    dcur.execute("show functions")
+    dcur.fetchall()
+    assert [r.name for r in dcur.description] == expected_columns
+
+    dcur.execute("show user functions")
+    assert dcur.fetchall() == []
+    assert [r.name for r in dcur.description] == expected_columns
 
 def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show procedures")
