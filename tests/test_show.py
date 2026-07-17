@@ -482,6 +482,7 @@ def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.fetchall() == []
     assert [r.name for r in dcur.description] == expected_columns
 
+
 def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show procedures")
     dcur.fetchall()
