@@ -2,6 +2,18 @@
 
 # Changelog
 
+## [0.11.11](https://github.com/tekumara/fakesnow/compare/v0.11.10...v0.11.11) (2026-07-17)
+
+
+### Features
+
+* support SHOW USER FUNCTIONS ([4423fe0](https://github.com/tekumara/fakesnow/commit/4423fe0b9cbf050dabdcdc1fd6fda4d5e40aa813)), closes [#359](https://github.com/tekumara/fakesnow/issues/359)
+
+
+### Chores
+
+* fix lints ([0873f25](https://github.com/tekumara/fakesnow/commit/0873f25c9e9409625719bd1b4706ab146c088617))
+
 ## [0.11.10](https://github.com/tekumara/fakesnow/compare/v0.11.9...v0.11.10) (2026-07-06)
 
 
