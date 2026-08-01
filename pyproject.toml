@@ -35,12 +35,12 @@ dev = [
     "pyarrow-stubs==20.0.0.20260625",
     "pyright==1.1.411",
     "pytest~=9.1",
-    "ruff~=0.15.20",
+    "ruff~=0.16.0",
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
-    "snowflake-sqlalchemy~=1.10.2",
-    "testcontainers>=4.14.2",
-    "twine~=6.2",
+    "snowflake-sqlalchemy~=1.11.0",
+    "testcontainers>=4.15.0",
+    "twine~=7.0",
 ]
 # for debugging, see https://duckdb.org/docs/guides/python/jupyter.html
 notebook = ["duckdb-engine", "ipykernel", "jupysql"]
@@ -50,7 +50,7 @@ notebook = ["duckdb-engine", "ipykernel", "jupysql"]
 server = ["starlette", "uvicorn"]
 
 [build-system]
-requires = ["setuptools~=82.0"]
+requires = ["setuptools~=83.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
