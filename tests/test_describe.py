@@ -279,10 +279,10 @@ def test_description_insert(dcur: snowflake.connector.cursor.DictCursor):
 
 def test_description_int128(dcur: snowflake.connector.cursor.DictCursor):
     # duckdb count_if returns int128 / hugeint
-    dcur.execute("SELECT COUNT_IF(TRUE) FROM (SELECT * FROM (VALUES (1), (2)))")
+    dcur.execute("SELECT COUNT_IF(TRUE) AS n FROM (SELECT * FROM (VALUES (1), (2)))")
 
-    # TODO: Snowflake is actually name=COUNT_IF(TRUE), precision=13
-    assert dcur.description == [ResultMetadata(name="count_if(CAST('t' AS BOOLEAN))", type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)]  # fmt: skip
+    # TODO: Snowflake is actually precision=13
+    assert dcur.description == [ResultMetadata(name="N", type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)]  # fmt: skip
 
 
 def test_description_uint64(cur: snowflake.connector.cursor.DictCursor):
