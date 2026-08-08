@@ -22,6 +22,7 @@ from fakesnow.expr import normalise_ident
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.rowtype import describe_as_rowtype
+from fakesnow.statement_type import DML_TYPE_IDS, statement_type_id
 
 logger = logging.getLogger("fakesnow.server")
 # use same format as uvicorn
@@ -102,6 +103,7 @@ async def query_request(request: Request) -> JSONResponse:
             params = None
 
         expr = parse_one(sql_text, read="snowflake")
+        type_id = statement_type_id(expr)
 
         try:
             # only a single sql statement is sent at a time by the python snowflake connector
@@ -141,11 +143,23 @@ async def query_request(request: Request) -> JSONResponse:
             # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318
             raise ServerError(status_code=500, code="261000", message=msg) from None
 
-        if cur._arrow_table:  # noqa: SLF001
-            batch_bytes = to_ipc(to_sf(cur._arrow_table, rowtype))  # noqa: SLF001
-            rowset_b64 = b64encode(batch_bytes).decode("utf-8")
+        arrow_table = cur._arrow_table  # noqa: SLF001
+
+        if arrow_table and type_id in DML_TYPE_IDS:
+            # DML results are returned as json, because clients read the affected row counts
+            # from rowset, eg: SnowflakeCursor._init_result_and_meta
+            result: dict[str, Any] = {
+                "queryResultFormat": "json",
+                "rowset": [
+                    [None if v is None else str(v) for v in row]
+                    for row in zip(*[c.to_pylist() for c in arrow_table.columns], strict=True)
+                ],
+            }
+        elif arrow_table:
+            batch_bytes = to_ipc(to_sf(arrow_table, rowtype))
+            result = {"queryResultFormat": "arrow", "rowsetBase64": b64encode(batch_bytes).decode("utf-8")}
         else:
-            rowset_b64 = ""
+            result = {"queryResultFormat": "arrow", "rowsetBase64": ""}
 
         return JSONResponse(
             {
@@ -154,12 +168,12 @@ async def query_request(request: Request) -> JSONResponse:
                         {"name": "TIMEZONE", "value": "Etc/UTC"},
                     ],
                     "rowtype": rowtype,
-                    "rowsetBase64": rowset_b64,
                     "total": cur._rowcount,  # noqa: SLF001
                     "queryId": cur.sfqid,
-                    "queryResultFormat": "arrow",
+                    "statementTypeId": type_id,
                     "finalDatabaseName": conn.database,
                     "finalSchemaName": conn.schema,
+                    **result,
                 },
                 "success": True,
             }
