@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.11.12](https://github.com/tekumara/fakesnow/compare/v0.11.11...v0.11.12) (2026-08-09)
+
+
+### Bug Fixes
+
+* return statementTypeId so DML and DDL statements work when using the JDBC driver ([#365](https://github.com/tekumara/fakesnow/issues/365)) ([ce685db](https://github.com/tekumara/fakesnow/commit/ce685db56741b88c5346fda84cc8b31dd7e86472)), closes [#204](https://github.com/tekumara/fakesnow/issues/204)
+
 ## [0.11.11](https://github.com/tekumara/fakesnow/compare/v0.11.10...v0.11.11) (2026-07-17)
 
 
