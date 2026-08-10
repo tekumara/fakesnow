@@ -196,6 +196,30 @@ SELECT 'Hello World' as greeting
 +-------------+
 ```
 
+#### Connecting from Java
+
+The official [snowflake-jdbc](https://github.com/snowflakedb/snowflake-jdbc) driver connects to the server unmodified:
+
+```
+jdbc:snowflake://<host>:<port>/?ssl=off&account=fakesnow&db=<database>&schema=<schema>
+```
+
+Two things to watch out for:
+
+- Keep `account` in the URL. Without it the driver derives the account from the host, which fails for hosts that have no account part, eg: `localhost`.
+- Run the JVM with `--add-opens=java.base/java.nio=ALL-UNNAMED`, otherwise the Arrow bundled in snowflake-jdbc can't initialise and queries fail with `ExceptionInInitializerError`.
+
+Using [Testcontainers](https://testcontainers.com):
+
+```java
+@Container
+static final GenericContainer<?> fakesnow =
+    new GenericContainer<>("ghcr.io/tekumara/fakesnow:latest").withExposedPorts(64616);
+
+String url = "jdbc:snowflake://" + fakesnow.getHost() + ":" + fakesnow.getMappedPort(64616)
+    + "/?ssl=off&account=fakesnow&db=db1&schema=schema1";
+```
+
 ### pytest fixtures
 
 fakesnow provides [fixtures](fakesnow/fixtures.py) for easier test integration. Add them in _conftest.py_:
