@@ -1,3 +1,4 @@
+import pytest
 import sqlglot
 from sqlglot import Expr
 
@@ -37,12 +38,17 @@ def test_statement_type_id_ddl() -> None:
     assert type_id("truncate table customers") == statement_type.DDL
 
 
-def test_statement_type_id_use() -> None:
-    assert type_id("use database foobar") == statement_type.USE_DATABASE
-    assert type_id("use schema foobar") == statement_type.USE_SCHEMA
-    assert type_id("use warehouse foobar") == statement_type.USE_WAREHOUSE
-    # other kinds fall back to the USE category
-    assert type_id("use role foobar") == statement_type.USE
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "use role foobar",
+        "use database foobar",
+        "use schema foobar",
+        "use warehouse foobar",
+    ],
+)
+def test_statement_type_id_use(sql: str) -> None:
+    assert type_id(sql) == statement_type.USE
 
 
 def test_statement_type_id_scl() -> None:

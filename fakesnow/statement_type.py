@@ -19,9 +19,6 @@ MULTI_INSERT = DML + 0x500
 COPY = DML + 0x600
 SCL = 0x4000
 USE = SCL + 0x300
-USE_DATABASE = USE + 0x01
-USE_SCHEMA = USE + 0x02
-USE_WAREHOUSE = USE + 0x03
 SHOW = SCL + 0x400
 DESCRIBE = SCL + 0x500
 TCL = 0x5000
@@ -49,12 +46,6 @@ _EXPRESSION_TYPES: dict[type[Expr], int] = {
     exp.Transaction: TCL,
 }
 
-_USE_KINDS = {
-    "DATABASE": USE_DATABASE,
-    "SCHEMA": USE_SCHEMA,
-    "WAREHOUSE": USE_WAREHOUSE,
-}
-
 
 def statement_type_id(expression: Expr) -> int:
     """The Snowflake statement type id for an expression.
@@ -70,7 +61,6 @@ def statement_type_id(expression: Expr) -> int:
     """
 
     if isinstance(expression, exp.Use):
-        kind = expression.args.get("kind")
-        return _USE_KINDS.get(kind.name.upper(), USE) if isinstance(kind, exp.Var) else USE
+        return USE
 
     return _EXPRESSION_TYPES.get(type(expression), UNKNOWN)
