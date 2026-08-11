@@ -2,6 +2,7 @@
 
 import datetime
 
+import pytest
 import snowflake.connector
 
 # see https://docs.snowflake.com/en/sql-reference/functions/to_timestamp
@@ -61,3 +62,34 @@ def test_string_datetime_to_timestamp(cur: snowflake.connector.cursor.SnowflakeC
 
     cur.execute("SELECT to_timestamp_ntz('2013-04-05 01:02:03')")
     assert cur.fetchall() == [(datetime.datetime(2013, 4, 5, 1, 2, 3),)]
+
+
+def test_timestamp_tz_with_offset(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # snowflake accepts a numeric utc offset, with or without a space before it, and in
+    # both TZH:TZM and TZHTZM forms. see
+    # https://docs.snowflake.com/en/sql-reference/date-time-input-output
+    for literal in [
+        "2026-01-01 10:00:00 +09:00",
+        "2026-01-01 10:00:00+09:00",
+        "2026-01-01 10:00:00 +0900",
+        "2026-01-01T10:00:00+09:00",
+    ]:
+        assert cur.execute(f"select '{literal}'::timestamp_tz").fetchall() == [
+            (datetime.datetime(2026, 1, 1, 10, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=9))),)
+        ], literal
+
+    assert cur.execute("select '2026-01-01 10:00:00 -0700'::timestamp_tz").fetchall() == [
+        (datetime.datetime(2026, 1, 1, 10, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=-7))),)
+    ]
+
+    assert cur.execute("select to_timestamp_tz('2026-01-01 10:00:00 +09:00')").fetchall() == [
+        (datetime.datetime(2026, 1, 1, 10, 0, tzinfo=datetime.timezone(datetime.timedelta(hours=9))),)
+    ]
+
+
+def test_timestamp_tz_with_unrecognised_zone(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # snowflake only takes numeric offsets here, a zone name is an error not a failure
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute("select '2026-01-01 10:00:00 Not/AZone'::timestamp_tz")
+
+    assert excinfo.value.sqlstate == "22007"

@@ -280,6 +280,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.sequence_nextval)
             .transform(transforms.values_columns)
             .transform(transforms.to_date)
+            .transform(transforms.timestamp_offsets)
             .transform(transforms.to_decimal)
             .transform(transforms.to_timestamp)
             .transform(transforms.to_variant)
@@ -428,6 +429,11 @@ class FakeSnowflakeCursor:
             raise snowflake.connector.errors.DatabaseError(msg=e.args[0], errno=250002, sqlstate="08003") from e
         except duckdb.ParserException as e:
             raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=1003, sqlstate="42000") from e
+        except duckdb.ConversionException as e:
+            # a value that can't be cast, eg: a time zone name snowflake wouldn't accept either.
+            # snowflake reports this as an error rather than failing, message content may differ.
+            msg = cast(str, e.args[0]).split("\n")[0]
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100035, sqlstate="22007") from e
 
         affected_count = None
 
