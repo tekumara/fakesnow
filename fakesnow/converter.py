@@ -21,8 +21,11 @@ def from_binding(binding: dict[str, str]) -> int | bytes | bool | date | time | 
         return from_date(value)
     elif type_ == "TIME":
         return from_time(value)
-    elif type_ == "TIMESTAMP_NTZ":
+    elif type_ in ("TIMESTAMP_NTZ", "TIMESTAMP_LTZ"):
+        # the JDBC driver binds setTimestamp as TIMESTAMP_LTZ, the python connector as TIMESTAMP_NTZ
         return from_datetime(value)
+    elif type_ == "TIMESTAMP_TZ":
+        return from_datetime_tz(value)
     else:
         # For other types, return str
         return value
@@ -58,3 +61,12 @@ def from_datetime(s: str) -> datetime.datetime:
     return datetime.datetime.fromtimestamp(microseconds / 1_000_000, timezone.utc).replace(
         microsecond=int(microseconds % 1_000_000)
     )
+
+
+def from_datetime_tz(s: str) -> datetime.datetime:
+    """Convert a TIMESTAMP_TZ binding, ie: "<epoch nanoseconds> <utc offset in minutes + 1440>"."""
+    nanoseconds, _, offset_minutes = s.partition(" ")
+    at = from_datetime(nanoseconds)
+    if not offset_minutes:
+        return at
+    return at.astimezone(timezone(datetime.timedelta(minutes=int(offset_minutes) - 1440)))

@@ -78,6 +78,20 @@ def test_server_binding_qmark(server: dict):
         cur.execute("select * from example where xint = ?", (1,))
 
 
+def test_server_binding_timestamp_ltz(server: dict) -> None:
+    with (
+        snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create or replace table example (value timestamp_ntz)")
+        timestamp = datetime.datetime(2026, 1, 1, 10)
+
+        cur.execute("insert into example values (?)", (("TIMESTAMP_LTZ", timestamp),))
+
+        cur.execute("select value from example")
+        assert cur.fetchone() == (timestamp,)
+
+
 def test_server_binding_named(server: dict) -> None:
     with snowflake.connector.connect(**server, database="DB1", schema="SCHEMA1") as conn:
         with conn.cursor() as cur:
