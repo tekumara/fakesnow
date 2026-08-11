@@ -237,6 +237,7 @@ import pytest
 
 pytest_plugins = "fakesnow.fixtures"
 
+
 @pytest.fixture(scope="session", autouse=True)
 def setup(_fakesnow_session: None) -> Iterator[None]:
     # the standard imports are now patched
@@ -254,6 +255,7 @@ import fakesnow
 import pytest
 
 pytest_plugins = "fakesnow.fixtures"
+
 
 @pytest.fixture(scope="session", autouse=True)
 def _fakesnow_session() -> Iterator[None]:
@@ -273,6 +275,7 @@ And then use the `fakesnow_server` session fixture like this:
 
 ```python
 import snowflake.connector
+
 
 def test_with_server(fakesnow_server: dict):
     # fakesnow_server contains connection kwargs (host, port, etc.)

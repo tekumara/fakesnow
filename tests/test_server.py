@@ -440,6 +440,27 @@ def test_server_rowcount(scur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.rowcount == 2
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        "use role foobar",
+        "use database db1",
+        "use schema schema1",
+        "use warehouse foobar",
+    ],
+)
+def test_server_query_response_has_use_statement_type_id(server: dict, sql: str) -> None:
+    session_parameters = server.get("session_parameters", {}) | {"nop_regexes": [r"use (role|warehouse)"]}
+    with snowflake.connector.connect(
+        **(server | {"session_parameters": session_parameters}),
+        database="db1",
+        schema="schema1",
+    ) as conn:
+        result = conn.cmd_query(sql, conn._next_sequence_counter(), uuid.uuid4())  # noqa: SLF001
+
+    assert result["data"]["statementTypeId"] == 0x4300
+
+
 def test_server_rowcount_dml(scur: snowflake.connector.cursor.SnowflakeCursor):
     cur = scur
 
