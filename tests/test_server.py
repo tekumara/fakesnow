@@ -88,7 +88,8 @@ def test_server_binding_timestamp_ltz(server: dict) -> None:
 
         cur.execute("insert into example values (?)", (("TIMESTAMP_LTZ", timestamp),))
 
-        assert cur.execute("select value from example").fetchone() == (timestamp,)
+        cur.execute("select value from example")
+        assert cur.fetchone() == (timestamp,)
 
 
 def test_server_binding_named(server: dict) -> None:
