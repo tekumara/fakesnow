@@ -156,6 +156,38 @@ def test_write_pandas_db_schema(conn: snowflake.connector.SnowflakeConnection):
         assert cur.fetchall() == [(1, "Jenny", None), (2, "Jasper", None)]
 
 
+def test_write_pandas_overwrite(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar)")
+
+        df = pd.DataFrame.from_records([{"ID": 1, "FIRST_NAME": "Jenny"}])
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS")
+
+        df2 = pd.DataFrame.from_records([{"ID": 2, "FIRST_NAME": "Jasper"}])
+        snowflake.connector.pandas_tools.write_pandas(conn, df2, "CUSTOMERS", overwrite=True)
+
+        cur.execute("select id, first_name from customers")
+
+        # existing rows are replaced, not appended to
+        assert cur.fetchall() == [(2, "Jasper")]
+
+
+def test_write_pandas_overwrite_auto_create(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table customers (ID int, AGE int)")
+
+        df = pd.DataFrame.from_records([{"ID": 1, "AGE": 20}])
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS", auto_create_table=True)
+
+        df2 = pd.DataFrame.from_records([{"ID": 2, "AGE": 30}])
+        snowflake.connector.pandas_tools.write_pandas(conn, df2, "CUSTOMERS", auto_create_table=True, overwrite=True)
+
+        cur.execute("select id, age from customers")
+
+        # the table is dropped and recreated, so only the new rows remain
+        assert cur.fetchall() == [(2, 30)]
+
+
 def sort_keys(sdict: str, indent: int | None = 2) -> str:
     return json.dumps(
         json.loads(sdict, object_pairs_hook=lambda x: dict(sorted(x))),
