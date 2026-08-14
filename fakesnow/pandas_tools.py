@@ -70,7 +70,14 @@ def write_pandas(
     if auto_create_table:
         cols = [f"{c} {sql_type(t)}" for c, t in df.dtypes.to_dict().items()]
 
+        if overwrite:
+            # overwrite drops and recreates the table, so its schema matches the dataframe
+            conn.cursor().execute(f"DROP TABLE IF EXISTS {name}")
+
         conn.cursor().execute(f"CREATE TABLE IF NOT EXISTS {name} ({','.join(cols)})")
+    elif overwrite:
+        # overwrite truncates the existing table before loading
+        conn.cursor().execute(f"TRUNCATE TABLE {name}")
 
     count = _insert_df(conn._duck_conn, df, name)  # noqa: SLF001
 
