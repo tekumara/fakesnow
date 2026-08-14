@@ -2,6 +2,21 @@
 
 # Changelog
 
+## [0.11.13](https://github.com/tekumara/fakesnow/compare/v0.11.12...v0.11.13) (2026-08-14)
+
+
+### Bug Fixes
+
+* honour overwrite in write_pandas ([#377](https://github.com/tekumara/fakesnow/issues/377)) ([9cdb23f](https://github.com/tekumara/fakesnow/commit/9cdb23fcbe5870421cdea3eb4d670ab858513328))
+* match Snowflake USE statement type responses ([457080d](https://github.com/tekumara/fakesnow/commit/457080d6a97ec0775ffc043c14d5b8886116a2cf))
+* support JDBC driver setTimestamp ([#375](https://github.com/tekumara/fakesnow/issues/375)) ([4f95d7b](https://github.com/tekumara/fakesnow/commit/4f95d7befa0d89230d5151c4087466364c559201))
+
+
+### Chores
+
+* **deps-dev:** update ruff requirement from ~=0.16.0 to ~=0.16.1 in the pip group ([#367](https://github.com/tekumara/fakesnow/issues/367)) ([232931b](https://github.com/tekumara/fakesnow/commit/232931bff96f09d50237431a3eef2719e25266c2))
+* **deps:** update sqlglot requirement from ~=30.14.0 to ~=30.15.0 ([#368](https://github.com/tekumara/fakesnow/issues/368)) ([72b5426](https://github.com/tekumara/fakesnow/commit/72b54269699d0469cb1dfc8f297ccfe6ceb8147f))
+
 ## [0.11.12](https://github.com/tekumara/fakesnow/compare/v0.11.11...v0.11.12) (2026-08-09)
 
 
