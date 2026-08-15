@@ -205,6 +205,11 @@ def show_keys(
         snowflake_kind = "IMPORTED"
 
     if isinstance(expression, exp.Show) and expression.name.upper() == f"{snowflake_kind} KEYS":
+        scope_kind = expression.args.get("scope_kind")
+        database_filter = (
+            f"AND database_name = '{current_database}'" if current_database and scope_kind != "ACCOUNT" else ""
+        )
+
         if kind == "FOREIGN":
             statement = f"""
                 SELECT
@@ -230,7 +235,7 @@ def show_keys(
                     null as "comment"
                 FROM duckdb_constraints
                 WHERE constraint_type = 'PRIMARY KEY'
-                  AND database_name = '{current_database}'
+                  {database_filter}
                   AND table_name NOT LIKE '_fs_%'
                 """
         else:
@@ -247,14 +252,16 @@ def show_keys(
                     null as "comment"
                 FROM duckdb_constraints
                 WHERE constraint_type = '{kind} KEY'
-                  AND database_name = '{current_database}'
+                  {database_filter}
                   AND table_name NOT LIKE '_fs_%'
                 """
 
-        if scope_kind := expression.args.get("scope_kind"):
+        if scope_kind:
             table = expression.args["scope"]
 
-            if scope_kind == "SCHEMA":
+            if scope_kind == "ACCOUNT":
+                pass
+            elif scope_kind == "SCHEMA":
                 db = table and table.db
                 schema = table and table.name
                 if db:

@@ -211,8 +211,11 @@ def test_show_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
 def test_show_primary_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("CREATE TABLE example (id int, name varchar, PRIMARY KEY (id, name))")
+    dcur.execute("create database db2")
+    dcur.execute("create schema db2.schema2")
+    dcur.execute("create table db2.schema2.example2 (id int primary key)")
 
-    dcur.execute("show primary keys")
+    dcur.execute("show primary keys in account")
     result = dcur.fetchall()
 
     assert result == [
@@ -238,16 +241,42 @@ def test_show_primary_keys(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "rely": "false",
             "comment": None,
         },
+        {
+            "created_on": datetime.datetime(1970, 1, 1, 0, 0, tzinfo=pytz.utc),
+            "database_name": "DB2",
+            "schema_name": "SCHEMA2",
+            "table_name": "EXAMPLE2",
+            "column_name": "ID",
+            "key_sequence": 1,
+            "constraint_name": "db2_schema2_example2_pkey",
+            "rely": "false",
+            "comment": None,
+        },
     ]
+
+    dcur.execute("show primary keys")
+    assert dcur.fetchall() == result[:2]
 
     dcur.execute("show primary keys in schema db1.schema1")
     result2 = dcur.fetchall()
-    assert result == result2
+    assert result2 == result[:2]
 
     # Assertion to sanity check that the above "in schema" filter isn't wrong, and in fact filters
     dcur.execute("show primary keys in schema db1.information_schema")
     result3 = dcur.fetchall()
     assert result3 == []
+
+
+@pytest.mark.parametrize("kind", ["primary", "unique", "imported"])
+def test_show_keys_without_current_database(dcur: snowflake.connector.cursor.SnowflakeCursor, kind: str) -> None:
+    dcur.execute("create table example (id int primary key, name varchar unique)")
+
+    with snowflake.connector.connect() as conn, conn.cursor() as cur:
+        cur.execute(f"show {kind} keys in account")
+        account_keys = cur.fetchall()
+
+        cur.execute(f"show {kind} keys")
+        assert cur.fetchall() == account_keys
 
 
 def test_show_primary_keys_from_table(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
