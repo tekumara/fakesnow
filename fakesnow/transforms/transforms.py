@@ -1659,3 +1659,39 @@ def numeric_agg_implicit_cast(expression: Expr) -> Expr:
         if col_name and isinstance(expression.parent, exp.Select):
             return exp.alias_(expression, col_name, quoted=True)
     return expression
+
+
+# a numeric utc offset at the end of a timestamp literal, ie: " +09:00", " -0700", " Z"
+TIMESTAMP_OFFSET = re.compile(r"(\d)\s+([+-]\d{2}:?(?:\d{2})?|Z)$")
+
+TIMESTAMP_WITH_OFFSET_TYPES = (
+    exp.DataType.Type.TIMESTAMPTZ,
+    exp.DataType.Type.TIMESTAMPLTZ,
+)
+
+
+def timestamp_offsets(expression: Expr) -> Expr:
+    """Remove the space before a numeric utc offset in a timestamp literal.
+
+    Snowflake accepts a space, duckdb doesn't and reads the offset as a time zone name:
+
+        "2026-01-01 10:00:00 +09:00" -> Unknown TimeZone '+09:00'
+
+    so it's dropped before duckdb sees it.
+
+        SELECT '2026-01-01 10:00:00 +09:00'::TIMESTAMP_TZ
+    becomes
+        SELECT '2026-01-01 10:00:00+09:00'::TIMESTAMPTZ
+    """
+    if (
+        isinstance(expression, exp.Cast)
+        and expression.to.this in TIMESTAMP_WITH_OFFSET_TYPES
+        and isinstance(expression.this, exp.Literal)
+        and expression.this.is_string
+    ):
+        literal = expression.this
+        collapsed = TIMESTAMP_OFFSET.sub(r"\1\2", literal.this)
+        if collapsed != literal.this:
+            literal.set("this", collapsed)
+
+    return expression
