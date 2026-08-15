@@ -294,6 +294,17 @@ def test_error_syntax(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.sqlstate == "42000"
 
 
+def test_error_create_macro(cur: snowflake.connector.cursor.SnowflakeCursor):
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute("CREATE MACRO double_it(x) AS x * 2")
+
+    assert "001003 (42000)" in str(excinfo.value)
+    assert cur.sqlstate == "42000"
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError):
+        cur.execute("SELECT double_it(1)")
+
+
 def test_error_not_implemented(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
         cur.execute("SELECT TO_DECIMAL('1.2345', '99.9')")

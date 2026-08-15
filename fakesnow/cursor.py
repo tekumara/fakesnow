@@ -362,10 +362,12 @@ class FakeSnowflakeCursor:
             and isinstance(transformed, exp.Command)
             and re.search(r"\bMACRO\b", transformed.expression, re.IGNORECASE)
         ):
+            # Snowflake has no CREATE MACRO statement, so it fails as a syntax error rather than
+            # silently creating a DuckDB macro as a side effect.
             raise snowflake.connector.errors.ProgrammingError(
-                msg="SQL compilation error:\nUnsupported feature 'CREATE MACRO'.",
-                errno=2,
-                sqlstate="0A000",
+                msg="SQL compilation error:\nsyntax error line 1 at position 0 unexpected 'AS'.",
+                errno=1003,
+                sqlstate="42000",
             )
 
         if sfqid := transformed.args.get("result_scan_sfqid"):
