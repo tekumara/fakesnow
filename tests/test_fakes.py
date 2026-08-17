@@ -187,6 +187,14 @@ def test_create_table_as(dcur: snowflake.connector.cursor.SnowflakeCursor) -> No
     dcur.execute("select * from t1")
     assert dcur.fetchall() == [{"ID": "1"}]
 
+    # Typed column list + SELECT aliases previously emitted
+    # `CAST(1 AS ID AS BIGINT) AS ID` which DuckDB rejects.
+    dcur.execute(
+        "create or replace table t1(id int, payload variant) as select 1 as id, parse_json('{\"a\":1}') as payload"
+    )
+    dcur.execute("select id, payload from t1")
+    assert dcur.fetchall() == [{"ID": 1, "PAYLOAD": '{"a":1}'}]
+
 
 def test_dateadd_date_cast(dcur: snowflake.connector.DictCursor):
     q = """
