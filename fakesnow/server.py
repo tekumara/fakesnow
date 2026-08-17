@@ -9,19 +9,21 @@ from dataclasses import dataclass
 from typing import Any
 
 import snowflake.connector.errors
-from sqlglot import parse_one
+from sqlglot import Expr, exp, parse_one
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
 from starlette.responses import JSONResponse
 from starlette.routing import Route
 
+from fakesnow import statement_type
 from fakesnow.arrow import to_ipc, to_sf
 from fakesnow.converter import from_binding
+from fakesnow.cursor import FakeSnowflakeCursor
 from fakesnow.expr import normalise_ident
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
-from fakesnow.rowtype import describe_as_rowtype
+from fakesnow.rowtype import ColumnInfo, describe_as_rowtype
 from fakesnow.statement_type import DML_TYPE_IDS, statement_type_id
 
 logger = logging.getLogger("fakesnow.server")
@@ -119,6 +121,12 @@ async def query_request(request: Request) -> JSONResponse:
         expr = parse_one(sql_text, read="snowflake")
         type_id = statement_type_id(expr)
 
+        if body_json.get("describeOnly"):
+            cur = conn.cursor()
+            if (described := await run_in_threadpool(cur._describe_only, sql_text)) is not None:  # noqa: SLF001
+                return describe_only_response(conn, cur, describe_as_rowtype(described), expr, type_id)
+            # we can only describe this statement by running it, which is what we've always done
+
         batch_rowcount = 0
 
         try:
@@ -211,6 +219,42 @@ async def query_request(request: Request) -> JSONResponse:
             {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
             status_code=e.status_code,
         )
+
+
+def describe_only_response(
+    conn: FakeSnowflakeConnection,
+    cur: FakeSnowflakeCursor,
+    rowtype: list[ColumnInfo],
+    expr: Expr,
+    type_id: int,
+) -> JSONResponse:
+    """Describe the statement's result without any rows, as snowflake does for describeOnly."""
+
+    # snowflake returns json for everything but a query
+    result = (
+        {"queryResultFormat": "arrow", "rowsetBase64": ""}
+        if type_id == statement_type.SELECT
+        else {"queryResultFormat": "json", "rowset": []}
+    )
+    return JSONResponse(
+        {
+            "data": {
+                "rowtype": rowtype,
+                "total": 0,
+                "returned": 0,
+                "queryId": cur.sfqid,
+                "statementTypeId": type_id,
+                "numberOfBinds": len(list(expr.find_all(exp.Placeholder))),
+                # clients read this to decide whether they can send the batch as an array binding.
+                # snowflake only supports it for inserts.
+                "arrayBindSupported": type_id == statement_type.INSERT,
+                "finalDatabaseName": conn.database,
+                "finalSchemaName": conn.schema,
+                **result,
+            },
+            "success": True,
+        }
+    )
 
 
 def to_token(request: Request) -> str:
