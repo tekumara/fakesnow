@@ -1375,8 +1375,6 @@ def create_table_as(expression: Expr, duck_conn: DuckDBPyConnection) -> Expr:
             create_col_type = col_def.kind
             select_col = select_query.expressions[i]
 
-            # Unwrap an existing Alias so we cast the value, not `val AS alias`.
-            # Otherwise DuckDB receives invalid SQL like `CAST(1 AS ID AS BIGINT)`.
             inner = select_col.this if isinstance(select_col, exp.Alias) else select_col
             cast_expr = exp.Cast(this=inner, to=create_col_type)
             aliased_expr = exp.Alias(this=cast_expr, alias=create_col_id)
