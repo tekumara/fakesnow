@@ -161,6 +161,26 @@ def test_server_client_session_keep_alive(server: dict) -> None:
         pass
 
 
+def test_server_executemany_qmark(server: dict) -> None:
+    # the connector reads CLIENT_STAGE_ARRAY_BINDING_THRESHOLD from the login response to decide
+    # between binding the values inline and staging them, then sends the inline values as an
+    # array binding, ie: a list of values per placeholder
+    with (
+        snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create or replace table example (id int, name varchar)")
+        cur.executemany("insert into example values (?, ?)", [(1, "one"), (2, "two"), (3, "three")])
+        assert cur.rowcount == 3
+
+        cur.execute("select id, name from example order by id")
+        assert cur.fetchall() == [
+            (1, "one"),
+            (2, "two"),
+            (3, "three"),
+        ]
+
+
 def test_server_close(server: dict) -> None:
     conn = snowflake.connector.connect(**server)
 
