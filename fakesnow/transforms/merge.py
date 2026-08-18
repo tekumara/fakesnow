@@ -22,7 +22,13 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> Expr:
 
     source = merge_expr.args.get("using")
     assert isinstance(source, Expr)
-    source_id = (alias := source.args.get("alias")) and alias.this if isinstance(source, exp.Subquery) else source.this
+    # a source is either a table, or a subquery or values list that carries its name in an alias,
+    # eg: USING (VALUES (1, 'a')) AS s (id, name)
+    source_id = (
+        (alias := source.args.get("alias")) and alias.this
+        if isinstance(source, (exp.Subquery, exp.Values))
+        else source.this
+    )
     assert isinstance(source_id, exp.Identifier)
 
     join_expr = merge_expr.args.get("on")

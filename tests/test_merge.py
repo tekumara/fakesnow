@@ -582,3 +582,54 @@ def test_merge_with_source_subquery(conn: snowflake.connector.SnowflakeConnectio
         {"ID": 1, "BATCH_NUMBER": 1, "ACTIVE_STATUS": 1, "END_DATE": datetime.date(2001, 1, 1)},
         {"ID": 2, "BATCH_NUMBER": 2, "ACTIVE_STATUS": 1, "END_DATE": None},
     ]
+
+
+def test_merge_with_bind_params(_fakesnow: None) -> None:
+    # a MERGE is split into several statements, and only the one reading the source rows keeps
+    # the placeholders. binding the params to all of them fails with a count mismatch.
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create or replace table t (id int, name varchar)")
+        cur.execute("insert into t values (1, 'old')")
+
+        merge = """
+            MERGE INTO t tgt USING (SELECT ? AS id, ? AS name) src ON tgt.id = src.id
+            WHEN MATCHED THEN UPDATE SET tgt.name = src.name
+            WHEN NOT MATCHED THEN INSERT (id, name) VALUES (src.id, src.name)
+            """
+
+        cur.execute(merge, (1, "updated"))
+        assert cur.fetchall() == [(0, 1)]
+
+        cur.execute(merge, (2, "inserted"))
+        assert cur.fetchall() == [(1, 0)]
+
+        cur.execute("select id, name from t order by id")
+        assert cur.fetchall() == [(1, "updated"), (2, "inserted")]
+
+
+def test_merge_with_values_source(_fakesnow: None) -> None:
+    # a values list carries its name in an alias, like a subquery, rather than in .this
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create or replace table t (id int, name varchar)")
+        cur.execute("insert into t values (1, 'old')")
+
+        merge = """
+            MERGE INTO t tgt USING (VALUES (?, ?)) src (id, name) ON tgt.id = src.id
+            WHEN MATCHED THEN UPDATE SET tgt.name = src.name
+            WHEN NOT MATCHED THEN INSERT (id, name) VALUES (src.id, src.name)
+            """
+
+        cur.execute(merge, (1, "updated"))
+        assert cur.fetchall() == [(0, 1)]
+
+        cur.execute(merge, (2, "inserted"))
+        assert cur.fetchall() == [(1, 0)]
+
+        cur.execute("select id, name from t order by id")
+        assert cur.fetchall() == [(1, "updated"), (2, "inserted")]
