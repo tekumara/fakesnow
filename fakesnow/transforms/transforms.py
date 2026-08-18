@@ -1269,9 +1269,9 @@ def try_parse_json(expression: Expr) -> Expr:
 def semi_structured_types(expression: Expr) -> Expr:
     """Convert OBJECT, ARRAY, and VARIANT types to duckdb compatible types.
 
-    Structured types, eg: ARRAY(VARCHAR) or OBJECT(a INT), become JSON too. Their
-    element types aren't carried over, because duckdb would read them as a type
-    modifier and reject them, ie: JSON(TEXT).
+    Structured types, eg: ARRAY(VARCHAR) or OBJECT(a INT NOT NULL), become JSON
+    too. Their element types and field constraints aren't carried over, because
+    duckdb would read them as a type modifier and reject them, ie: JSON(TEXT).
 
     Example:
         >>> import sqlglot

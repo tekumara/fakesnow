@@ -701,6 +701,7 @@ def test_semi_structured_types_structured() -> None:
         "CREATE TABLE table1 (name ARRAY(ARRAY(INT)))",
         "CREATE TABLE table1 (name OBJECT(a INT))",
         "CREATE TABLE table1 (name OBJECT(a INT, b VARCHAR))",
+        "CREATE TABLE table1 (name OBJECT(a INT NOT NULL))",
     ]:
         assert (
             sqlglot.parse_one(sql, read="snowflake").transform(semi_structured_types).sql(dialect="duckdb")
