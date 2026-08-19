@@ -170,6 +170,7 @@ def test_server_executemany_qmark(server: dict) -> None:
         snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
         conn.cursor() as cur,
     ):
+        assert conn.rest
         responses = []
         request = conn.rest.request
 
