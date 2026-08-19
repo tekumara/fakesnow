@@ -68,6 +68,9 @@ async def login_request(request: Request) -> JSONResponse:
                 "parameters": [
                     {"name": "AUTOCOMMIT", "value": autocommit},
                     {"name": "CLIENT_SESSION_KEEP_ALIVE_HEARTBEAT_FREQUENCY", "value": 3600},
+                    # clients read this to decide whether to bind an array inline or stage it
+                    # first. 0 keeps them inline, ie: no PUT, which we don't support well yet.
+                    {"name": "CLIENT_STAGE_ARRAY_BINDING_THRESHOLD", "value": 0},
                 ],
                 "sessionInfo": {
                     "databaseName": database,
@@ -91,23 +94,44 @@ async def query_request(request: Request) -> JSONResponse:
 
         sql_text = body_json["sqlText"]
 
+        params: Any = None
+        # rows of params, when the client sends an array binding
+        batch: list[tuple[Any, ...]] | None = None
+
         if bindings := body_json.get("bindings"):
-            if all(k.isdigit() for k in bindings):
-                # positional bindings: {'1': {'type': 'FIXED', 'value': '10'}, ...} -> tuple (10, ...)
-                params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
-            else:
+            if not all(k.isdigit() for k in bindings):
                 # named bindings: {'myid': {'type': 'FIXED', 'value': '10'}, ...} -> dict {'myid': 10, ...}
                 params = {name: from_binding(b) for name, b in bindings.items()}
-            logger.debug(f"Bindings: {params}")
-        else:
-            params = None
+            elif any(isinstance(b["value"], list) for b in bindings.values()):
+                # array bindings hold a list of values per placeholder, one per row, and are sent
+                # when executing a batch, eg: cursor.executemany. transpose them into rows, ie:
+                # {'1': {'type': 'FIXED', 'value': ['1', '2']}, ...} -> [(1, ...), (2, ...)]
+                columns = [
+                    [from_binding({**b, "value": v}) for v in b["value"]]
+                    for b in (bindings[str(pos)] for pos in range(1, len(bindings) + 1))
+                ]
+                batch = list(zip(*columns, strict=True))
+            else:
+                # positional bindings: {'1': {'type': 'FIXED', 'value': '10'}, ...} -> tuple (10, ...)
+                params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
+            logger.debug(f"Bindings: {batch if batch is not None else params}")
 
         expr = parse_one(sql_text, read="snowflake")
         type_id = statement_type_id(expr)
 
+        batch_rowcount = 0
+
         try:
             # only a single sql statement is sent at a time by the python snowflake connector
-            cur = await run_in_threadpool(conn.cursor().execute, sql_text, binding_params=params, server=True)
+            cur = conn.cursor()
+            if batch is None:
+                await run_in_threadpool(cur.execute, sql_text, binding_params=params, server=True)
+            else:
+                # snowflake runs an array binding as one statement and reports the rows affected
+                # across the whole batch, so accumulate them as we execute row by row
+                for row in batch:
+                    await run_in_threadpool(cur.execute, sql_text, binding_params=row, server=True)
+                    batch_rowcount += cur._rowcount or 0  # noqa: SLF001
             rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
             expr = cur._last_transformed  # noqa: SLF001
@@ -145,10 +169,13 @@ async def query_request(request: Request) -> JSONResponse:
 
         arrow_table = cur._arrow_table  # noqa: SLF001
 
-        if arrow_table and type_id in DML_TYPE_IDS:
+        if batch is not None and arrow_table and type_id in DML_TYPE_IDS:
+            # the batch ran as multiple statements, but the client sent one, so report the total
+            result: dict[str, Any] = {"queryResultFormat": "json", "rowset": [[str(batch_rowcount)]]}
+        elif arrow_table and type_id in DML_TYPE_IDS:
             # DML results are returned as json, because clients read the affected row counts
             # from rowset, eg: SnowflakeCursor._init_result_and_meta
-            result: dict[str, Any] = {
+            result = {
                 "queryResultFormat": "json",
                 "rowset": [
                     [None if v is None else str(v) for v in row]
@@ -168,7 +195,7 @@ async def query_request(request: Request) -> JSONResponse:
                         {"name": "TIMEZONE", "value": "Etc/UTC"},
                     ],
                     "rowtype": rowtype,
-                    "total": cur._rowcount,  # noqa: SLF001
+                    "total": 1 if batch is not None else cur._rowcount,  # noqa: SLF001
                     "queryId": cur.sfqid,
                     "statementTypeId": type_id,
                     "finalDatabaseName": conn.database,

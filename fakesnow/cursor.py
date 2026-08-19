@@ -177,9 +177,11 @@ class FakeSnowflakeCursor:
             expression = parse_one(command, read="snowflake")
             self.check_db_and_schema(expression)
 
-            for exp in self._transform_explode(expression):
-                transformed = self._transform(exp, params)
-                self._execute(transformed, params)
+            for statement in self._transform_explode(expression):
+                transformed = self._transform(statement, params)
+                # a statement split into several, eg: MERGE, keeps the placeholders in whichever
+                # part reads the source rows. duckdb rejects params for the parts without any.
+                self._execute(transformed, params if transformed.find(exp.Placeholder) else None)
 
             if not kwargs.get("server") and (put_stage_data := transformed.args.get("put_stage_data")):  # pyright: ignore[reportPossiblyUnboundVariable]
                 self._put_files(put_stage_data)
