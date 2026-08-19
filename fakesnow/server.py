@@ -195,7 +195,7 @@ async def query_request(request: Request) -> JSONResponse:
                         {"name": "TIMEZONE", "value": "Etc/UTC"},
                     ],
                     "rowtype": rowtype,
-                    "total": batch_rowcount if batch is not None else cur._rowcount,  # noqa: SLF001
+                    "total": 1 if batch is not None else cur._rowcount,  # noqa: SLF001
                     "queryId": cur.sfqid,
                     "statementTypeId": type_id,
                     "finalDatabaseName": conn.database,
