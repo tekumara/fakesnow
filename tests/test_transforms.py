@@ -1148,3 +1148,15 @@ def test_numeric_agg_implicit_cast() -> None:
         == 'SELECT STDDEV_SAMP(TRY_CAST(amount AS DOUBLE)) AS "STDDEV_SAMP(AMOUNT)", '
         'VARIANCE_POP(TRY_CAST(amount AS DOUBLE)) AS "VARIANCE_POP(AMOUNT)" FROM t'
     )
+
+
+def test_sum_to_fakesnow_sum() -> None:
+    from fakesnow.transforms.transforms import numeric_agg_implicit_cast_except_sum, sum_to_fakesnow_sum
+
+    assert (
+        sqlglot.parse_one("SELECT SUM(amount) FROM t")
+        .transform(numeric_agg_implicit_cast_except_sum)
+        .transform(sum_to_fakesnow_sum)
+        .sql()
+        == 'SELECT _FS_SUM(amount) AS "SUM(AMOUNT)" FROM t'
+    )

@@ -1,7 +1,7 @@
 MAKEFLAGS += --warn-undefined-variables
 SHELL = /bin/bash -o pipefail
 .DEFAULT_GOAL := help
-.PHONY: help .uv .sync clean install check format pyright test dist hooks install-hooks
+.PHONY: help .uv .sync clean install check format pyright test dist hooks install-hooks duckdb-extension
 
 ## display help message
 help:
@@ -33,14 +33,23 @@ format: hooks
 pyright:
 	PYRIGHT_PYTHON_IGNORE_WARNINGS=1 uv run pyright
 
+## build fakesnow DuckDB extension
+duckdb-extension:
+	MAKEFLAGS= $(MAKE) -C duckdb_extension configure debug
+	mkdir -p fakesnow/_duckdb_extension
+	cp duckdb_extension/build/debug/fakesnow.duckdb_extension fakesnow/_duckdb_extension/
+
 ## run tests
-test:
+test: duckdb-extension
 	uv run pytest
 
 ## build python distribution
 dist:
 # start with a clean slate (see setuptools/#2347)
 	rm -rf build dist *.egg-info
+	MAKEFLAGS= $(MAKE) -C duckdb_extension configure release
+	mkdir -p fakesnow/_duckdb_extension
+	cp duckdb_extension/build/release/fakesnow.duckdb_extension fakesnow/_duckdb_extension/
 	uv run -m build --wheel
 
 ## publish to pypi

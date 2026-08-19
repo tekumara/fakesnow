@@ -6,7 +6,7 @@ from typing import Any
 import duckdb
 
 import fakesnow.fakes as fakes
-from fakesnow import info_schema
+from fakesnow import duckdb_extensions, info_schema
 from fakesnow.transforms import show
 
 GLOBAL_DATABASE_NAME = "_fs_global"
@@ -26,7 +26,8 @@ class FakeSnow:
         self.nop_regexes = nop_regexes
 
         self.results_cache: dict[str, tuple] = {}
-        self.duck_conn = duckdb.connect(database=":memory:")
+        self.duck_conn = duckdb.connect(database=":memory:", config={"allow_unsigned_extensions": "true"})
+        duckdb_extensions.load_fakesnow_extension(self.duck_conn)
 
         # create a "global" database for storing objects which span databases.
         self.duck_conn.execute(f"ATTACH IF NOT EXISTS ':memory:' AS {GLOBAL_DATABASE_NAME}")

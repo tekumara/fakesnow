@@ -64,6 +64,39 @@ SQL_COPY_ROWS = Template(
 )
 
 
+def _fixed_zero_scale_field_names(table: pyarrow.Table | pyarrow.RecordBatch) -> set[str]:
+    """Return decimal field names Snowflake exposes as Python ints.
+
+    Snowflake's connector converts FIXED values with scale=0 to int, so apply
+    the same conversion when materialising Python rows.
+    """
+    return {
+        field.name
+        for field in table.schema
+        if pyarrow.types.is_decimal(field.type) and getattr(field.type, "scale", None) == 0
+    }
+
+
+def _arrow_table_to_snowflake_pylist(table: pyarrow.Table | pyarrow.RecordBatch) -> list[dict[str, Any]]:
+    rows = table.to_pylist()
+    fixed_zero_scale_fields = _fixed_zero_scale_field_names(table)
+    if not fixed_zero_scale_fields:
+        return rows
+
+    for row in rows:
+        for field_name in fixed_zero_scale_fields:
+            if (value := row[field_name]) is not None:
+                row[field_name] = int(value)
+    return rows
+
+
+def _arrow_table_to_snowflake_pandas(table: pyarrow.Table | pyarrow.RecordBatch) -> pd.DataFrame:
+    df = table.to_pandas()
+    for field_name in _fixed_zero_scale_field_names(table):
+        df[field_name] = df[field_name].map(lambda value: int(value) if value is not None else None)
+    return df
+
+
 class FakeSnowflakeCursor:
     def __init__(
         self,
@@ -319,7 +352,8 @@ class FakeSnowflakeCursor:
             .transform(transforms.create_clone)
             .transform(transforms.alias_in_join)
             .transform(transforms.alter_table_strip_cluster_by)
-            .transform(transforms.numeric_agg_implicit_cast)
+            .transform(transforms.numeric_agg_implicit_cast_except_sum)
+            .transform(transforms.sum_to_fakesnow_sum)
             .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.list_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.put_stage(e, self._conn.database, self._conn.schema, params))
@@ -621,7 +655,7 @@ class FakeSnowflakeCursor:
         if self._arrow_table is None:
             # mimic snowflake python connector error type
             raise snowflake.connector.NotSupportedError("No open result set")
-        return self._arrow_table.to_pandas()
+        return _arrow_table_to_snowflake_pandas(self._arrow_table)
 
     def fetchone(self) -> dict | tuple | None:
         result = self.fetchmany(1)
@@ -636,7 +670,9 @@ class FakeSnowflakeCursor:
         if self._arrow_table is None:
             # mimic snowflake python connector error type
             raise TypeError("No open result set")
-        tslice = self._arrow_table.slice(offset=self._arrow_table_fetch_index or 0, length=size).to_pylist()
+        tslice = _arrow_table_to_snowflake_pylist(
+            self._arrow_table.slice(offset=self._arrow_table_fetch_index or 0, length=size)
+        )
 
         if self._arrow_table_fetch_index is None:
             self._arrow_table_fetch_index = size
@@ -694,17 +730,18 @@ class FakeResultBatch(ResultBatch):
     def create_iter(
         self, **kwargs: dict[str, Any]
     ) -> Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]:
+        rows = _arrow_table_to_snowflake_pylist(self._batch)
         if self._use_dict_result:
-            return iter(self._batch.to_pylist())
+            return iter(rows)
 
-        return iter(tuple(d.values()) for d in self._batch.to_pylist())
+        return iter(tuple(d.values()) for d in rows)
 
     @property
     def rowcount(self) -> int:
         return self._batch.num_rows
 
     def to_pandas(self) -> pd.DataFrame:
-        return self._batch.to_pandas()
+        return _arrow_table_to_snowflake_pandas(self._batch)
 
     def to_arrow(self) -> pyarrow.Table:
         raise NotImplementedError()
