@@ -5,6 +5,7 @@ import os
 import tempfile
 import uuid
 from decimal import Decimal
+from typing import Any
 from unittest.mock import patch
 
 import numpy as np
@@ -159,6 +160,40 @@ def test_server_client_session_keep_alive(server: dict) -> None:
     with snowflake.connector.connect(**server | {"client_session_keep_alive": True}):
         # shouldn't error
         pass
+
+
+def test_server_executemany_qmark(server: dict) -> None:
+    # the connector reads CLIENT_STAGE_ARRAY_BINDING_THRESHOLD from the login response to decide
+    # between binding the values inline and staging them, then sends the inline values as an
+    # array binding, ie: a list of values per placeholder
+    with (
+        snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        assert conn.rest
+        responses = []
+        request = conn.rest.request
+
+        def capture_response(*args: Any, **kwargs: Any):
+            response = request(*args, **kwargs)
+            body = kwargs.get("body", args[1] if len(args) > 1 else None)
+            if body and body.get("sqlText", "").startswith("insert into example"):
+                responses.append(response)
+            return response
+
+        conn.rest.request = capture_response
+        cur.execute("create or replace table example (id int, name varchar)")
+        cur.executemany("insert into example values (?, ?)", [(1, "one"), (2, "two"), (3, "three")])
+        assert cur.rowcount == 3
+        # Snowflake's response has one result row; the affected-row count is in rowset.
+        assert responses[-1]["data"]["total"] == 1
+
+        cur.execute("select id, name from example order by id")
+        assert cur.fetchall() == [
+            (1, "one"),
+            (2, "two"),
+            (3, "three"),
+        ]
 
 
 def test_server_close(server: dict) -> None:
