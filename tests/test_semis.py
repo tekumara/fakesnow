@@ -163,6 +163,11 @@ def test_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select attrs['a'] from structured")
     assert cur.fetchall() == [("1",)]
 
+    cur.execute("create or replace table structured_nn (attrs object(a int not null) not null)")
+    cur.execute("insert into structured_nn(attrs) select object_construct('a', 1)")
+    cur.execute("select attrs['a'] from structured_nn")
+    assert cur.fetchall() == [("1",)]
+
 
 def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table semis (emails array, names object, notes variant)")

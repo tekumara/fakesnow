@@ -715,6 +715,13 @@ def test_semi_structured_types_structured() -> None:
         == "CREATE TABLE table1 (name MAP(TEXT, JSON))"
     )
 
+    assert (
+        sqlglot.parse_one("CREATE TABLE table1 (name OBJECT(a INT NOT NULL) NOT NULL)", read="snowflake")
+        .transform(semi_structured_types)
+        .sql(dialect="duckdb")
+        == "CREATE TABLE table1 (name JSON NOT NULL)"
+    )
+
 
 def test_show_tables_etc() -> None:
     def _show_tables_etc(e: Expr) -> Expr:
