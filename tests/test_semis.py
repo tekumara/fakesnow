@@ -149,7 +149,10 @@ def test_to_variant(conn: snowflake.connector.SnowflakeConnection):
 
 def test_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table structured (names array(varchar), attrs object(a int))")
-    cur.execute("insert into structured(names, attrs) select ['A', 'B'], object_construct('a', 1)")
+    cur.execute(
+        "insert into structured(names, attrs) "
+        "select ['A', 'B']::array(varchar), object_construct('a', 1)::object(a int)"
+    )
 
     cur.execute("select names from structured")
     assert indent(cur.fetchall()) == [('[\n  "A",\n  "B"\n]',)]
@@ -164,7 +167,7 @@ def test_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [("1",)]
 
     cur.execute("create or replace table structured_nn (attrs object(a int not null) not null)")
-    cur.execute("insert into structured_nn(attrs) select object_construct('a', 1)")
+    cur.execute("insert into structured_nn(attrs) select object_construct('a', 1)::object(a int not null)")
     cur.execute("select attrs['a'] from structured_nn")
     assert cur.fetchall() == [("1",)]
 

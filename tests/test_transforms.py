@@ -722,6 +722,19 @@ def test_semi_structured_types_structured() -> None:
         == "CREATE TABLE table1 (name JSON NOT NULL)"
     )
 
+    assert (
+        sqlglot.parse_one("SELECT col::ARRAY(VARCHAR)", read="snowflake")
+        .transform(semi_structured_types)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(col AS JSON)"
+    )
+    assert (
+        sqlglot.parse_one("SELECT col::OBJECT(a INT)", read="snowflake")
+        .transform(semi_structured_types)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(col AS JSON)"
+    )
+
 
 def test_show_tables_etc() -> None:
     def _show_tables_etc(e: Expr) -> Expr:
