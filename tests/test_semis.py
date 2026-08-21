@@ -157,19 +157,19 @@ def test_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select names from structured")
     assert indent(cur.fetchall()) == [('[\n  "A",\n  "B"\n]',)]
 
-    cur.execute("select names[0] from structured")
-    assert cur.fetchall() == [('"A"',)]
+    cur.execute("select names[0]::varchar from structured")
+    assert cur.fetchall() == [("A",)]
 
     cur.execute("select attrs from structured")
     assert indent(cur.fetchall()) == [('{\n  "a": 1\n}',)]
 
-    cur.execute("select attrs['a'] from structured")
-    assert cur.fetchall() == [("1",)]
+    cur.execute("select attrs['a']::number from structured")
+    assert cur.fetchall() == [(1,)]
 
     cur.execute("create or replace table structured_nn (attrs object(a int not null) not null)")
     cur.execute("insert into structured_nn(attrs) select object_construct('a', 1)::object(a int not null)")
-    cur.execute("select attrs['a'] from structured_nn")
-    assert cur.fetchall() == [("1",)]
+    cur.execute("select attrs['a']::number from structured_nn")
+    assert cur.fetchall() == [(1,)]
 
 
 def test_semi_structured_types(cur: snowflake.connector.cursor.SnowflakeCursor):
