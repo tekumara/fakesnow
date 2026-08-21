@@ -64,6 +64,15 @@ SQL_COPY_ROWS = Template(
 )
 
 
+# The result columns snowflake reports when asked to describe a DML statement without running it.
+# The counts are placeholders, only the column names and types are used.
+DESCRIBE_RESULT_SQL: dict[type[Expr], str] = {
+    exp.Insert: SQL_INSERTED_ROWS.substitute(count=0),
+    exp.Update: SQL_UPDATED_ROWS.substitute(count=0),
+    exp.Delete: SQL_DELETED_ROWS.substitute(count=0),
+}
+
+
 class FakeSnowflakeCursor:
     def __init__(
         self,
@@ -135,6 +144,31 @@ class FakeSnowflakeCursor:
     @property
     def description(self) -> list[ResultMetadata]:
         return describe_as_result_metadata(self._describe_last_sql())
+
+    def _describe_only(self, command: str) -> list | None:
+        """Describe the result columns of command without executing it.
+
+        Snowflake does this for describeOnly requests, which clients send before executing a
+        prepared statement, eg: the JDBC driver before a batch insert.
+
+        Returns None for statements we can only describe by running them.
+        """
+
+        expression = sqlglot.parse_one(command, read="snowflake")
+
+        if result_sql := DESCRIBE_RESULT_SQL.get(type(expression)):
+            describe = result_sql
+        elif isinstance(expression, exp.Select):
+            # a describe request carries no bindings, so replace the placeholders with null to
+            # make the statement runnable. it doesn't change the columns the query returns.
+            describe = expression.transform(lambda e: exp.Null() if isinstance(e, exp.Placeholder) else e).sql(
+                dialect="snowflake"
+            )
+        else:
+            return None
+
+        self.execute(f"DESCRIBE {describe}")
+        return self.fetchall()
 
     def _describe_last_sql(self) -> list:
         # use a separate cursor to avoid consuming the result set on this cursor
