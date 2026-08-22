@@ -2,6 +2,24 @@
 
 # Changelog
 
+## [0.11.14](https://github.com/tekumara/fakesnow/compare/v0.11.13...v0.11.14) (2026-08-22)
+
+
+### Features
+
+* support structured types (by treating as JSON without their element types) ([#390](https://github.com/tekumara/fakesnow/issues/390)) ([6083421](https://github.com/tekumara/fakesnow/commit/608342195bd63b3b8da58d4de4620cbd6a7a4f3a))
+
+
+### Bug Fixes
+
+* accept a space before a utc offset in timestamp literals ([#376](https://github.com/tekumara/fakesnow/issues/376)) ([14e15fc](https://github.com/tekumara/fakesnow/commit/14e15fc9b0a7aa5686d0a752147868636231a590)), closes [#372](https://github.com/tekumara/fakesnow/issues/372)
+* describe statements without running them for describeOnly requests ([#384](https://github.com/tekumara/fakesnow/issues/384)) ([6961151](https://github.com/tekumara/fakesnow/commit/6961151d8daed0d0fc1dc5c9b63aa70b544088d3)), closes [#371](https://github.com/tekumara/fakesnow/issues/371)
+* raise ProgrammingError for CREATE MACRO instead of creating it as a side effect ([#350](https://github.com/tekumara/fakesnow/issues/350)) ([0b9a651](https://github.com/tekumara/fakesnow/commit/0b9a651299a81d1225e31587be847b2ed357ea0f))
+* support account-scoped SHOW KEYS ([d6c2071](https://github.com/tekumara/fakesnow/commit/d6c2071f256503bc2e02b46ac6d76458bed0166f)), closes [#373](https://github.com/tekumara/fakesnow/issues/373)
+* support array bindings, ie: executemany over the server ([#383](https://github.com/tekumara/fakesnow/issues/383)) ([1992084](https://github.com/tekumara/fakesnow/commit/19920846f0fc4d81e7c7b17e04563f0d8c0ea7bd))
+* support bind params and a values list source in MERGE ([#388](https://github.com/tekumara/fakesnow/issues/388)) ([720b390](https://github.com/tekumara/fakesnow/commit/720b390a7e0128d0571b198ecfb80d1ad7528cab))
+* typed CTAS with aliased SELECT expression ([#386](https://github.com/tekumara/fakesnow/issues/386)) ([d827315](https://github.com/tekumara/fakesnow/commit/d82731507df2d1ce52eff4cc58306dc985d68197))
+
 ## [0.11.13](https://github.com/tekumara/fakesnow/compare/v0.11.12...v0.11.13) (2026-08-14)
 
 
