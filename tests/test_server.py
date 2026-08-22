@@ -626,3 +626,28 @@ def test_server_monitoring_endpoint_error(scur: snowflake.connector.cursor.Snowf
     ) as exc:
         cur.fetchall()
     assert exc.value.errno == -1
+
+
+def test_server_describe_only(server: dict) -> None:
+    # clients describe a statement before executing it, eg: the JDBC driver before a batch
+    # insert, and expect the result columns back without the statement having run
+    with (
+        snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create or replace table example (id int, name varchar)")
+
+        assert [(m.name, m.type_code) for m in cur.describe("select id, name from example where id = ?")] == [
+            ("ID", 0),
+            ("NAME", 2),
+        ]
+        assert [m.name for m in cur.describe("insert into example values (?, ?)")] == ["number of rows inserted"]
+        assert [m.name for m in cur.describe("update example set name = ? where id = ?")] == [
+            "number of rows updated",
+            "number of multi-joined rows updated",
+        ]
+        assert [m.name for m in cur.describe("delete from example where id = ?")] == ["number of rows deleted"]
+
+        # nothing ran
+        cur.execute("select count(*) from example")
+        assert cur.fetchall() == [(0,)]
