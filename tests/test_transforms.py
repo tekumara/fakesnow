@@ -695,6 +695,47 @@ def test_semi_structured_types() -> None:
     )
 
 
+def test_semi_structured_types_structured() -> None:
+    for sql in [
+        "CREATE TABLE table1 (name ARRAY(VARCHAR))",
+        "CREATE TABLE table1 (name ARRAY(ARRAY(INT)))",
+        "CREATE TABLE table1 (name OBJECT(a INT))",
+        "CREATE TABLE table1 (name OBJECT(a INT, b VARCHAR))",
+    ]:
+        assert (
+            sqlglot.parse_one(sql, read="snowflake").transform(semi_structured_types).sql(dialect="duckdb")
+            == "CREATE TABLE table1 (name JSON)"
+        )
+
+    # structured types nested inside a type that isn't itself converted
+    assert (
+        sqlglot.parse_one("CREATE TABLE table1 (name MAP(VARCHAR, ARRAY(INT)))", read="snowflake")
+        .transform(semi_structured_types)
+        .sql(dialect="duckdb")
+        == "CREATE TABLE table1 (name MAP(TEXT, JSON))"
+    )
+
+    assert (
+        sqlglot.parse_one("CREATE TABLE table1 (name OBJECT(a INT NOT NULL) NOT NULL)", read="snowflake")
+        .transform(semi_structured_types)
+        .sql(dialect="duckdb")
+        == "CREATE TABLE table1 (name JSON NOT NULL)"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT col::ARRAY(VARCHAR)", read="snowflake")
+        .transform(semi_structured_types)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(col AS JSON)"
+    )
+    assert (
+        sqlglot.parse_one("SELECT col::OBJECT(a INT)", read="snowflake")
+        .transform(semi_structured_types)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(col AS JSON)"
+    )
+
+
 def test_show_tables_etc() -> None:
     def _show_tables_etc(e: Expr) -> Expr:
         return show_tables_etc(e, None, None)
