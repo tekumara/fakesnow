@@ -74,7 +74,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> Expr:
             if isinstance(then, exp.Update):
                 case_when_clauses.append(f"WHEN {predicate} THEN {w_idx}")
                 values.update([str(c.expression) for c in then.expressions if isinstance(c.expression, exp.Column)])
-            elif isinstance(then, exp.Var) and then.args.get("this") == "DELETE":
+            elif isinstance(then, exp.Var) and then.name.upper() == "DELETE":
                 case_when_clauses.append(f"WHEN {predicate} THEN {w_idx}")
             else:
                 raise AssertionError(f"Expected 'Update' or 'Delete', got {then}")
@@ -125,7 +125,7 @@ def _mutations(merge_expr: exp.Merge) -> list[Expr]:
         then = w.args.get("then")
 
         if matched:
-            if isinstance(then, exp.Var) and then.args.get("this") == "DELETE":
+            if isinstance(then, exp.Var) and then.name.upper() == "DELETE":
                 delete_sql = f"""
                     DELETE FROM {target_tbl}
                     USING merge_candidates AS {source_tbl}
@@ -191,7 +191,7 @@ def _counts(merge_expr: exp.Merge) -> Expr:
         if matched:
             if isinstance(then, exp.Update):
                 operations["updated"].append(w_idx)
-            elif isinstance(then, exp.Var) and then.args.get("this") == "DELETE":
+            elif isinstance(then, exp.Var) and then.name.upper() == "DELETE":
                 operations["deleted"].append(w_idx)
             else:
                 raise AssertionError(f"Expected 'Update' or 'Delete', got {then}")

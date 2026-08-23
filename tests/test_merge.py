@@ -633,3 +633,17 @@ def test_merge_with_values_source(_fakesnow: None) -> None:
 
         cur.execute("select id, name from t order by id")
         assert cur.fetchall() == [(1, "updated"), (2, "inserted")]
+
+
+def test_merge_delete_lowercase(conn: snowflake.connector.SnowflakeConnection):
+    # sql is case insensitive, and sqlglot keeps the case of the DELETE token, so the whens
+    # can't be matched case sensitively
+    with conn.cursor() as cur:
+        cur.execute("create or replace table t (id int, v int)")
+        cur.execute("insert into t values (1, 10), (2, 20)")
+
+        cur.execute("merge into t using (select 1 as id) s on t.id = s.id when matched then delete")
+        assert cur.fetchall() == [(1,)]
+
+        cur.execute("select id from t order by id")
+        assert cur.fetchall() == [(2,)]
