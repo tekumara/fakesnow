@@ -33,6 +33,7 @@ from fakesnow.copy_into import copy_into
 from fakesnow.params import MutableParams
 from fakesnow.rowtype import describe_as_result_metadata
 from fakesnow.transforms import stage
+from fakesnow.transforms.merge import operations as merge_operations
 
 if TYPE_CHECKING:
     # don't require pandas at import time
@@ -63,6 +64,11 @@ SQL_COPY_ROWS = Template(
     "NULL as first_error_column_name"
 )
 
+
+# Statements that report a status rather than a result set, so describing them without running
+# them is the same as describing the status. Verified against an account: CREATE, DROP, ALTER and
+# TRUNCATE all describe as a single "status" column.
+DDL_EXPRESSIONS = (exp.Create, exp.Drop, exp.Alter, exp.TruncateTable)
 
 # The result columns snowflake reports when asked to describe a DML statement without running it.
 # The counts are placeholders, only the column names and types are used.
@@ -158,6 +164,15 @@ class FakeSnowflakeCursor:
 
         if result_sql := DESCRIBE_RESULT_SQL.get(type(expression)):
             describe = result_sql
+        elif isinstance(expression, exp.Merge):
+            # a merge reports a count per operation it performs, so the columns depend on its
+            # WHEN clauses. the counts are placeholders, only the names and types are used.
+            counts = ", ".join(
+                f"0 as 'number of rows {op}'" for op, indices in merge_operations(expression).items() if indices
+            )
+            describe = f"SELECT {counts}"
+        elif isinstance(expression, DDL_EXPRESSIONS):
+            describe = SQL_SUCCESS
         elif isinstance(expression, exp.Select):
             # a describe request carries no bindings, so replace the placeholders with null to
             # make the statement runnable. it doesn't change the columns the query returns.
