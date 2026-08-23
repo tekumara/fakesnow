@@ -651,3 +651,41 @@ def test_server_describe_only(server: dict) -> None:
         # nothing ran
         cur.execute("select count(*) from example")
         assert cur.fetchall() == [(0,)]
+
+
+def test_server_describe_only_no_side_effects(server: dict) -> None:
+    # a describe request must not run the statement, so preparing a DDL or a MERGE can't
+    # create a table or move rows
+    with (
+        snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create or replace table example (id int, v int)")
+        cur.execute("insert into example values (1, 10)")
+
+        assert [m.name for m in cur.describe("create table side_effect (id int)")] == ["status"]
+        assert [m.name for m in cur.describe("drop table example")] == ["status"]
+        assert [m.name for m in cur.describe("alter table example add column w int")] == ["status"]
+        assert [m.name for m in cur.describe("truncate table example")] == ["status"]
+
+        merge = """
+            merge into example t using (select 1 as id, 2 as v) s on t.id = s.id
+            when matched then update set t.v = s.v
+            when not matched then insert values (s.id, s.v)
+            """
+        assert [m.name for m in cur.describe(merge)] == [
+            "number of rows inserted",
+            "number of rows updated",
+        ]
+        assert [
+            m.name
+            for m in cur.describe(
+                "merge into example t using (select 1 as id) s on t.id = s.id when matched then delete"
+            )
+        ] == ["number of rows deleted"]
+
+        # nothing ran: no new table, the columns and rows are untouched
+        cur.execute("select count(*) from information_schema.tables where table_name = 'SIDE_EFFECT'")
+        assert cur.fetchall() == [(0,)]
+        cur.execute("select id, v from example")
+        assert cur.fetchall() == [(1, 10)]

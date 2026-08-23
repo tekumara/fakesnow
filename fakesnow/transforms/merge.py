@@ -165,6 +165,36 @@ def _mutations(merge_expr: exp.Merge) -> list[Expr]:
     return statements
 
 
+def operations(merge_expr: exp.Merge) -> dict[str, list[int]]:
+    """The WHEN clause indices of a merge statement, by the operation they perform.
+
+    Only operations the statement performs have indices, eg: a merge that never deletes has an
+    empty list for "deleted". The order determines the order of the result columns, which is
+    what snowflake returns.
+    """
+
+    ops: dict[str, list[int]] = {"inserted": [], "updated": [], "deleted": []}
+
+    for w_idx, w in enumerate(merge_expr.args["whens"]):
+        assert isinstance(w, exp.When), f"Expected When expression, got {w}"
+
+        matched = w.args.get("matched")
+        then = w.args.get("then")
+
+        if matched:
+            if isinstance(then, exp.Update):
+                ops["updated"].append(w_idx)
+            elif isinstance(then, exp.Var) and then.name.upper() == "DELETE":
+                ops["deleted"].append(w_idx)
+            else:
+                raise AssertionError(f"Expected 'Update' or 'Delete', got {then}")
+        else:
+            assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
+            ops["inserted"].append(w_idx)
+
+    return ops
+
+
 def _counts(merge_expr: exp.Merge) -> Expr:
     """
     Given a merge statement, derive the a SQL statement which produces the following columns using the merge_candidates
@@ -178,30 +208,11 @@ def _counts(merge_expr: exp.Merge) -> Expr:
     column is not included.
     """
 
-    # Initialize dictionaries to store operation types and their corresponding indices
-    operations = {"inserted": [], "updated": [], "deleted": []}
-
-    # Iterate through the WHEN clauses to categorize operations
-    for w_idx, w in enumerate(merge_expr.args["whens"]):
-        assert isinstance(w, exp.When), f"Expected When expression, got {w}"
-
-        matched = w.args.get("matched")
-        then = w.args.get("then")
-
-        if matched:
-            if isinstance(then, exp.Update):
-                operations["updated"].append(w_idx)
-            elif isinstance(then, exp.Var) and then.name.upper() == "DELETE":
-                operations["deleted"].append(w_idx)
-            else:
-                raise AssertionError(f"Expected 'Update' or 'Delete', got {then}")
-        else:
-            assert isinstance(then, exp.Insert), f"Expected 'Insert', got {then}"
-            operations["inserted"].append(w_idx)
+    ops = operations(merge_expr)
 
     count_statements = [
         f"""COUNT_IF(merge_op in ({",".join(map(str, indices))})) as \"number of rows {op}\""""
-        for op, indices in operations.items()
+        for op, indices in ops.items()
         if indices
     ]
     sql = f"""
