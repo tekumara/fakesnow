@@ -636,6 +636,7 @@ def test_server_describe_only(server: dict) -> None:
         conn.cursor() as cur,
     ):
         cur.execute("create or replace table example (id int, name varchar)")
+        cur.execute("insert into example values (1, 'old')")
 
         assert [(m.name, m.type_code) for m in cur.describe("select id, name from example where id = ?")] == [
             ("ID", 0),
@@ -648,6 +649,30 @@ def test_server_describe_only(server: dict) -> None:
         ]
         assert [m.name for m in cur.describe("delete from example where id = ?")] == ["number of rows deleted"]
 
-        # nothing ran
-        cur.execute("select count(*) from example")
+        merge = """
+            merge into example t using (select 1 as id, 'new' as name) s on t.id = s.id
+            when matched then update set t.name = s.name
+            when not matched then insert values (s.id, s.name)
+            """
+        assert [m.name for m in cur.describe(merge)] == [
+            "number of rows inserted",
+            "number of rows updated",
+        ]
+        assert [
+            m.name
+            for m in cur.describe(
+                "merge into example t using (select 1 as id) s on t.id = s.id when matched then delete"
+            )
+        ] == ["number of rows deleted"]
+
+        assert [m.name for m in cur.describe("create table side_effect (id int)")] == ["status"]
+        cur.execute("select count(*) from information_schema.tables where table_name = 'SIDE_EFFECT'")
         assert cur.fetchall() == [(0,)]
+
+        assert [m.name for m in cur.describe("drop table example")] == ["status"]
+        assert [m.name for m in cur.describe("alter table example add column w int")] == ["status"]
+        assert [m.name for m in cur.describe("truncate table example")] == ["status"]
+
+        # nothing ran: the original table is untouched
+        cur.execute("select * from example")
+        assert cur.fetchall() == [(1, "old")]
