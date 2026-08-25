@@ -2,6 +2,14 @@
 
 # Changelog
 
+## [0.11.15](https://github.com/tekumara/fakesnow/compare/v0.11.14...v0.11.15) (2026-08-25)
+
+
+### Bug Fixes
+
+* describe DDL and MERGE without running them ([#392](https://github.com/tekumara/fakesnow/issues/392)) ([c9b4acc](https://github.com/tekumara/fakesnow/commit/c9b4acceabaaeb70b650c4e3ecbd103d768212f7))
+* match the DELETE in a MERGE regardless of case ([#391](https://github.com/tekumara/fakesnow/issues/391)) ([2e1ea15](https://github.com/tekumara/fakesnow/commit/2e1ea15fbef36338128b94812be6d5c235a100e9))
+
 ## [0.11.14](https://github.com/tekumara/fakesnow/compare/v0.11.13...v0.11.14) (2026-08-22)
 
 
