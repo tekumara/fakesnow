@@ -65,14 +65,13 @@ SQL_COPY_ROWS = Template(
 )
 
 
-# Statements that report a status rather than a result set, so describing them without running
-# them is the same as describing the status. Verified against an account: CREATE, DROP, ALTER and
-# TRUNCATE all describe as a single "status" column.
-DDL_EXPRESSIONS = (exp.Create, exp.Drop, exp.Alter, exp.TruncateTable)
-
-# The result columns snowflake reports when asked to describe a DML statement without running it.
+# The result columns snowflake reports when asked to describe a statement without running it.
 # The counts are placeholders, only the column names and types are used.
 DESCRIBE_RESULT_SQL: dict[type[Expr], str] = {
+    exp.Create: SQL_SUCCESS,
+    exp.Drop: SQL_SUCCESS,
+    exp.Alter: SQL_SUCCESS,
+    exp.TruncateTable: SQL_SUCCESS,
     exp.Insert: SQL_INSERTED_ROWS.substitute(count=0),
     exp.Update: SQL_UPDATED_ROWS.substitute(count=0),
     exp.Delete: SQL_DELETED_ROWS.substitute(count=0),
@@ -171,8 +170,6 @@ class FakeSnowflakeCursor:
                 f"0 as 'number of rows {op}'" for op, indices in merge_operations(expression).items() if indices
             )
             describe = f"SELECT {counts}"
-        elif isinstance(expression, DDL_EXPRESSIONS):
-            describe = SQL_SUCCESS
         elif isinstance(expression, exp.Select):
             # a describe request carries no bindings, so replace the placeholders with null to
             # make the statement runnable. it doesn't change the columns the query returns.

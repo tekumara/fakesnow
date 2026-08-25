@@ -636,6 +636,7 @@ def test_server_describe_only(server: dict) -> None:
         conn.cursor() as cur,
     ):
         cur.execute("create or replace table example (id int, name varchar)")
+        cur.execute("insert into example values (1, 'old')")
 
         assert [(m.name, m.type_code) for m in cur.describe("select id, name from example where id = ?")] == [
             ("ID", 0),
@@ -648,30 +649,10 @@ def test_server_describe_only(server: dict) -> None:
         ]
         assert [m.name for m in cur.describe("delete from example where id = ?")] == ["number of rows deleted"]
 
-        # nothing ran
-        cur.execute("select count(*) from example")
-        assert cur.fetchall() == [(0,)]
-
-
-def test_server_describe_only_no_side_effects(server: dict) -> None:
-    # a describe request must not run the statement, so preparing a DDL or a MERGE can't
-    # create a table or move rows
-    with (
-        snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
-        conn.cursor() as cur,
-    ):
-        cur.execute("create or replace table example (id int, v int)")
-        cur.execute("insert into example values (1, 10)")
-
-        assert [m.name for m in cur.describe("create table side_effect (id int)")] == ["status"]
-        assert [m.name for m in cur.describe("drop table example")] == ["status"]
-        assert [m.name for m in cur.describe("alter table example add column w int")] == ["status"]
-        assert [m.name for m in cur.describe("truncate table example")] == ["status"]
-
         merge = """
-            merge into example t using (select 1 as id, 2 as v) s on t.id = s.id
-            when matched then update set t.v = s.v
-            when not matched then insert values (s.id, s.v)
+            merge into example t using (select 1 as id, 'new' as name) s on t.id = s.id
+            when matched then update set t.name = s.name
+            when not matched then insert values (s.id, s.name)
             """
         assert [m.name for m in cur.describe(merge)] == [
             "number of rows inserted",
@@ -684,8 +665,14 @@ def test_server_describe_only_no_side_effects(server: dict) -> None:
             )
         ] == ["number of rows deleted"]
 
-        # nothing ran: no new table, the columns and rows are untouched
+        assert [m.name for m in cur.describe("create table side_effect (id int)")] == ["status"]
         cur.execute("select count(*) from information_schema.tables where table_name = 'SIDE_EFFECT'")
         assert cur.fetchall() == [(0,)]
-        cur.execute("select id, v from example")
-        assert cur.fetchall() == [(1, 10)]
+
+        assert [m.name for m in cur.describe("drop table example")] == ["status"]
+        assert [m.name for m in cur.describe("alter table example add column w int")] == ["status"]
+        assert [m.name for m in cur.describe("truncate table example")] == ["status"]
+
+        # nothing ran: the original table is untouched
+        cur.execute("select * from example")
+        assert cur.fetchall() == [(1, "old")]
