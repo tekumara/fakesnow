@@ -35,11 +35,21 @@ WritePandasResult = tuple[
 ]
 
 
-def sql_type(dtype: np.dtype) -> str:
-    if str(dtype) == "int64":
+def sql_type(dtype: np.dtype | pd.api.extensions.ExtensionDtype) -> str:
+    import pandas as pd
+
+    if pd.api.types.is_bool_dtype(dtype):
+        return "BOOLEAN"
+    elif pd.api.types.is_integer_dtype(dtype):
         return "NUMBER"
-    elif str(dtype) == "object":
+    elif pd.api.types.is_float_dtype(dtype) and str(dtype) != "float16":
+        # snowflake reads a staged half float as binary, not as a float
+        return "FLOAT"
+    elif pd.api.types.is_string_dtype(dtype):
         return "VARCHAR"
+    elif isinstance(dtype, pd.CategoricalDtype):
+        # parquet stages a category as a dictionary of its own type, which is what snowflake infers
+        return sql_type(dtype.categories.dtype)
     else:
         raise NotImplementedError(f"sql_type {dtype=}")
 

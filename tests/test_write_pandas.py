@@ -4,6 +4,7 @@ import datetime
 import json
 
 import pandas as pd
+import pytest
 import pytz
 import snowflake.connector
 import snowflake.connector.cursor
@@ -25,6 +26,64 @@ def test_write_pandas_auto_create(conn: snowflake.connector.SnowflakeConnection)
         cur.execute("select id, first_name from customers")
 
         assert cur.fetchall() == [(1, "Jenny"), (2, "Jasper")]
+
+
+def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        df = pd.DataFrame(
+            {
+                "INT32": pd.Series([1], dtype="int32"),
+                "NULLABLE_INT64": pd.Series([1], dtype="Int64"),
+                "UINT8": pd.Series([1], dtype="uint8"),
+                "FLOAT32": pd.Series([1.5], dtype="float32"),
+                "FLOAT64": pd.Series([1.5], dtype="float64"),
+                "BOOL": pd.Series([True], dtype="bool"),
+                "NULLABLE_BOOL": pd.Series([True], dtype="boolean"),
+                "CATEGORY": pd.Series(["a"], dtype="category"),
+                "CATEGORY_INT": pd.Series([1], dtype="category"),
+                "CATEGORY_FLOAT": pd.Series([1.5], dtype="category"),
+                "STRING": pd.Series(["a"], dtype="string"),
+                "OBJECT": pd.Series(["a"], dtype="object"),
+            }
+        )
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
+
+        cur.execute("describe table example")
+
+        assert [(r[0], r[1]) for r in cur.fetchall()] == [
+            ("INT32", "NUMBER(38,0)"),
+            ("NULLABLE_INT64", "NUMBER(38,0)"),
+            ("UINT8", "NUMBER(38,0)"),
+            ("FLOAT32", "FLOAT"),
+            ("FLOAT64", "FLOAT"),
+            ("BOOL", "BOOLEAN"),
+            ("NULLABLE_BOOL", "BOOLEAN"),
+            ("CATEGORY", "VARCHAR(16777216)"),
+            ("CATEGORY_INT", "NUMBER(38,0)"),
+            ("CATEGORY_FLOAT", "FLOAT"),
+            ("STRING", "VARCHAR(16777216)"),
+            ("OBJECT", "VARCHAR(16777216)"),
+        ]
+
+        cur.execute("select category_int, category_float from example")
+        assert cur.fetchall() == [(1, 1.5)]
+
+
+@pytest.mark.parametrize(
+    ("series", "match"),
+    [
+        (pd.Series([pd.Period("2025-01", freq="M")]), "sql_type dtype=period"),
+        # snowflake reads a staged half float as binary, not as a float
+        (pd.Series([1.5], dtype="float16"), r"sql_type dtype=dtype\('float16'\)"),
+    ],
+)
+def test_write_pandas_auto_create_unsupported_dtype(
+    conn: snowflake.connector.SnowflakeConnection, series: pd.Series, match: str
+):
+    df = pd.DataFrame({"C": series})
+
+    with pytest.raises(NotImplementedError, match=match):
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
 
 
 def test_write_pandas_quoted_column_names(conn: snowflake.connector.SnowflakeConnection):
