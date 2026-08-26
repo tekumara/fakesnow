@@ -57,8 +57,18 @@ def sql_type(dtype: np.dtype | pd.api.extensions.ExtensionDtype, *, use_logical_
         # parquet column holds, except for a tz-aware sub-nanosecond one, see
         # https://docs.snowflake.com/en/sql-reference/sql/create-file-format#label-parquet-format-type-options
         return "TIMESTAMP_LTZ" if isinstance(dtype, pd.DatetimeTZDtype) else "TIMESTAMP_NTZ"
+    elif use_logical_type and _is_time(dtype):
+        return "TIME"
     else:
         raise NotImplementedError(f"sql_type {dtype=}")
+
+
+def _is_time(dtype: np.dtype | pd.api.extensions.ExtensionDtype) -> bool:
+    # pandas has no time dtype of its own, only an arrow-backed one
+    import pandas as pd
+    import pyarrow as pa
+
+    return isinstance(dtype, pd.ArrowDtype) and pa.types.is_time(dtype.pyarrow_dtype)
 
 
 def write_pandas(

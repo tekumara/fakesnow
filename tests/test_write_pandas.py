@@ -4,6 +4,7 @@ import datetime
 import json
 
 import pandas as pd
+import pyarrow as pa
 import pytest
 import pytz
 import snowflake.connector
@@ -129,6 +130,26 @@ def test_write_pandas_auto_create_timestamp_tz_described_as_ltz(conn: snowflake.
 
         cur.execute("describe table example")
         assert [(r[0], r[1]) for r in cur.fetchall()] == [("TZ", "TIMESTAMP_LTZ(9)")]
+
+
+def test_write_pandas_auto_create_time(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        at = datetime.time(12, 0)
+        df = pd.DataFrame(
+            {
+                "US": pd.Series([at], dtype=pd.ArrowDtype(pa.time64("us"))),
+                "NS": pd.Series([at], dtype=pd.ArrowDtype(pa.time64("ns"))),
+            }
+        )
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
+        )
+
+        cur.execute("describe table example")
+        assert [(r[0], r[1]) for r in cur.fetchall()] == [("US", "TIME(9)"), ("NS", "TIME(9)")]
+
+        cur.execute("select * from example")
+        assert cur.fetchall() == [(at, at)]
 
 
 def test_write_pandas_auto_create_timestamps_without_use_logical_type(
