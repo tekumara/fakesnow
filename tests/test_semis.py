@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 
+import pytest
 import snowflake.connector
 import snowflake.connector.cursor
 
@@ -125,6 +126,61 @@ def test_object_construct(conn: snowflake.connector.SnowflakeConnection):
         result = cur.fetchone()
         assert isinstance(result, tuple)
         assert json.loads(result[1]) == json.loads('{\n  "k1": "v1",\n  "k2": "v2",\n  "k3": "v3"\n}')
+
+
+def test_object_construct_star(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table tbl (a int, b varchar)")
+    cur.execute("insert into tbl values (1, 'x'), (2, null)")
+
+    # keys are the column names, uppercased as unquoted identifiers
+    cur.execute("select object_construct(*) from tbl")
+    assert indent(cur.fetchall()) == [('{\n  "A": 1,\n  "B": "x"\n}',), ('{\n  "A": 2\n}',)]
+
+    cur.execute("select object_construct_keep_null(*) from tbl")
+    assert indent(cur.fetchall()) == [('{\n  "A": 1,\n  "B": "x"\n}',), ('{\n  "A": 2,\n  "B": null\n}',)]
+
+    cur.execute("select object_construct(t.*) from tbl as t")
+    assert indent(cur.fetchall()) == [('{\n  "A": 1,\n  "B": "x"\n}',), ('{\n  "A": 2\n}',)]
+
+    # a qualified star only includes the columns of the source it names
+    cur.execute("create or replace table other (a int, c varchar)")
+    cur.execute("insert into other values (1, 'y'), (2, null)")
+    cur.execute("select object_construct(t.*) from tbl as t join other as o on t.a = o.a")
+    assert indent(cur.fetchall()) == [('{\n  "A": 1,\n  "B": "x"\n}',), ('{\n  "A": 2\n}',)]
+
+
+def test_object_construct_star_preserves_json_nulls(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table tbl (id int, sql_null variant, json_null variant, nested variant)")
+    cur.execute("insert into tbl select 1, null, parse_json('null'), parse_json('{\"x\":null,\"y\":1}')")
+
+    cur.execute("select object_construct(*) from tbl")
+    assert indent(cur.fetchall()) == [
+        ('{\n  "ID": 1,\n  "JSON_NULL": null,\n  "NESTED": {\n    "x": null,\n    "y": 1\n  }\n}',)
+    ]
+
+
+@pytest.mark.xfail(
+    reason="sqlglot can't parse a qualified star in OBJECT_CONSTRUCT_KEEP_NULL, "
+    "see https://github.com/tobymao/sqlglot/issues/8262",
+)
+def test_object_construct_keep_null_qualified_star(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table tbl (a int, b varchar)")
+    cur.execute("insert into tbl values (1, 'x'), (2, null)")
+
+    cur.execute("select object_construct_keep_null(t.*) from tbl as t")
+    assert indent(cur.fetchall()) == [('{\n  "A": 1,\n  "B": "x"\n}',), ('{\n  "A": 2,\n  "B": null\n}',)]
+
+
+def test_object_construct_star_duplicate_key(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table tbl (a int, b varchar)")
+    cur.execute("insert into tbl values (1, 'x')")
+    cur.execute("create or replace table other (a int, c varchar)")
+    cur.execute("insert into other values (1, 'y')")
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as exc:
+        cur.execute("select object_construct(*) from tbl as t join other as o on t.a = o.a")
+
+    assert (exc.value.errno, exc.value.sqlstate) == (100103, "22000")
 
 
 def test_to_variant(conn: snowflake.connector.SnowflakeConnection):

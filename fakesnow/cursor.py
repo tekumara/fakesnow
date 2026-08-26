@@ -473,7 +473,8 @@ class FakeSnowflakeCursor:
                 self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]
-            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=2043, sqlstate="02000") from e
+            errno, sqlstate = (100103, "22000") if "Duplicate struct entry name" in msg else (2043, "02000")
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=errno, sqlstate=sqlstate) from e
         except duckdb.CatalogException as e:
             # minimal processing to make it look like a snowflake exception, message content may differ
             msg = cast(str, e.args[0]).split("\n")[0]

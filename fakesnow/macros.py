@@ -49,6 +49,21 @@ CREATE OR REPLACE MACRO ${catalog}._fs_object_construct(keys, vals, keep_nulls) 
 """
 )
 
+FS_OBJECT_CONSTRUCT_STAR = Template(
+    """
+CREATE OR REPLACE MACRO ${catalog}._fs_object_construct_star(row_value) AS (
+    SELECT COALESCE(json_group_object(key, value::JSON), '{}'::JSON)
+    FROM (
+        UNPIVOT (
+            SELECT TO_JSON(COLUMNS(*))
+            FROM (SELECT UNNEST(row_value))
+        ) ON COLUMNS(*)::VARCHAR
+        INTO NAME key VALUE value
+    )
+);
+"""
+)
+
 FS_TO_TIMESTAMP = Template(
     """
 CREATE OR REPLACE MACRO ${catalog}._fs_to_timestamp(val, scale) AS (
@@ -86,5 +101,6 @@ def creation_sql(catalog: str) -> str:
         {FS_FLATTEN.substitute(catalog=catalog)};
         {FS_HAVERSINE.substitute(catalog=catalog)};
         {FS_OBJECT_CONSTRUCT.substitute(catalog=catalog)};
+        {FS_OBJECT_CONSTRUCT_STAR.substitute(catalog=catalog)};
         {FS_TO_TIMESTAMP.substitute(catalog=catalog)};
     """

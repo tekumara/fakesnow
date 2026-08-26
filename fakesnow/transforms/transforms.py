@@ -845,12 +845,56 @@ def sample(expression: Expr) -> Expr:
     return expression
 
 
+# A star can carry a column filter, eg: * ILIKE 'col1%', which isn't supported yet.
+_STAR_FILTERS = ("ilike", "except_", "replace", "rename")
+
+
+def _star_arg(expression: Expr) -> Expr | None:
+    """Return the star argument of OBJECT_CONSTRUCT, if it's one that can be transformed."""
+
+    if not expression.is_star:
+        return None
+
+    star = expression.this if isinstance(expression, exp.Column) else expression
+    if any(star.args.get(name) for name in _STAR_FILTERS):
+        return None
+
+    return expression
+
+
+def _star_object(star: Expr, *, keep_nulls: bool) -> Expr:
+    """Build an object containing every column the star refers to."""
+
+    table = star.args.get("table") if isinstance(star, exp.Column) else None
+    if table is not None:
+        # a qualified star, eg: t.*, names a single source which TO_JSON accepts directly
+        source = exp.Column(this=table.copy())
+    else:
+        # an unqualified star is every column in scope, ie: whatever COLUMNS(*) expands to,
+        # spread into STRUCT_PACK args so the column names don't need to be known here
+        source = exp.Anonymous(this="STRUCT_PACK", expressions=[exp.var("*COLUMNS(*)")])
+
+    if keep_nulls:
+        return exp.Anonymous(this="TO_JSON", expressions=[source])
+
+    return exp.Anonymous(this="_FS_OBJECT_CONSTRUCT_STAR", expressions=[source])
+
+
 def object_construct(expression: Expr) -> Expr:
-    """Convert OBJECT_CONSTRUCT/OBJECT_CONSTRUCT_KEEP_NULL to _FS_OBJECT_CONSTRUCT."""
+    """Convert OBJECT_CONSTRUCT/OBJECT_CONSTRUCT_KEEP_NULL to _FS_OBJECT_CONSTRUCT.
+
+    A star argument, eg: OBJECT_CONSTRUCT(*), becomes TO_JSON instead, because
+    _FS_OBJECT_CONSTRUCT needs the keys and values which a star doesn't provide.
+    """
 
     items: list[tuple[Expr, Expr]] = []
 
-    if isinstance(expression, exp.Struct):
+    if isinstance(expression, exp.StarMap):
+        # OBJECT_CONSTRUCT(*) or OBJECT_CONSTRUCT(t.*)
+        star = _star_arg(expression.this)
+        return _star_object(star, keep_nulls=False) if star else expression
+
+    elif isinstance(expression, exp.Struct):
         # OBJECT_CONSTRUCT
         keep_nulls = False
 
@@ -861,6 +905,10 @@ def object_construct(expression: Expr) -> Expr:
     elif isinstance(expression, exp.JSONObject):
         # OBJECT_CONSTRUCT_KEEP_NULL
         keep_nulls = True
+
+        # OBJECT_CONSTRUCT_KEEP_NULL(*) is a single star rather than key/value pairs
+        if len(expression.expressions) == 1 and (star := _star_arg(expression.expressions[0])):
+            return _star_object(star, keep_nulls=True)
 
         for kv in expression.expressions:
             assert isinstance(kv, exp.JSONKeyValue)
