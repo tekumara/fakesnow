@@ -167,9 +167,10 @@ def test_object_construct_star_duplicate_key(cur: snowflake.connector.cursor.Sno
     cur.execute("create or replace table other (a int, c varchar)")
     cur.execute("insert into other values (1, 'y')")
 
-    # snowflake rejects this too, with: Duplicate field key 'A'
-    with pytest.raises(snowflake.connector.errors.ProgrammingError, match="Duplicate struct entry name"):
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as exc:
         cur.execute("select object_construct(*) from tbl as t join other as o on t.a = o.a")
+
+    assert (exc.value.errno, exc.value.sqlstate) == (100103, "22000")
 
 
 def test_to_variant(conn: snowflake.connector.SnowflakeConnection):
