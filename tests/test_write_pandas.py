@@ -80,6 +80,67 @@ def test_write_pandas_float16_null(conn: snowflake.connector.SnowflakeConnection
         assert cur.fetchall() == [(b"\x00>",), (None,)]
 
 
+def test_write_pandas_auto_create_timestamps(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        at = pd.Timestamp("2025-01-01 12:00")
+        df = pd.DataFrame(
+            {
+                # the precision of the staged column doesn't change what snowflake reads
+                "NS": pd.Series([at]).astype("datetime64[ns]"),
+                "US": pd.Series([at]).astype("datetime64[us]"),
+                "S": pd.Series([at]).astype("datetime64[s]"),
+            }
+        )
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
+        )
+
+        cur.execute("describe table example")
+        assert [(r[0], r[1]) for r in cur.fetchall()] == [
+            ("NS", "TIMESTAMP_NTZ(9)"),
+            ("US", "TIMESTAMP_NTZ(9)"),
+            ("S", "TIMESTAMP_NTZ(9)"),
+        ]
+
+        cur.execute("select * from example")
+        naive = datetime.datetime(2025, 1, 1, 12, 0)
+        assert cur.fetchall() == [(naive, naive, naive)]
+
+
+def test_write_pandas_auto_create_timestamp_tz(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        at = pd.Timestamp("2025-01-01 12:00", tz="UTC")
+        df = pd.DataFrame({"TZ": pd.Series([at]).astype("datetime64[us, UTC]")})
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
+        )
+
+        cur.execute("select tz from example")
+        assert cur.fetchall() == [(datetime.datetime(2025, 1, 1, 12, 0, tzinfo=pytz.utc),)]
+
+
+@pytest.mark.xfail(reason="a timestamp_ltz column is described as timestamp_tz")
+def test_write_pandas_auto_create_timestamp_tz_described_as_ltz(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        df = pd.DataFrame({"TZ": pd.Series([pd.Timestamp("2025-01-01 12:00", tz="UTC")])})
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
+        )
+
+        cur.execute("describe table example")
+        assert [(r[0], r[1]) for r in cur.fetchall()] == [("TZ", "TIMESTAMP_LTZ(9)")]
+
+
+def test_write_pandas_auto_create_timestamps_without_use_logical_type(
+    conn: snowflake.connector.SnowflakeConnection,
+):
+    # without it snowflake infers a number, whose unit follows the dtype, rather than a timestamp
+    df = pd.DataFrame({"TS": pd.Series([pd.Timestamp("2025-01-01 12:00")])})
+
+    with pytest.raises(NotImplementedError, match="sql_type dtype="):
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
+
+
 def test_write_pandas_auto_create_unsupported_dtype(conn: snowflake.connector.SnowflakeConnection):
     df = pd.DataFrame({"C": pd.Series([pd.Period("2025-01", freq="M")])})
 
