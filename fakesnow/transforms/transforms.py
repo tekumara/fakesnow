@@ -874,16 +874,10 @@ def _star_object(star: Expr, *, keep_nulls: bool) -> Expr:
         # spread into STRUCT_PACK args so the column names don't need to be known here
         source = exp.Anonymous(this="STRUCT_PACK", expressions=[exp.var("*COLUMNS(*)")])
 
-    obj = exp.Anonymous(this="TO_JSON", expressions=[source])
     if keep_nulls:
-        return obj
+        return exp.Anonymous(this="TO_JSON", expressions=[source])
 
-    # OBJECT_CONSTRUCT omits nulls whereas TO_JSON keeps them. A JSON merge patch removes
-    # members whose value in the patch is null (RFC 7396), dropping exactly those.
-    return exp.Anonymous(
-        this="JSON_MERGE_PATCH",
-        expressions=[exp.Literal(this="{}", is_string=True), obj],
-    )
+    return exp.Anonymous(this="_FS_OBJECT_CONSTRUCT_STAR", expressions=[source])
 
 
 def object_construct(expression: Expr) -> Expr:

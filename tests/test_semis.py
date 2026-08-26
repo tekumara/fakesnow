@@ -149,6 +149,18 @@ def test_object_construct_star(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert indent(cur.fetchall()) == [('{\n  "A": 1,\n  "B": "x"\n}',), ('{\n  "A": 2\n}',)]
 
 
+def test_object_construct_star_preserves_json_nulls(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table tbl (id int, sql_null variant, json_null variant, nested variant)")
+    cur.execute(
+        "insert into tbl select 1, null, parse_json('null'), parse_json('{\"x\":null,\"y\":1}')"
+    )
+
+    cur.execute("select object_construct(*) from tbl")
+    assert indent(cur.fetchall()) == [
+        ('{\n  "ID": 1,\n  "JSON_NULL": null,\n  "NESTED": {\n    "x": null,\n    "y": 1\n  }\n}',)
+    ]
+
+
 @pytest.mark.xfail(
     reason="sqlglot can't parse a qualified star in OBJECT_CONSTRUCT_KEEP_NULL, "
     "see https://github.com/tobymao/sqlglot/issues/8262",
