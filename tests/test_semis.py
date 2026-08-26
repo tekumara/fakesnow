@@ -151,9 +151,7 @@ def test_object_construct_star(cur: snowflake.connector.cursor.SnowflakeCursor):
 
 def test_object_construct_star_preserves_json_nulls(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table tbl (id int, sql_null variant, json_null variant, nested variant)")
-    cur.execute(
-        "insert into tbl select 1, null, parse_json('null'), parse_json('{\"x\":null,\"y\":1}')"
-    )
+    cur.execute("insert into tbl select 1, null, parse_json('null'), parse_json('{\"x\":null,\"y\":1}')")
 
     cur.execute("select object_construct(*) from tbl")
     assert indent(cur.fetchall()) == [
