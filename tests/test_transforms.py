@@ -639,6 +639,38 @@ def test_object_construct() -> None:
     )
 
 
+def test_object_construct_star() -> None:
+    assert (
+        sqlglot.parse_one("SELECT OBJECT_CONSTRUCT(*) FROM tbl", read="snowflake")
+        .transform(object_construct)
+        .sql(dialect="duckdb")
+        == "SELECT JSON_MERGE_PATCH('{}', TO_JSON(STRUCT_PACK(*COLUMNS(*)))) FROM tbl"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT OBJECT_CONSTRUCT_KEEP_NULL(*) FROM tbl", read="snowflake")
+        .transform(object_construct)
+        .sql(dialect="duckdb")
+        == "SELECT TO_JSON(STRUCT_PACK(*COLUMNS(*))) FROM tbl"
+    )
+
+    assert (
+        sqlglot.parse_one("SELECT OBJECT_CONSTRUCT(t.*) FROM tbl AS t", read="snowflake")
+        .transform(object_construct)
+        .sql(dialect="duckdb")
+        == "SELECT JSON_MERGE_PATCH('{}', TO_JSON(t)) FROM tbl AS t"
+    )
+
+    # a filtered star selects a subset of the columns, which isn't supported yet, so it's
+    # left alone rather than transformed into every column
+    assert (
+        sqlglot.parse_one("SELECT OBJECT_CONSTRUCT(* ILIKE 'a%') FROM tbl", read="snowflake")
+        .transform(object_construct)
+        .sql(dialect="snowflake")
+        == "SELECT OBJECT_CONSTRUCT(* ILIKE 'a%') FROM tbl"
+    )
+
+
 def test_random() -> None:
     e = sqlglot.parse_one("select random(420)").transform(random)
 
