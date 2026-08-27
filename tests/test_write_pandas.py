@@ -65,8 +65,8 @@ def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConn
             ("OBJECT", "VARCHAR(16777216)"),
         ]
 
-        cur.execute("select category_int, category_float from example")
-        assert cur.fetchall() == [(1, 1.5)]
+        cur.execute("select * from example")
+        assert cur.fetchall() == [(1, 1, 1, 1.5, 1.5, True, True, "a", 1, 1.5, "a", "a")]
 
 
 @pytest.mark.parametrize(
