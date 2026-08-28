@@ -207,6 +207,7 @@ class FakeSnowflakeCursor:
                 print(f"{command};params={p}" if p else f"{command};", file=sys.stderr)
 
             command = self._inline_variables(command)
+            command = stage.normalise_put_src(command)
             if kwargs.get("binding_params"):
                 # params have come via the server
                 params = kwargs["binding_params"]
