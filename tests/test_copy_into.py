@@ -811,6 +811,35 @@ def test_params_files_multiple():
     assert _source_urls(from_source, params.files) == ["s3://mybucket/data/file1.csv", "s3://mybucket/data/file2.csv"]
 
 
+def test_load_history_is_per_table(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+    create_table(dcur)
+    bucket = str(uuid.uuid4())
+    upload_file(s3_client, "1,2", bucket=bucket, key="foo.csv")
+
+    sql = """
+    COPY INTO {table}
+    FROM 's3://{bucket}/'
+    FILES=('foo.csv')
+    """
+
+    dcur.execute(sql.format(table="table1", bucket=bucket))
+    assert dcur.fetchall()[0]["status"] == "LOADED"
+
+    # reloading the same file into the same table skips it
+    dcur.execute(sql.format(table="table1", bucket=bucket))
+    assert dcur.fetchall()[0]["status"] == "LOAD_SKIPPED"
+
+    # but loading it into another table is not skipped
+    dcur.execute("CREATE TABLE schema1.table2 (a INT, b INT)")
+    dcur.execute(sql.format(table="table2", bucket=bucket))
+    assert dcur.fetchall()[0]["status"] == "LOADED"
+
+    # recreating the table resets its load history
+    dcur.execute("CREATE OR REPLACE TABLE schema1.table1 (a INT, b INT)")
+    dcur.execute(sql.format(table="table1", bucket=bucket))
+    assert dcur.fetchall()[0]["status"] == "LOADED"
+
+
 def test_params_csv_options():
     _, params = parse("""
     COPY INTO table1
