@@ -85,8 +85,20 @@ def create_stage(
 
     stage_type = ("EXTERNAL" if url else "INTERNAL") + (" TEMPORARY" if is_temp else "")
 
+    replace = expression.args.get("replace")
+    if_not_exists = expression.args.get("exists")
+
+    guard = (
+        ""
+        if replace
+        else f"""
+        WHERE NOT EXISTS (
+            SELECT 1 FROM _fs_global._fs_information_schema._fs_stages
+            WHERE name = '{stage_name}' AND database_name = '{catalog}' AND schema_name = '{schema}'
+        )"""
+    )
     insert_sql = f"""
-        INSERT INTO _fs_global._fs_information_schema._fs_stages
+        INSERT {"OR REPLACE" if replace else ""} INTO _fs_global._fs_information_schema._fs_stages
         (created_on, name, database_name, schema_name, url, has_credentials, has_encryption_key, owner,
         comment, region, type, cloud, notification_channel, storage_integration, endpoint, owner_role_type,
         directory_enabled)
@@ -94,13 +106,11 @@ def create_stage(
             '{now}', '{stage_name}', '{catalog}', '{schema}', '{url}', 'N', 'N', 'SYSADMIN',
             '', NULL, '{stage_type}', {f"'{cloud}'" if cloud else "NULL"}, NULL, NULL, NULL, 'ROLE',
             'N'
-        WHERE NOT EXISTS (
-            SELECT 1 FROM _fs_global._fs_information_schema._fs_stages
-            WHERE name = '{stage_name}' AND database_name = '{catalog}' AND schema_name = '{schema}'
-        )
+        {guard}
         """
     transformed = sqlglot.parse_one(insert_sql, read="duckdb")
     transformed.args["create_stage_name"] = stage_name
+    transformed.args["create_stage_if_not_exists"] = if_not_exists
     return transformed
 
 
