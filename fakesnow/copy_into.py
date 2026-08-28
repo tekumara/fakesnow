@@ -5,7 +5,6 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any, NamedTuple, Protocol, cast
 from urllib.parse import urlparse, urlunparse
 
@@ -313,6 +312,11 @@ def stage_url_from_var(
     stage_var, _, path = var.partition("/")
     database_name, schema_name, name = stage.parts_from_var(stage_var, current_database, current_schema)
 
+    if name.startswith("%"):
+        # a table stage exists implicitly for every table
+        url = stage.internal_dir(f"{database_name}.{schema_name}.{name}")
+        return f"{url.rstrip('/')}/{path}" if path else url
+
     # Look up the stage URL
     duck_conn.execute(
         """
@@ -347,13 +351,13 @@ def _source_urls(source: str, files: list[str]) -> list[str]:
 
 def _source_glob(source: str, duck_conn: DuckDBPyConnection) -> list[str]:
     """List files from the source using duckdb glob."""
-    is_internal_file = stage.is_internal(source) and not os.path.isdir(source)
     if stage.is_internal(source):
-        source = Path(source).as_uri()  # convert local directory to a file URL
-
-    scheme, _netloc, _path, _params, _query, _fragment = urlparse(source)
-    # a stage path suffix is a prefix match, eg: @stage1/dir/file matches dir/file*
-    glob = f"{source}/*" if scheme == "file" and not is_internal_file else f"{source}*"
+        # keep the plain path: duckdb does not decode percent-encoded file URIs
+        # a stage path suffix is a prefix match, eg: @stage1/dir/file matches dir/file*
+        glob = f"{source.rstrip('/')}/*" if os.path.isdir(source) else f"{source}*"
+    else:
+        scheme, _netloc, _path, _params, _query, _fragment = urlparse(source)
+        glob = f"{source}/*" if scheme == "file" else f"{source}*"
     sql = f"SELECT file FROM glob('{glob}')"
     logger.log_sql(sql)
     result = duck_conn.execute(sql).fetchall()

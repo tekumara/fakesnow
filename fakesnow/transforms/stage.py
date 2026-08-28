@@ -139,13 +139,7 @@ def list_stage(expression: Expr, current_database: str | None, current_schema: s
     var = stage.text("this")
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
-    query = f"""
-        SELECT *
-        from _fs_global._fs_information_schema._fs_stages
-        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
-    """
-
-    transformed = sqlglot.parse_one(query, read="duckdb")
+    transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name), read="duckdb")
     transformed.args["list_stage_name"] = f"{catalog}.{schema}.{stage_name}"
     return transformed
 
@@ -185,13 +179,7 @@ def put_stage(
     var = this[1:]
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
-    query = f"""
-        SELECT *
-        from _fs_global._fs_information_schema._fs_stages
-        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
-    """
-
-    transformed = sqlglot.parse_one(query, read="duckdb")
+    transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name), read="duckdb")
     fqname = f"{catalog}.{schema}.{stage_name}"
     transformed.args["put_stage_name"] = fqname
     transformed.args["put_stage_data"] = {
@@ -211,6 +199,24 @@ def put_stage(
     }
 
     return transformed
+
+
+def stage_lookup_sql(catalog: str, schema: str, stage_name: str) -> str:
+    """SQL that returns a single row when the stage exists.
+
+    A stage name starting with % is a table stage, which exists implicitly for every table.
+    """
+    if stage_name.startswith("%"):
+        return f"""
+            SELECT *
+            from duckdb_tables()
+            where database_name = '{catalog}' and schema_name = '{schema}' and table_name = '{stage_name[1:]}'
+        """
+    return f"""
+        SELECT *
+        from _fs_global._fs_information_schema._fs_stages
+        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
+    """
 
 
 def parts_from_var(var: str, current_database: str | None, current_schema: str | None) -> tuple[str, str, str]:
