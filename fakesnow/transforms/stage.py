@@ -188,12 +188,15 @@ def put_stage(
 
     assert isinstance(expression.this, exp.Literal), "PUT command requires a file path as a literal"
     src_url = urlparse(expression.this.this)
-    src_path = url2pathname(src_url.path)
+    # include netloc to handle relative urls, eg: file://data.csv.gz as sent by the connector
+    # when it re-requests a presigned url using the destination file name
+    src_path = src_url.netloc + url2pathname(src_url.path)
     target = expression.args["target"]
 
     assert isinstance(target, exp.Var), f"{target} is not a exp.Var"
     this = target.text("this")
-    if this == "?":
+    target_from_params = this == "?"
+    if target_from_params:
         if not (isinstance(params, list) and len(params) == 1):
             raise NotImplementedError("PUT requires a single parameter for the stage name")
         this = params.pop(0)
@@ -213,6 +216,7 @@ def put_stage(
     transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name), read="duckdb")
     fqname = f"{catalog}.{schema}.{stage_name}"
     transformed.args["put_stage_name"] = fqname
+    transformed.args["put_stage_target_from_params"] = target_from_params
     transformed.args["put_stage_data"] = {
         "stageInfo": {
             # use LOCAL_FS otherwise we need to mock S3 with HTTPS which requires a certificate

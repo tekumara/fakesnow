@@ -19,7 +19,7 @@ from dirty_equals import IsDatetime, IsUUID
 from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
 
-from tests.utils import indent
+from tests.utils import dindent, indent
 
 
 def test_server_abort_request(server: dict) -> None:
@@ -722,3 +722,47 @@ def test_server_bulk_load_pipeline(sdcur: snowflake.connector.cursor.DictCursor)
 
             dcur.execute("SELECT * FROM target ORDER BY id")
             assert dcur.fetchall() == [{"ID": 1, "NAME": "foo"}, {"ID": 2, "NAME": None}]
+
+
+def test_server_table_stage_bulk_load(sdcur: snowflake.connector.cursor.DictCursor) -> None:
+    # PUT a gzipped csv with a header row to a fully-qualified table stage, then COPY it,
+    # including VARIANT columns fed from csv strings
+    dcur = sdcur
+    dcur.execute("""
+        CREATE OR REPLACE TABLE db1.schema1.snap_t (
+            release_tag VARCHAR(100) NOT NULL, permissions VARIANT NOT NULL,
+            provider_details VARIANT, created_at TIMESTAMP NOT NULL)
+    """)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = f"{tmp_dir}/snap_t.csv.gz"
+        with gzip.open(path, "wt") as f:
+            f.write("RELEASE_TAG,PERMISSIONS,PROVIDER_DETAILS,CREATED_AT\n")
+            f.write('v1,"{""a"": 1}",,2024-01-01 00:00:00\n')
+
+        dcur.execute(f"PUT file://{path} @db1.schema1.%snap_t AUTO_COMPRESS=FALSE")
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0]["target"] == "snap_t.csv.gz"
+        assert results[0]["status"] == "UPLOADED"
+
+        dcur.execute("""
+            COPY INTO db1.schema1.snap_t FROM @db1.schema1.%snap_t/snap_t.csv.gz
+            FILE_FORMAT = (TYPE='CSV' FIELD_DELIMITER=',' SKIP_HEADER=1 FIELD_OPTIONALLY_ENCLOSED_BY='"'
+            EMPTY_FIELD_AS_NULL=TRUE NULL_IF=('') ESCAPE_UNENCLOSED_FIELD='NONE')
+            ON_ERROR='ABORT_STATEMENT'
+        """)
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0]["status"] == "LOADED"
+        assert results[0]["rows_loaded"] == 1
+
+        dcur.execute("SELECT * FROM db1.schema1.snap_t")
+        assert dindent(dcur.fetchall()) == [
+            {
+                "RELEASE_TAG": "v1",
+                "PERMISSIONS": '{\n  "a": 1\n}',
+                "PROVIDER_DETAILS": None,
+                "CREATED_AT": datetime.datetime(2024, 1, 1, 0, 0),
+            }
+        ]
