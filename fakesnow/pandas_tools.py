@@ -44,6 +44,9 @@ def sql_type(dtype: np.dtype | pd.api.extensions.ExtensionDtype, *, use_logical_
     elif pd.api.types.is_integer_dtype(dtype):
         return "NUMBER"
     elif str(dtype) == "float16":
+        if use_logical_type:
+            # snowflake's infer_schema returns no columns for a staged half float under USE_LOGICAL_TYPE
+            raise NotImplementedError(f"sql_type {dtype=} {use_logical_type=}")
         return "BINARY"
     elif pd.api.types.is_float_dtype(dtype):
         return "FLOAT"
@@ -53,8 +56,6 @@ def sql_type(dtype: np.dtype | pd.api.extensions.ExtensionDtype, *, use_logical_
         # parquet stages a category as a dictionary of its own type, which is what snowflake infers
         return sql_type(dtype.categories.dtype, use_logical_type=use_logical_type)
     elif use_logical_type and pd.api.types.is_datetime64_any_dtype(dtype):
-        # without USE_LOGICAL_TYPE snowflake infers a number from the epoch offset the staged
-        # parquet column holds, except for a tz-aware sub-nanosecond one, see
         # https://docs.snowflake.com/en/sql-reference/sql/create-file-format#label-parquet-format-type-options
         return "TIMESTAMP_LTZ" if isinstance(dtype, pd.DatetimeTZDtype) else "TIMESTAMP_NTZ"
     elif use_logical_type and _is_time(dtype):
@@ -96,11 +97,6 @@ def write_pandas(
         name = f"{database}.{name}"
 
     if auto_create_table:
-        if use_logical_type and any(str(t) == "float16" for t in df.dtypes):
-            # snowflake's infer_schema returns no columns at all for a staged half float under
-            # USE_LOGICAL_TYPE = TRUE, so the connector fails looking up the first column's type
-            raise KeyError(df.columns[0])
-
         cols = [f"{c} {sql_type(t, use_logical_type=bool(use_logical_type))}" for c, t in df.dtypes.to_dict().items()]
 
         if overwrite:
