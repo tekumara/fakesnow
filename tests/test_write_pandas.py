@@ -32,14 +32,15 @@ def test_write_pandas_auto_create(conn: snowflake.connector.SnowflakeConnection)
 @pytest.mark.parametrize("use_logical_type", [None, False, True])
 def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConnection, use_logical_type: bool | None):
     # USE_LOGICAL_TYPE only changes how a staged time or timestamp is read, so these are the same
-    # column under either setting
+    # column under either setting. float16 is excluded because it isn't: snowflake's infer_schema
+    # returns no columns at all for a staged half float under USE_LOGICAL_TYPE = TRUE, so the
+    # connector fails with a KeyError, see test_write_pandas_float16_null.
     with conn.cursor() as cur:
         df = pd.DataFrame(
             {
                 "INT32": pd.Series([1], dtype="int32"),
                 "NULLABLE_INT64": pd.Series([1], dtype="Int64"),
                 "UINT8": pd.Series([1], dtype="uint8"),
-                "FLOAT16": pd.Series([1.5], dtype="float16"),
                 "FLOAT32": pd.Series([1.5], dtype="float32"),
                 "FLOAT64": pd.Series([1.5], dtype="float64"),
                 "BOOL": pd.Series([True], dtype="bool"),
@@ -61,7 +62,6 @@ def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConn
             ("INT32", "NUMBER(38,0)"),
             ("NULLABLE_INT64", "NUMBER(38,0)"),
             ("UINT8", "NUMBER(38,0)"),
-            ("FLOAT16", "BINARY(8388608)"),
             ("FLOAT32", "FLOAT"),
             ("FLOAT64", "FLOAT"),
             ("BOOL", "BOOLEAN"),
@@ -74,14 +74,18 @@ def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConn
         ]
 
         cur.execute("select * from example")
-        assert cur.fetchall() == [(1, 1, 1, b"\x00>", 1.5, 1.5, True, True, "a", 1, 1.5, "a", "a")]
+        assert cur.fetchall() == [(1, 1, 1, 1.5, 1.5, True, True, "a", 1, 1.5, "a", "a")]
 
 
 def test_write_pandas_float16_null(conn: snowflake.connector.SnowflakeConnection):
     df = pd.DataFrame({"C": pd.Series([1.5, None], dtype="float16")})
+    # snowflake can only auto_create_table this column without USE_LOGICAL_TYPE = TRUE
     snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
 
     with conn.cursor() as cur:
+        cur.execute("describe table example")
+        assert [(r[0], r[1]) for r in cur.fetchall()] == [("C", "BINARY(8388608)")]
+
         cur.execute("select * from example")
         assert cur.fetchall() == [(b"\x00>",), (None,)]
 
