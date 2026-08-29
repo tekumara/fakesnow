@@ -32,9 +32,8 @@ def test_write_pandas_auto_create(conn: snowflake.connector.SnowflakeConnection)
 @pytest.mark.parametrize("use_logical_type", [None, False, True])
 def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConnection, use_logical_type: bool | None):
     # USE_LOGICAL_TYPE only changes how a staged time or timestamp is read, so these are the same
-    # column under either setting. float16 is excluded because it isn't: snowflake's infer_schema
-    # returns no columns at all for a staged half float under USE_LOGICAL_TYPE = TRUE, so the
-    # connector fails with a KeyError, see test_write_pandas_float16_null.
+    # column under either setting. float16 is excluded because it can't be created under
+    # USE_LOGICAL_TYPE = TRUE at all, see test_write_pandas_float16_use_logical_type.
     with conn.cursor() as cur:
         df = pd.DataFrame(
             {
@@ -79,7 +78,6 @@ def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConn
 
 def test_write_pandas_float16_null(conn: snowflake.connector.SnowflakeConnection):
     df = pd.DataFrame({"C": pd.Series([1.5, None], dtype="float16")})
-    # snowflake can only auto_create_table this column without USE_LOGICAL_TYPE = TRUE
     snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
 
     with conn.cursor() as cur:
@@ -88,6 +86,20 @@ def test_write_pandas_float16_null(conn: snowflake.connector.SnowflakeConnection
 
         cur.execute("select * from example")
         assert cur.fetchall() == [(b"\x00>",), (None,)]
+
+
+@pytest.mark.parametrize("columns", [["HALF"], ["HALF", "OTHER"], ["OTHER", "HALF"]])
+def test_write_pandas_float16_use_logical_type(conn: snowflake.connector.SnowflakeConnection, columns: list[str]):
+    # infer_schema returns no columns for a staged half float under USE_LOGICAL_TYPE = TRUE, so
+    # snowflake's own write_pandas raises a KeyError naming the first column, whichever it is
+    df = pd.DataFrame({c: pd.Series([1.5], dtype="float16" if c == "HALF" else "float32") for c in columns})
+
+    with pytest.raises(KeyError) as excinfo:
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
+        )
+
+    assert excinfo.value.args == (columns[0],)
 
 
 def test_write_pandas_auto_create_timestamps(conn: snowflake.connector.SnowflakeConnection):

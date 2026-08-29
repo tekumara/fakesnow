@@ -96,6 +96,11 @@ def write_pandas(
         name = f"{database}.{name}"
 
     if auto_create_table:
+        if use_logical_type and any(str(t) == "float16" for t in df.dtypes):
+            # snowflake's infer_schema returns no columns at all for a staged half float under
+            # USE_LOGICAL_TYPE = TRUE, so the connector fails looking up the first column's type
+            raise KeyError(df.columns[0])
+
         cols = [f"{c} {sql_type(t, use_logical_type=bool(use_logical_type))}" for c, t in df.dtypes.to_dict().items()]
 
         if overwrite:
