@@ -44,10 +44,9 @@ def sql_type(dtype: np.dtype | pd.api.extensions.ExtensionDtype, *, use_logical_
     elif pd.api.types.is_integer_dtype(dtype):
         return "NUMBER"
     elif str(dtype) == "float16":
-        if use_logical_type:
-            # snowflake's infer_schema returns no columns for a staged half float under USE_LOGICAL_TYPE
-            raise NotImplementedError(f"sql_type {dtype=} {use_logical_type=}")
-        return "BINARY"
+        # snowflake's infer_schema returns no columns for a staged half float under USE_LOGICAL_TYPE
+        if not use_logical_type:
+            return "BINARY"
     elif pd.api.types.is_float_dtype(dtype):
         return "FLOAT"
     elif pd.api.types.is_string_dtype(dtype):
@@ -60,8 +59,8 @@ def sql_type(dtype: np.dtype | pd.api.extensions.ExtensionDtype, *, use_logical_
         return "TIMESTAMP_LTZ" if isinstance(dtype, pd.DatetimeTZDtype) else "TIMESTAMP_NTZ"
     elif use_logical_type and _is_time(dtype):
         return "TIME"
-    else:
-        raise NotImplementedError(f"sql_type {dtype=}")
+
+    raise NotImplementedError(f"sql_type {dtype=} {use_logical_type=}")
 
 
 def _is_time(dtype: np.dtype | pd.api.extensions.ExtensionDtype) -> bool:

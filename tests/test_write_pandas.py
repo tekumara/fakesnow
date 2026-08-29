@@ -31,9 +31,6 @@ def test_write_pandas_auto_create(conn: snowflake.connector.SnowflakeConnection)
 
 @pytest.mark.parametrize("use_logical_type", [None, False, True])
 def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConnection, use_logical_type: bool | None):
-    # USE_LOGICAL_TYPE only changes how a staged time or timestamp is read, so these are the same
-    # column under either setting. float16 is excluded because it can't be created under
-    # USE_LOGICAL_TYPE = TRUE at all, see test_write_pandas_float16_use_logical_type.
     with conn.cursor() as cur:
         df = pd.DataFrame(
             {
