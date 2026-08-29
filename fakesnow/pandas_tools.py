@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import struct
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
@@ -42,8 +43,9 @@ def sql_type(dtype: np.dtype | pd.api.extensions.ExtensionDtype) -> str:
         return "BOOLEAN"
     elif pd.api.types.is_integer_dtype(dtype):
         return "NUMBER"
-    elif pd.api.types.is_float_dtype(dtype) and str(dtype) != "float16":
-        # snowflake reads a staged half float as binary, not as a float
+    elif str(dtype) == "float16":
+        return "BINARY"
+    elif pd.api.types.is_float_dtype(dtype):
         return "FLOAT"
     elif pd.api.types.is_string_dtype(dtype):
         return "VARCHAR"
@@ -99,6 +101,8 @@ def write_pandas(
 
 
 def _insert_df(duck_conn: DuckDBPyConnection, df: pd.DataFrame, table_name: str) -> int:
+    import pandas as pd
+
     # Objects in dataframes are written as parquet structs, and snowflake loads parquet structs as json strings.
     # Whereas duckdb analyses a dataframe see https://duckdb.org/docs/api/python/data_ingestion.html#pandas-dataframes--object-columns
     # and converts a object to the most specific type possible, eg: dict -> STRUCT, MAP or varchar, and list -> LIST
@@ -110,6 +114,10 @@ def _insert_df(duck_conn: DuckDBPyConnection, df: pd.DataFrame, table_name: str)
     # copy and transform in python.
 
     df = df.copy()
+
+    # Snowflake loads staged half floats as their two-byte IEEE-754 representation.
+    for col in df.select_dtypes(include=["float16"]).columns:
+        df[col] = df[col].map(lambda value: struct.pack("<e", value) if pd.notna(value) else None)
 
     # Identify columns of type object
     object_cols = df.select_dtypes(include=["object"]).columns

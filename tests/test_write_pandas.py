@@ -35,6 +35,7 @@ def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConn
                 "INT32": pd.Series([1], dtype="int32"),
                 "NULLABLE_INT64": pd.Series([1], dtype="Int64"),
                 "UINT8": pd.Series([1], dtype="uint8"),
+                "FLOAT16": pd.Series([1.5], dtype="float16"),
                 "FLOAT32": pd.Series([1.5], dtype="float32"),
                 "FLOAT64": pd.Series([1.5], dtype="float64"),
                 "BOOL": pd.Series([True], dtype="bool"),
@@ -54,6 +55,7 @@ def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConn
             ("INT32", "NUMBER(38,0)"),
             ("NULLABLE_INT64", "NUMBER(38,0)"),
             ("UINT8", "NUMBER(38,0)"),
+            ("FLOAT16", "BINARY(8388608)"),
             ("FLOAT32", "FLOAT"),
             ("FLOAT64", "FLOAT"),
             ("BOOL", "BOOLEAN"),
@@ -66,23 +68,20 @@ def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConn
         ]
 
         cur.execute("select * from example")
-        assert cur.fetchall() == [(1, 1, 1, 1.5, 1.5, True, True, "a", 1, 1.5, "a", "a")]
+        assert cur.fetchall() == [(1, 1, 1, b"\x00>", 1.5, 1.5, True, True, "a", 1, 1.5, "a", "a")]
 
 
-@pytest.mark.parametrize(
-    ("series", "match"),
-    [
-        (pd.Series([pd.Period("2025-01", freq="M")]), "sql_type dtype=period"),
-        # snowflake reads a staged half float as binary, not as a float
-        (pd.Series([1.5], dtype="float16"), r"sql_type dtype=dtype\('float16'\)"),
-    ],
-)
-def test_write_pandas_auto_create_unsupported_dtype(
-    conn: snowflake.connector.SnowflakeConnection, series: pd.Series, match: str
-):
-    df = pd.DataFrame({"C": series})
+def test_write_pandas_float16_null(conn: snowflake.connector.SnowflakeConnection):
+    df = pd.DataFrame({"C": pd.Series([1.5, None], dtype="float16")})
+    snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
 
-    with pytest.raises(NotImplementedError, match=match):
+    assert conn.cursor().execute("select * from example").fetchall() == [(b"\x00>",), (None,)]
+
+
+def test_write_pandas_auto_create_unsupported_dtype(conn: snowflake.connector.SnowflakeConnection):
+    df = pd.DataFrame({"C": pd.Series([pd.Period("2025-01", freq="M")])})
+
+    with pytest.raises(NotImplementedError, match="sql_type dtype=period"):
         snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
 
 
