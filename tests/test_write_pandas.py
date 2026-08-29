@@ -75,7 +75,9 @@ def test_write_pandas_float16_null(conn: snowflake.connector.SnowflakeConnection
     df = pd.DataFrame({"C": pd.Series([1.5, None], dtype="float16")})
     snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
 
-    assert conn.cursor().execute("select * from example").fetchall() == [(b"\x00>",), (None,)]
+    with conn.cursor() as cur:
+        cur.execute("select * from example")
+        assert cur.fetchall() == [(b"\x00>",), (None,)]
 
 
 def test_write_pandas_auto_create_unsupported_dtype(conn: snowflake.connector.SnowflakeConnection):
