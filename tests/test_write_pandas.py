@@ -4,6 +4,7 @@ import datetime
 import json
 
 import pandas as pd
+import pyarrow as pa
 import pytest
 import pytz
 import snowflake.connector
@@ -28,14 +29,14 @@ def test_write_pandas_auto_create(conn: snowflake.connector.SnowflakeConnection)
         assert cur.fetchall() == [(1, "Jenny"), (2, "Jasper")]
 
 
-def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConnection):
+@pytest.mark.parametrize("use_logical_type", [None, False, True])
+def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConnection, use_logical_type: bool | None):
     with conn.cursor() as cur:
         df = pd.DataFrame(
             {
                 "INT32": pd.Series([1], dtype="int32"),
                 "NULLABLE_INT64": pd.Series([1], dtype="Int64"),
                 "UINT8": pd.Series([1], dtype="uint8"),
-                "FLOAT16": pd.Series([1.5], dtype="float16"),
                 "FLOAT32": pd.Series([1.5], dtype="float32"),
                 "FLOAT64": pd.Series([1.5], dtype="float64"),
                 "BOOL": pd.Series([True], dtype="bool"),
@@ -47,7 +48,9 @@ def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConn
                 "OBJECT": pd.Series(["a"], dtype="object"),
             }
         )
-        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=use_logical_type
+        )
 
         cur.execute("describe table example")
 
@@ -55,7 +58,6 @@ def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConn
             ("INT32", "NUMBER(38,0)"),
             ("NULLABLE_INT64", "NUMBER(38,0)"),
             ("UINT8", "NUMBER(38,0)"),
-            ("FLOAT16", "BINARY(8388608)"),
             ("FLOAT32", "FLOAT"),
             ("FLOAT64", "FLOAT"),
             ("BOOL", "BOOLEAN"),
@@ -68,7 +70,7 @@ def test_write_pandas_auto_create_dtypes(conn: snowflake.connector.SnowflakeConn
         ]
 
         cur.execute("select * from example")
-        assert cur.fetchall() == [(1, 1, 1, b"\x00>", 1.5, 1.5, True, True, "a", 1, 1.5, "a", "a")]
+        assert cur.fetchall() == [(1, 1, 1, 1.5, 1.5, True, True, "a", 1, 1.5, "a", "a")]
 
 
 def test_write_pandas_float16_null(conn: snowflake.connector.SnowflakeConnection):
@@ -76,8 +78,99 @@ def test_write_pandas_float16_null(conn: snowflake.connector.SnowflakeConnection
     snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
 
     with conn.cursor() as cur:
+        cur.execute("describe table example")
+        assert [(r[0], r[1]) for r in cur.fetchall()] == [("C", "BINARY(8388608)")]
+
         cur.execute("select * from example")
         assert cur.fetchall() == [(b"\x00>",), (None,)]
+
+
+def test_write_pandas_auto_create_timestamps(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        at = pd.Timestamp("2025-01-01 12:00")
+        df = pd.DataFrame(
+            {
+                # the precision of the staged column doesn't change what snowflake reads
+                "NS": pd.Series([at]).astype("datetime64[ns]"),
+                "US": pd.Series([at]).astype("datetime64[us]"),
+                "S": pd.Series([at]).astype("datetime64[s]"),
+            }
+        )
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
+        )
+
+        cur.execute("describe table example")
+        assert [(r[0], r[1]) for r in cur.fetchall()] == [
+            ("NS", "TIMESTAMP_NTZ(9)"),
+            ("US", "TIMESTAMP_NTZ(9)"),
+            ("S", "TIMESTAMP_NTZ(9)"),
+        ]
+
+        cur.execute("select * from example")
+        naive = datetime.datetime(2025, 1, 1, 12, 0)
+        assert cur.fetchall() == [(naive, naive, naive)]
+
+
+def test_write_pandas_auto_create_timestamp_tz(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        at = pd.Timestamp("2025-01-01 12:00", tz="UTC")
+        df = pd.DataFrame({"TZ": pd.Series([at]).astype("datetime64[us, UTC]")})
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
+        )
+
+        cur.execute("select tz from example")
+        assert cur.fetchall() == [(datetime.datetime(2025, 1, 1, 12, 0, tzinfo=pytz.utc),)]
+
+
+@pytest.mark.xfail(reason="a timestamp_ltz column is described as timestamp_tz")
+def test_write_pandas_auto_create_timestamp_tz_described_as_ltz(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        df = pd.DataFrame({"TZ": pd.Series([pd.Timestamp("2025-01-01 12:00", tz="UTC")])})
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
+        )
+
+        cur.execute("describe table example")
+        assert [(r[0], r[1]) for r in cur.fetchall()] == [("TZ", "TIMESTAMP_LTZ(9)")]
+
+
+def test_write_pandas_auto_create_time(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        at = datetime.time(12, 0)
+        df = pd.DataFrame(
+            {
+                "US": pd.Series([at], dtype=pd.ArrowDtype(pa.time64("us"))),
+                "NS": pd.Series([at], dtype=pd.ArrowDtype(pa.time64("ns"))),
+            }
+        )
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
+        )
+
+        cur.execute("describe table example")
+        assert [(r[0], r[1]) for r in cur.fetchall()] == [("US", "TIME(9)"), ("NS", "TIME(9)")]
+
+        cur.execute("select * from example")
+        assert cur.fetchall() == [(at, at)]
+
+
+def test_write_pandas_auto_create_category_of_timestamps(conn: snowflake.connector.SnowflakeConnection):
+    # parquet stages a category as its category dtype, so USE_LOGICAL_TYPE decides this column too
+    with conn.cursor() as cur:
+        df = pd.DataFrame(
+            {"TS": pd.Series([pd.Timestamp("2025-01-01 12:00")], dtype="datetime64[us]").astype("category")}
+        )
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
+        )
+
+        cur.execute("describe table example")
+        assert [(r[0], r[1]) for r in cur.fetchall()] == [("TS", "TIMESTAMP_NTZ(9)")]
+
+        cur.execute("select * from example")
+        assert cur.fetchall() == [(datetime.datetime(2025, 1, 1, 12, 0),)]
 
 
 def test_write_pandas_auto_create_unsupported_dtype(conn: snowflake.connector.SnowflakeConnection):

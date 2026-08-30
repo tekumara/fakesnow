@@ -36,7 +36,7 @@ WritePandasResult = tuple[
 ]
 
 
-def sql_type(dtype: np.dtype | pd.api.extensions.ExtensionDtype) -> str:
+def sql_type(dtype: np.dtype | pd.api.extensions.ExtensionDtype, *, use_logical_type: bool = False) -> str:
     import pandas as pd
 
     if pd.api.types.is_bool_dtype(dtype):
@@ -44,16 +44,31 @@ def sql_type(dtype: np.dtype | pd.api.extensions.ExtensionDtype) -> str:
     elif pd.api.types.is_integer_dtype(dtype):
         return "NUMBER"
     elif str(dtype) == "float16":
-        return "BINARY"
+        # snowflake's infer_schema returns no columns for a staged half float under USE_LOGICAL_TYPE
+        if not use_logical_type:
+            return "BINARY"
     elif pd.api.types.is_float_dtype(dtype):
         return "FLOAT"
     elif pd.api.types.is_string_dtype(dtype):
         return "VARCHAR"
     elif isinstance(dtype, pd.CategoricalDtype):
         # parquet stages a category as a dictionary of its own type, which is what snowflake infers
-        return sql_type(dtype.categories.dtype)
-    else:
-        raise NotImplementedError(f"sql_type {dtype=}")
+        return sql_type(dtype.categories.dtype, use_logical_type=use_logical_type)
+    elif use_logical_type and pd.api.types.is_datetime64_any_dtype(dtype):
+        # https://docs.snowflake.com/en/sql-reference/sql/create-file-format#label-parquet-format-type-options
+        return "TIMESTAMP_LTZ" if isinstance(dtype, pd.DatetimeTZDtype) else "TIMESTAMP_NTZ"
+    elif use_logical_type and _is_time(dtype):
+        return "TIME"
+
+    raise NotImplementedError(f"sql_type {dtype=} {use_logical_type=}")
+
+
+def _is_time(dtype: np.dtype | pd.api.extensions.ExtensionDtype) -> bool:
+    # pandas has no time dtype of its own, only an arrow-backed one
+    import pandas as pd
+    import pyarrow as pa
+
+    return isinstance(dtype, pd.ArrowDtype) and pa.types.is_time(dtype.pyarrow_dtype)
 
 
 def write_pandas(
@@ -71,6 +86,7 @@ def write_pandas(
     create_temp_table: bool = False,
     overwrite: bool = False,
     table_type: Literal["", "temp", "temporary", "transient"] = "",
+    use_logical_type: bool | None = None,
     **kwargs: Any,
 ) -> WritePandasResult:
     name = table_name
@@ -80,7 +96,7 @@ def write_pandas(
         name = f"{database}.{name}"
 
     if auto_create_table:
-        cols = [f"{c} {sql_type(t)}" for c, t in df.dtypes.to_dict().items()]
+        cols = [f"{c} {sql_type(t, use_logical_type=bool(use_logical_type))}" for c, t in df.dtypes.to_dict().items()]
 
         if overwrite:
             # overwrite drops and recreates the table, so its schema matches the dataframe
