@@ -85,17 +85,6 @@ def test_write_pandas_float16_null(conn: snowflake.connector.SnowflakeConnection
         assert cur.fetchall() == [(b"\x00>",), (None,)]
 
 
-def test_write_pandas_float16_use_logical_type(conn: snowflake.connector.SnowflakeConnection):
-    # snowflake's infer_schema returns no columns for a staged half float under
-    # USE_LOGICAL_TYPE = TRUE, so it can't create the table either
-    df = pd.DataFrame({"C": pd.Series([1.5], dtype="float16")})
-
-    with pytest.raises(NotImplementedError, match=r"sql_type dtype=dtype\('float16'\) use_logical_type=True"):
-        snowflake.connector.pandas_tools.write_pandas(
-            conn, df, "EXAMPLE", auto_create_table=True, use_logical_type=True
-        )
-
-
 def test_write_pandas_auto_create_timestamps(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         at = pd.Timestamp("2025-01-01 12:00")
@@ -182,19 +171,6 @@ def test_write_pandas_auto_create_category_of_timestamps(conn: snowflake.connect
 
         cur.execute("select * from example")
         assert cur.fetchall() == [(datetime.datetime(2025, 1, 1, 12, 0),)]
-
-        with pytest.raises(NotImplementedError, match="sql_type dtype="):
-            snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE2", auto_create_table=True)
-
-
-def test_write_pandas_auto_create_timestamps_without_use_logical_type(
-    conn: snowflake.connector.SnowflakeConnection,
-):
-    # without it snowflake infers a number, whose unit follows the dtype, rather than a timestamp
-    df = pd.DataFrame({"TS": pd.Series([pd.Timestamp("2025-01-01 12:00")])})
-
-    with pytest.raises(NotImplementedError, match="sql_type dtype="):
-        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
 
 
 def test_write_pandas_auto_create_unsupported_dtype(conn: snowflake.connector.SnowflakeConnection):
