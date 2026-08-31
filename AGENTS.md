@@ -8,3 +8,7 @@ When a test compares JSON, `VARIANT`, `ARRAY`, or `OBJECT` results as strings, u
 - Use `indent(rows)` for tuple results.
 
 Do not compare raw DuckDB JSON strings when the assertion is intended to match real Snowflake output.
+
+## Live behavior in tests
+
+Tests should assert the live Snowflake behavior rather than the fake implementation's current limitation.
