@@ -2,6 +2,25 @@
 
 # Changelog
 
+## [0.11.16](https://github.com/tekumara/fakesnow/compare/v0.11.15...v0.11.16) (2026-08-31)
+
+
+### Features
+
+* support * as an argument to OBJECT_CONSTRUCT ([#395](https://github.com/tekumara/fakesnow/issues/395)) ([9b7e4d3](https://github.com/tekumara/fakesnow/commit/9b7e4d3bfbfadfb2c46ea481078c2532ab14d4b8))
+* support more dtypes (more int widths, float, bool, category) in write_pandas auto_create_table ([#398](https://github.com/tekumara/fakesnow/issues/398)) ([11cb4e5](https://github.com/tekumara/fakesnow/commit/11cb4e5443db37fc81bb734522aa85b013d360cd))
+* support timestamp and time dtypes in write_pandas auto_create_table under use_logical_type ([#401](https://github.com/tekumara/fakesnow/issues/401)) ([08b701c](https://github.com/tekumara/fakesnow/commit/08b701c273668e391c1e92be9b1b3fbfcda1b4fd))
+
+
+### Bug Fixes
+
+* report the rows affected by a MERGE as the total across its operations ([#402](https://github.com/tekumara/fakesnow/issues/402)) ([dff8018](https://github.com/tekumara/fakesnow/commit/dff801839fc601778ab71132ef10a94e972c2d4b))
+
+
+### Chores
+
+* bump dev venv to python 3.11 ([cf0b6d3](https://github.com/tekumara/fakesnow/commit/cf0b6d31b55c26d3e8ace08c080931e49f5c7378))
+
 ## [0.11.15](https://github.com/tekumara/fakesnow/compare/v0.11.14...v0.11.15) (2026-08-25)
 
 
