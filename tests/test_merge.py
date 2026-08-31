@@ -647,3 +647,39 @@ def test_merge_delete_lowercase(conn: snowflake.connector.SnowflakeConnection):
 
         cur.execute("select id from t order by id")
         assert cur.fetchall() == [(2,)]
+
+
+def test_merge_rowcount(conn: snowflake.connector.SnowflakeConnection):
+    # snowflake reports the rows affected across all the merge operations, not the single row
+    # the counts are returned in
+    with conn.cursor() as cur:
+
+        def reset() -> None:
+            cur.execute("create or replace table t (id int, v int)")
+            cur.execute("insert into t values (1, 10), (2, 20)")
+
+        matched_and_not = """
+            merge into t using (select 1 as id, 99 as v union all select 3, 30) s on t.id = s.id
+            when matched then update set t.v = s.v
+            when not matched then insert values (s.id, s.v)
+            """
+
+        reset()
+        cur.execute(matched_and_not)
+        assert cur.fetchall() == [(1, 1)]
+        assert cur.rowcount == 2
+
+        reset()
+        cur.execute("merge into t using (select 1 as id) s on t.id = s.id when matched then delete")
+        assert cur.fetchall() == [(1,)]
+        assert cur.rowcount == 1
+
+        reset()
+        cur.execute("""
+            merge into t using (select 1 as id, 99 as v union all select 3, 30) s on t.id = s.id
+            when matched and s.v > 50 then update set t.v = s.v
+            when matched then delete
+            when not matched then insert values (s.id, s.v)
+            """)
+        assert cur.fetchall() == [(1, 1, 0)]
+        assert cur.rowcount == 2

@@ -622,6 +622,10 @@ class FakeSnowflakeCursor:
             self._duck_conn.execute(result_sql)
 
         self._arrow_table = self._duck_conn.to_arrow_table()
+        if transformed.args.get("merge_counts"):
+            # a merge returns a count per operation, but snowflake reports their total as the
+            # rows affected, not the single row those counts are in
+            affected_count = int(sum(c[0].as_py() for c in self._arrow_table.columns))
         self._rowcount = affected_count or self._arrow_table.num_rows
         self._sfqid = str(uuid.uuid4())
 
