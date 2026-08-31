@@ -220,4 +220,8 @@ def _counts(merge_expr: exp.Merge) -> Expr:
     FROM merge_candidates
     """
 
-    return sqlglot.parse_one(sql)
+    counts = sqlglot.parse_one(sql)
+    # marks the statement that produces the merge result, so the cursor can report the rows
+    # affected across all the operations rather than the single row of counts
+    counts.set("merge_counts", True)
+    return counts

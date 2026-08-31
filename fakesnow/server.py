@@ -139,7 +139,7 @@ async def query_request(request: Request) -> JSONResponse:
                 # across the whole batch, so accumulate them as we execute row by row
                 for row in batch:
                     await run_in_threadpool(cur.execute, sql_text, binding_params=row, server=True)
-                    batch_rowcount += cur._rowcount or 0  # noqa: SLF001
+                    batch_rowcount += cur.rowcount or 0
             rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
             expr = cur._last_transformed  # noqa: SLF001
@@ -203,7 +203,7 @@ async def query_request(request: Request) -> JSONResponse:
                         {"name": "TIMEZONE", "value": "Etc/UTC"},
                     ],
                     "rowtype": rowtype,
-                    "total": 1 if batch is not None else cur._rowcount,  # noqa: SLF001
+                    "total": 1 if batch is not None else cur.rowcount,
                     "queryId": cur.sfqid,
                     "statementTypeId": type_id,
                     "finalDatabaseName": conn.database,

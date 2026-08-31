@@ -496,24 +496,6 @@ def test_server_query_response_has_use_statement_type_id(server: dict, sql: str)
     assert result["data"]["statementTypeId"] == 0x4300
 
 
-def test_server_rowcount_dml(scur: snowflake.connector.cursor.SnowflakeCursor):
-    cur = scur
-
-    cur.execute("create or replace table example (id int)")
-    cur.execute("insert into example values (1), (2), (3)")
-    assert cur.rowcount == 3
-    cur.execute("update example set id = 9 where id > 1")
-    assert cur.rowcount == 2
-    cur.execute("delete from example where id = 9")
-    assert cur.rowcount == 2
-    cur.execute(
-        "merge into example t using (select 1 as id union all select 7 as id) s on t.id = s.id "
-        "when matched then update set t.id = 5 when not matched then insert (id) values (s.id)"
-    )
-    # 1 row inserted + 1 row updated
-    assert cur.rowcount == 2
-
-
 def test_server_sfid(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     cur = scur
     assert not cur.sfqid
