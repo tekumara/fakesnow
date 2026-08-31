@@ -496,7 +496,6 @@ def test_server_query_response_has_use_statement_type_id(server: dict, sql: str)
     assert result["data"]["statementTypeId"] == 0x4300
 
 
-
 def test_server_sfid(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     cur = scur
     assert not cur.sfqid
