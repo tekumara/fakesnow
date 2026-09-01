@@ -25,17 +25,17 @@ fakesnow = "fakesnow.cli:main"
 dev = [
     "boto3",
     "boto3-stubs[s3,sts]",
-    "build~=1.5",
+    "build~=1.6",
     "dirty-equals",
     "fakesnow[server]",
-    "moto[server] >= 5.2.2",
+    "moto[server] >= 5.2.3",
     # to fix https://github.com/pandas-dev/pandas/issues/56995
     "pandas-stubs",
     "pre-commit~=4.6",
-    "pyarrow-stubs==20.0.0.20260625",
+    "pyarrow-stubs==20.0.0.20260819",
     "pyright==1.1.411",
     "pytest~=9.1",
-    "ruff~=0.16.1",
+    "ruff~=0.16.5",
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
     "snowflake-sqlalchemy~=1.11.0",
@@ -50,7 +50,7 @@ notebook = ["duckdb-engine", "ipykernel", "jupysql"]
 server = ["starlette", "uvicorn"]
 
 [build-system]
-requires = ["setuptools~=83.0"]
+requires = ["setuptools~=84.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
