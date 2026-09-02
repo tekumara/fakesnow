@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import shutil
 import tempfile
 from pathlib import PurePath
 from typing import Any, TypedDict
@@ -111,6 +112,9 @@ def create_stage(
     transformed = sqlglot.parse_one(insert_sql, read="duckdb")
     transformed.args["create_stage_name"] = stage_name
     transformed.args["create_stage_if_not_exists"] = if_not_exists
+    if replace:
+        # a replaced stage starts empty
+        shutil.rmtree(internal_dir(f"{catalog}.{schema}.{stage_name}"), ignore_errors=True)
     return transformed
 
 
