@@ -203,7 +203,7 @@ async def query_request(request: Request) -> JSONResponse:
                         {"name": "TIMEZONE", "value": "Etc/UTC"},
                     ],
                     "rowtype": rowtype,
-                    "total": 1 if batch is not None else cur.rowcount,
+                    "total": 1 if batch is not None else arrow_table.num_rows if arrow_table else 0,
                     "queryId": cur.sfqid,
                     "statementTypeId": type_id,
                     "finalDatabaseName": conn.database,

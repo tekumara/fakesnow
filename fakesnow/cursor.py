@@ -626,7 +626,7 @@ class FakeSnowflakeCursor:
             # a merge returns a count per operation, but snowflake reports their total as the
             # rows affected, not the single row those counts are in
             affected_count = int(sum(c[0].as_py() for c in self._arrow_table.columns))
-        self._rowcount = affected_count or self._arrow_table.num_rows
+        self._rowcount = affected_count if affected_count is not None else self._arrow_table.num_rows
         self._sfqid = str(uuid.uuid4())
 
         self._last_sql = result_sql or sql
