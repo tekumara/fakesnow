@@ -62,9 +62,9 @@ def test_transform_merge() -> None:
             WHERE t2.merge_op = 3"""),
         strip("""
             SELECT
-              COUNT_IF(merge_op IN (3)) AS "number of rows inserted",
-              COUNT_IF(merge_op IN (1, 2)) AS "number of rows updated",
-              COUNT_IF(merge_op IN (0)) AS "number of rows deleted"
+              COALESCE(COUNT_IF(merge_op IN (3)), 0) AS "number of rows inserted",
+              COALESCE(COUNT_IF(merge_op IN (1, 2)), 0) AS "number of rows updated",
+              COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows deleted"
             FROM merge_candidates"""),
     ]
 
@@ -121,9 +121,9 @@ def test_transform_merge_table_alias_target() -> None:
             WHERE t2.merge_op = 3"""),
         strip("""
             SELECT
-              COUNT_IF(merge_op IN (3)) AS "number of rows inserted",
-              COUNT_IF(merge_op IN (1, 2)) AS "number of rows updated",
-              COUNT_IF(merge_op IN (0)) AS "number of rows deleted"
+              COALESCE(COUNT_IF(merge_op IN (3)), 0) AS "number of rows inserted",
+              COALESCE(COUNT_IF(merge_op IN (1, 2)), 0) AS "number of rows updated",
+              COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows deleted"
             FROM merge_candidates"""),
     ]
 
@@ -180,9 +180,9 @@ def test_transform_merge_table_alias_source() -> None:
             WHERE t2.merge_op = 3"""),
         strip("""
             SELECT
-              COUNT_IF(merge_op IN (3)) AS "number of rows inserted",
-              COUNT_IF(merge_op IN (1, 2)) AS "number of rows updated",
-              COUNT_IF(merge_op IN (0)) AS "number of rows deleted"
+              COALESCE(COUNT_IF(merge_op IN (3)), 0) AS "number of rows inserted",
+              COALESCE(COUNT_IF(merge_op IN (1, 2)), 0) AS "number of rows updated",
+              COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows deleted"
             FROM merge_candidates"""),
     ]
 
@@ -216,7 +216,7 @@ def test_transform_merge_not_matched_condition() -> None:
             WHERE t2.merge_op = 0"""),
         strip("""
             SELECT
-              COUNT_IF(merge_op IN (0)) AS "number of rows inserted"
+              COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows inserted"
             FROM merge_candidates"""),
     ]
 
@@ -261,8 +261,8 @@ def test_transform_merge_complex_join_keys() -> None:
             WHERE t2.merge_op = 1"""),
         strip("""
             SELECT
-              COUNT_IF(merge_op IN (1)) AS "number of rows inserted",
-              COUNT_IF(merge_op IN (0)) AS "number of rows deleted"
+              COALESCE(COUNT_IF(merge_op IN (1)), 0) AS "number of rows inserted",
+              COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows deleted"
             FROM merge_candidates"""),
     ]
 
@@ -305,7 +305,7 @@ def test_transform_merge_source_subquery() -> None:
             AND src.merge_op = 0"""),
         strip("""
             SELECT
-              COUNT_IF(merge_op IN (0)) AS "number of rows updated"
+              COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows updated"
             FROM merge_candidates"""),
     ]
 
@@ -362,9 +362,9 @@ def test_transform_merge_join_function() -> None:
             WHERE t2.merge_op = 3"""),
         strip("""
             SELECT
-              COUNT_IF(merge_op IN (3)) AS "number of rows inserted",
-              COUNT_IF(merge_op IN (1, 2)) AS "number of rows updated",
-              COUNT_IF(merge_op IN (0)) AS "number of rows deleted"
+              COALESCE(COUNT_IF(merge_op IN (3)), 0) AS "number of rows inserted",
+              COALESCE(COUNT_IF(merge_op IN (1, 2)), 0) AS "number of rows updated",
+              COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows deleted"
             FROM merge_candidates"""),
     ]
 
@@ -683,3 +683,22 @@ def test_merge_rowcount(conn: snowflake.connector.SnowflakeConnection):
             """)
         assert cur.fetchall() == [(1, 1, 0)]
         assert cur.rowcount == 2
+
+
+def test_merge_no_rows_affected_returns_integer_counts(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("CREATE OR REPLACE TABLE t1 (id INT, name VARCHAR)")
+    dcur.execute("CREATE OR REPLACE TABLE s1 (id INT, name VARCHAR)")
+    dcur.execute("INSERT INTO s1 VALUES (1, 'a')")
+
+    merge = """
+        MERGE INTO t1 USING s1 ON t1.id = s1.id
+        WHEN MATCHED AND t1.name IS DISTINCT FROM s1.name THEN UPDATE SET name = s1.name
+        WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s1.id, s1.name)
+    """
+    dcur.execute(merge)
+    assert dcur.fetchall() == [{"number of rows inserted": 1, "number of rows updated": 0}]
+
+    # rerun: no clause affects any row, but the counts are integers, never NULL
+    dcur.execute(merge)
+    assert dcur.fetchall() == [{"number of rows inserted": 0, "number of rows updated": 0}]
+    assert dcur.rowcount == 0

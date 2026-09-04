@@ -196,6 +196,26 @@ def test_server_executemany_qmark(server: dict) -> None:
         ]
 
 
+def test_server_merge_response_total(sconn: snowflake.connector.SnowflakeConnection) -> None:
+    conn = sconn
+    with conn.cursor() as cur:
+        cur.execute("create table target (id int, name varchar)")
+        cur.execute("create table source (id int, name varchar)")
+        cur.execute("insert into source values (1, 'a')")
+
+        merge = """
+            merge into target using source on target.id = source.id
+            when matched and target.name is distinct from source.name then update set name = source.name
+            when not matched then insert (id, name) values (source.id, source.name)
+        """
+        cur.execute(merge)
+
+    result = conn.cmd_query(merge, conn._next_sequence_counter(), uuid.uuid4())  # noqa: SLF001
+
+    # A zero-effect MERGE still returns one row of operation counts.
+    assert result["data"]["total"] == 1
+
+
 def test_server_close(server: dict) -> None:
     conn = snowflake.connector.connect(**server)
 

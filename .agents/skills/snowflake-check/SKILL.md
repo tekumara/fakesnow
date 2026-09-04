@@ -1,11 +1,11 @@
 ---
 name: snowflake-check
-description: Inspect the Git diff from `main...HEAD` to identify tests it added or changed, validate the applicable runtime behavior against a real Snowflake instance, and produce a concise report of failures and behavioral differences. Use when a user asks to run tests from the current branch on real Snowflake, compare fake/local Snowflake behavior to actual Snowflake behavior, or verify whether newly added Snowflake-facing tests match live semantics.
+description: Inspect the Git diff from `origin/main...HEAD` to identify tests it added or changed, validate the applicable runtime behavior against a real Snowflake instance, and produce a concise report of failures and behavioral differences. Use when a user asks to run tests from the current branch on real Snowflake, compare fake/local Snowflake behavior to actual Snowflake behavior, or verify whether newly added Snowflake-facing tests match live semantics.
 ---
 
 # Snowflake Check
 
-Identify the tests introduced by the current branch diff against `main`, separate live-applicable runtime checks from local-only unit tests, reproduce the runtime behavior against a real Snowflake account with isolated temporary objects, and report any divergence precisely.
+Identify the tests introduced by the current branch diff against `origin/main`, separate live-applicable runtime checks from local-only unit tests, reproduce the runtime behavior against a real Snowflake account with isolated temporary objects, and report any divergence precisely.
 
 Prefer reproducing the behavior in a small one-off script over patching the repo tests to force them through live credentials. Treat the repo tests as specifications to validate, not as the only executable surface.
 
@@ -13,9 +13,9 @@ Prefer reproducing the behavior in a small one-off script over patching the repo
 
 1. Inspect the current branch diff.
 
-- Run `git diff --stat --name-only main...HEAD` to identify touched files.
-- Run `git diff main...HEAD -- <candidate test files>` to isolate the exact newly added test bodies.
-- Note that the review scope is `main...HEAD` in the final report.
+- Run `git diff --stat --name-only origin/main...HEAD` to identify touched files.
+- Run `git diff origin/main...HEAD -- <candidate test files>` to isolate the exact newly added test bodies.
+- Note that the review scope is `origin/main...HEAD` in the final report.
 
 2. Classify each added test before running anything live.
 
@@ -50,7 +50,7 @@ Prefer reproducing the behavior in a small one-off script over patching the repo
 
 6. Produce the report.
 
-- Report that the review scope was `main...HEAD` and the exact added tests reviewed.
+- Report that the review scope was `origin/main...HEAD` and the exact added tests reviewed.
 - For each added test, state one of:
   - `passes on real Snowflake as written`
   - `fails on real Snowflake as written`
@@ -102,7 +102,7 @@ PY
 
 ## Output Template
 
-- `Diff scope:` `main...HEAD`
+- `Diff scope:` `origin/main...HEAD`
 - `Added tests reviewed:` `<file:line>` entries
 - `Live-applicable tests:` short list
 - `Local-only tests:` short list

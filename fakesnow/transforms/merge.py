@@ -210,8 +210,10 @@ def _counts(merge_expr: exp.Merge) -> Expr:
 
     ops = operations(merge_expr)
 
+    # COALESCE because duckdb's COUNT_IF returns NULL for an empty merge_candidates table,
+    # whereas snowflake always returns integer counts
     count_statements = [
-        f"""COUNT_IF(merge_op in ({",".join(map(str, indices))})) as \"number of rows {op}\""""
+        f"""COALESCE(COUNT_IF(merge_op in ({",".join(map(str, indices))})), 0) as \"number of rows {op}\""""
         for op, indices in ops.items()
         if indices
     ]
