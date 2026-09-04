@@ -53,6 +53,8 @@ SQL_CREATED_SECRET = Template("SELECT 'Secret ${name} successfully created.' as 
 SQL_CREATED_TABLE = Template("SELECT 'Table ${name} successfully created.' as 'status'")
 SQL_CREATED_VIEW = Template("SELECT 'View ${name} successfully created.' as 'status'")
 SQL_CREATED_STAGE = Template("SELECT 'Stage area ${name} successfully created.' as status")
+SQL_OBJECT_EXISTS = Template("SELECT '${name} already exists, statement succeeded.' as status")
+SQL_CREATED_FILE_FORMAT = Template("SELECT 'File format ${name} successfully created.' as status")
 SQL_DROPPED = Template("SELECT '${name} successfully dropped.' as 'status'")
 SQL_INSERTED_ROWS = Template("SELECT ${count} as 'number of rows inserted'")
 SQL_UPDATED_ROWS = Template("SELECT ${count} as 'number of rows updated', 0 as 'number of multi-joined rows updated'")
@@ -369,6 +371,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.alter_table_strip_cluster_by)
             .transform(transforms.numeric_agg_implicit_cast)
             .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
+            .transform(lambda e: transforms.create_file_format(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.list_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.put_stage(e, self._conn.database, self._conn.schema, params))
             .transform(lambda e: transforms.create_table_as(e, self._duck_conn))
@@ -442,8 +445,10 @@ class FakeSnowflakeCursor:
             # see https://docs.snowflake.com/en/sql-reference/transactions#ddl
             # and https://docs.snowflake.com/en/sql-reference/sql-ddl-summary
             # TODO: include DESCRIBE, SHOW, USE in this list of DDL statements
-            if isinstance(transformed, (exp.Alter, exp.Comment, exp.Create, exp.Drop)) or transformed.args.get(
-                "create_stage_name"
+            if (
+                isinstance(transformed, (exp.Alter, exp.Comment, exp.Create, exp.Drop))
+                or transformed.args.get("create_stage_name")
+                or transformed.args.get("create_file_format_name")
             ):
                 self._duck_conn.commit()
                 self._conn._in_transaction = False
@@ -454,6 +459,7 @@ class FakeSnowflakeCursor:
             elif (
                 isinstance(transformed, (exp.Insert, exp.Update, exp.Delete, exp.Merge, exp.Copy))
                 and not transformed.args.get("create_stage_name")
+                and not transformed.args.get("create_file_format_name")
                 and not self._conn._in_transaction
             ):
                 self._duck_conn.begin()
@@ -521,13 +527,29 @@ class FakeSnowflakeCursor:
 
         elif stage_name := transformed.args.get("create_stage_name"):
             (affected_count,) = self._duck_conn.fetchall()[0]
-            if affected_count == 0:
+            if affected_count > 0:
+                result_sql = SQL_CREATED_STAGE.substitute(name=stage_name)
+            elif transformed.args.get("create_stage_if_not_exists"):
+                result_sql = SQL_OBJECT_EXISTS.substitute(name=stage_name)
+            else:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"SQL compilation error:\nObject '{stage_name}' already exists.",
                     errno=2002,
                     sqlstate="42710",
                 )
-            result_sql = SQL_CREATED_STAGE.substitute(name=stage_name)
+
+        elif format_name := transformed.args.get("create_file_format_name"):
+            (affected_count,) = self._duck_conn.fetchall()[0]
+            if affected_count > 0:
+                result_sql = SQL_CREATED_FILE_FORMAT.substitute(name=format_name)
+            elif transformed.args.get("create_file_format_if_not_exists"):
+                result_sql = SQL_OBJECT_EXISTS.substitute(name=format_name)
+            else:
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg=f"SQL compilation error:\nObject '{format_name}' already exists.",
+                    errno=2002,
+                    sqlstate="42710",
+                )
 
         elif stage_name := transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
             if self._duck_conn.to_arrow_table().num_rows != 1:

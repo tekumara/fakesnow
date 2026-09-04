@@ -255,7 +255,20 @@ CREATE TABLE IF NOT EXISTS _fs_global._fs_information_schema._fs_stages (
     storage_integration TEXT,
     endpoint TEXT,
     owner_role_type TEXT,
-    directory_enabled TEXT
+    directory_enabled TEXT,
+    PRIMARY KEY (database_name, schema_name, name)
+);
+"""
+
+SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_FILE_FORMATS_TABLE = """
+CREATE TABLE IF NOT EXISTS _fs_global._fs_information_schema._fs_file_formats (
+    created_on TIMESTAMPTZ,
+    name TEXT,
+    database_name TEXT,
+    schema_name TEXT,
+    type TEXT,
+    options TEXT,
+    PRIMARY KEY (database_name, schema_name, name)
 );
 """
 
@@ -278,7 +291,8 @@ def fs_global_creation_sql() -> str:
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_EXT};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_COLUMNS_VIEW};
         {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_USERS_TABLE};
-        {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_STAGES_TABLE}
+        {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_STAGES_TABLE};
+        {SQL_CREATE_GLOBAL_INFORMATION_SCHEMA_FILE_FORMATS_TABLE}
     """
 
 
