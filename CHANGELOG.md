@@ -2,6 +2,20 @@
 
 # Changelog
 
+## [0.11.17](https://github.com/tekumara/fakesnow/compare/v0.11.16...v0.11.17) (2026-09-04)
+
+
+### Bug Fixes
+
+* MERGE returns integer counts when no rows are affected ([#410](https://github.com/tekumara/fakesnow/issues/410)) ([755a29f](https://github.com/tekumara/fakesnow/commit/755a29f82331632bffa0b2fb70dacb48ec2b38bf))
+* scope load history to the target table ([#411](https://github.com/tekumara/fakesnow/issues/411)) ([efd0ea2](https://github.com/tekumara/fakesnow/commit/efd0ea261d332df346005b9802c80f6757622c88))
+
+
+### Chores
+
+* **deps-dev:** bump the pip group with 5 updates ([#404](https://github.com/tekumara/fakesnow/issues/404)) ([31e6e81](https://github.com/tekumara/fakesnow/commit/31e6e81c4cad3b9adab28a3b1e93abcc376a4f43))
+* **deps:** update sqlglot requirement from ~=30.15.0 to ~=30.17.0 ([#405](https://github.com/tekumara/fakesnow/issues/405)) ([945dc3b](https://github.com/tekumara/fakesnow/commit/945dc3baf33a94456a637ab5e147724de9250752))
+
 ## [0.11.16](https://github.com/tekumara/fakesnow/compare/v0.11.15...v0.11.16) (2026-08-31)
 
 
