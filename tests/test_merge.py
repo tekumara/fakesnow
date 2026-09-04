@@ -701,3 +701,4 @@ def test_merge_no_rows_affected_returns_integer_counts(dcur: snowflake.connector
     # rerun: no clause affects any row, but the counts are integers, never NULL
     dcur.execute(merge)
     assert dcur.fetchall() == [{"number of rows inserted": 0, "number of rows updated": 0}]
+    assert dcur.rowcount == 0

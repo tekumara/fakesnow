@@ -658,24 +658,3 @@ def test_server_describe_only(server: dict) -> None:
         # nothing ran: the original table is untouched
         cur.execute("select * from example")
         assert cur.fetchall() == [(1, "old")]
-
-
-def test_server_merge_no_rows_affected(sdcur: snowflake.connector.cursor.DictCursor) -> None:
-    # the connector reads the counts client-side with int(), so they must never be NULL
-    dcur = sdcur
-    dcur.execute("CREATE OR REPLACE TABLE t1 (id INT, name VARCHAR)")
-    dcur.execute("CREATE OR REPLACE TABLE s1 (id INT, name VARCHAR)")
-    dcur.execute("INSERT INTO s1 VALUES (1, 'a')")
-
-    merge = """
-        MERGE INTO t1 USING s1 ON t1.id = s1.id
-        WHEN MATCHED AND t1.name IS DISTINCT FROM s1.name THEN UPDATE SET name = s1.name
-        WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s1.id, s1.name)
-    """
-    dcur.execute(merge)
-    assert dcur.fetchall() == [{"number of rows inserted": 1, "number of rows updated": 0}]
-
-    # rerun: no clause affects any row
-    dcur.execute(merge)
-    assert dcur.fetchall() == [{"number of rows inserted": 0, "number of rows updated": 0}]
-    assert dcur.rowcount == 0
