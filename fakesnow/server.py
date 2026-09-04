@@ -3,17 +3,19 @@ from __future__ import annotations
 import gzip
 import json
 import logging
+import os
 import secrets
 from base64 import b64encode
 from dataclasses import dataclass
 from typing import Any
+from urllib.parse import quote
 
 import snowflake.connector.errors
 from sqlglot import Expr, exp, parse_one
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
-from starlette.responses import JSONResponse
+from starlette.responses import JSONResponse, Response
 from starlette.routing import Route
 
 from fakesnow import statement_type
@@ -25,6 +27,7 @@ from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.rowtype import ColumnInfo, describe_as_rowtype
 from fakesnow.statement_type import DML_TYPE_IDS, statement_type_id
+from fakesnow.transforms import stage
 
 logger = logging.getLogger("fakesnow.server")
 # use same format as uvicorn
@@ -94,7 +97,7 @@ async def query_request(request: Request) -> JSONResponse:
 
         body_json = json.loads(body)
 
-        sql_text = body_json["sqlText"]
+        sql_text = stage.normalise_put_src(body_json["sqlText"])
 
         params: Any = None
         # rows of params, when the client sends an array binding
@@ -145,6 +148,15 @@ async def query_request(request: Request) -> JSONResponse:
             expr = cur._last_transformed  # noqa: SLF001
             assert expr
             if put_stage_data := expr.args.get("put_stage_data"):
+                if not expr.args.get("put_stage_target_from_params"):
+                    # rewrite the stage info so the client uploads the file over http to this
+                    # server, rather than writing to a local path, which fails when the client
+                    # doesn't share the server's filesystem (eg: the server runs in a container).
+                    # GCS is the only location type the connector uploads to via a plain http
+                    # presigned url, so mimic it. a PUT with a ? placeholder target keeps
+                    # LOCAL_FS because the connector re-requests the presigned url by executing
+                    # the command without bindings (see SnowflakeGCSRestClient).
+                    put_stage_data["stageInfo"] = gcs_stage_info(request, expr, put_stage_data)
                 # this is a PUT command, so return the stage data
                 return JSONResponse(
                     {
@@ -219,6 +231,51 @@ async def query_request(request: Request) -> JSONResponse:
             {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
             status_code=e.status_code,
         )
+
+
+def gcs_stage_info(request: Request, expr: Expr, put_stage_data: stage.UploadCommandDict) -> dict[str, Any]:
+    """Stage info that uploads to this server over http via a GCS-style presigned url.
+
+    The presigned url targets the file's destination name. The connector re-requests it
+    with the destination file name as the source, so the url is correct for the actual
+    upload even when auto compression renames the file.
+    """
+    fqname = expr.args["put_stage_name"]
+    src = put_stage_data["src_locations"][0]
+    dst = os.path.basename(src)
+    if put_stage_data["autoCompress"] and not dst.endswith(".gz"):
+        dst += ".gz"
+
+    catalog, schema, name = fqname.split(".")
+    path = quote(f"{catalog}/{schema}/{name}/{dst}")
+    return {
+        "locationType": "GCS",
+        "location": f"{fqname}/",
+        "creds": {},
+        "presignedUrl": f"{request.url.scheme}://{request.url.netloc}/fs_bucket/{path}",
+    }
+
+
+def _write_bucket_file(path: str, body: bytes) -> str | None:
+    """Write body to path within the local bucket, returning the target path, or None if invalid."""
+    target = os.path.normpath(os.path.join(stage.LOCAL_BUCKET_PATH, path))
+    if not target.startswith(stage.LOCAL_BUCKET_PATH + os.sep):
+        return None
+
+    os.makedirs(os.path.dirname(target), exist_ok=True)
+    with open(target, "wb") as f:
+        f.write(body)
+    return target
+
+
+async def bucket_upload(request: Request) -> Response:
+    """Store an uploaded file in the local bucket, ie: the backing storage for internal stages."""
+    body = await request.body()
+    target = await run_in_threadpool(_write_bucket_file, request.path_params["path"], body)
+    if not target:
+        return Response(status_code=400)
+    logger.info(f"Uploaded {len(body)} bytes to {target}")
+    return Response()
 
 
 def describe_only_response(
@@ -314,6 +371,7 @@ routes = [
         methods=["POST"],
     ),
     Route("/queries/v1/abort-request", lambda _: JSONResponse({"success": True}), methods=["POST"]),
+    Route("/fs_bucket/{path:path}", bucket_upload, methods=["PUT"]),
     Route("/monitoring/queries/{sfqid}", monitoring_query, methods=["GET"]),
 ]
 
