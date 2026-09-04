@@ -574,6 +574,17 @@ class FakeSnowflakeCursor:
             elif cmd == "CREATE TABLE" and ident:
                 result_sql = SQL_CREATED_TABLE.substitute(name=ident)
 
+                # a newly created table object has no load history
+                if table := transformed.find(exp.Table):
+                    catalog = table.catalog or self._conn.database
+                    schema = table.db or self._conn.schema
+                    assert catalog and schema
+                    self._duck_conn.execute(
+                        f"DELETE FROM {catalog}._fs_information_schema._fs_load_history "
+                        "WHERE SCHEMA_NAME = ? AND TABLE_NAME = ?",
+                        [schema, table.name],
+                    )
+
             elif cmd.startswith("ALTER") and ident:
                 result_sql = SQL_SUCCESS
 

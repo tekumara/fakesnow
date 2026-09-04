@@ -90,11 +90,14 @@ def copy_into(
     histories: list[LoadHistoryRecord] = []
     load_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
     try:
-        check_sql = "SELECT 1 FROM _fs_information_schema._fs_load_history WHERE FILE_NAME = ? LIMIT 1"
+        check_sql = (
+            "SELECT 1 FROM _fs_information_schema._fs_load_history "
+            "WHERE FILE_NAME = ? AND TABLE_NAME = ? AND SCHEMA_NAME = ? LIMIT 1"
+        )
 
         for i, url in zip(inserts, urls, strict=False):
-            # Check if file has been loaded into any table before
-            duck_conn.execute(check_sql, [url])
+            # Check if file has been loaded into this table before
+            duck_conn.execute(check_sql, [url, table.name, schema])
             if duck_conn.fetchone() and not cparams.force:
                 affected_count = 0
                 status = "LOAD_SKIPPED"
