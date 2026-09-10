@@ -305,6 +305,7 @@ Partially supported:
 - Tags
 - User management
 - Stages and PUT
+- Named file formats
 - `COPY INTO` from S3 sources and stages, see [COPY INTO](#copy-into)
 
 Not yet implemented:
