@@ -255,7 +255,8 @@ CREATE TABLE IF NOT EXISTS _fs_global._fs_information_schema._fs_stages (
     storage_integration TEXT,
     endpoint TEXT,
     owner_role_type TEXT,
-    directory_enabled TEXT
+    directory_enabled TEXT,
+    PRIMARY KEY (database_name, schema_name, name)
 );
 """
 
