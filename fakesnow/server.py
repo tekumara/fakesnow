@@ -25,7 +25,7 @@ from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.rowtype import ColumnInfo, describe_as_rowtype
 from fakesnow.statement_type import DML_TYPE_IDS, statement_type_id
-from fakesnow.transforms import SERVER_VERSION
+from fakesnow.transforms import SERVER_VERSION, stage
 
 logger = logging.getLogger("fakesnow.server")
 # use same format as uvicorn
@@ -98,7 +98,7 @@ async def query_request(request: Request) -> JSONResponse:
 
         body_json = json.loads(body)
 
-        sql_text = body_json["sqlText"]
+        sql_text = stage.normalise_put_src(body_json["sqlText"])
 
         params: Any = None
         # rows of params, when the client sends an array binding
