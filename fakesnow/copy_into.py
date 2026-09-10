@@ -5,7 +5,6 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
-from pathlib import Path
 from typing import Any, NamedTuple, Protocol, cast
 from urllib.parse import urlparse, urlunparse
 
@@ -309,25 +308,31 @@ def _from_source(expr: exp.Copy) -> str:
 def stage_url_from_var(
     var: str, duck_conn: DuckDBPyConnection, current_database: str | None, current_schema: str | None
 ) -> str:
-    database_name, schema_name, name = stage.parts_from_var(var, current_database, current_schema)
+    # a stage reference can include a path suffix, eg: @stage1/dir/file.csv.gz
+    stage_var, _, path = var.partition("/")
+    database_name, schema_name, name = stage.parts_from_var(stage_var, current_database, current_schema)
+    fqname = f"{database_name}.{schema_name}.{name}"
 
-    # Look up the stage URL
-    duck_conn.execute(
-        """
-        SELECT url FROM _fs_global._fs_information_schema._fs_stages
-        WHERE database_name = ? and schema_name  = ? and name = ?
-        """,
-        (database_name, schema_name, name),
-    )
-    if result := duck_conn.fetchone():
-        # if no URL is found, it is an internal stage ie: local directory
-        return result[0] or stage.internal_dir(f"{database_name}.{schema_name}.{name}")
+    if stage.is_table_stage(name):
+        url = stage.internal_dir(fqname)
     else:
-        raise snowflake.connector.errors.ProgrammingError(
-            msg=f"SQL compilation error:\nStage '{database_name}.{schema_name}.{name}' does not exist or not authorized.",  # noqa: E501
-            errno=2003,
-            sqlstate="02000",
+        duck_conn.execute(
+            """
+            SELECT url FROM _fs_global._fs_information_schema._fs_stages
+            WHERE database_name = ? and schema_name  = ? and name = ?
+            """,
+            (database_name, schema_name, name),
         )
+        if not (result := duck_conn.fetchone()):
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"SQL compilation error:\nStage '{fqname}' does not exist or not authorized.",
+                errno=2003,
+                sqlstate="02000",
+            )
+        # if no URL is found, it is an internal stage ie: local directory
+        url = result[0] or stage.internal_dir(fqname)
+
+    return f"{url.rstrip('/')}/{path}" if path else url
 
 
 def _source_urls(source: str, files: list[str]) -> list[str]:
@@ -345,10 +350,12 @@ def _source_urls(source: str, files: list[str]) -> list[str]:
 def _source_glob(source: str, duck_conn: DuckDBPyConnection) -> list[str]:
     """List files from the source using duckdb glob."""
     if stage.is_internal(source):
-        source = Path(source).as_uri()  # convert local directory to a file URL
-
-    scheme, _netloc, _path, _params, _query, _fragment = urlparse(source)
-    glob = f"{source}/*" if scheme == "file" else f"{source}*"
+        # keep the plain path: duckdb does not decode percent-encoded file URIs
+        # a stage path suffix is a prefix match, eg: @stage1/dir/file matches dir/file*
+        glob = f"{source.rstrip('/')}/*" if os.path.isdir(source) else f"{source}*"
+    else:
+        scheme, _netloc, _path, _params, _query, _fragment = urlparse(source)
+        glob = f"{source}/*" if scheme == "file" else f"{source}*"
     sql = f"SELECT file FROM glob('{glob}')"
     logger.log_sql(sql)
     result = duck_conn.execute(sql).fetchall()

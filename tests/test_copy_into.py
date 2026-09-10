@@ -268,6 +268,62 @@ def test_copy_format_name_with_only_default_options(dcur: snowflake.connector.cu
         assert dcur.fetchall() == [{"A": 1, "B": 2}]
 
 
+def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    create_table(dcur)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        for name, data in (("first.csv", "1,2\n"), ("second.csv", "3,4\n")):
+            with open(f"{tmp_dir}/{name}", "w") as f:
+                f.write(data)
+
+        dcur.execute("CREATE STAGE stage3")
+        dcur.execute(f"PUT 'file://{tmp_dir}/first.csv' @stage3")
+        dcur.execute(f"PUT 'file://{tmp_dir}/second.csv' @stage3")
+
+        # a path suffix restricts the copy to the matching files within the stage
+        dcur.execute("COPY INTO table1 FROM @stage3/second.csv.gz")
+        results = dcur.fetchall()
+        assert [r["file"] for r in results] == ["stage3/second.csv.gz"]
+
+        dcur.execute("SELECT * FROM table1")
+        assert dcur.fetchall() == [{"A": 3, "B": 4}]
+
+
+def test_copy_internal_table_stage(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    create_table(dcur)
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        data = "1,2\n"
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file_path = temp_file.name
+        temp_file_basename = os.path.basename(temp_file_path)
+
+        # a table stage exists implicitly for every table
+        dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.%table1")
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0]["target"] == f"{temp_file_basename}.gz"
+
+        dcur.execute("COPY INTO table1 FROM @db1.schema1.%table1")
+        results = dcur.fetchall()
+        assert [(r["file"], r["status"]) for r in results] == [(f"%table1/{temp_file_basename}.gz", "LOADED")]
+
+        dcur.execute("SELECT * FROM table1")
+        assert dcur.fetchall() == [{"A": 1, "B": 2}]
+
+
+def test_put_table_stage_non_existent_table(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file_path = temp_file.name
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            dcur.execute(f"PUT 'file://{temp_file_path}' @%foobar")
+
+        assert (
+            str(excinfo.value)
+            == "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.%FOOBAR' does not exist or not authorized."
+        )
+
+
 def test_copy_format_name_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     dcur.execute("CREATE STAGE stage3")
