@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 import sqlglot
@@ -302,6 +303,79 @@ SELECT
     '' as 'external_access_integrations',
 WHERE 0 = 1;
 """
+
+
+# see https://docs.snowflake.com/en/sql-reference/sql/show-parameters
+# only the session parameters fakesnow honours are listed, so the reported values match behaviour.
+SHOW_PARAMETERS: list[tuple[str, str, str, str]] = [
+    (
+        "AUTOCOMMIT",
+        "true",
+        "true",
+        "The autocommit property determines whether a DML statement, when executed without an active "
+        "transaction, is automatically committed after the statement successfully completes.",
+    ),
+    (
+        "QUOTED_IDENTIFIERS_IGNORE_CASE",
+        "false",
+        "false",
+        "If true, the case of quoted identifiers is ignored.",
+    ),
+    (
+        "TIMEZONE",
+        "Etc/UTC",
+        "America/Los_Angeles",
+        "time zone, e.g. PST, America/Los_Angeles",
+    ),
+]
+
+# sqlglot parses SHOW PARAMETERS as a Command rather than a Show, so match on the command text.
+_SHOW_PARAMETERS = re.compile(
+    r"^\s*PARAMETERS(?:\s+LIKE\s+'(?P<like>(?:[^']|'')*)')?(?:\s+(?:IN|FOR)\s+.*)?\s*$",
+    re.IGNORECASE | re.DOTALL,
+)
+
+
+def _sql_str(value: str) -> str:
+    return "'" + value.replace("'", "''") + "'"
+
+
+def show_parameters(expression: Expr, autocommit: bool) -> Expr:
+    """Transform SHOW PARAMETERS.
+
+    Scopes (IN SESSION, IN ACCOUNT, ...) are accepted and ignored, because fakesnow only has
+    session parameters.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-parameters
+    """
+    if not (
+        isinstance(expression, exp.Command)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "SHOW"
+        and isinstance(rest := expression.args.get("expression"), str)
+        and (match := _SHOW_PARAMETERS.match(rest))
+    ):
+        return expression
+
+    selects = []
+    for key, value, default, description in SHOW_PARAMETERS:
+        if key == "AUTOCOMMIT":
+            value = "true" if autocommit else "false"
+        columns = (
+            (key, "key"),
+            (value, "value"),
+            (default, "default"),
+            ("SESSION" if value != default else "", "level"),
+            (description, "description"),
+        )
+        selects.append("SELECT " + ", ".join(f'{_sql_str(v)} as "{c}"' for v, c in columns))
+
+    query = " UNION ALL ".join(selects)
+    if (like := match.group("like")) is not None:
+        # snowflake matches the pattern case-insensitively, with sql wildcards
+        query = f'SELECT * FROM ({query}) WHERE "key" ILIKE {_sql_str(like.replace(chr(39) * 2, chr(39)))}'
+
+    return sqlglot.parse_one(query, read="duckdb")
 
 
 def show_procedures(expression: Expr) -> Expr:
