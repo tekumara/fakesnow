@@ -4,6 +4,7 @@ import datetime
 import os
 import shutil
 import tempfile
+from contextlib import suppress
 from pathlib import PurePath
 from typing import Any, TypedDict
 from urllib.parse import urlparse
@@ -113,8 +114,10 @@ def create_stage(
     transformed.args["create_stage_name"] = stage_name
     transformed.args["create_stage_if_not_exists"] = if_not_exists
     if replace:
-        # a replaced stage starts empty
-        shutil.rmtree(internal_dir(f"{catalog}.{schema}.{stage_name}"), ignore_errors=True)
+        # A replaced stage starts empty. Its directory may not exist yet, but other cleanup failures
+        # must prevent the replacement from succeeding with stale files.
+        with suppress(FileNotFoundError):
+            shutil.rmtree(internal_dir(f"{catalog}.{schema}.{stage_name}"))
     return transformed
 
 
