@@ -28,8 +28,5 @@ def test_create_file_format_if_not_exists(dcur: snowflake.connector.cursor.Snowf
 
 
 def test_create_file_format_fully_qualified(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("CREATE DATABASE db2")
-    dcur.execute("CREATE SCHEMA db2.schema2")
-
-    dcur.execute("CREATE FILE FORMAT db2.schema2.my_fmt TYPE='CSV'")
+    dcur.execute("CREATE FILE FORMAT db1.schema1.my_fmt TYPE='CSV'")
     assert dcur.fetchall() == [{"status": "File format MY_FMT successfully created."}]

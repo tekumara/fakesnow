@@ -6,10 +6,7 @@ from typing import Any
 
 import snowflake.connector.errors
 import sqlglot
-from duckdb import DuckDBPyConnection
 from sqlglot import Expr, exp
-
-from fakesnow.transforms.stage import parts_from_var
 
 
 def option_value(value: Expr | None) -> Any:  # noqa: ANN401
@@ -95,32 +92,3 @@ def create_file_format(
     transformed.args["create_file_format_name"] = format_name
     transformed.args["create_file_format_if_not_exists"] = if_not_exists
     return transformed
-
-
-def lookup_file_format(
-    duck_conn: DuckDBPyConnection,
-    name: str,
-    current_database: str | None,
-    current_schema: str | None,
-) -> dict[str, Any]:
-    """Return the stored options of a named file format.
-
-    Raises if the file format does not exist.
-    """
-    database_name, schema_name, format_name = parts_from_var(name, current_database, current_schema)
-
-    duck_conn.execute(
-        """
-        SELECT options FROM _fs_global._fs_information_schema._fs_file_formats
-        WHERE database_name = ? AND schema_name = ? AND name = ?
-        """,
-        (database_name, schema_name, format_name),
-    )
-    if result := duck_conn.fetchone():
-        return json.loads(result[0])
-
-    raise snowflake.connector.errors.ProgrammingError(
-        msg=f"SQL compilation error:\nFile format '{format_name}' does not exist or not authorized.",
-        errno=2003,
-        sqlstate="02000",
-    )
