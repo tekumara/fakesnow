@@ -1289,6 +1289,21 @@ def timestamp_ntz(expression: Expr) -> Expr:
     return expression
 
 
+def timestamp_ltz(expression: Expr) -> Expr:
+    """Convert timestamp_ltz (snowflake) to timestamptz (duckdb), dropping any precision.
+
+    Snowflake accepts a precision, eg: TIMESTAMP_LTZ(9), but duckdb's TIMESTAMPTZ takes no type
+    parameters and rejects it with "Type 'TIMESTAMP WITH TIME ZONE' does not take any type
+    parameters". sqlglot drops the precision when generating TIMESTAMP_TZ but keeps it for
+    TIMESTAMP_LTZ, so strip it here.
+    """
+
+    if isinstance(expression, exp.DataType) and expression.this == exp.DataType.Type.TIMESTAMPLTZ:
+        return exp.DataType(this=exp.DataType.Type.TIMESTAMPLTZ)
+
+    return expression
+
+
 def trim_cast_varchar(expression: Expr) -> Expr:
     """Snowflake's TRIM casts input to VARCHAR implicitly."""
 

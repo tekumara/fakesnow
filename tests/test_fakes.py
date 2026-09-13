@@ -9,6 +9,7 @@ import tempfile
 from decimal import Decimal
 
 import pytest
+import pytz
 import snowflake.connector
 import snowflake.connector.cursor
 from snowflake.connector.errors import ProgrammingError
@@ -626,6 +627,15 @@ def test_unquoted_identifiers_are_upper_cased(dcur: snowflake.connector.cursor.S
     assert dcur.fetchall() == [
         {"FIRST_NAME": "Jenny", "FNAME": "Jenny"},
     ]
+
+
+def test_timestamp_ltz_with_precision(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # snowflake accepts a precision on TIMESTAMP_LTZ, duckdb's TIMESTAMPTZ does not
+    cur.execute("CREATE TABLE example (ts TIMESTAMP_LTZ(9))")
+    cur.execute("INSERT INTO example VALUES ('2026-09-13 01:02:03+09:00')")
+
+    cur.execute("SELECT ts FROM example")
+    assert cur.fetchall() == [(datetime.datetime(2026, 9, 12, 16, 2, 3, tzinfo=pytz.utc),)]
 
 
 def test_use_role_and_warehouse(cur: snowflake.connector.cursor.SnowflakeCursor):
