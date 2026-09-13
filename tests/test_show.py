@@ -550,6 +550,67 @@ def test_show_sequences(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert sorted(cast(list[dict], dcur.fetchall()), key=lambda row: row["name"]) == [seq1, seq2]
 
 
+def test_show_parameters(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    autocommit = {
+        "key": "AUTOCOMMIT",
+        "value": "true",
+        "default": "true",
+        "level": "",
+        "description": "The autocommit property determines whether a DML statement, when executed without an "
+        "active transaction, is automatically committed after the statement successfully completes.",
+    }
+    quoted_identifiers = {
+        "key": "QUOTED_IDENTIFIERS_IGNORE_CASE",
+        "value": "false",
+        "default": "false",
+        "level": "",
+        "description": "If true, the case of quoted identifiers is ignored.",
+    }
+    timezone = {
+        "key": "TIMEZONE",
+        "value": "Etc/UTC",
+        "default": "America/Los_Angeles",
+        "level": "SESSION",
+        "description": "time zone, e.g. PST, America/Los_Angeles",
+    }
+
+    dcur.execute("SHOW PARAMETERS LIKE 'QUOTED_IDENTIFIERS_IGNORE_CASE'")
+    assert dcur.fetchall() == [quoted_identifiers]
+    assert [r.name for r in dcur.description] == ["key", "value", "default", "level", "description"]
+
+    # the pattern is case-insensitive and takes sql wildcards
+    dcur.execute("SHOW PARAMETERS LIKE 'quoted%'")
+    assert dcur.fetchall() == [quoted_identifiers]
+
+    dcur.execute("SHOW PARAMETERS LIKE 'NOT_A_PARAMETER'")
+    assert dcur.fetchall() == []
+
+    dcur.execute("SHOW PARAMETERS")
+    assert dcur.fetchall() == [autocommit, quoted_identifiers, timezone]
+
+    # a scope is accepted and ignored, fakesnow only has session parameters
+    dcur.execute("SHOW PARAMETERS IN SESSION")
+    assert dcur.fetchall() == [autocommit, quoted_identifiers, timezone]
+
+
+def test_show_parameters_autocommit_off(_fakesnow: None):
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1", autocommit=False) as conn,
+        conn.cursor(snowflake.connector.cursor.DictCursor) as dcur,
+    ):
+        dcur.execute("SHOW PARAMETERS LIKE 'AUTOCOMMIT'")
+        assert dcur.fetchall() == [
+            {
+                "key": "AUTOCOMMIT",
+                "value": "false",
+                "default": "true",
+                "level": "SESSION",
+                "description": "The autocommit property determines whether a DML statement, when executed without "
+                "an active transaction, is automatically committed after the statement successfully completes.",
+            }
+        ]
+
+
 def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show procedures")
     dcur.fetchall()
