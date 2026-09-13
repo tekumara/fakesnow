@@ -18,7 +18,7 @@ from mypy_boto3_s3 import S3Client
 from sqlglot import exp
 
 from fakesnow import logger
-from fakesnow.copy_into import CopyParams, _from_source, _params, _source_urls, _strip_json_extract
+from fakesnow.copy_into import CopyParams, ReadCSV, _from_source, _params, _source_urls, _strip_json_extract
 from tests.utils import dindent
 
 
@@ -217,6 +217,88 @@ def test_copy_internal_stage_server(sdcur: snowflake.connector.cursor.DictCursor
         dcur.execute("LIST @stage3")
         results = dcur.fetchall()
         assert len(results) == 0
+
+
+def test_copy_internal_stage_format_name_and_path(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    create_table(dcur)
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        data = 'A,B\n"1",2\n,4\n'
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file_path = temp_file.name
+        temp_file_basename = os.path.basename(temp_file_path)
+
+        dcur.execute("CREATE STAGE stage3")
+        dcur.execute(f"PUT 'file://{temp_file_path}' @stage3")
+        dcur.execute("""
+            CREATE FILE FORMAT my_csv_format TYPE='CSV' FIELD_DELIMITER=',' SKIP_HEADER=1
+            FIELD_OPTIONALLY_ENCLOSED_BY='"' EMPTY_FIELD_AS_NULL=TRUE NULL_IF=('') ESCAPE_UNENCLOSED_FIELD='NONE'
+        """)
+
+        # reference a single file within the stage and a named file format
+        dcur.execute(f"""
+            COPY INTO table1
+            FROM @stage3/{temp_file_basename}.gz
+            FILE_FORMAT = (FORMAT_NAME = 'my_csv_format')
+            ON_ERROR = 'ABORT_STATEMENT'
+        """)
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0]["file"] == f"stage3/{temp_file_basename}.gz"
+        assert results[0]["status"] == "LOADED"
+        assert results[0]["rows_loaded"] == 2
+
+        dcur.execute("SELECT * FROM table1")
+        assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": None, "B": 4}]
+
+
+def test_copy_internal_table_stage(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    create_table(dcur)
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        data = "1,2\n"
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file_path = temp_file.name
+        temp_file_basename = os.path.basename(temp_file_path)
+
+        # a table stage exists implicitly for every table
+        dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.%table1")
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0]["target"] == f"{temp_file_basename}.gz"
+
+        dcur.execute(f"COPY INTO table1 FROM @db1.schema1.%table1/{temp_file_basename}.gz")
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0]["status"] == "LOADED"
+
+        dcur.execute("SELECT * FROM table1")
+        assert dcur.fetchall() == [{"A": 1, "B": 2}]
+
+
+def test_put_table_stage_non_existent_table(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file_path = temp_file.name
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            dcur.execute(f"PUT 'file://{temp_file_path}' @%foobar")
+
+        assert (
+            str(excinfo.value)
+            == "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.%FOOBAR' does not exist or not authorized."
+        )
+
+
+def test_copy_format_name_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    create_table(dcur)
+    dcur.execute("CREATE STAGE stage3")
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("COPY INTO table1 FROM @stage3 FILE_FORMAT = (FORMAT_NAME = 'unknown_format')")
+
+    assert str(excinfo.value) == (
+        "002003 (02000): SQL compilation error:\nFile format 'UNKNOWN_FORMAT' does not exist or not authorized."
+    )
 
 
 @patch("fakesnow.copy_into.logger.log_sql", side_effect=logger.log_sql)
@@ -793,6 +875,45 @@ def test_load_history_is_per_table(dcur: snowflake.connector.cursor.DictCursor, 
     dcur.execute("CREATE OR REPLACE TABLE schema1.table1 (a INT, b INT)")
     dcur.execute(sql.format(table="table1", bucket=bucket))
     assert dcur.fetchall()[0]["status"] == "LOADED"
+
+
+def test_params_csv_options():
+    _, params = parse("""
+    COPY INTO table1
+    FROM 's3://mybucket/data/'
+    FILE_FORMAT = (TYPE='CSV' FIELD_DELIMITER=',' SKIP_HEADER=1 FIELD_OPTIONALLY_ENCLOSED_BY='"'
+        EMPTY_FIELD_AS_NULL=TRUE NULL_IF=('') ESCAPE_UNENCLOSED_FIELD='NONE' COMPRESSION='GZIP')
+    ON_ERROR = 'ABORT_STATEMENT'
+    """)
+
+    assert params.file_format == ReadCSV(skip_header=1, quote='"', delimiter=",", null_if=[""], compression="gzip")
+    assert params.on_error == "ABORT_STATEMENT"
+
+    assert (
+        params.file_format.read_expression("s3://mybucket/data/file1.csv").sql(dialect="duckdb")
+        == "READ_CSV('s3://mybucket/data/file1.csv', header = FALSE, skip = 1, quote = '\"', nullstr = [''], compression = 'gzip')"
+    )
+
+
+def test_params_csv_null_if_multiple():
+    _, params = parse("""
+    COPY INTO table1
+    FROM 's3://mybucket/data/'
+    FILE_FORMAT = (TYPE='CSV' NULL_IF=('NULL', 'null'))
+    """)
+
+    # EMPTY_FIELD_AS_NULL defaults to TRUE, so '' is included
+    assert params.file_format == ReadCSV(null_if=["", "NULL", "null"])
+
+
+def test_params_csv_empty_field_as_null_false():
+    _, params = parse("""
+    COPY INTO table1
+    FROM 's3://mybucket/data/'
+    FILE_FORMAT = (TYPE='CSV' EMPTY_FIELD_AS_NULL=FALSE)
+    """)
+
+    assert params.file_format == ReadCSV(null_if=[])
 
 
 def test__strip_json_extract():

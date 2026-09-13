@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import datetime
 import os
+import re
 import shutil
 import tempfile
 from contextlib import suppress
@@ -142,15 +143,37 @@ def list_stage(expression: Expr, current_database: str | None, current_schema: s
     var = stage.text("this")
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
-    query = f"""
-        SELECT *
-        from _fs_global._fs_information_schema._fs_stages
-        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
-    """
-
-    transformed = sqlglot.parse_one(query, read="duckdb")
+    transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name), read="duckdb")
     transformed.args["list_stage_name"] = f"{catalog}.{schema}.{stage_name}"
     return transformed
+
+
+_PUT_UNQUOTED_SRC = re.compile(r"^(\s*PUT\s+)(file://\S+)", re.IGNORECASE)
+
+
+def normalise_put_src(command: str) -> str:
+    """Quote an unquoted PUT source so sqlglot parses PUT as exp.Put rather than exp.Command."""
+    return _PUT_UNQUOTED_SRC.sub(r"\1'\2'", command)
+
+
+def put_options(expression: exp.Put) -> dict[str, Any]:
+    """Extract PUT options as a dict of option name -> python value."""
+    options: dict[str, Any] = {}
+    properties = expression.args.get("properties") or []
+    for prop in properties:
+        assert isinstance(prop, exp.Property), f"{prop.__class__} is not a Property"
+        assert isinstance(prop.this, exp.Var), f"{prop.this.__class__} is not a Var"
+        name = prop.this.name.upper()
+        value = prop.args.get("value")
+        if isinstance(value, exp.Boolean):
+            options[name] = value.this
+        elif isinstance(value, exp.Literal):
+            options[name] = value.this if value.is_string else int(value.this)
+        elif isinstance(value, exp.Var):
+            options[name] = value.this
+        else:
+            raise NotImplementedError(f"PUT option {name} with value {value}")
+    return options
 
 
 def put_stage(
@@ -168,12 +191,15 @@ def put_stage(
 
     assert isinstance(expression.this, exp.Literal), "PUT command requires a file path as a literal"
     src_url = urlparse(expression.this.this)
-    src_path = url2pathname(src_url.path)
+    # include netloc to handle relative urls, eg: file://data.csv.gz as sent by the connector
+    # when it re-requests a presigned url using the destination file name
+    src_path = src_url.netloc + url2pathname(src_url.path)
     target = expression.args["target"]
 
     assert isinstance(target, exp.Var), f"{target} is not a exp.Var"
     this = target.text("this")
-    if this == "?":
+    target_from_params = this == "?"
+    if target_from_params:
         if not (isinstance(params, list) and len(params) == 1):
             raise NotImplementedError("PUT requires a single parameter for the stage name")
         this = params.pop(0)
@@ -188,15 +214,12 @@ def put_stage(
     var = this[1:]
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
-    query = f"""
-        SELECT *
-        from _fs_global._fs_information_schema._fs_stages
-        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
-    """
+    options = put_options(expression)
 
-    transformed = sqlglot.parse_one(query, read="duckdb")
+    transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name), read="duckdb")
     fqname = f"{catalog}.{schema}.{stage_name}"
     transformed.args["put_stage_name"] = fqname
+    transformed.args["put_stage_target_from_params"] = target_from_params
     transformed.args["put_stage_data"] = {
         "stageInfo": {
             # use LOCAL_FS otherwise we need to mock S3 with HTTPS which requires a certificate
@@ -205,15 +228,33 @@ def put_stage(
             "creds": {},
         },
         "src_locations": [src_path],
-        # defaults as per https://docs.snowflake.com/en/sql-reference/sql/put TODO: support other values
-        "parallel": 4,
-        "autoCompress": True,
-        "sourceCompression": "auto_detect",
-        "overwrite": False,
+        # defaults as per https://docs.snowflake.com/en/sql-reference/sql/put
+        "parallel": options.get("PARALLEL", 4),
+        "autoCompress": options.get("AUTO_COMPRESS", True),
+        "sourceCompression": str(options.get("SOURCE_COMPRESSION", "auto_detect")).lower(),
+        "overwrite": options.get("OVERWRITE", False),
         "command": "UPLOAD",
     }
 
     return transformed
+
+
+def stage_lookup_sql(catalog: str, schema: str, stage_name: str) -> str:
+    """SQL that returns a single row when the stage exists.
+
+    A stage name starting with % is a table stage, which exists implicitly for every table.
+    """
+    if stage_name.startswith("%"):
+        return f"""
+            SELECT *
+            from duckdb_tables()
+            where database_name = '{catalog}' and schema_name = '{schema}' and table_name = '{stage_name[1:]}'
+        """
+    return f"""
+        SELECT *
+        from _fs_global._fs_information_schema._fs_stages
+        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
+    """
 
 
 def parts_from_var(var: str, current_database: str | None, current_schema: str | None) -> tuple[str, str, str]:
@@ -269,18 +310,28 @@ def list_stage_files_sql(stage_name: str) -> str:
 
 
 def upload_files(put_stage_data: UploadCommandDict) -> list[dict[str, Any]]:
+    auto_compress = put_stage_data["autoCompress"]
     results = []
     for src in put_stage_data["src_locations"]:
         basename = os.path.basename(src)
         stage_dir = put_stage_data["stageInfo"]["location"]
 
         os.makedirs(stage_dir, exist_ok=True)
-        gzip_file_name, target_size = SnowflakeFileUtil.compress_file_with_gzip(src, stage_dir)
+        source_is_gzipped = basename.endswith(".gz")
 
-        # Rename to match expected .gz extension on upload
-        target_basename = basename + ".gz"
-        target = os.path.join(stage_dir, target_basename)
-        os.replace(gzip_file_name, target)
+        if auto_compress and not source_is_gzipped:
+            gzip_file_name, _ = SnowflakeFileUtil.compress_file_with_gzip(src, stage_dir)
+
+            # Rename to match expected .gz extension on upload
+            target_basename = basename + ".gz"
+            target = os.path.join(stage_dir, target_basename)
+            os.replace(gzip_file_name, target)
+            target_compression = "GZIP"
+        else:
+            target_basename = basename
+            target = os.path.join(stage_dir, target_basename)
+            shutil.copyfile(src, target)
+            target_compression = "GZIP" if source_is_gzipped else "NONE"
 
         target_size = os.path.getsize(target)
         source_size = os.path.getsize(src)
@@ -291,8 +342,8 @@ def upload_files(put_stage_data: UploadCommandDict) -> list[dict[str, Any]]:
                 "target": target_basename,
                 "source_size": source_size,
                 "target_size": target_size,
-                "source_compression": "NONE",
-                "target_compression": "GZIP",
+                "source_compression": "GZIP" if source_is_gzipped else "NONE",
+                "target_compression": target_compression,
                 "status": "UPLOADED",
                 "message": "",
             }
