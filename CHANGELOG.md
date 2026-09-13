@@ -2,6 +2,29 @@
 
 # Changelog
 
+## [0.11.17](https://github.com/tekumara/fakesnow/compare/v0.11.16...v0.11.17) (2026-09-13)
+
+
+### Features
+
+* report a server version from CURRENT_VERSION() and the login response ([#417](https://github.com/tekumara/fakesnow/issues/417)) ([57c35e3](https://github.com/tekumara/fakesnow/commit/57c35e39fc045dbca36fb8d58c8a3d69543484f2))
+* support CREATE OR REPLACE STAGE and CREATE STAGE IF NOT EXISTS ([#419](https://github.com/tekumara/fakesnow/issues/419)) ([42753b2](https://github.com/tekumara/fakesnow/commit/42753b24cf35b7396336d17f82e5e9e4ae104930))
+* support SHOW SEQUENCES ([#418](https://github.com/tekumara/fakesnow/issues/418)) ([1526138](https://github.com/tekumara/fakesnow/commit/15261384690dda08b3e8a9c463ff67a6da197757))
+* support USE ROLE/WAREHOUSE as NOP instead of raising ([#415](https://github.com/tekumara/fakesnow/issues/415)) ([394bd01](https://github.com/tekumara/fakesnow/commit/394bd01d2cf5d95a8d47d28796fadec6dc98b191))
+
+
+### Bug Fixes
+
+* MERGE returns integer counts when no rows are affected ([#410](https://github.com/tekumara/fakesnow/issues/410)) ([755a29f](https://github.com/tekumara/fakesnow/commit/755a29f82331632bffa0b2fb70dacb48ec2b38bf))
+* scope load history to the target table ([#411](https://github.com/tekumara/fakesnow/issues/411)) ([efd0ea2](https://github.com/tekumara/fakesnow/commit/efd0ea261d332df346005b9802c80f6757622c88))
+* use schema after creation ([ae7c966](https://github.com/tekumara/fakesnow/commit/ae7c9664b86081eb396528cb23d2c7eaf5bbeea8))
+
+
+### Chores
+
+* **deps-dev:** bump the pip group with 5 updates ([#404](https://github.com/tekumara/fakesnow/issues/404)) ([31e6e81](https://github.com/tekumara/fakesnow/commit/31e6e81c4cad3b9adab28a3b1e93abcc376a4f43))
+* **deps:** update sqlglot requirement from ~=30.15.0 to ~=30.17.0 ([#405](https://github.com/tekumara/fakesnow/issues/405)) ([945dc3b](https://github.com/tekumara/fakesnow/commit/945dc3baf33a94456a637ab5e147724de9250752))
+
 ## [0.11.16](https://github.com/tekumara/fakesnow/compare/v0.11.15...v0.11.16) (2026-08-31)
 
 
