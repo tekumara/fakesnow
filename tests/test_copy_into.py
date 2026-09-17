@@ -590,6 +590,44 @@ def test_copy_parquet_match_by_column_name_none_with_variant(
     ]
 
 
+def test_copy_parquet_match_by_column_name_with_nested_variant_column(
+    dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
+) -> None:
+    """Test MATCH_BY_COLUMN_NAME loads a nested (struct/list) parquet column into a VARIANT column.
+
+    Regression test: parquet columns whose top-level type is itself a struct/list (eg: a semi-structured/
+    variant column) must still be matched by name, not silently dropped and loaded as NULL.
+    """
+    dcur.execute("CREATE SCHEMA IF NOT EXISTS schema1")
+    dcur.execute("USE SCHEMA schema1")
+    dcur.execute("CREATE OR REPLACE TABLE table1 (a INT, data VARIANT)")
+
+    df = pd.DataFrame({"A": [1, 2], "DATA": [{"k": "v1"}, {"k": "v2"}]})
+    parquet_data = df.to_parquet()
+    bucket = upload_file(s3_client, parquet_data, key="data.parquet")
+    dcur.execute(f"CREATE STAGE stage1 url='s3://{bucket}/'")
+
+    dcur.execute(
+        """
+        COPY INTO table1
+        FROM @stage1
+        FILES=('data.parquet')
+        MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE
+        FILE_FORMAT = (TYPE = 'PARQUET')
+        """
+    )
+
+    result = dcur.fetchall()
+    assert result[0]["status"] == "LOADED"
+    assert result[0]["rows_loaded"] == 2
+
+    dcur.execute("SELECT a, data FROM table1 ORDER BY a")
+    assert dindent(dcur.fetchall()) == [
+        {"A": 1, "DATA": '{\n  "k": "v1"\n}'},
+        {"A": 2, "DATA": '{\n  "k": "v2"\n}'},
+    ]
+
+
 def test_force(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
     create_table(dcur)
     bucket = str(uuid.uuid4())
