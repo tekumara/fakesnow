@@ -5,7 +5,7 @@ from datetime import timezone
 
 import pytest
 import snowflake.connector.cursor
-from dirty_equals import IsDatetime, IsNow
+from dirty_equals import IsDatetime, IsInt, IsNow
 
 
 def test_create_stage(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -192,12 +192,15 @@ def test_put_unquoted_src_auto_compress_false(dcur: snowflake.connector.cursor.D
 
         dcur.execute("CREATE STAGE stage6")
         dcur.execute(f"PUT file://{temp_file_path} @stage6 AUTO_COMPRESS=FALSE")
-        assert dcur.fetchall() == [
+        put_results = dcur.fetchall()
+        assert put_results == [
             {
                 "source": temp_file_basename,
                 "target": temp_file_basename,
                 "source_size": len(data),
-                "target_size": len(data),
+                # Snowflake client-side encryption can make internal-stage targets
+                # larger; fakesnow stores plain local files.
+                "target_size": IsInt(ge=len(data)),
                 "source_compression": "NONE",
                 "target_compression": "NONE",
                 "status": "UPLOADED",
@@ -209,7 +212,7 @@ def test_put_unquoted_src_auto_compress_false(dcur: snowflake.connector.cursor.D
         results = dcur.fetchall()
         assert len(results) == 1
         assert results[0]["name"] == f"stage6/{temp_file_basename}"
-        assert results[0]["size"] == len(data)
+        assert results[0]["size"] == put_results[0]["target_size"]
 
 
 def test_put_gzipped_src_not_recompressed(dcur: snowflake.connector.cursor.DictCursor) -> None:
@@ -227,7 +230,9 @@ def test_put_gzipped_src_not_recompressed(dcur: snowflake.connector.cursor.DictC
                 "source": temp_file_basename,
                 "target": temp_file_basename,
                 "source_size": len(data),
-                "target_size": len(data),
+                # Snowflake client-side encryption can make internal-stage targets
+                # larger; fakesnow stores plain local files.
+                "target_size": IsInt(ge=len(data)),
                 "source_compression": "GZIP",
                 "target_compression": "GZIP",
                 "status": "UPLOADED",
