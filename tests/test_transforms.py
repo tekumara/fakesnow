@@ -42,6 +42,7 @@ from fakesnow.transforms import (
     show_tables_etc,
     split,
     tag,
+    timestamp_ltz,
     timestamp_ntz,
     to_date,
     to_decimal,
@@ -827,6 +828,22 @@ def test_timestamp_ntz_ns() -> None:
         .transform(timestamp_ntz)
         .sql(dialect="duckdb")
         == "CREATE TABLE table1 (ts TIMESTAMP)"
+    )
+
+
+def test_timestamp_ltz_precision() -> None:
+    # duckdb's TIMESTAMPTZ takes no type parameters, so the snowflake precision is dropped
+    assert (
+        sqlglot.parse_one("CREATE TABLE table1(ts TIMESTAMP_LTZ(9))", read="snowflake")
+        .transform(timestamp_ltz)
+        .sql(dialect="duckdb")
+        == "CREATE TABLE table1 (ts TIMESTAMPTZ)"
+    )
+    assert (
+        sqlglot.parse_one("CREATE TABLE table1(ts TIMESTAMP_LTZ)", read="snowflake")
+        .transform(timestamp_ltz)
+        .sql(dialect="duckdb")
+        == "CREATE TABLE table1 (ts TIMESTAMPTZ)"
     )
 
 

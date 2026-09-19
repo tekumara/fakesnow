@@ -335,6 +335,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.to_variant)
             .transform(transforms.object_construct)
             .transform(transforms.timestamp_ntz)
+            .transform(transforms.timestamp_ltz)
             .transform(transforms.float_to_double)
             .transform(transforms.integer_precision)
             .transform(transforms.extract_text_length)
