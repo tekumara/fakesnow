@@ -12,3 +12,14 @@ Do not compare raw DuckDB JSON strings when the assertion is intended to match r
 ## Live behavior in tests
 
 Tests should assert the live Snowflake behavior rather than the fake implementation's current limitation.
+
+## Keep behavior with its owner
+
+Find where related rules already live and how similar cases are handled.
+Prefer extending the existing implementation over spreading responsibility
+across callers.
+
+Before adding special handling to a caller, check whether the module
+responsible for that behavior can handle it through its existing interface.
+Prefer this over requiring callers to perform extra steps, even through
+a shared helper.
