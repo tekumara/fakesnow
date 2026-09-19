@@ -157,11 +157,6 @@ def list_stage(expression: Expr, current_database: str | None, current_schema: s
 _PUT_UNQUOTED_SRC = re.compile(r"^(\s*PUT\s+)(file://\S+)", re.IGNORECASE)
 
 
-def normalise_put_src(command: str) -> str:
-    """Quote an unquoted PUT source so sqlglot parses PUT as exp.Put rather than exp.Command."""
-    return _PUT_UNQUOTED_SRC.sub(r"\1'\2'", command)
-
-
 def put_options(expression: exp.Put) -> dict[str, Any]:
     """Extract PUT options as a dict of option name -> python value."""
     options: dict[str, Any] = {}
@@ -192,6 +187,12 @@ def put_stage(
 
     See https://docs.snowflake.com/en/sql-reference/sql/put
     """
+    # sqlglot falls back to Command for PUT with an unquoted source.
+    # https://github.com/tobymao/sqlglot/issues/8399
+    if isinstance(expression, exp.Command) and expression.name.upper() == "PUT":
+        command = _PUT_UNQUOTED_SRC.sub(r"\1'\2'", f"PUT {expression.expression}")
+        expression = sqlglot.parse_one(command, read="snowflake")
+
     if not isinstance(expression, exp.Put):
         return expression
 
