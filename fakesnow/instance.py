@@ -26,7 +26,6 @@ class FakeSnow:
         self.nop_regexes = nop_regexes
 
         self.results_cache: dict[str, tuple] = {}
-        self.file_formats: dict[tuple[str, str, str], dict[str, Any]] = {}
         self.duck_conn = duckdb.connect(database=":memory:")
 
         # create a "global" database for storing objects which span databases.
@@ -53,7 +52,6 @@ class FakeSnow:
         return fakes.FakeSnowflakeConnection(
             self.duck_conn.cursor(),
             self.results_cache,
-            self.file_formats,
             database,
             schema,
             create_database=self.create_database_on_connect,

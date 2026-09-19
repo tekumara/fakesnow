@@ -24,7 +24,6 @@ class FakeSnowflakeConnection:
         self,
         duck_conn: DuckDBPyConnection,
         results_cache: dict[str, tuple],
-        file_formats: dict[tuple[str, str, str], dict[str, Any]],
         database: str | None = None,
         schema: str | None = None,
         create_database: bool = True,
@@ -54,7 +53,6 @@ class FakeSnowflakeConnection:
         self._paramstyle = kwargs.get("paramstyle", snowflake.connector.paramstyle)
         self.variables = Variables()
         self.results_cache = results_cache
-        self.file_formats = file_formats
         self._autocommit = kwargs.get("autocommit", True)
         self._in_transaction = False
 

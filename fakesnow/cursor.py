@@ -470,9 +470,16 @@ class FakeSnowflakeCursor:
             elif isinstance(transformed, (exp.Commit, exp.Rollback)):
                 self._conn._in_transaction = False
 
+        affected_count = None
         try:
             if isinstance(transformed, exp.Copy):
                 sql = copy_into(self._duck_conn, self._conn.database, self._conn.schema, transformed, params)
+            elif transformed.args.get("create_file_format_name"):
+                # File formats persist without committing the caller's DML. A separate DuckDB
+                # cursor uses an independent transaction, avoiding cross-database writes too.
+                logger.log_sql(sql, params)
+                with self._duck_conn.cursor() as metadata_conn:
+                    (affected_count,) = metadata_conn.execute(sql, params).fetchall()[0]
             else:
                 logger.log_sql(sql, params)
                 self._duck_conn.execute(sql, params)
@@ -501,8 +508,6 @@ class FakeSnowflakeCursor:
             # snowflake reports this as an error rather than failing, message content may differ.
             msg = cast(str, e.args[0]).split("\n")[0]
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100035, sqlstate="22007") from e
-
-        affected_count = None
 
         if set_database := transformed.args.get("set_database"):
             self._conn.database = set_database
@@ -538,22 +543,17 @@ class FakeSnowflakeCursor:
                 )
 
         elif format_name := transformed.args.get("create_file_format_name"):
-            key = transformed.args.get("create_file_format_key")
-            assert isinstance(key, tuple) and len(key) == 3
-            if key in self._conn.file_formats and not transformed.args.get("create_file_format_replace"):
-                if transformed.args.get("create_file_format_if_not_exists"):
-                    result_sql = SQL_OBJECT_EXISTS.substitute(name=format_name)
-                else:
-                    raise snowflake.connector.errors.ProgrammingError(
-                        msg=f"SQL compilation error:\nObject '{format_name}' already exists.",
-                        errno=2002,
-                        sqlstate="42710",
-                    )
-            else:
-                options = transformed.args.get("create_file_format_options")
-                assert isinstance(options, dict)
-                self._conn.file_formats[key] = options
+            assert affected_count is not None
+            if affected_count > 0:
                 result_sql = SQL_CREATED_FILE_FORMAT.substitute(name=format_name)
+            elif transformed.args.get("create_file_format_if_not_exists"):
+                result_sql = SQL_OBJECT_EXISTS.substitute(name=format_name)
+            else:
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg=f"SQL compilation error:\nObject '{format_name}' already exists.",
+                    errno=2002,
+                    sqlstate="42710",
+                )
 
         elif stage_name := transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
             if self._duck_conn.to_arrow_table().num_rows != 1:
