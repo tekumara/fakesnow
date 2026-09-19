@@ -5,7 +5,7 @@ from datetime import timezone
 
 import pytest
 import snowflake.connector.cursor
-from dirty_equals import IsDatetime, IsInt, IsNow
+from dirty_equals import IsDatetime, IsInt, IsNow, IsStr
 
 
 def test_create_stage(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -151,12 +151,15 @@ def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
 
         dcur.execute("CREATE STAGE stage4")
         dcur.execute(f"PUT 'file://{temp_file_path}' @stage4")
-        assert dcur.fetchall() == [
+        put_results = dcur.fetchall()
+        assert put_results == [
             {
                 "source": temp_file_basename,
                 "target": f"{temp_file_basename}.gz",
                 "source_size": len(data),
-                "target_size": 42,  # GZIP compressed size
+                # Snowflake client-side encryption can make internal-stage targets
+                # larger; fakesnow stores plain local files.
+                "target_size": IsInt(ge=len(data)),
                 "source_compression": "NONE",
                 "target_compression": "GZIP",
                 "status": "UPLOADED",
@@ -169,8 +172,8 @@ def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
         assert len(results) == 1
         assert results[0] == {
             "name": f"stage4/{temp_file_basename}.gz",
-            "size": 42,
-            "md5": "29498d110c32a756df8109e70d22fa36",
+            "size": put_results[0]["target_size"],
+            "md5": IsStr(regex=r"^[0-9a-f]{32}$"),
             "last_modified": IsDatetime(
                 # string in RFC 7231 date format (e.g. 'Sat, 31 May 2025 08:50:51 GMT')
                 format_string="%a, %d %b %Y %H:%M:%S GMT"
