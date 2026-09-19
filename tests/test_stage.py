@@ -182,7 +182,18 @@ def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
         dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage5\"")
 
 
-def test_put_unquoted_src_auto_compress_false(dcur: snowflake.connector.cursor.DictCursor) -> None:
+def test_put_unquoted_src(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2\n")
+        temp_file.flush()
+        temp_file_basename = os.path.basename(temp_file.name)
+
+        dcur.execute("CREATE STAGE stage6")
+        dcur.execute(f"PUT file://{temp_file.name} @stage6")
+        assert dcur.fetchall()[0]["source"] == temp_file_basename
+
+
+def test_put_auto_compress_false(dcur: snowflake.connector.cursor.DictCursor) -> None:
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         data = "1,2\n"
         temp_file.write(data)
@@ -190,8 +201,8 @@ def test_put_unquoted_src_auto_compress_false(dcur: snowflake.connector.cursor.D
         temp_file_path = temp_file.name
         temp_file_basename = os.path.basename(temp_file_path)
 
-        dcur.execute("CREATE STAGE stage6")
-        dcur.execute(f"PUT file://{temp_file_path} @stage6 AUTO_COMPRESS=FALSE")
+        dcur.execute("CREATE STAGE stage7")
+        dcur.execute(f"PUT 'file://{temp_file_path}' @stage7 AUTO_COMPRESS=FALSE")
         put_results = dcur.fetchall()
         assert put_results == [
             {
@@ -208,10 +219,10 @@ def test_put_unquoted_src_auto_compress_false(dcur: snowflake.connector.cursor.D
             }
         ]
 
-        dcur.execute("LIST @stage6")
+        dcur.execute("LIST @stage7")
         results = dcur.fetchall()
         assert len(results) == 1
-        assert results[0]["name"] == f"stage6/{temp_file_basename}"
+        assert results[0]["name"] == f"stage7/{temp_file_basename}"
         assert results[0]["size"] == put_results[0]["target_size"]
 
 
