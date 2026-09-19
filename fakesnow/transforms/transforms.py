@@ -1296,6 +1296,9 @@ def timestamp_ltz(expression: Expr) -> Expr:
     parameters and rejects it with "Type 'TIMESTAMP WITH TIME ZONE' does not take any type
     parameters". sqlglot drops the precision when generating TIMESTAMP_TZ but keeps it for
     TIMESTAMP_LTZ, so strip it here.
+
+    TODO: Remove this workaround once we require a sqlglot version that fixes
+    https://github.com/tobymao/sqlglot/issues/8402.
     """
 
     if isinstance(expression, exp.DataType) and expression.this == exp.DataType.Type.TIMESTAMPLTZ:
