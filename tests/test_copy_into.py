@@ -524,8 +524,6 @@ def test_copy_parquet_single_variant_column(dcur: snowflake.connector.cursor.Dic
     When destination table has exactly one VARIANT column, parquet can be loaded directly
     without MATCH_BY_COLUMN_NAME or a transformation. The entire row becomes a JSON object.
     """
-    dcur.execute("CREATE SCHEMA IF NOT EXISTS schema1")
-    dcur.execute("USE SCHEMA schema1")
     dcur.execute("CREATE OR REPLACE TABLE variant_table (data VARIANT)")
 
     parquet_data = pd.DataFrame({"A": [1, 2], "B": [10, 20]}).to_parquet()
@@ -560,8 +558,6 @@ def test_copy_parquet_match_by_column_name_none_with_variant(
 
     NONE is the default and means "load into variant column or use transform".
     """
-    dcur.execute("CREATE SCHEMA IF NOT EXISTS schema1")
-    dcur.execute("USE SCHEMA schema1")
     dcur.execute("CREATE OR REPLACE TABLE variant_table (data VARIANT)")
 
     parquet_data = pd.DataFrame({"A": [1, 2], "B": [10, 20]}).to_parquet()
@@ -598,8 +594,6 @@ def test_copy_parquet_match_by_column_name_with_nested_variant_column(
     Regression test: parquet columns whose top-level type is itself a struct/list (eg: a semi-structured/
     variant column) must still be matched by name, not silently dropped and loaded as NULL.
     """
-    dcur.execute("CREATE SCHEMA IF NOT EXISTS schema1")
-    dcur.execute("USE SCHEMA schema1")
     dcur.execute("CREATE OR REPLACE TABLE table1 (a INT, data VARIANT)")
 
     df = pd.DataFrame({"A": [1, 2], "DATA": [{"k": "v1"}, {"k": "v2"}]})
