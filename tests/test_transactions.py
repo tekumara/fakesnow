@@ -167,6 +167,21 @@ def test_autocommit_create_stage(conn: snowflake.connector.SnowflakeConnection):
         cur.execute("INSERT INTO table1 VALUES (1)")
 
 
+def test_autocommit_create_file_format_does_not_commit_active_transaction(
+    conn: snowflake.connector.SnowflakeConnection,
+):
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("CREATE TABLE file_format_transaction_test (id int)")
+        cur.execute("INSERT INTO file_format_transaction_test VALUES (1)")
+        cur.execute("CREATE FILE FORMAT file_format_transaction_test TYPE='CSV'")
+        conn.rollback()
+
+        assert cur.execute("SELECT count(*) FROM file_format_transaction_test").fetchone() == (0,)
+        with pytest.raises(snowflake.connector.errors.ProgrammingError, match="already exists"):
+            cur.execute("CREATE FILE FORMAT file_format_transaction_test TYPE='CSV'")
+
+
 def test_conn_autocommit_false(_fakesnow: None):
     # create table upfront
     with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:

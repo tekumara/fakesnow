@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-import datetime
-import json
 from typing import Any
 
 import snowflake.connector.errors
@@ -62,33 +60,15 @@ def create_file_format(
     catalog = table.catalog or current_database
     schema = table.db or current_schema
     format_name = ident.this
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
-
-    replace = expression.args.get("replace")
-    if_not_exists = expression.args.get("exists")
-
     properties = expression.args.get("properties") or []
     options = format_options(list(properties))
-    format_type = str(options.get("TYPE", "CSV")).upper()
-    options_json = json.dumps(options).replace("'", "''")
 
-    guard = (
-        ""
-        if replace
-        else f"""
-        WHERE NOT EXISTS (
-            SELECT 1 FROM _fs_global._fs_information_schema._fs_file_formats
-            WHERE name = '{format_name}' AND database_name = '{catalog}' AND schema_name = '{schema}'
-        )"""
-    )
-    insert_sql = f"""
-        INSERT {"OR REPLACE" if replace else ""} INTO _fs_global._fs_information_schema._fs_file_formats
-        (created_on, name, database_name, schema_name, type, options)
-        SELECT
-            '{now}', '{format_name}', '{catalog}', '{schema}', '{format_type}', '{options_json}'
-        {guard}
-        """
-    transformed = sqlglot.parse_one(insert_sql, read="duckdb")
+    # File-format creation persists independently of the active transaction on Snowflake.
+    # Keep its metadata outside DuckDB's transaction so it cannot commit preceding DML.
+    transformed = sqlglot.parse_one("SELECT 1", read="duckdb")
     transformed.args["create_file_format_name"] = format_name
-    transformed.args["create_file_format_if_not_exists"] = if_not_exists
+    transformed.args["create_file_format_key"] = (catalog, schema, format_name)
+    transformed.args["create_file_format_options"] = options
+    transformed.args["create_file_format_replace"] = bool(expression.args.get("replace"))
+    transformed.args["create_file_format_if_not_exists"] = bool(expression.args.get("exists"))
     return transformed
