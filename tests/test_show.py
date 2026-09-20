@@ -609,10 +609,14 @@ def test_show_parameters_columns(dcur: snowflake.connector.cursor.SnowflakeCurso
     assert [r.name for r in dcur.description] == ["key", "value", "default", "level", "description", "type"]
 
 
-def test_show_parameters_like_is_case_insensitive_and_accepts_wildcards(
-    dcur: snowflake.connector.cursor.SnowflakeCursor,
-):
-    dcur.execute("SHOW PARAMETERS LIKE 'quoted%'")
+def test_show_parameters_like_is_case_insensitive(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("SHOW PARAMETERS LIKE 'autocommit'")
+    assert dcur.fetchall() == [AUTOCOMMIT_PARAMETER]
+
+
+@pytest.mark.parametrize("pattern", ["QUOTED%", "QUOTED_IDENTIFIERS_IGNORE_CAS_"])
+def test_show_parameters_like_wildcards(dcur: snowflake.connector.cursor.SnowflakeCursor, pattern: str):
+    dcur.execute(f"SHOW PARAMETERS LIKE '{pattern}'")
     assert dcur.fetchall() == [QUOTED_IDENTIFIERS_PARAMETER]
 
 
@@ -621,16 +625,11 @@ def test_show_parameters_like_returns_no_rows_when_nothing_matches(dcur: snowfla
     assert dcur.fetchall() == []
 
 
-def test_show_parameters_contains_supported_session_parameters(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("SHOW PARAMETERS")
-    parameters = dcur.fetchall()
-    assert all(parameter in parameters for parameter in SESSION_PARAMETERS)
-
-
-def test_show_parameters_in_session_contains_supported_session_parameters(
-    dcur: snowflake.connector.cursor.SnowflakeCursor,
+@pytest.mark.parametrize("scope", ["", " IN SESSION", " FOR SESSION"])
+def test_show_parameters_contains_supported_session_parameters(
+    dcur: snowflake.connector.cursor.SnowflakeCursor, scope: str
 ):
-    dcur.execute("SHOW PARAMETERS IN SESSION")
+    dcur.execute(f"SHOW PARAMETERS{scope}")
     parameters = dcur.fetchall()
     assert all(parameter in parameters for parameter in SESSION_PARAMETERS)
 
