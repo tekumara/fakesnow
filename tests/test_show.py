@@ -666,6 +666,25 @@ def test_show_parameters_autocommit_on_connect(_fakesnow: None, autocommit: bool
         assert dcur.fetchall() == [{**AUTOCOMMIT_PARAMETER, "value": value, "level": level}]
 
 
+@pytest.mark.parametrize(("autocommit", "value"), [(False, "false"), (True, "true")])
+def test_show_parameters_autocommit_after_connector_change(
+    conn: snowflake.connector.SnowflakeConnection,
+    dcur: snowflake.connector.cursor.SnowflakeCursor,
+    autocommit: bool,
+    value: str,
+):
+    conn.autocommit(autocommit)
+    dcur.execute("SHOW PARAMETERS LIKE 'AUTOCOMMIT'")
+    assert dcur.fetchall() == [{**AUTOCOMMIT_PARAMETER, "value": value, "level": "SESSION"}]
+
+
+@pytest.mark.parametrize("value", ["false", "true"])
+def test_show_parameters_autocommit_after_alter_session(dcur: snowflake.connector.cursor.SnowflakeCursor, value: str):
+    dcur.execute(f"ALTER SESSION SET AUTOCOMMIT = {value}")
+    dcur.execute("SHOW PARAMETERS LIKE 'AUTOCOMMIT'")
+    assert dcur.fetchall() == [{**AUTOCOMMIT_PARAMETER, "value": value, "level": "SESSION"}]
+
+
 def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show procedures")
     dcur.fetchall()
