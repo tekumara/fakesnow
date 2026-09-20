@@ -305,39 +305,6 @@ WHERE 0 = 1;
 """
 
 
-# see https://docs.snowflake.com/en/sql-reference/sql/show-parameters
-# only the parameters fakesnow supports are listed, so the reported values match behaviour.
-SHOW_PARAMETERS: list[tuple[str, str, str, str, str, str]] = [
-    (
-        "AUTOCOMMIT",
-        "true",
-        "true",
-        "The autocommit property determines whether is statement should to be implicitly\n"
-        "wrapped within a transaction or not. If autocommit is set to true, then a \n"
-        "statement that requires a transaction is executed within a transaction \n"
-        "implicitly. If autocommit is off then an explicit commit or rollback is required\n"
-        "to close a transaction. The default autocommit value is true.",
-        "BOOLEAN",
-        "",
-    ),
-    (
-        "QUOTED_IDENTIFIERS_IGNORE_CASE",
-        "false",
-        "false",
-        "If true, the case of quoted identifiers is ignored",
-        "BOOLEAN",
-        "",
-    ),
-    (
-        "TIMEZONE",
-        "Etc/UTC",
-        "America/Los_Angeles",
-        "time zone",
-        "STRING",
-        "ACCOUNT",
-    ),
-]
-
 # sqlglot parses SHOW PARAMETERS as a Command rather than a Show, so match on the command text.
 _SHOW_PARAMETERS = re.compile(
     r"^\s*PARAMETERS(?:\s+LIKE\s+'(?P<like>(?:[^']|'')*)')?(?:\s+(?:IN|FOR)\s+(?P<scope>.*))?\s*$",
@@ -369,25 +336,23 @@ def show_parameters(expression: Expr, autocommit: bool, autocommit_set: bool) ->
     if not match or ((scope := match.group("scope")) is not None and scope.strip().upper() != "SESSION"):
         raise NotImplementedError(expression.sql(dialect="snowflake"))
 
-    selects = []
-    for key, value, default, description, type_, level in SHOW_PARAMETERS:
-        if key == "AUTOCOMMIT":
-            value = "true" if autocommit else "false"
-            level = "SESSION" if autocommit_set else ""
-        columns = (
-            (key, "key"),
-            (value, "value"),
-            (default, "default"),
-            (level, "level"),
-            (description, "description"),
-            (type_, "type"),
-        )
-        selects.append("SELECT " + ", ".join(f'{_sql_str(v)} as "{c}"' for v, c in columns))
-
-    query = " UNION ALL ".join(selects)
+    # Only list supported parameters, so the reported values match behaviour.
+    query = f"""
+        SELECT * FROM (VALUES
+            ('AUTOCOMMIT', '{"true" if autocommit else "false"}', 'true', '{"SESSION" if autocommit_set else ""}',
+             'The autocommit property determines whether is statement should to be implicitly\n' ||
+             'wrapped within a transaction or not. If autocommit is set to true, then a \n' ||
+             'statement that requires a transaction is executed within a transaction \n' ||
+             'implicitly. If autocommit is off then an explicit commit or rollback is required\n' ||
+             'to close a transaction. The default autocommit value is true.', 'BOOLEAN'),
+            ('QUOTED_IDENTIFIERS_IGNORE_CASE', 'false', 'false', '',
+             'If true, the case of quoted identifiers is ignored', 'BOOLEAN'),
+            ('TIMEZONE', 'Etc/UTC', 'America/Los_Angeles', 'ACCOUNT', 'time zone', 'STRING')
+        ) AS parameters("key", "value", "default", "level", "description", "type")
+    """
     if (like := match.group("like")) is not None:
         # snowflake matches the pattern case-insensitively, with sql wildcards
-        query = f'SELECT * FROM ({query}) WHERE "key" ILIKE {_sql_str(like.replace(chr(39) * 2, chr(39)))}'
+        query += f' WHERE "key" ILIKE {_sql_str(like.replace(chr(39) * 2, chr(39)))}'
 
     return sqlglot.parse_one(query, read="duckdb")
 
