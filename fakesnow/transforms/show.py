@@ -340,7 +340,7 @@ SHOW_PARAMETERS: list[tuple[str, str, str, str, str, str]] = [
 
 # sqlglot parses SHOW PARAMETERS as a Command rather than a Show, so match on the command text.
 _SHOW_PARAMETERS = re.compile(
-    r"^\s*PARAMETERS(?:\s+LIKE\s+'(?P<like>(?:[^']|'')*)')?(?:\s+(?:IN|FOR)\s+.*)?\s*$",
+    r"^\s*PARAMETERS(?:\s+LIKE\s+'(?P<like>(?:[^']|'')*)')?(?:\s+(?:IN|FOR)\s+(?P<scope>.*))?\s*$",
     re.IGNORECASE | re.DOTALL,
 )
 
@@ -352,8 +352,7 @@ def _sql_str(value: str) -> str:
 def show_parameters(expression: Expr, autocommit: bool, autocommit_set: bool) -> Expr:
     """Transform SHOW PARAMETERS.
 
-    Scopes (IN SESSION, IN ACCOUNT, ...) are accepted and ignored, because fakesnow only
-    reports the parameters it supports.
+    Only session scope (the default, IN SESSION, or FOR SESSION) is supported.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-parameters
     """
@@ -362,9 +361,13 @@ def show_parameters(expression: Expr, autocommit: bool, autocommit_set: bool) ->
         and isinstance(expression.this, str)
         and expression.this.upper() == "SHOW"
         and isinstance(rest := expression.args.get("expression"), str)
-        and (match := _SHOW_PARAMETERS.match(rest))
+        and re.match(r"^\s*PARAMETERS\b", rest, re.IGNORECASE)
     ):
         return expression
+
+    match = _SHOW_PARAMETERS.fullmatch(rest)
+    if not match or ((scope := match.group("scope")) is not None and scope.strip().upper() != "SESSION"):
+        raise NotImplementedError(expression.sql(dialect="snowflake"))
 
     selects = []
     for key, value, default, description, type_, level in SHOW_PARAMETERS:

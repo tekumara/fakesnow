@@ -618,6 +618,25 @@ def test_show_parameters_in_session_contains_supported_session_parameters(
     assert all(parameter in parameters for parameter in SESSION_PARAMETERS)
 
 
+def test_show_parameters_invalid_scope(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    with pytest.raises(snowflake.connector.errors.ProgrammingError):
+        dcur.execute("SHOW PARAMETERS IN BANANA")
+
+
+@pytest.mark.xfail(
+    raises=snowflake.connector.errors.ProgrammingError,
+    reason="SHOW PARAMETERS outside session scope is not implemented",
+    strict=True,
+)
+@pytest.mark.parametrize("scope", ["IN ACCOUNT", "FOR ACCOUNT"])
+def test_show_parameters_in_account_ignores_session_override(
+    dcur: snowflake.connector.cursor.SnowflakeCursor, scope: str
+):
+    dcur.execute("ALTER SESSION SET AUTOCOMMIT = FALSE")
+    dcur.execute(f"SHOW PARAMETERS LIKE 'AUTOCOMMIT' {scope}")
+    assert dcur.fetchall() == [AUTOCOMMIT_PARAMETER]
+
+
 @pytest.mark.parametrize(
     ("autocommit", "value", "level"),
     [(False, "false", "SESSION"), (True, "true", "SESSION"), (None, "true", "")],
