@@ -306,26 +306,35 @@ WHERE 0 = 1;
 
 
 # see https://docs.snowflake.com/en/sql-reference/sql/show-parameters
-# only the session parameters fakesnow honours are listed, so the reported values match behaviour.
-SHOW_PARAMETERS: list[tuple[str, str, str, str]] = [
+# only the parameters fakesnow supports are listed, so the reported values match behaviour.
+SHOW_PARAMETERS: list[tuple[str, str, str, str, str, str]] = [
     (
         "AUTOCOMMIT",
         "true",
         "true",
-        "The autocommit property determines whether a DML statement, when executed without an active "
-        "transaction, is automatically committed after the statement successfully completes.",
+        "The autocommit property determines whether is statement should to be implicitly\n"
+        "wrapped within a transaction or not. If autocommit is set to true, then a \n"
+        "statement that requires a transaction is executed within a transaction \n"
+        "implicitly. If autocommit is off then an explicit commit or rollback is required\n"
+        "to close a transaction. The default autocommit value is true.",
+        "BOOLEAN",
+        "",
     ),
     (
         "QUOTED_IDENTIFIERS_IGNORE_CASE",
         "false",
         "false",
-        "If true, the case of quoted identifiers is ignored.",
+        "If true, the case of quoted identifiers is ignored",
+        "BOOLEAN",
+        "",
     ),
     (
         "TIMEZONE",
         "Etc/UTC",
         "America/Los_Angeles",
-        "time zone, e.g. PST, America/Los_Angeles",
+        "time zone",
+        "STRING",
+        "ACCOUNT",
     ),
 ]
 
@@ -343,8 +352,8 @@ def _sql_str(value: str) -> str:
 def show_parameters(expression: Expr, autocommit: bool) -> Expr:
     """Transform SHOW PARAMETERS.
 
-    Scopes (IN SESSION, IN ACCOUNT, ...) are accepted and ignored, because fakesnow only has
-    session parameters.
+    Scopes (IN SESSION, IN ACCOUNT, ...) are accepted and ignored, because fakesnow only
+    reports the parameters it supports.
 
     See https://docs.snowflake.com/en/sql-reference/sql/show-parameters
     """
@@ -358,15 +367,17 @@ def show_parameters(expression: Expr, autocommit: bool) -> Expr:
         return expression
 
     selects = []
-    for key, value, default, description in SHOW_PARAMETERS:
+    for key, value, default, description, type_, level in SHOW_PARAMETERS:
         if key == "AUTOCOMMIT":
             value = "true" if autocommit else "false"
+            level = "SESSION" if value != default else ""
         columns = (
             (key, "key"),
             (value, "value"),
             (default, "default"),
-            ("SESSION" if value != default else "", "level"),
+            (level, "level"),
             (description, "description"),
+            (type_, "type"),
         )
         selects.append("SELECT " + ", ".join(f'{_sql_str(v)} as "{c}"' for v, c in columns))
 
