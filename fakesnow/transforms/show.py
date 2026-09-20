@@ -1,10 +1,9 @@
 from __future__ import annotations
 
-import re
 from typing import Literal
 
 import sqlglot
-from sqlglot import Expr, exp
+from sqlglot import Expr, TokenType, exp
 
 
 def fs_global_creation_sql() -> str:
@@ -305,17 +304,6 @@ WHERE 0 = 1;
 """
 
 
-# sqlglot parses SHOW PARAMETERS as a Command rather than a Show, so match on the command text.
-_SHOW_PARAMETERS = re.compile(
-    r"^\s*PARAMETERS(?:\s+LIKE\s+'(?P<like>(?:[^']|'')*)')?(?:\s+(?:IN|FOR)\s+(?P<scope>.*))?\s*$",
-    re.IGNORECASE | re.DOTALL,
-)
-
-
-def _sql_str(value: str) -> str:
-    return "'" + value.replace("'", "''") + "'"
-
-
 def show_parameters(expression: Expr, autocommit: bool, autocommit_set: bool) -> Expr:
     """Transform SHOW PARAMETERS.
 
@@ -327,13 +315,28 @@ def show_parameters(expression: Expr, autocommit: bool, autocommit_set: bool) ->
         isinstance(expression, exp.Command)
         and isinstance(expression.this, str)
         and expression.this.upper() == "SHOW"
-        and isinstance(rest := expression.args.get("expression"), str)
-        and re.match(r"^\s*PARAMETERS\b", rest, re.IGNORECASE)
+        and isinstance(expression.expression, str)
     ):
         return expression
 
-    match = _SHOW_PARAMETERS.fullmatch(rest)
-    if not match or ((scope := match.group("scope")) is not None and scope.strip().upper() != "SESSION"):
+    # SQLGlot parses SHOW PARAMETERS as a Command. Tokenize its text to handle comments and string escaping.
+    tokens = sqlglot.tokenize(expression.expression, read="snowflake")
+    if not tokens or tokens[0].token_type != TokenType.VAR or tokens[0].text.upper() != "PARAMETERS":
+        return expression
+
+    tokens = tokens[1:]
+    like = None
+    if (
+        len(tokens) >= 2
+        and tokens[0].token_type == TokenType.LIKE
+        and tokens[1].token_type in (TokenType.STRING, TokenType.RAW_STRING)
+    ):
+        like = exp.Literal.string(tokens[1].text)
+        tokens = tokens[2:]
+    if tokens and [t.token_type for t in tokens] not in (
+        [TokenType.IN, TokenType.SESSION],
+        [TokenType.FOR, TokenType.SESSION],
+    ):
         raise NotImplementedError(expression.sql(dialect="snowflake"))
 
     # Only list supported parameters, so the reported values match behaviour.
@@ -350,9 +353,9 @@ def show_parameters(expression: Expr, autocommit: bool, autocommit_set: bool) ->
             ('TIMEZONE', 'Etc/UTC', 'America/Los_Angeles', 'ACCOUNT', 'time zone', 'STRING')
         ) AS parameters("key", "value", "default", "level", "description", "type")
     """
-    if (like := match.group("like")) is not None:
-        # snowflake matches the pattern case-insensitively, with sql wildcards
-        query += f' WHERE "key" ILIKE {_sql_str(like.replace(chr(39) * 2, chr(39)))}'
+    if like is not None:
+        # Snowflake matches the pattern case-insensitively, with SQL wildcards.
+        query += f' WHERE "key" ILIKE {like.sql(dialect="duckdb")}'
 
     return sqlglot.parse_one(query, read="duckdb")
 

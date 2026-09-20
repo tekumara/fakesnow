@@ -586,6 +586,23 @@ def test_show_parameters_like(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.fetchall() == [QUOTED_IDENTIFIERS_PARAMETER]
 
 
+@pytest.mark.parametrize("comment", ["/* comment */", "-- comment\n"])
+def test_show_parameters_comments(dcur: snowflake.connector.cursor.SnowflakeCursor, comment: str):
+    dcur.execute(f"SHOW PARAMETERS {comment} LIKE 'TIMEZONE'")
+    assert dcur.fetchall() == [TIMEZONE_PARAMETER]
+
+
+@pytest.mark.parametrize("pattern", ["'NOT''A_PARAMETER'", r"'NOT\'A_PARAMETER'"])
+def test_show_parameters_like_escaped_quote(dcur: snowflake.connector.cursor.SnowflakeCursor, pattern: str):
+    dcur.execute(f"SHOW PARAMETERS LIKE {pattern}")
+    assert dcur.fetchall() == []
+
+
+def test_show_parameters_like_dollar_quoted_string(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("SHOW PARAMETERS LIKE $$TIMEZONE$$")
+    assert dcur.fetchall() == [TIMEZONE_PARAMETER]
+
+
 def test_show_parameters_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("SHOW PARAMETERS LIKE 'QUOTED_IDENTIFIERS_IGNORE_CASE'")
     dcur.fetchall()
