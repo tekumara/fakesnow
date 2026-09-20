@@ -352,7 +352,11 @@ class FakeSnowflakeCursor:
             .transform(transforms.show_databases)
             .transform(transforms.show_functions)
             .transform(transforms.show_procedures)
-            .transform(lambda e: transforms.show_parameters(e, self._conn._autocommit))
+            .transform(
+                transforms.show_parameters,
+                autocommit=self._conn._autocommit,
+                autocommit_set=self._conn._autocommit_set,
+            )
             .transform(transforms.show_warehouses)
             .transform(lambda e: transforms.show_schemas(e, self._conn.database))
             .transform(lambda e: transforms.show_tables_etc(e, self._conn.database, self._conn.schema))

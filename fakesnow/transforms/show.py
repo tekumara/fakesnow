@@ -349,7 +349,7 @@ def _sql_str(value: str) -> str:
     return "'" + value.replace("'", "''") + "'"
 
 
-def show_parameters(expression: Expr, autocommit: bool) -> Expr:
+def show_parameters(expression: Expr, autocommit: bool, autocommit_set: bool) -> Expr:
     """Transform SHOW PARAMETERS.
 
     Scopes (IN SESSION, IN ACCOUNT, ...) are accepted and ignored, because fakesnow only
@@ -370,7 +370,7 @@ def show_parameters(expression: Expr, autocommit: bool) -> Expr:
     for key, value, default, description, type_, level in SHOW_PARAMETERS:
         if key == "AUTOCOMMIT":
             value = "true" if autocommit else "false"
-            level = "SESSION" if value != default else ""
+            level = "SESSION" if autocommit_set else ""
         columns = (
             (key, "key"),
             (value, "value"),

@@ -618,13 +618,17 @@ def test_show_parameters_in_session_contains_supported_session_parameters(
     assert all(parameter in parameters for parameter in SESSION_PARAMETERS)
 
 
-def test_show_parameters_autocommit_off(_fakesnow: None):
+@pytest.mark.parametrize(
+    ("autocommit", "value", "level"),
+    [(False, "false", "SESSION"), (True, "true", "SESSION"), (None, "true", "")],
+)
+def test_show_parameters_autocommit_on_connect(_fakesnow: None, autocommit: bool | None, value: str, level: str):
     with (
-        snowflake.connector.connect(database="db1", schema="schema1", autocommit=False) as conn,
+        snowflake.connector.connect(database="db1", schema="schema1", autocommit=autocommit) as conn,
         conn.cursor(snowflake.connector.cursor.DictCursor) as dcur,
     ):
         dcur.execute("SHOW PARAMETERS LIKE 'AUTOCOMMIT'")
-        assert dcur.fetchall() == [{**AUTOCOMMIT_PARAMETER, "value": "false", "level": "SESSION"}]
+        assert dcur.fetchall() == [{**AUTOCOMMIT_PARAMETER, "value": value, "level": level}]
 
 
 def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
