@@ -55,7 +55,6 @@ class FakeSnowflakeConnection:
         self.results_cache = results_cache
         autocommit = kwargs.get("autocommit")
         self._autocommit = True if autocommit is None else autocommit
-        self._autocommit_set = autocommit is not None
         self._in_transaction = False
 
         # create database if needed
@@ -140,7 +139,6 @@ class FakeSnowflakeConnection:
             self._in_transaction = False
 
         self._autocommit = mode
-        self._autocommit_set = True
 
     def close(self, retry: bool = True) -> None:
         self._duck_conn.close()

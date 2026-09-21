@@ -304,7 +304,7 @@ WHERE 0 = 1;
 """
 
 
-def show_parameters(expression: Expr, autocommit: bool, autocommit_set: bool) -> Expr:
+def show_parameters(expression: Expr) -> Expr:
     """Transform SHOW PARAMETERS.
 
     Only session scope (the default, IN SESSION, or FOR SESSION) is supported.
@@ -340,14 +340,8 @@ def show_parameters(expression: Expr, autocommit: bool, autocommit_set: bool) ->
         raise NotImplementedError(expression.sql(dialect="snowflake"))
 
     # Only list supported parameters, so the reported values match behaviour.
-    query = f"""
+    query = """
         SELECT * FROM (VALUES
-            ('AUTOCOMMIT', '{"true" if autocommit else "false"}', 'true', '{"SESSION" if autocommit_set else ""}',
-             'The autocommit property determines whether is statement should to be implicitly\n' ||
-             'wrapped within a transaction or not. If autocommit is set to true, then a \n' ||
-             'statement that requires a transaction is executed within a transaction \n' ||
-             'implicitly. If autocommit is off then an explicit commit or rollback is required\n' ||
-             'to close a transaction. The default autocommit value is true.', 'BOOLEAN'),
             ('QUOTED_IDENTIFIERS_IGNORE_CASE', 'false', 'false', '',
              'If true, the case of quoted identifiers is ignored', 'BOOLEAN'),
             ('TIMEZONE', 'Etc/UTC', 'America/Los_Angeles', 'ACCOUNT', 'time zone', 'STRING')

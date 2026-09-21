@@ -550,18 +550,6 @@ def test_show_sequences(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert sorted(cast(list[dict], dcur.fetchall()), key=lambda row: row["name"]) == [seq1, seq2]
 
 
-AUTOCOMMIT_PARAMETER = {
-    "key": "AUTOCOMMIT",
-    "value": "true",
-    "default": "true",
-    "level": "",
-    "description": "The autocommit property determines whether is statement should to be implicitly\n"
-    "wrapped within a transaction or not. If autocommit is set to true, then a \n"
-    "statement that requires a transaction is executed within a transaction \n"
-    "implicitly. If autocommit is off then an explicit commit or rollback is required\n"
-    "to close a transaction. The default autocommit value is true.",
-    "type": "BOOLEAN",
-}
 QUOTED_IDENTIFIERS_PARAMETER = {
     "key": "QUOTED_IDENTIFIERS_IGNORE_CASE",
     "value": "false",
@@ -578,7 +566,7 @@ TIMEZONE_PARAMETER = {
     "description": "time zone",
     "type": "STRING",
 }
-SESSION_PARAMETERS = [AUTOCOMMIT_PARAMETER, QUOTED_IDENTIFIERS_PARAMETER, TIMEZONE_PARAMETER]
+SESSION_PARAMETERS = [QUOTED_IDENTIFIERS_PARAMETER, TIMEZONE_PARAMETER]
 
 
 def test_show_parameters_like(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -610,8 +598,8 @@ def test_show_parameters_columns(dcur: snowflake.connector.cursor.SnowflakeCurso
 
 
 def test_show_parameters_like_is_case_insensitive(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("SHOW PARAMETERS LIKE 'autocommit'")
-    assert dcur.fetchall() == [AUTOCOMMIT_PARAMETER]
+    dcur.execute("SHOW PARAMETERS LIKE 'timezone'")
+    assert dcur.fetchall() == [TIMEZONE_PARAMETER]
 
 
 @pytest.mark.parametrize("pattern", ["QUOTED%", "QUOTED_IDENTIFIERS_IGNORE_CAS_"])
@@ -645,44 +633,9 @@ def test_show_parameters_invalid_scope(dcur: snowflake.connector.cursor.Snowflak
     strict=True,
 )
 @pytest.mark.parametrize("scope", ["IN ACCOUNT", "FOR ACCOUNT"])
-def test_show_parameters_in_account_ignores_session_override(
-    dcur: snowflake.connector.cursor.SnowflakeCursor, scope: str
-):
-    dcur.execute("ALTER SESSION SET AUTOCOMMIT = FALSE")
-    dcur.execute(f"SHOW PARAMETERS LIKE 'AUTOCOMMIT' {scope}")
-    assert dcur.fetchall() == [AUTOCOMMIT_PARAMETER]
-
-
-@pytest.mark.parametrize(
-    ("autocommit", "value", "level"),
-    [(False, "false", "SESSION"), (True, "true", "SESSION"), (None, "true", "")],
-)
-def test_show_parameters_autocommit_on_connect(_fakesnow: None, autocommit: bool | None, value: str, level: str):
-    with (
-        snowflake.connector.connect(database="db1", schema="schema1", autocommit=autocommit) as conn,
-        conn.cursor(snowflake.connector.cursor.DictCursor) as dcur,
-    ):
-        dcur.execute("SHOW PARAMETERS LIKE 'AUTOCOMMIT'")
-        assert dcur.fetchall() == [{**AUTOCOMMIT_PARAMETER, "value": value, "level": level}]
-
-
-@pytest.mark.parametrize(("autocommit", "value"), [(False, "false"), (True, "true")])
-def test_show_parameters_autocommit_after_connector_change(
-    conn: snowflake.connector.SnowflakeConnection,
-    dcur: snowflake.connector.cursor.SnowflakeCursor,
-    autocommit: bool,
-    value: str,
-):
-    conn.autocommit(autocommit)
-    dcur.execute("SHOW PARAMETERS LIKE 'AUTOCOMMIT'")
-    assert dcur.fetchall() == [{**AUTOCOMMIT_PARAMETER, "value": value, "level": "SESSION"}]
-
-
-@pytest.mark.parametrize("value", ["false", "true"])
-def test_show_parameters_autocommit_after_alter_session(dcur: snowflake.connector.cursor.SnowflakeCursor, value: str):
-    dcur.execute(f"ALTER SESSION SET AUTOCOMMIT = {value}")
-    dcur.execute("SHOW PARAMETERS LIKE 'AUTOCOMMIT'")
-    assert dcur.fetchall() == [{**AUTOCOMMIT_PARAMETER, "value": value, "level": "SESSION"}]
+def test_show_parameters_in_account(dcur: snowflake.connector.cursor.SnowflakeCursor, scope: str):
+    dcur.execute(f"SHOW PARAMETERS LIKE 'TIMEZONE' {scope}")
+    assert dcur.fetchall() == [TIMEZONE_PARAMETER]
 
 
 def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):

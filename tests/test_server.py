@@ -124,19 +124,6 @@ def test_server_connect(sconn: snowflake.connector.SnowflakeConnection) -> None:
     assert conn.schema == "SCHEMA2"
 
 
-@pytest.mark.parametrize(
-    ("autocommit", "value", "level"),
-    [(None, "true", ""), (True, "true", "SESSION"), (False, "false", "SESSION")],
-)
-def test_server_show_parameters_autocommit_on_connect(
-    server: dict, autocommit: bool | None, value: str, level: str
-) -> None:
-    with snowflake.connector.connect(**server, autocommit=autocommit) as conn, conn.cursor() as cur:
-        cur.execute("SHOW PARAMETERS LIKE 'AUTOCOMMIT'")
-        row = cur.fetchone()
-        assert row and (row[1], row[3]) == (value, level)
-
-
 def test_server_connect_autocommit_false(server: dict) -> None:
     # connect with autocommit=False
     with (
