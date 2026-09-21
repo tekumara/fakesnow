@@ -1,3 +1,8 @@
 [files]
 # ignore CHANGELOG because it contains commit SHAs
 extend-exclude = ["CHANGELOG.md", "notebooks/*"]
+
+[default]
+extend-ignore-identifiers-re = [
+    "\\bINSERTs\\b" # https://github.com/crate-ci/typos/issues/745
+]
