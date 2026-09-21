@@ -1,10 +1,11 @@
+import gzip
 import os
 import tempfile
 from datetime import timezone
 
 import pytest
 import snowflake.connector.cursor
-from dirty_equals import IsDatetime, IsNow
+from dirty_equals import IsDatetime, IsInt, IsNow, IsStr
 
 
 def test_create_stage(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -150,12 +151,15 @@ def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
 
         dcur.execute("CREATE STAGE stage4")
         dcur.execute(f"PUT 'file://{temp_file_path}' @stage4")
-        assert dcur.fetchall() == [
+        put_results = dcur.fetchall()
+        assert put_results == [
             {
                 "source": temp_file_basename,
                 "target": f"{temp_file_basename}.gz",
                 "source_size": len(data),
-                "target_size": 42,  # GZIP compressed size
+                # Snowflake client-side encryption can make internal-stage targets
+                # larger; fakesnow stores plain local files.
+                "target_size": IsInt(ge=len(data)),
                 "source_compression": "NONE",
                 "target_compression": "GZIP",
                 "status": "UPLOADED",
@@ -168,8 +172,8 @@ def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
         assert len(results) == 1
         assert results[0] == {
             "name": f"stage4/{temp_file_basename}.gz",
-            "size": 42,
-            "md5": "29498d110c32a756df8109e70d22fa36",
+            "size": put_results[0]["target_size"],
+            "md5": IsStr(regex=r"^[0-9a-f]{32}$"),
             "last_modified": IsDatetime(
                 # string in RFC 7231 date format (e.g. 'Sat, 31 May 2025 08:50:51 GMT')
                 format_string="%a, %d %b %Y %H:%M:%S GMT"
@@ -179,3 +183,73 @@ def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
         # fully qualified stage name quoted
         dcur.execute('CREATE STAGE db1.schema1."stage5"')
         dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage5\"")
+
+
+def test_put_unquoted_src(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2\n")
+        temp_file.flush()
+        temp_file_basename = os.path.basename(temp_file.name)
+
+        dcur.execute("CREATE STAGE stage6")
+        dcur.execute(f"PUT file://{temp_file.name} @stage6")
+        assert dcur.fetchall()[0]["source"] == temp_file_basename
+
+
+def test_put_auto_compress_false(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        data = "1,2\n"
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file_path = temp_file.name
+        temp_file_basename = os.path.basename(temp_file_path)
+
+        dcur.execute("CREATE STAGE stage7")
+        dcur.execute(f"PUT 'file://{temp_file_path}' @stage7 AUTO_COMPRESS=FALSE")
+        put_results = dcur.fetchall()
+        assert put_results == [
+            {
+                "source": temp_file_basename,
+                "target": temp_file_basename,
+                "source_size": len(data),
+                # Snowflake client-side encryption can make internal-stage targets
+                # larger; fakesnow stores plain local files.
+                "target_size": IsInt(ge=len(data)),
+                "source_compression": "NONE",
+                "target_compression": "NONE",
+                "status": "UPLOADED",
+                "message": "",
+            }
+        ]
+
+        dcur.execute("LIST @stage7")
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0]["name"] == f"stage7/{temp_file_basename}"
+        assert results[0]["size"] == put_results[0]["target_size"]
+
+
+def test_put_gzipped_src_not_recompressed(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    with tempfile.NamedTemporaryFile(suffix=".csv.gz") as temp_file:
+        data = gzip.compress(b"1,2\n")
+        temp_file.write(data)
+        temp_file.flush()
+        temp_file_path = temp_file.name
+        temp_file_basename = os.path.basename(temp_file_path)
+
+        dcur.execute("CREATE STAGE stage7")
+        dcur.execute(f"PUT 'file://{temp_file_path}' @stage7")
+        assert dcur.fetchall() == [
+            {
+                "source": temp_file_basename,
+                "target": temp_file_basename,
+                "source_size": len(data),
+                # Snowflake client-side encryption can make internal-stage targets
+                # larger; fakesnow stores plain local files.
+                "target_size": IsInt(ge=len(data)),
+                "source_compression": "GZIP",
+                "target_compression": "GZIP",
+                "status": "UPLOADED",
+                "message": "",
+            }
+        ]

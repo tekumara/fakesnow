@@ -461,7 +461,7 @@ def _inserts(
 
 def _get_parquet_column_names(url: str, duck_conn: DuckDBPyConnection) -> list[str]:
     """Get column names from a parquet file."""
-    result = duck_conn.execute(f"SELECT name FROM parquet_schema('{url}') WHERE num_children IS NULL").fetchall()
+    result = duck_conn.execute(f"DESCRIBE SELECT * FROM read_parquet('{url}')").fetchall()
     return [r[0] for r in result]
 
 
