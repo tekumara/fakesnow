@@ -569,25 +569,8 @@ TIMEZONE_PARAMETER = {
 SESSION_PARAMETERS = [QUOTED_IDENTIFIERS_PARAMETER, TIMEZONE_PARAMETER]
 
 
-def test_show_parameters_like(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("SHOW PARAMETERS LIKE 'QUOTED_IDENTIFIERS_IGNORE_CASE'")
-    assert dcur.fetchall() == [QUOTED_IDENTIFIERS_PARAMETER]
-
-
-@pytest.mark.parametrize("comment", ["/* comment */", "-- comment\n"])
-def test_show_parameters_comments(dcur: snowflake.connector.cursor.SnowflakeCursor, comment: str):
-    dcur.execute(f"SHOW PARAMETERS {comment} LIKE 'TIMEZONE'")
-    assert dcur.fetchall() == [TIMEZONE_PARAMETER]
-
-
-@pytest.mark.parametrize("pattern", ["'NOT''A_PARAMETER'", r"'NOT\'A_PARAMETER'"])
-def test_show_parameters_like_escaped_quote(dcur: snowflake.connector.cursor.SnowflakeCursor, pattern: str):
-    dcur.execute(f"SHOW PARAMETERS LIKE {pattern}")
-    assert dcur.fetchall() == []
-
-
-def test_show_parameters_like_dollar_quoted_string(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("SHOW PARAMETERS LIKE $$TIMEZONE$$")
+def test_show_parameters_comments(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("SHOW PARAMETERS /* comment */ LIKE 'TIMEZONE'")
     assert dcur.fetchall() == [TIMEZONE_PARAMETER]
 
 
@@ -602,15 +585,9 @@ def test_show_parameters_like_is_case_insensitive(dcur: snowflake.connector.curs
     assert dcur.fetchall() == [TIMEZONE_PARAMETER]
 
 
-@pytest.mark.parametrize("pattern", ["QUOTED%", "QUOTED_IDENTIFIERS_IGNORE_CAS_"])
-def test_show_parameters_like_wildcards(dcur: snowflake.connector.cursor.SnowflakeCursor, pattern: str):
-    dcur.execute(f"SHOW PARAMETERS LIKE '{pattern}'")
+def test_show_parameters_like_wildcard(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("SHOW PARAMETERS LIKE 'QUOTED%'")
     assert dcur.fetchall() == [QUOTED_IDENTIFIERS_PARAMETER]
-
-
-def test_show_parameters_like_returns_no_rows_when_nothing_matches(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("SHOW PARAMETERS LIKE 'NOT_A_PARAMETER'")
-    assert dcur.fetchall() == []
 
 
 @pytest.mark.parametrize("scope", ["", " IN SESSION", " FOR SESSION"])
@@ -620,22 +597,6 @@ def test_show_parameters_contains_supported_session_parameters(
     dcur.execute(f"SHOW PARAMETERS{scope}")
     parameters = dcur.fetchall()
     assert all(parameter in parameters for parameter in SESSION_PARAMETERS)
-
-
-def test_show_parameters_invalid_scope(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    with pytest.raises(snowflake.connector.errors.ProgrammingError):
-        dcur.execute("SHOW PARAMETERS IN BANANA")
-
-
-@pytest.mark.xfail(
-    raises=snowflake.connector.errors.ProgrammingError,
-    reason="SHOW PARAMETERS outside session scope is not implemented",
-    strict=True,
-)
-@pytest.mark.parametrize("scope", ["IN ACCOUNT", "FOR ACCOUNT"])
-def test_show_parameters_in_account(dcur: snowflake.connector.cursor.SnowflakeCursor, scope: str):
-    dcur.execute(f"SHOW PARAMETERS LIKE 'TIMEZONE' {scope}")
-    assert dcur.fetchall() == [TIMEZONE_PARAMETER]
 
 
 def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):

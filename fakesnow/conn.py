@@ -53,8 +53,7 @@ class FakeSnowflakeConnection:
         self._paramstyle = kwargs.get("paramstyle", snowflake.connector.paramstyle)
         self.variables = Variables()
         self.results_cache = results_cache
-        autocommit = kwargs.get("autocommit")
-        self._autocommit = True if autocommit is None else autocommit
+        self._autocommit = kwargs.get("autocommit", True)
         self._in_transaction = False
 
         # create database if needed
