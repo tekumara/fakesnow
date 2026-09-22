@@ -38,10 +38,11 @@ def test_create_file_format_fully_qualified(dcur: snowflake.connector.cursor.Sno
     assert dcur.fetchall() == [{"status": "File format MY_FMT successfully created."}]
 
 
-def test_show_file_formats_metadata(dcur: snowflake.connector.cursor.SnowflakeCursor):
+@pytest.mark.parametrize("statement", ["SHOW FILE FORMATS", "SHOW TERSE FILE FORMATS"])
+def test_show_file_formats_metadata(dcur: snowflake.connector.cursor.SnowflakeCursor, statement: str):
     dcur.execute('CREATE FILE FORMAT "My Format" TYPE=CSV')
 
-    dcur.execute("SHOW FILE FORMATS")
+    dcur.execute(statement)
     expected = {
         "created_on": IsDatetime(),
         "name": "My Format",
@@ -199,6 +200,14 @@ def test_show_file_formats_scope(dcur: snowflake.connector.cursor.SnowflakeCurso
 
     dcur.execute(f"SHOW FILE FORMATS {scope}")
     assert {row["name"] for row in cast(list[dict], dcur.fetchall())} == expected
+
+
+def test_show_file_formats_terse_scope(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("CREATE FILE FORMAT fmt1 TYPE=CSV")
+    dcur.execute("CREATE SCHEMA db1.schema2")
+    dcur.execute("CREATE FILE FORMAT db1.schema2.fmt2 TYPE=CSV")
+    dcur.execute("show terse file formats in schema db1.schema1")
+    assert [row["name"] for row in cast(list[dict], dcur.fetchall())] == ["FMT1"]
 
 
 def test_show_file_formats_without_current_database(_fakesnow: None):

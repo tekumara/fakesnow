@@ -1,9 +1,12 @@
 from __future__ import annotations
 
+import re
 from typing import Literal
 
 import sqlglot
 from sqlglot import Expr, exp
+
+from fakesnow.transforms.transforms import upper_case_unquoted_identifiers
 
 
 def fs_global_creation_sql() -> str:
@@ -561,6 +564,15 @@ where not table_catalog in ('system')
 
 def show_tables_etc(expression: Expr, current_database: str | None, current_schema: str | None) -> Expr:
     """Transform SHOW OBJECTS/TABLES/VIEWS/FILE FORMATS to a query against the _fs_information_schema views."""
+    if (
+        isinstance(expression, exp.Command)
+        and expression.name.upper() == "SHOW"
+        and isinstance(expression.expression, str)
+        and (match := re.match(r"\s*TERSE\s+(FILE\s+FORMATS\b.*)", expression.expression, re.IGNORECASE | re.DOTALL))
+    ):
+        # sqlglot falls back to Command; Snowflake accepts TERSE but returns the full file-format columns.
+        expression = sqlglot.parse_one(f"SHOW {match[1]}", read="snowflake").transform(upper_case_unquoted_identifiers)
+
     if not (
         isinstance(expression, exp.Show)
         and (show := expression.name.upper())
@@ -592,7 +604,7 @@ def show_tables_etc(expression: Expr, current_database: str | None, current_sche
 
     if expression.args["terse"] and show == "VIEWS":
         columns = ["created_on, name, 'VIEW' as kind, database_name, schema_name"]
-    elif expression.args["terse"]:
+    elif expression.args["terse"] and show != "FILE FORMATS":
         columns = ["created_on, name, kind, database_name, schema_name"]
     else:
         columns = ["*"]
