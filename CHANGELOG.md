@@ -2,6 +2,21 @@
 
 # Changelog
 
+## [0.11.18](https://github.com/tekumara/fakesnow/compare/v0.11.17...v0.11.18) (2026-09-22)
+
+
+### Features
+
+* support CREATE FILE FORMAT for named file formats ([#421](https://github.com/tekumara/fakesnow/issues/421)) ([e8012e3](https://github.com/tekumara/fakesnow/commit/e8012e39da96a91349b29e110c373e70c788dd17))
+* support SHOW FILE FORMATS ([#431](https://github.com/tekumara/fakesnow/issues/431)) ([1f569a5](https://github.com/tekumara/fakesnow/commit/1f569a59e2cd682e064edfd1c67cff7281ba5bfc))
+* support SHOW PARAMETERS with a basic set ([#426](https://github.com/tekumara/fakesnow/issues/426)) ([235ce2b](https://github.com/tekumara/fakesnow/commit/235ce2b0fe36c4433772c8e78a46ccf151808a1f))
+
+
+### Bug Fixes
+
+* PUT with an unquoted file url and honour AUTO_COMPRESS ([#428](https://github.com/tekumara/fakesnow/issues/428)) ([9974883](https://github.com/tekumara/fakesnow/commit/99748839b57c4055cc2445377492e81c0a0076f5))
+* use of TIMESTAMP_LTZ with precision ([#427](https://github.com/tekumara/fakesnow/issues/427)) ([5e46cdb](https://github.com/tekumara/fakesnow/commit/5e46cdb3801c084f1f84b57eec266d61c89eade1))
+
 ## [0.11.17](https://github.com/tekumara/fakesnow/compare/v0.11.16...v0.11.17) (2026-09-18)
 
 
