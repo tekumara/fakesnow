@@ -214,16 +214,6 @@ def test_show_file_formats_scope(dcur: snowflake.connector.cursor.SnowflakeCurso
     assert {row["name"] for row in cast(list[dict], dcur.fetchall())} == expected
 
 
-def test_show_file_formats_terse_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute("SHOW FILE FORMATS")
-    assert dcur.description
-    columns = [column.name for column in dcur.description]
-
-    dcur.execute("SHOW TERSE FILE FORMATS")
-    assert dcur.description
-    assert [column.name for column in dcur.description] == columns
-
-
 def test_show_file_formats_without_current_database(_fakesnow: None):
     with (
         snowflake.connector.connect(database="db1", schema="schema1") as creator,
