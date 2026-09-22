@@ -550,6 +550,55 @@ def test_show_sequences(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert sorted(cast(list[dict], dcur.fetchall()), key=lambda row: row["name"]) == [seq1, seq2]
 
 
+QUOTED_IDENTIFIERS_PARAMETER = {
+    "key": "QUOTED_IDENTIFIERS_IGNORE_CASE",
+    "value": "false",
+    "default": "false",
+    "level": "",
+    "description": "If true, the case of quoted identifiers is ignored",
+    "type": "BOOLEAN",
+}
+TIMEZONE_PARAMETER = {
+    "key": "TIMEZONE",
+    "value": "Etc/UTC",
+    "default": "America/Los_Angeles",
+    "level": "ACCOUNT",
+    "description": "time zone",
+    "type": "STRING",
+}
+SESSION_PARAMETERS = [QUOTED_IDENTIFIERS_PARAMETER, TIMEZONE_PARAMETER]
+
+
+def test_show_parameters_comments(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("SHOW PARAMETERS /* comment */ LIKE 'TIMEZONE'")
+    assert dcur.fetchall() == [TIMEZONE_PARAMETER]
+
+
+def test_show_parameters_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("SHOW PARAMETERS LIKE 'QUOTED_IDENTIFIERS_IGNORE_CASE'")
+    dcur.fetchall()
+    assert [r.name for r in dcur.description] == ["key", "value", "default", "level", "description", "type"]
+
+
+def test_show_parameters_like_is_case_insensitive(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("SHOW PARAMETERS LIKE 'timezone'")
+    assert dcur.fetchall() == [TIMEZONE_PARAMETER]
+
+
+def test_show_parameters_like_wildcard(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute("SHOW PARAMETERS LIKE 'QUOTED%'")
+    assert dcur.fetchall() == [QUOTED_IDENTIFIERS_PARAMETER]
+
+
+@pytest.mark.parametrize("scope", ["", " IN SESSION", " FOR SESSION"])
+def test_show_parameters_contains_supported_session_parameters(
+    dcur: snowflake.connector.cursor.SnowflakeCursor, scope: str
+):
+    dcur.execute(f"SHOW PARAMETERS{scope}")
+    parameters = dcur.fetchall()
+    assert all(parameter in parameters for parameter in SESSION_PARAMETERS)
+
+
 def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("show procedures")
     dcur.fetchall()

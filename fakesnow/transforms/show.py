@@ -4,7 +4,7 @@ import re
 from typing import Literal
 
 import sqlglot
-from sqlglot import Expr, exp
+from sqlglot import Expr, TokenType, exp
 
 from fakesnow.transforms.transforms import upper_case_unquoted_identifiers
 
@@ -324,6 +324,56 @@ SELECT
     '' as 'external_access_integrations',
 WHERE 0 = 1;
 """
+
+
+def show_parameters(expression: Expr) -> Expr:
+    """Transform SHOW PARAMETERS.
+
+    Only session scope (the default, IN SESSION, or FOR SESSION) is supported.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-parameters
+    """
+    if not (
+        isinstance(expression, exp.Command)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "SHOW"
+        and isinstance(expression.expression, str)
+    ):
+        return expression
+
+    # SQLGlot parses SHOW PARAMETERS as a Command. Tokenize its text to handle comments and string escaping.
+    tokens = sqlglot.tokenize(expression.expression, read="snowflake")
+    if not tokens or tokens[0].token_type != TokenType.VAR or tokens[0].text.upper() != "PARAMETERS":
+        return expression
+
+    tokens = tokens[1:]
+    like = None
+    if (
+        len(tokens) >= 2
+        and tokens[0].token_type == TokenType.LIKE
+        and tokens[1].token_type in (TokenType.STRING, TokenType.RAW_STRING)
+    ):
+        like = exp.Literal.string(tokens[1].text)
+        tokens = tokens[2:]
+    if tokens and [t.token_type for t in tokens] not in (
+        [TokenType.IN, TokenType.SESSION],
+        [TokenType.FOR, TokenType.SESSION],
+    ):
+        raise NotImplementedError(expression.sql(dialect="snowflake"))
+
+    # Only list supported parameters, so the reported values match behaviour.
+    query = """
+        SELECT * FROM (VALUES
+            ('QUOTED_IDENTIFIERS_IGNORE_CASE', 'false', 'false', '',
+             'If true, the case of quoted identifiers is ignored', 'BOOLEAN'),
+            ('TIMEZONE', 'Etc/UTC', 'America/Los_Angeles', 'ACCOUNT', 'time zone', 'STRING')
+        ) AS parameters("key", "value", "default", "level", "description", "type")
+    """
+    if like is not None:
+        # Snowflake matches the pattern case-insensitively, with SQL wildcards.
+        query += f' WHERE "key" ILIKE {like.sql(dialect="duckdb")}'
+
+    return sqlglot.parse_one(query, read="duckdb")
 
 
 def show_procedures(expression: Expr) -> Expr:
