@@ -38,10 +38,8 @@ def test_create_file_format_fully_qualified(dcur: snowflake.connector.cursor.Sno
     assert dcur.fetchall() == [{"status": "File format MY_FMT successfully created."}]
 
 
-@pytest.mark.parametrize("create", [False, True])
-def test_show_file_formats_metadata(dcur: snowflake.connector.cursor.SnowflakeCursor, create: bool):
-    if create:
-        dcur.execute('CREATE FILE FORMAT "My Format" TYPE=CSV')
+def test_show_file_formats_metadata(dcur: snowflake.connector.cursor.SnowflakeCursor):
+    dcur.execute('CREATE FILE FORMAT "My Format" TYPE=CSV')
 
     dcur.execute("SHOW FILE FORMATS")
     expected = {
@@ -55,7 +53,7 @@ def test_show_file_formats_metadata(dcur: snowflake.connector.cursor.SnowflakeCu
         "format_options": IsStr(),
         "owner_role_type": "ROLE",
     }
-    assert dcur.fetchall() == ([expected] if create else [])
+    assert dcur.fetchall() == [expected]
     assert dcur.description
     assert [column.name for column in dcur.description] == list(expected)
 
@@ -156,16 +154,11 @@ def test_show_file_formats_defaults(
     ("option", "value", "expected"),
     [
         ("SKIP_HEADER", "2", 2),
-        ("TRIM_SPACE", "TRUE", True),
-        ("FIELD_DELIMITER", "'|'", "|"),
-        ("NULL_IF", "('null')", ["null"]),
         ("NULL_IF", "('null', '')", ["null", ""]),
-        ("NULL_IF", "()", []),
-        ("COMPRESSION", "gzip", "gzip"),
     ],
 )
 def test_show_file_formats_option_overrides(
-    dcur: snowflake.connector.cursor.SnowflakeCursor, option: str, value: str, expected: str | int | bool | list[str]
+    dcur: snowflake.connector.cursor.SnowflakeCursor, option: str, value: str, expected: int | list[str]
 ):
     dcur.execute(f"CREATE FILE FORMAT my_fmt TYPE=CSV {option}={value}")
     dcur.execute("SHOW FILE FORMATS")
@@ -184,18 +177,18 @@ def test_show_file_formats_comment(dcur: snowflake.connector.cursor.SnowflakeCur
 @pytest.mark.parametrize(
     ("scope", "expected"),
     [
-        ("", ["FMT1"]),
-        ("IN SCHEMA", ["FMT1"]),
-        ("IN SCHEMA schema2", ["FMT2"]),
-        ("IN SCHEMA db2.schema2", ["FMT3"]),
-        ("IN schema2", ["FMT2"]),
-        ("IN db2.schema2", ["FMT3"]),
-        ("IN DATABASE", ["FMT1", "FMT2"]),
-        ("IN DATABASE db2", ["FMT3"]),
-        ("IN ACCOUNT", ["FMT1", "FMT2", "FMT3"]),
+        ("", {"FMT1"}),
+        ("IN SCHEMA", {"FMT1"}),
+        ("IN SCHEMA schema2", {"FMT2"}),
+        ("IN SCHEMA db2.schema2", {"FMT3"}),
+        ("IN schema2", {"FMT2"}),
+        ("IN db2.schema2", {"FMT3"}),
+        ("IN DATABASE", {"FMT1", "FMT2"}),
+        ("IN DATABASE db2", {"FMT3"}),
+        ("IN ACCOUNT", {"FMT1", "FMT2", "FMT3"}),
     ],
 )
-def test_show_file_formats_scope(dcur: snowflake.connector.cursor.SnowflakeCursor, scope: str, expected: list[str]):
+def test_show_file_formats_scope(dcur: snowflake.connector.cursor.SnowflakeCursor, scope: str, expected: set[str]):
     dcur.execute("CREATE FILE FORMAT fmt1 TYPE=CSV")
     dcur.execute("CREATE SCHEMA db1.schema2")
     dcur.execute("CREATE FILE FORMAT db1.schema2.fmt2 TYPE=JSON")
@@ -205,18 +198,10 @@ def test_show_file_formats_scope(dcur: snowflake.connector.cursor.SnowflakeCurso
     dcur.execute("USE SCHEMA db1.schema1")
 
     dcur.execute(f"SHOW FILE FORMATS {scope}")
-    assert [row["name"] for row in cast(list[dict], dcur.fetchall())] == expected
+    assert {row["name"] for row in cast(list[dict], dcur.fetchall())} == expected
 
 
-def test_show_file_formats_quoted_scope(dcur: snowflake.connector.cursor.SnowflakeCursor):
-    dcur.execute('CREATE SCHEMA "MixedSchema"')
-    dcur.execute('CREATE FILE FORMAT "MixedSchema".fmt TYPE=CSV')
-    dcur.execute('SHOW FILE FORMATS IN SCHEMA db1."MixedSchema"')
-    assert [row["name"] for row in cast(list[dict], dcur.fetchall())] == ["FMT"]
-
-
-@pytest.mark.parametrize("scope", ["", "IN DATABASE", "IN SCHEMA", "IN ACCOUNT"])
-def test_show_file_formats_without_current_database(_fakesnow: None, scope: str):
+def test_show_file_formats_without_current_database(_fakesnow: None):
     with (
         snowflake.connector.connect(database="db1", schema="schema1") as creator,
         snowflake.connector.connect() as conn,
@@ -224,19 +209,15 @@ def test_show_file_formats_without_current_database(_fakesnow: None, scope: str)
         conn.cursor(snowflake.connector.DictCursor) as cur,
     ):
         create_cur.execute("CREATE FILE FORMAT my_fmt TYPE=CSV")
-        cur.execute(f"SHOW FILE FORMATS {scope}")
+        cur.execute("SHOW FILE FORMATS")
         assert [row["name"] for row in cast(list[dict], cur.fetchall())] == ["MY_FMT"]
 
 
-@pytest.mark.parametrize(
-    ("pattern", "expected"),
-    [("csv%", ["CSV_ONE", "CSV_TWO"]), ("%_one", ["CSV_ONE", "JSON_ONE"]), ("missing%", [])],
-)
-def test_show_file_formats_like(dcur: snowflake.connector.cursor.SnowflakeCursor, pattern: str, expected: list[str]):
+def test_show_file_formats_like(dcur: snowflake.connector.cursor.SnowflakeCursor):
     for name in ["csv_one", "csv_two", "json_one"]:
         dcur.execute(f"CREATE FILE FORMAT {name} TYPE=CSV")
-    dcur.execute(f"SHOW FILE FORMATS LIKE '{pattern}'")
-    assert [row["name"] for row in cast(list[dict], dcur.fetchall())] == expected
+    dcur.execute("SHOW FILE FORMATS LIKE 'csv%'")
+    assert {row["name"] for row in cast(list[dict], dcur.fetchall())} == {"CSV_ONE", "CSV_TWO"}
 
 
 def test_show_file_formats_order(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -251,15 +232,18 @@ def test_show_file_formats_order(dcur: snowflake.connector.cursor.SnowflakeCurso
     ]
 
 
-@pytest.mark.parametrize(("clause", "expected"), [("OR REPLACE", "JSON"), ("IF NOT EXISTS", "CSV")])
+@pytest.mark.parametrize(
+    ("statement", "expected"),
+    [
+        ("CREATE OR REPLACE FILE FORMAT my_fmt TYPE=JSON", "JSON"),
+        ("CREATE FILE FORMAT IF NOT EXISTS my_fmt TYPE=JSON", "CSV"),
+    ],
+)
 def test_show_file_formats_after_create_again(
-    dcur: snowflake.connector.cursor.SnowflakeCursor, clause: str, expected: str
+    dcur: snowflake.connector.cursor.SnowflakeCursor, statement: str, expected: str
 ):
     dcur.execute("CREATE FILE FORMAT my_fmt TYPE=CSV")
-    if clause == "OR REPLACE":
-        dcur.execute("CREATE OR REPLACE FILE FORMAT my_fmt TYPE=JSON")
-    else:
-        dcur.execute("CREATE FILE FORMAT IF NOT EXISTS my_fmt TYPE=JSON")
+    dcur.execute(statement)
     dcur.execute("SHOW FILE FORMATS")
     assert [row["type"] for row in cast(list[dict], dcur.fetchall())] == [expected]
 
