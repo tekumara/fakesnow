@@ -268,6 +268,7 @@ CREATE TABLE IF NOT EXISTS _fs_global._fs_information_schema._fs_file_formats (
     schema_name TEXT,
     type TEXT,
     options TEXT,
+    comment TEXT DEFAULT '',
     PRIMARY KEY (database_name, schema_name, name)
 );
 """

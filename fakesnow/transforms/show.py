@@ -13,6 +13,7 @@ def fs_global_creation_sql() -> str:
         {SQL_CREATE_VIEW_SHOW_VIEWS};
         {SQL_CREATE_VIEW_SHOW_COLUMNS};
         {SQL_CREATE_VIEW_SHOW_DATABASES};
+        {SQL_CREATE_VIEW_SHOW_FILE_FORMATS};
         {SQL_CREATE_VIEW_SHOW_FUNCTIONS};
         {SQL_CREATE_VIEW_SHOW_SCHEMAS};
         {SQL_CREATE_VIEW_SHOW_PROCEDURES};
@@ -140,6 +141,24 @@ def show_databases(expression: Expr) -> Expr:
         return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_show_databases", read="duckdb")
 
     return expression
+
+
+# see https://docs.snowflake.com/en/sql-reference/sql/show-file-formats
+SQL_CREATE_VIEW_SHOW_FILE_FORMATS = """
+create view if not exists _fs_global._fs_information_schema._fs_show_file_formats as
+select
+    created_on,
+    name,
+    database_name,
+    schema_name,
+    type,
+    'SYSADMIN' as owner,
+    comment,
+    options as format_options,
+    'ROLE' as owner_role_type
+from _fs_global._fs_information_schema._fs_file_formats
+order by database_name, schema_name, name
+"""
 
 
 SQL_CREATE_VIEW_SHOW_FUNCTIONS = """
@@ -541,11 +560,11 @@ where not table_catalog in ('system')
 
 
 def show_tables_etc(expression: Expr, current_database: str | None, current_schema: str | None) -> Expr:
-    """Transform SHOW OBJECTS/TABLES/VIEWS to a query against the _fs_information_schema views."""
+    """Transform SHOW OBJECTS/TABLES/VIEWS/FILE FORMATS to a query against the _fs_information_schema views."""
     if not (
         isinstance(expression, exp.Show)
         and (show := expression.name.upper())
-        and show in {"OBJECTS", "TABLES", "VIEWS"}
+        and show in {"OBJECTS", "TABLES", "VIEWS", "FILE FORMATS"}
     ):
         return expression
 
@@ -556,6 +575,10 @@ def show_tables_etc(expression: Expr, current_database: str | None, current_sche
         catalog = (table and table.name) or current_database
         schema = None
     elif scope_kind == "SCHEMA" and table:
+        catalog = table.db or current_database
+        schema = table.name
+    elif scope_kind == "TABLE" and table and show == "FILE FORMATS":
+        # sqlglot parses the optional SCHEMA keyword as a TABLE scope for file formats.
         catalog = table.db or current_database
         schema = table.name
     elif scope_kind == "ACCOUNT":
@@ -588,7 +611,7 @@ def show_tables_etc(expression: Expr, current_database: str | None, current_sche
 
     query = f"""
         SELECT {columns_clause}
-        from _fs_global._fs_information_schema._fs_show_{show.lower()}
+        from _fs_global._fs_information_schema._fs_show_{show.lower().replace(" ", "_")}
         where {where_clause}
         {limit}
     """
