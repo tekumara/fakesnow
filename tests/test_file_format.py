@@ -208,9 +208,14 @@ def test_show_file_formats_without_current_database(_fakesnow: None):
         creator.cursor() as create_cur,
         conn.cursor(snowflake.connector.DictCursor) as cur,
     ):
-        create_cur.execute("CREATE FILE FORMAT my_fmt TYPE=CSV")
+        create_cur.execute("CREATE FILE FORMAT fmt_a TYPE=CSV")
+        create_cur.execute("CREATE DATABASE db2")
+        create_cur.execute("CREATE SCHEMA db2.schema2")
+        create_cur.execute("CREATE FILE FORMAT db2.schema2.fmt_b TYPE=CSV")
         cur.execute("SHOW FILE FORMATS")
-        assert [row["name"] for row in cast(list[dict], cur.fetchall())] == ["MY_FMT"]
+        assert {
+            (row["database_name"], row["schema_name"], row["name"]) for row in cast(list[dict], cur.fetchall())
+        } == {("DB1", "SCHEMA1", "FMT_A"), ("DB2", "SCHEMA2", "FMT_B")}
 
 
 def test_show_file_formats_like(dcur: snowflake.connector.cursor.SnowflakeCursor):
