@@ -445,7 +445,11 @@ def extract_comment_on_table(expression: Expr) -> Expr:
         Expr: The transformed expression, with any comment stored in the new 'table_comment' arg.
     """
 
-    if isinstance(expression, exp.Create) and (table := expression.find(exp.Table)):
+    if (
+        isinstance(expression, exp.Create)
+        and expression.args.get("kind") in {"TABLE", "VIEW"}
+        and (table := expression.find(exp.Table))
+    ):
         comment = None
         if props := cast(exp.Properties, expression.args.get("properties")):
             other_props = []
