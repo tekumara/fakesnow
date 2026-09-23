@@ -1,6 +1,7 @@
 # ruff: noqa: E501
 
 import datetime
+import gzip
 import os
 import tempfile
 import uuid
@@ -18,7 +19,7 @@ from dirty_equals import IsDatetime, IsInt, IsStr, IsUUID
 from pandas.testing import assert_frame_equal
 from snowflake.connector.cursor import ResultMetadata
 
-from tests.utils import indent
+from tests.utils import dindent, indent
 
 
 def test_server_abort_request(server: dict) -> None:
@@ -437,6 +438,68 @@ def test_server_put_non_existent_stage(sdcur: snowflake.connector.cursor.DictCur
         )
 
 
+def test_server_put_presigned_url(server: dict, sconn: snowflake.connector.SnowflakeConnection) -> None:
+    # in server mode the client may not share the server's filesystem, so PUT hands back a
+    # GCS-style presigned url and the client uploads over http to this server, which stores
+    # the file in the stage
+    conn = sconn
+    with (
+        conn.cursor(snowflake.connector.cursor.DictCursor) as dcur,
+        tempfile.NamedTemporaryFile(suffix=".csv") as temp_file,
+    ):
+        temp_file_basename = os.path.basename(temp_file.name)
+        dcur.execute("CREATE STAGE presigned_stage")
+
+        result = conn.cmd_query(
+            f"PUT 'file://{temp_file.name}' @presigned_stage",
+            conn._next_sequence_counter(),  # noqa: SLF001
+            uuid.uuid4(),
+        )
+
+        stage_info = result["data"]["stageInfo"]
+        assert stage_info["locationType"] == "GCS"
+        assert stage_info["presignedUrl"] == (
+            f"http://{server['host']}:{server['port']}/fs_bucket/DB1/SCHEMA1/PRESIGNED_STAGE/{temp_file_basename}"
+        )
+
+        data = b"1,2\n"
+        response = requests.put(stage_info["presignedUrl"], data=data, timeout=5)
+        assert response.status_code == 200
+
+        dcur.execute("LIST @presigned_stage")
+        assert dcur.fetchall() == [
+            {
+                "name": f"presigned_stage/{temp_file_basename}",
+                "size": len(data),
+                "md5": IsStr(regex=r"^[0-9a-f]{32}$"),
+                "last_modified": IsDatetime(format_string="%a, %d %b %Y %H:%M:%S GMT"),
+            }
+        ]
+
+
+def test_server_put_qmark_target_stays_local(sconn: snowflake.connector.SnowflakeConnection) -> None:
+    # the connector re-requests a presigned url by executing the PUT without bindings, which
+    # cannot resolve a ? target, so a bound target keeps the local filesystem upload
+    conn = sconn
+    with conn.cursor() as cur, tempfile.NamedTemporaryFile(suffix=".csv") as temp_file:
+        cur.execute("CREATE STAGE qmark_stage")
+
+        result = conn.cmd_query(
+            f"PUT 'file://{temp_file.name}' ?",
+            conn._next_sequence_counter(),  # noqa: SLF001
+            uuid.uuid4(),
+            binding_params={"1": {"type": "TEXT", "value": "@qmark_stage"}},
+        )
+
+        assert result["data"]["stageInfo"]["locationType"] == "LOCAL_FS"
+
+
+def test_server_bucket_upload_rejects_path_outside_bucket(server: dict) -> None:
+    response = requests.put(f"http://{server['host']}:{server['port']}/fs_bucket//etc/passwd", data=b"x", timeout=5)
+
+    assert response.status_code == 400
+
+
 def test_server_response_params(server: dict) -> None:
     # mimic the jdbc driver
     headers = {
@@ -694,3 +757,96 @@ def test_server_describe_only(server: dict) -> None:
         # nothing ran: the original table is untouched
         cur.execute("select * from example")
         assert cur.fetchall() == [(1, "old")]
+
+
+def test_server_bulk_load_pipeline(sdcur: snowflake.connector.cursor.DictCursor) -> None:
+    """End-to-end by design: a data-sync job's stage/PUT/COPY/MERGE bulk load, run twice.
+
+    The single behavior under test is that the steps compose in server mode and that a
+    rerun with CREATE OR REPLACE yields the same target rows.
+    """
+    dcur = sdcur
+    dcur.execute("CREATE OR REPLACE TABLE target (id INT, name VARCHAR)")
+
+    for run in (1, 2):
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            path = f"{tmp_dir}/data.csv.gz"
+            with gzip.open(path, "wt") as f:
+                f.write('ID,NAME\n1,"foo"\n2,\n')
+
+            dcur.execute("CREATE OR REPLACE STAGE bulk_stage FILE_FORMAT = (TYPE = 'CSV')")
+            dcur.execute("""
+                CREATE OR REPLACE FILE FORMAT bulk_csv_format TYPE='CSV' FIELD_DELIMITER=',' SKIP_HEADER=1
+                FIELD_OPTIONALLY_ENCLOSED_BY='"' EMPTY_FIELD_AS_NULL=TRUE NULL_IF=('') ESCAPE_UNENCLOSED_FIELD='NONE'
+            """)
+            dcur.execute("CREATE OR REPLACE TEMPORARY TABLE staging (id INT, name VARCHAR)")
+
+            dcur.execute(f"PUT file://{path} @bulk_stage AUTO_COMPRESS=FALSE")
+            results = dcur.fetchall()
+            assert results[0]["target"] == "data.csv.gz", f"run {run}: {results}"
+
+            dcur.execute("""
+                COPY INTO staging
+                FROM @bulk_stage/data.csv.gz
+                FILE_FORMAT = (FORMAT_NAME = 'bulk_csv_format')
+                ON_ERROR = 'ABORT_STATEMENT'
+            """)
+            results = dcur.fetchall()
+            assert results[0]["status"] == "LOADED", f"run {run}: {results}"
+            assert results[0]["rows_loaded"] == 2
+
+            dcur.execute("""
+                MERGE INTO target t USING staging s ON t.id = s.id
+                WHEN MATCHED THEN UPDATE SET t.name = s.name
+                WHEN NOT MATCHED THEN INSERT (id, name) VALUES (s.id, s.name)
+            """)
+
+            dcur.execute("SELECT * FROM target ORDER BY id")
+            assert dcur.fetchall() == [{"ID": 1, "NAME": "foo"}, {"ID": 2, "NAME": None}]
+
+
+def test_server_table_stage_bulk_load(sdcur: snowflake.connector.cursor.DictCursor) -> None:
+    """End-to-end by design: PUT a gzipped csv to a fully qualified table stage and COPY it.
+
+    The single behavior under test is that a table stage carries a file from PUT through
+    COPY in server mode, including VARIANT columns fed from csv strings.
+    """
+    dcur = sdcur
+    dcur.execute("""
+        CREATE OR REPLACE TABLE db1.schema1.snap_t (
+            release_tag VARCHAR(100) NOT NULL, permissions VARIANT NOT NULL,
+            provider_details VARIANT, created_at TIMESTAMP NOT NULL)
+    """)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = f"{tmp_dir}/snap_t.csv.gz"
+        with gzip.open(path, "wt") as f:
+            f.write("RELEASE_TAG,PERMISSIONS,PROVIDER_DETAILS,CREATED_AT\n")
+            f.write('v1,"{""a"": 1}",,2024-01-01 00:00:00\n')
+
+        dcur.execute(f"PUT file://{path} @db1.schema1.%snap_t AUTO_COMPRESS=FALSE")
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0]["target"] == "snap_t.csv.gz"
+        assert results[0]["status"] == "UPLOADED"
+
+        dcur.execute("""
+            COPY INTO db1.schema1.snap_t FROM @db1.schema1.%snap_t/snap_t.csv.gz
+            FILE_FORMAT = (TYPE='CSV' FIELD_DELIMITER=',' SKIP_HEADER=1 FIELD_OPTIONALLY_ENCLOSED_BY='"'
+            EMPTY_FIELD_AS_NULL=TRUE NULL_IF=('') ESCAPE_UNENCLOSED_FIELD='NONE')
+            ON_ERROR='ABORT_STATEMENT'
+        """)
+        results = dcur.fetchall()
+        assert len(results) == 1
+        assert results[0]["status"] == "LOADED"
+        assert results[0]["rows_loaded"] == 1
+
+        dcur.execute("SELECT * FROM db1.schema1.snap_t")
+        assert dindent(dcur.fetchall()) == [
+            {
+                "RELEASE_TAG": "v1",
+                "PERMISSIONS": '{\n  "a": 1\n}',
+                "PROVIDER_DETAILS": None,
+                "CREATED_AT": datetime.datetime(2024, 1, 1, 0, 0),
+            }
+        ]

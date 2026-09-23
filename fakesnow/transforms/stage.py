@@ -143,13 +143,7 @@ def list_stage(expression: Expr, current_database: str | None, current_schema: s
     var = stage.text("this")
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
-    query = f"""
-        SELECT *
-        from _fs_global._fs_information_schema._fs_stages
-        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
-    """
-
-    transformed = sqlglot.parse_one(query, read="duckdb")
+    transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name), read="duckdb")
     transformed.args["list_stage_name"] = f"{catalog}.{schema}.{stage_name}"
     return transformed
 
@@ -198,7 +192,9 @@ def put_stage(
 
     assert isinstance(expression.this, exp.Literal), "PUT command requires a file path as a literal"
     src_url = urlparse(expression.this.this)
-    src_path = url2pathname(src_url.path)
+    # include netloc to handle relative urls, eg: file://data.csv.gz as sent by the connector
+    # when it re-requests a presigned url using the destination file name
+    src_path = src_url.netloc + url2pathname(src_url.path)
     target = expression.args["target"]
 
     assert isinstance(target, exp.Var), f"{target} is not a exp.Var"
@@ -220,13 +216,7 @@ def put_stage(
 
     options = put_options(expression)
 
-    query = f"""
-        SELECT *
-        from _fs_global._fs_information_schema._fs_stages
-        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
-    """
-
-    transformed = sqlglot.parse_one(query, read="duckdb")
+    transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name), read="duckdb")
     fqname = f"{catalog}.{schema}.{stage_name}"
     transformed.args["put_stage_name"] = fqname
     transformed.args["put_stage_data"] = {
@@ -246,6 +236,26 @@ def put_stage(
     }
 
     return transformed
+
+
+def is_table_stage(stage_name: str) -> bool:
+    """A stage name starting with % is a table stage, which exists implicitly for every table."""
+    return stage_name.startswith("%")
+
+
+def stage_lookup_sql(catalog: str, schema: str, stage_name: str) -> str:
+    """SQL that returns a single row when the stage exists."""
+    if is_table_stage(stage_name):
+        return f"""
+            SELECT *
+            from duckdb_tables()
+            where database_name = '{catalog}' and schema_name = '{schema}' and table_name = '{stage_name[1:]}'
+        """
+    return f"""
+        SELECT *
+        from _fs_global._fs_information_schema._fs_stages
+        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
+    """
 
 
 def parts_from_var(var: str, current_database: str | None, current_schema: str | None) -> tuple[str, str, str]:
