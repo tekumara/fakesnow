@@ -202,7 +202,11 @@ def put_stage(
     options = parse_options(expression.args.get("properties") or [], statement="PUT")
     auto_compress = options.get("AUTO_COMPRESS", True)
     if not isinstance(auto_compress, bool):
-        raise NotImplementedError(f"PUT option AUTO_COMPRESS requires a boolean value, got {auto_compress!r}")
+        raise snowflake.connector.errors.ProgrammingError(
+            msg="Invalid value specified for property 'AUTO_COMPRESS'",
+            errno=1481,
+            sqlstate="42601",
+        )
 
     query = f"""
         SELECT *

@@ -199,11 +199,10 @@ def test_put_unquoted_src(dcur: snowflake.connector.cursor.DictCursor) -> None:
 def test_put_rejects_collection_auto_compress(dcur: snowflake.connector.cursor.DictCursor) -> None:
     dcur.execute("CREATE STAGE stage7")
 
-    with pytest.raises(
-        snowflake.connector.errors.ProgrammingError,
-        match=r"PUT option AUTO_COMPRESS requires a boolean value, got \[False\]",
-    ):
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
         dcur.execute("PUT 'file:///tmp/example.csv' @stage7 AUTO_COMPRESS=(FALSE)")
+
+    assert str(excinfo.value) == "001481 (42601): Invalid value specified for property 'AUTO_COMPRESS'"
 
 
 def test_put_auto_compress_false(dcur: snowflake.connector.cursor.DictCursor) -> None:
