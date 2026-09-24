@@ -199,7 +199,7 @@ def put_stage(
     var = this[1:]
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
-    options = parse_options(expression.args.get("properties") or [], statement="PUT")
+    options = parse_options(expression.args.get("properties") or [])
     auto_compress = options.get("AUTO_COMPRESS", True)
     if not isinstance(auto_compress, bool):
         raise snowflake.connector.errors.ProgrammingError(
