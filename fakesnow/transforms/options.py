@@ -27,6 +27,9 @@ def parse_options(properties: Iterable[Expr]) -> dict[str, Any]:
     for prop in properties:
         if isinstance(prop, exp.TemporaryProperty):
             continue
+        if isinstance(prop, exp.SchemaCommentProperty):
+            options["COMMENT"] = _option_value(prop.this)
+            continue
         assert isinstance(prop, exp.Property), f"{prop.__class__} is not a Property"
         assert isinstance(prop.this, exp.Var), f"{prop.this.__class__} is not a Var"
         options[prop.this.name.upper()] = _option_value(prop.args.get("value"))

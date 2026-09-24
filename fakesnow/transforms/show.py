@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import Literal
 
 import sqlglot
-from sqlglot import Expr, exp
+from sqlglot import Expr, TokenType, exp
 
 
 def fs_global_creation_sql() -> str:
@@ -13,6 +13,7 @@ def fs_global_creation_sql() -> str:
         {SQL_CREATE_VIEW_SHOW_VIEWS};
         {SQL_CREATE_VIEW_SHOW_COLUMNS};
         {SQL_CREATE_VIEW_SHOW_DATABASES};
+        {SQL_CREATE_VIEW_SHOW_FILE_FORMATS};
         {SQL_CREATE_VIEW_SHOW_FUNCTIONS};
         {SQL_CREATE_VIEW_SHOW_SCHEMAS};
         {SQL_CREATE_VIEW_SHOW_PROCEDURES};
@@ -140,6 +141,24 @@ def show_databases(expression: Expr) -> Expr:
         return sqlglot.parse_one("SELECT * FROM _fs_global._fs_information_schema._fs_show_databases", read="duckdb")
 
     return expression
+
+
+# see https://docs.snowflake.com/en/sql-reference/sql/show-file-formats
+SQL_CREATE_VIEW_SHOW_FILE_FORMATS = """
+create view if not exists _fs_global._fs_information_schema._fs_show_file_formats as
+select
+    created_on,
+    name,
+    database_name,
+    schema_name,
+    type,
+    'SYSADMIN' as owner,
+    comment,
+    options as format_options,
+    'ROLE' as owner_role_type
+from _fs_global._fs_information_schema._fs_file_formats
+order by database_name, schema_name, name
+"""
 
 
 SQL_CREATE_VIEW_SHOW_FUNCTIONS = """
@@ -302,6 +321,56 @@ SELECT
     '' as 'external_access_integrations',
 WHERE 0 = 1;
 """
+
+
+def show_parameters(expression: Expr) -> Expr:
+    """Transform SHOW PARAMETERS.
+
+    Only session scope (the default, IN SESSION, or FOR SESSION) is supported.
+
+    See https://docs.snowflake.com/en/sql-reference/sql/show-parameters
+    """
+    if not (
+        isinstance(expression, exp.Command)
+        and isinstance(expression.this, str)
+        and expression.this.upper() == "SHOW"
+        and isinstance(expression.expression, str)
+    ):
+        return expression
+
+    # SQLGlot parses SHOW PARAMETERS as a Command. Tokenize its text to handle comments and string escaping.
+    tokens = sqlglot.tokenize(expression.expression, read="snowflake")
+    if not tokens or tokens[0].token_type != TokenType.VAR or tokens[0].text.upper() != "PARAMETERS":
+        return expression
+
+    tokens = tokens[1:]
+    like = None
+    if (
+        len(tokens) >= 2
+        and tokens[0].token_type == TokenType.LIKE
+        and tokens[1].token_type in (TokenType.STRING, TokenType.RAW_STRING)
+    ):
+        like = exp.Literal.string(tokens[1].text)
+        tokens = tokens[2:]
+    if tokens and [t.token_type for t in tokens] not in (
+        [TokenType.IN, TokenType.SESSION],
+        [TokenType.FOR, TokenType.SESSION],
+    ):
+        raise NotImplementedError(expression.sql(dialect="snowflake"))
+
+    # Only list supported parameters, so the reported values match behaviour.
+    query = """
+        SELECT * FROM (VALUES
+            ('QUOTED_IDENTIFIERS_IGNORE_CASE', 'false', 'false', '',
+             'If true, the case of quoted identifiers is ignored', 'BOOLEAN'),
+            ('TIMEZONE', 'Etc/UTC', 'America/Los_Angeles', 'ACCOUNT', 'time zone', 'STRING')
+        ) AS parameters("key", "value", "default", "level", "description", "type")
+    """
+    if like is not None:
+        # Snowflake matches the pattern case-insensitively, with SQL wildcards.
+        query += f' WHERE "key" ILIKE {like.sql(dialect="duckdb")}'
+
+    return sqlglot.parse_one(query, read="duckdb")
 
 
 def show_procedures(expression: Expr) -> Expr:
@@ -541,11 +610,11 @@ where not table_catalog in ('system')
 
 
 def show_tables_etc(expression: Expr, current_database: str | None, current_schema: str | None) -> Expr:
-    """Transform SHOW OBJECTS/TABLES/VIEWS to a query against the _fs_information_schema views."""
+    """Transform SHOW OBJECTS/TABLES/VIEWS/FILE FORMATS to a query against the _fs_information_schema views."""
     if not (
         isinstance(expression, exp.Show)
         and (show := expression.name.upper())
-        and show in {"OBJECTS", "TABLES", "VIEWS"}
+        and show in {"OBJECTS", "TABLES", "VIEWS", "FILE FORMATS"}
     ):
         return expression
 
@@ -556,6 +625,10 @@ def show_tables_etc(expression: Expr, current_database: str | None, current_sche
         catalog = (table and table.name) or current_database
         schema = None
     elif scope_kind == "SCHEMA" and table:
+        catalog = table.db or current_database
+        schema = table.name
+    elif scope_kind == "TABLE" and table and show == "FILE FORMATS":
+        # sqlglot parses the optional SCHEMA keyword as a TABLE scope for file formats.
         catalog = table.db or current_database
         schema = table.name
     elif scope_kind == "ACCOUNT":
@@ -588,7 +661,7 @@ def show_tables_etc(expression: Expr, current_database: str | None, current_sche
 
     query = f"""
         SELECT {columns_clause}
-        from _fs_global._fs_information_schema._fs_show_{show.lower()}
+        from _fs_global._fs_information_schema._fs_show_{show.lower().replace(" ", "_")}
         where {where_clause}
         {limit}
     """
