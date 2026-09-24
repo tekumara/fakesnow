@@ -18,6 +18,7 @@ from sqlglot import Expr, exp
 
 from fakesnow.expr import normalise_ident
 from fakesnow.params import MutableParams
+from fakesnow.transforms.options import parse_options
 
 # TODO: clean up temp files on exit
 LOCAL_BUCKET_PATH = tempfile.mkdtemp(prefix="fakesnow_bucket_")
@@ -157,25 +158,6 @@ def list_stage(expression: Expr, current_database: str | None, current_schema: s
 _PUT_UNQUOTED_SRC = re.compile(r"^(\s*PUT\s+)(file://\S+)", re.IGNORECASE)
 
 
-def put_options(expression: exp.Put) -> dict[str, Any]:
-    """Extract PUT options as a dict of option name -> python value."""
-    options: dict[str, Any] = {}
-    properties = expression.args.get("properties") or []
-    for prop in properties:
-        assert isinstance(prop, exp.Property), f"{prop.__class__} is not a Property"
-        assert isinstance(prop.this, exp.Var), f"{prop.this.__class__} is not a Var"
-        name = prop.this.name.upper()
-        value = prop.args.get("value")
-        if isinstance(value, exp.Boolean):
-            options[name] = value.this
-        elif isinstance(value, exp.Literal):
-            options[name] = value.this if value.is_string else int(value.this)
-        elif isinstance(value, exp.Var):
-            options[name] = value.this
-        else:
-            raise NotImplementedError(f"PUT option {name} with value {value}")
-    return options
-
 
 def put_stage(
     expression: Expr,
@@ -218,7 +200,14 @@ def put_stage(
     var = this[1:]
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
-    options = put_options(expression)
+    properties = expression.args.get("properties") or []
+    try:
+        options = parse_options(list(properties))
+    except NotImplementedError as error:
+        raise NotImplementedError(f"PUT {error}") from None
+    auto_compress = options.get("AUTO_COMPRESS", True)
+    if not isinstance(auto_compress, bool):
+        raise NotImplementedError(f"PUT option AUTO_COMPRESS requires a boolean value, got {auto_compress!r}")
 
     query = f"""
         SELECT *
@@ -239,7 +228,7 @@ def put_stage(
         "src_locations": [src_path],
         # defaults as per https://docs.snowflake.com/en/sql-reference/sql/put TODO: support other values
         "parallel": 4,
-        "autoCompress": options.get("AUTO_COMPRESS", True),
+        "autoCompress": auto_compress,
         "sourceCompression": "auto_detect",
         "overwrite": False,
         "command": "UPLOAD",

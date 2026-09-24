@@ -2,38 +2,12 @@ from __future__ import annotations
 
 import datetime
 import json
-from typing import Any
 
 import snowflake.connector.errors
 import sqlglot
 from sqlglot import Expr, exp
 
-
-def option_value(value: Expr | None) -> Any:  # noqa: ANN401
-    """Convert a file format option value expression to a python value."""
-    if isinstance(value, exp.Literal):
-        return value.this if value.is_string else int(value.this)
-    if isinstance(value, exp.Boolean):
-        return value.this
-    if isinstance(value, exp.Paren):
-        return [option_value(value.this)]
-    if isinstance(value, exp.Tuple):
-        return [option_value(e) for e in value.expressions]
-    if isinstance(value, exp.Var):
-        return value.this
-    raise NotImplementedError(f"{value.__class__.__name__} as a file format option value")
-
-
-def format_options(properties: list[Expr]) -> dict[str, Any]:
-    """Convert file format properties to a dict of option name -> python value."""
-    options: dict[str, Any] = {}
-    for prop in properties:
-        if isinstance(prop, exp.TemporaryProperty):
-            continue
-        assert isinstance(prop, exp.Property), f"{prop.__class__} is not a Property"
-        assert isinstance(prop.this, exp.Var), f"{prop.this.__class__} is not a Var"
-        options[prop.this.name.upper()] = option_value(prop.args.get("value"))
-    return options
+from fakesnow.transforms.options import parse_options
 
 
 def create_file_format(
@@ -68,7 +42,7 @@ def create_file_format(
     if_not_exists = expression.args.get("exists")
 
     properties = expression.args.get("properties") or []
-    options = format_options(list(properties))
+    options = parse_options(list(properties))
     format_type = str(options.get("TYPE", "CSV")).upper()
     options_json = json.dumps(options).replace("'", "''")
 
