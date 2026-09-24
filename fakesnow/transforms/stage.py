@@ -158,7 +158,6 @@ def list_stage(expression: Expr, current_database: str | None, current_schema: s
 _PUT_UNQUOTED_SRC = re.compile(r"^(\s*PUT\s+)(file://\S+)", re.IGNORECASE)
 
 
-
 def put_stage(
     expression: Expr,
     current_database: str | None,
@@ -200,11 +199,7 @@ def put_stage(
     var = this[1:]
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
-    properties = expression.args.get("properties") or []
-    try:
-        options = parse_options(list(properties))
-    except NotImplementedError as error:
-        raise NotImplementedError(f"PUT {error}") from None
+    options = parse_options(expression.args.get("properties") or [], statement="PUT")
     auto_compress = options.get("AUTO_COMPRESS", True)
     if not isinstance(auto_compress, bool):
         raise NotImplementedError(f"PUT option AUTO_COMPRESS requires a boolean value, got {auto_compress!r}")

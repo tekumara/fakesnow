@@ -41,8 +41,7 @@ def create_file_format(
     replace = expression.args.get("replace")
     if_not_exists = expression.args.get("exists")
 
-    properties = expression.args.get("properties") or []
-    options = parse_options(list(properties))
+    options = parse_options(expression.args.get("properties") or [])
     format_type = str(options.get("TYPE", "CSV")).upper()
     options_json = json.dumps(options).replace("'", "''")
 

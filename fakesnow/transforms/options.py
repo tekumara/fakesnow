@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections.abc import Iterable
 from typing import Any
 
 from sqlglot import Expr, exp
@@ -20,7 +21,7 @@ def _option_value(value: Expr | None) -> Any:  # noqa: ANN401
     raise NotImplementedError(f"{value.__class__.__name__} as an option value")
 
 
-def parse_options(properties: list[Expr]) -> dict[str, Any]:
+def parse_options(properties: Iterable[Expr], *, statement: str = "SQL") -> dict[str, Any]:
     """Convert SQL option properties to a dict of uppercase names and Python values."""
     options: dict[str, Any] = {}
     for prop in properties:
@@ -33,5 +34,5 @@ def parse_options(properties: list[Expr]) -> dict[str, Any]:
         try:
             options[name] = _option_value(value)
         except NotImplementedError:
-            raise NotImplementedError(f"option {name} with value {value}") from None
+            raise NotImplementedError(f"{statement} option {name} with value {value}") from None
     return options
