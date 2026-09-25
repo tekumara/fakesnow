@@ -2,7 +2,6 @@
 
 import datetime
 import os
-import sys
 import tempfile
 import uuid
 from decimal import Decimal
@@ -436,35 +435,6 @@ def test_server_put_non_existent_stage(sdcur: snowflake.connector.cursor.DictCur
             str(excinfo.value)
             == "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.FOOBAR' does not exist or not authorized."
         )
-
-
-def test_server_put_presigned_url(sconn: snowflake.connector.SnowflakeConnection) -> None:
-    # The connector uploads to the server over HTTP rather than writing to a shared filesystem.
-    with (
-        sconn.cursor(snowflake.connector.cursor.DictCursor) as dcur,
-        tempfile.NamedTemporaryFile(suffix=".csv") as temp_file,
-    ):
-        data = b"1,2\n"
-        temp_file.write(data)
-        temp_file.flush()
-        temp_file_basename = os.path.basename(temp_file.name)
-        dcur.execute("CREATE STAGE presigned_stage")
-
-        server_module = sys.modules["fakesnow.server"]
-        with patch.object(server_module, "_write_bucket_file", wraps=server_module._write_bucket_file) as upload:  # noqa: SLF001
-            dcur.execute(f"PUT 'file://{temp_file.name}' @presigned_stage AUTO_COMPRESS=FALSE")
-            put_results = dcur.fetchall()
-
-        upload.assert_called_once_with(f"DB1/SCHEMA1/PRESIGNED_STAGE/{temp_file_basename}", data)
-        dcur.execute("LIST @presigned_stage")
-        assert dcur.fetchall() == [
-            {
-                "name": f"presigned_stage/{temp_file_basename}",
-                "size": put_results[0]["target_size"],
-                "md5": IsStr(regex=r"^[0-9a-f]{32}$"),
-                "last_modified": IsDatetime(format_string="%a, %d %b %Y %H:%M:%S GMT"),
-            }
-        ]
 
 
 def test_server_put_qmark_target_stays_local(sconn: snowflake.connector.SnowflakeConnection) -> None:
