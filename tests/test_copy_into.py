@@ -277,25 +277,39 @@ def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor) -
         assert dcur.fetchall() == [{"A": 3, "B": 4}]
 
 
+def test_put_internal_table_stage(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE TABLE put_table (a INT, b INT)")
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2\n")
+        temp_file.flush()
+        temp_file_basename = os.path.basename(temp_file.name)
+
+        # a table stage exists implicitly for every table
+        dcur.execute(f"PUT 'file://{temp_file.name}' @db1.schema1.%put_table")
+        assert [r["target"] for r in dcur.fetchall()] == [f"{temp_file_basename}.gz"]
+
+
+def test_copy_internal_table_stage_file_name(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE TABLE file_name_table (a INT, b INT)")
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2\n")
+        temp_file.flush()
+        temp_file_basename = os.path.basename(temp_file.name)
+
+        dcur.execute(f"PUT 'file://{temp_file.name}' @db1.schema1.%file_name_table")
+        dcur.execute("COPY INTO file_name_table FROM @db1.schema1.%file_name_table")
+        # unlike named stages, table stages do not prefix the returned file name
+        assert [r["file"] for r in dcur.fetchall()] == [f"{temp_file_basename}.gz"]
+
+
 def test_copy_internal_table_stage(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
-        data = "1,2\n"
-        temp_file.write(data)
+        temp_file.write("1,2\n")
         temp_file.flush()
-        temp_file_path = temp_file.name
-        temp_file_basename = os.path.basename(temp_file_path)
 
-        # a table stage exists implicitly for every table
-        dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.%table1")
-        results = dcur.fetchall()
-        assert len(results) == 1
-        assert results[0]["target"] == f"{temp_file_basename}.gz"
-
+        dcur.execute(f"PUT 'file://{temp_file.name}' @db1.schema1.%table1")
         dcur.execute("COPY INTO table1 FROM @db1.schema1.%table1")
-        results = dcur.fetchall()
-        assert [(r["file"], r["status"]) for r in results] == [(f"%table1/{temp_file_basename}.gz", "LOADED")]
-
         dcur.execute("SELECT * FROM table1")
         assert dcur.fetchall() == [{"A": 1, "B": 2}]
 

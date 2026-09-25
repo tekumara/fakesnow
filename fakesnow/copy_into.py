@@ -169,8 +169,11 @@ def _result_file_name(url: str) -> str:
     if not stage.is_internal(urlparse(url).path):
         return url
 
-    # for internal stages, return the stage name lowered + file name
     parts = url.split("/")
+    # table stages return just the file name, without the %table prefix
+    if stage.is_table_stage(parts[-2]):
+        return parts[-1]
+    # named internal stages include the lowercased stage name
     return f"{parts[-2].lower()}/{parts[-1]}"
 
 
