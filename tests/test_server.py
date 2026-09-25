@@ -453,6 +453,7 @@ def test_server_put_presigned_url(server: dict, sconn: snowflake.connector.Snowf
             f"PUT 'file://{temp_file.name}' @presigned_stage",
             conn._next_sequence_counter(),  # noqa: SLF001
             uuid.uuid4(),
+            is_file_transfer=True,
         )
 
         stage_info = result["data"]["stageInfo"]
@@ -488,6 +489,7 @@ def test_server_put_qmark_target_stays_local(sconn: snowflake.connector.Snowflak
             conn._next_sequence_counter(),  # noqa: SLF001
             uuid.uuid4(),
             binding_params={"1": {"type": "TEXT", "value": "@qmark_stage"}},
+            is_file_transfer=True,
         )
 
         assert result["data"]["stageInfo"]["locationType"] == "LOCAL_FS"
