@@ -8,6 +8,8 @@ import snowflake.connector.errors
 import sqlglot
 from sqlglot import Expr, exp
 
+from fakesnow.transforms.options import parse_options
+
 # Defaults reported by SHOW FILE FORMATS, including options not explicitly set by CREATE.
 DEFAULT_OPTIONS: dict[str, dict[str, Any]] = {
     "CSV": {
@@ -86,36 +88,6 @@ DEFAULT_OPTIONS: dict[str, dict[str, Any]] = {
 }
 
 
-def option_value(value: Expr | None) -> Any:  # noqa: ANN401
-    """Convert a file format option value expression to a python value."""
-    if isinstance(value, exp.Literal):
-        return value.this if value.is_string else int(value.this)
-    if isinstance(value, exp.Boolean):
-        return value.this
-    if isinstance(value, exp.Paren):
-        return [option_value(value.this)]
-    if isinstance(value, exp.Tuple):
-        return [option_value(e) for e in value.expressions]
-    if isinstance(value, exp.Var):
-        return value.this
-    raise NotImplementedError(f"{value.__class__.__name__} as a file format option value")
-
-
-def format_options(properties: list[Expr]) -> dict[str, Any]:
-    """Convert file format properties to a dict of option name -> python value."""
-    options: dict[str, Any] = {}
-    for prop in properties:
-        if isinstance(prop, exp.TemporaryProperty):
-            continue
-        if isinstance(prop, exp.SchemaCommentProperty):
-            options["COMMENT"] = option_value(prop.this)
-            continue
-        assert isinstance(prop, exp.Property), f"{prop.__class__} is not a Property"
-        assert isinstance(prop.this, exp.Var), f"{prop.this.__class__} is not a Var"
-        options[prop.this.name.upper()] = option_value(prop.args.get("value"))
-    return options
-
-
 def create_file_format(
     expression: Expr,
     current_database: str | None,
@@ -147,8 +119,7 @@ def create_file_format(
     replace = expression.args.get("replace")
     if_not_exists = expression.args.get("exists")
 
-    properties = expression.args.get("properties") or []
-    options = format_options(list(properties))
+    options = parse_options(expression.args.get("properties") or [])
     format_type = str(options.get("TYPE", "CSV")).upper()
     comment = str(options.pop("COMMENT", "")).replace("'", "''")
     options = {"TYPE": format_type, **DEFAULT_OPTIONS.get(format_type, {}), **options}
