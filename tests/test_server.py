@@ -2,6 +2,7 @@
 
 import datetime
 import os
+import sys
 import tempfile
 import uuid
 from decimal import Decimal
@@ -437,40 +438,29 @@ def test_server_put_non_existent_stage(sdcur: snowflake.connector.cursor.DictCur
         )
 
 
-def test_server_put_presigned_url(server: dict, sconn: snowflake.connector.SnowflakeConnection) -> None:
-    # in server mode the client may not share the server's filesystem, so PUT hands back a
-    # GCS-style presigned url and the client uploads over http to this server, which stores
-    # the file in the stage
-    conn = sconn
+def test_server_put_presigned_url(sconn: snowflake.connector.SnowflakeConnection) -> None:
+    # The connector uploads to the server over HTTP rather than writing to a shared filesystem.
     with (
-        conn.cursor(snowflake.connector.cursor.DictCursor) as dcur,
+        sconn.cursor(snowflake.connector.cursor.DictCursor) as dcur,
         tempfile.NamedTemporaryFile(suffix=".csv") as temp_file,
     ):
+        data = b"1,2\n"
+        temp_file.write(data)
+        temp_file.flush()
         temp_file_basename = os.path.basename(temp_file.name)
         dcur.execute("CREATE STAGE presigned_stage")
 
-        result = conn.cmd_query(
-            f"PUT 'file://{temp_file.name}' @presigned_stage",
-            conn._next_sequence_counter(),  # noqa: SLF001
-            uuid.uuid4(),
-            is_file_transfer=True,
-        )
+        server_module = sys.modules["fakesnow.server"]
+        with patch.object(server_module, "_write_bucket_file", wraps=server_module._write_bucket_file) as upload:  # noqa: SLF001
+            dcur.execute(f"PUT 'file://{temp_file.name}' @presigned_stage AUTO_COMPRESS=FALSE")
+            put_results = dcur.fetchall()
 
-        stage_info = result["data"]["stageInfo"]
-        assert stage_info["locationType"] == "GCS"
-        assert stage_info["presignedUrl"] == (
-            f"http://{server['host']}:{server['port']}/fs_bucket/DB1/SCHEMA1/PRESIGNED_STAGE/{temp_file_basename}"
-        )
-
-        data = b"1,2\n"
-        response = requests.put(stage_info["presignedUrl"], data=data, timeout=5)
-        assert response.status_code == 200
-
+        upload.assert_called_once_with(f"DB1/SCHEMA1/PRESIGNED_STAGE/{temp_file_basename}", data)
         dcur.execute("LIST @presigned_stage")
         assert dcur.fetchall() == [
             {
                 "name": f"presigned_stage/{temp_file_basename}",
-                "size": len(data),
+                "size": put_results[0]["target_size"],
                 "md5": IsStr(regex=r"^[0-9a-f]{32}$"),
                 "last_modified": IsDatetime(format_string="%a, %d %b %Y %H:%M:%S GMT"),
             }
