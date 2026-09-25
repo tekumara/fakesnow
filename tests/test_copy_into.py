@@ -323,7 +323,7 @@ def test_put_table_stage_non_existent_table(dcur: snowflake.connector.cursor.Dic
 
         assert (
             str(excinfo.value)
-            == "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.%FOOBAR' does not exist or not authorized."
+            == "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.\"%FOOBAR\"' does not exist or not authorized."
         )
 
 

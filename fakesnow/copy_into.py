@@ -331,11 +331,7 @@ def stage_url_from_var(
             (database_name, schema_name, name),
         )
         if not (result := duck_conn.fetchone()):
-            raise snowflake.connector.errors.ProgrammingError(
-                msg=f"SQL compilation error:\nStage '{fqname}' does not exist or not authorized.",
-                errno=2003,
-                sqlstate="02000",
-            )
+            raise stage.not_found_error(fqname)
         # if no URL is found, it is an internal stage ie: local directory
         url = result[0] or stage.internal_dir(fqname)
 

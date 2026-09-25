@@ -233,6 +233,18 @@ def is_table_stage(stage_name: str) -> bool:
     return stage_name.startswith("%")
 
 
+def not_found_error(fqname: str) -> snowflake.connector.errors.ProgrammingError:
+    """Build a missing-stage error using Snowflake's table-stage identifier quoting."""
+    namespace, _, stage_name = fqname.rpartition(".")
+    if is_table_stage(stage_name):
+        fqname = f"{namespace}.{exp.to_identifier(stage_name, quoted=True).sql(dialect='snowflake')}"
+    return snowflake.connector.errors.ProgrammingError(
+        msg=f"SQL compilation error:\nStage '{fqname}' does not exist or not authorized.",
+        errno=2003,
+        sqlstate="02000",
+    )
+
+
 def stage_lookup_sql(catalog: str, schema: str, stage_name: str) -> str:
     """SQL that returns a single row when the stage exists."""
     if is_table_stage(stage_name):
