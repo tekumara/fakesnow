@@ -384,6 +384,20 @@ def test_server_put_list(sdcur: snowflake.connector.cursor.DictCursor) -> None:
         dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage2\"")
 
 
+def test_server_put_relative_source(sdcur: snowflake.connector.cursor.DictCursor) -> None:
+    with tempfile.TemporaryDirectory(dir=".") as directory:
+        source = os.path.join(directory, "input.csv")
+        with open(source, "wb") as file:
+            file.write(b"1,2\n")
+
+        sdcur.execute("CREATE STAGE relative_stage")
+        sdcur.execute(f"PUT 'file://{os.path.relpath(source)}' @relative_stage AUTO_COMPRESS=FALSE")
+        assert sdcur.fetchall()[0]["status"] == "UPLOADED"
+
+        sdcur.execute("LIST @relative_stage")
+        assert [row["name"] for row in sdcur.fetchall()] == ["relative_stage/input.csv"]
+
+
 def test_server_put_qmark_quoted(server: dict) -> None:
     with (
         snowflake.connector.connect(
