@@ -39,6 +39,9 @@ dev = [
     # include compatible version of pandas, and secure-local-storage for token caching
     "snowflake-connector-python[pandas, secure-local-storage]",
     "snowflake-sqlalchemy~=1.11.0",
+    # TODO: Remove this constraint when snowflake-sqlalchemy supports SQLAlchemy 2.1:
+    # https://github.com/snowflakedb/snowflake-sqlalchemy/issues/652
+    "sqlalchemy<2.1",
     "testcontainers>=4.15.0",
     "twine~=7.0",
 ]
