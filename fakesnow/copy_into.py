@@ -236,6 +236,7 @@ def _params(
                 assert duck_conn, "duck_conn is required to resolve FORMAT_NAME"
                 options = lookup_file_format(duck_conn, str(format_name), current_database, current_schema)
 
+            # Snowflake defaults to CSV when FILE_FORMAT omits TYPE.
             var_type = str(options.get("TYPE", "CSV")).upper()
             if var_type == "CSV":
                 kwargs["file_format"] = handle_csv(options)
@@ -528,6 +529,7 @@ def _strip_json_extract(expr: exp.Select) -> exp.Select:
 
 
 def handle_csv(options: dict[str, Any]) -> ReadCSV:
+    """Translate Snowflake FILE_FORMAT options into DuckDB read_csv settings."""
     skip_header = ReadCSV.skip_header
     quote = ReadCSV.quote
     delimiter = ReadCSV.delimiter

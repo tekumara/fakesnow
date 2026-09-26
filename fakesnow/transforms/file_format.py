@@ -185,7 +185,7 @@ def lookup_file_format(
     current_database: str | None,
     current_schema: str | None,
 ) -> dict[str, Any]:
-    """Return the options of a named file format that differ from its type's defaults.
+    """Return named format overrides for COPY, excluding synthesized SHOW defaults.
 
     Raises if the file format does not exist.
     """
@@ -209,5 +209,7 @@ def lookup_file_format(
 
 
 def _non_default_options(options: dict[str, Any]) -> dict[str, Any]:
+    # CREATE stores every SHOW FILE FORMATS default, including options COPY cannot translate
+    # to DuckDB. Passing them all to handle_csv would reject even a default-only format.
     defaults = DEFAULT_OPTIONS.get(str(options.get("TYPE", "CSV")).upper(), {})
     return {name: value for name, value in options.items() if name not in defaults or defaults[name] != value}
