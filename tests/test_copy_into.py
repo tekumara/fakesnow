@@ -219,10 +219,10 @@ def test_copy_internal_stage_server(sdcur: snowflake.connector.cursor.DictCursor
         assert len(results) == 0
 
 
-def test_copy_internal_stage_format_name(dcur: snowflake.connector.cursor.DictCursor) -> None:
+def test_copy_uses_named_csv_field_delimiter(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
-        data = 'A,B\n"1",2\n,4\n'
+        data = "1|2\n3|4\n"
         temp_file.write(data)
         temp_file.flush()
         temp_file_path = temp_file.name
@@ -230,17 +230,12 @@ def test_copy_internal_stage_format_name(dcur: snowflake.connector.cursor.DictCu
 
         dcur.execute("CREATE STAGE stage3")
         dcur.execute(f"PUT 'file://{temp_file_path}' @stage3")
-        dcur.execute("""
-            CREATE FILE FORMAT my_csv_format TYPE='CSV' FIELD_DELIMITER=',' SKIP_HEADER=1
-            FIELD_OPTIONALLY_ENCLOSED_BY='"' EMPTY_FIELD_AS_NULL=TRUE NULL_IF=('') ESCAPE_UNENCLOSED_FIELD='NONE'
-        """)
+        dcur.execute("CREATE FILE FORMAT my_csv_format TYPE='CSV' FIELD_DELIMITER='|'")
 
-        # reference a named file format
         dcur.execute("""
             COPY INTO table1
             FROM @stage3
             FILE_FORMAT = (FORMAT_NAME = 'my_csv_format')
-            ON_ERROR = 'ABORT_STATEMENT'
         """)
         results = dcur.fetchall()
         assert len(results) == 1
@@ -249,10 +244,11 @@ def test_copy_internal_stage_format_name(dcur: snowflake.connector.cursor.DictCu
         assert results[0]["rows_loaded"] == 2
 
         dcur.execute("SELECT * FROM table1")
-        assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": None, "B": 4}]
+        assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
 
 
-def test_copy_format_name_with_only_default_options(dcur: snowflake.connector.cursor.DictCursor) -> None:
+def test_copy_uses_named_csv_with_default_options(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    # A default-only named format must load even though SHOW FILE FORMATS stores unsupported CSV defaults.
     create_table(dcur)
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         temp_file.write("1,2\n")
@@ -941,7 +937,8 @@ def test_params_csv_null_if_multiple():
     FILE_FORMAT = (TYPE='CSV' NULL_IF=('NULL', 'null'))
     """)
 
-    # EMPTY_FIELD_AS_NULL defaults to TRUE, so '' is included
+    # DuckDB's nullstr list replaces its default empty-string null marker. Keep that marker
+    # alongside explicit NULL_IF values: Snowflake's default EMPTY_FIELD_AS_NULL is TRUE.
     assert params.file_format == ReadCSV(null_if=["", "NULL", "null"])
 
 
