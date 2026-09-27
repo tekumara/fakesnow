@@ -19,8 +19,6 @@ notebooks/.ipynb_checkpoints
 tests/vcr
 # ignore uv.lock so we are always testing with the latest versions
 uv.lock
-.claude
-CLAUDE.md
 .windsurf
 TODO.md
 notebooks/*.ipynb
