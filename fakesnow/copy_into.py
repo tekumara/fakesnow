@@ -533,7 +533,7 @@ def handle_csv(options: dict[str, Any]) -> ReadCSV:
     skip_header = ReadCSV.skip_header
     quote = ReadCSV.quote
     delimiter = ReadCSV.delimiter
-    null_if: list[str] | None = None
+    null_if = ["\\N"]  # Snowflake's default NULL_IF; explicit NULL_IF replaces it.
     compression: str | None = None
     empty_field_as_null = True
 
@@ -544,7 +544,7 @@ def handle_csv(options: dict[str, Any]) -> ReadCSV:
         elif name == "SKIP_HEADER":
             skip_header = int(value)
         elif name == "FIELD_OPTIONALLY_ENCLOSED_BY":
-            quote = str(value)
+            quote = "" if str(value).upper() == "NONE" else str(value)
         elif name == "FIELD_DELIMITER":
             delimiter = str(value)
         elif name == "NULL_IF":
@@ -565,12 +565,11 @@ def handle_csv(options: dict[str, Any]) -> ReadCSV:
         else:
             raise NotImplementedError(f"{name} is not currently implemented")
 
-    # empty fields are null by default in duckdb (nullstr = ''), matching EMPTY_FIELD_AS_NULL = TRUE
+    # DuckDB's nullstr replaces its empty-field marker; preserve it when Snowflake
+    # treats empty fields as null, alongside the default or explicit NULL_IF values.
     if empty_field_as_null:
-        if null_if is not None and "" not in null_if:
+        if "" not in null_if:
             null_if = ["", *null_if]
-    elif null_if is None:
-        null_if = []
     elif "" in null_if:
         raise NotImplementedError("EMPTY_FIELD_AS_NULL = FALSE with NULL_IF containing '' is not currently implemented")
 
@@ -602,9 +601,9 @@ class FileTypeHandler(Protocol):
 @dataclass
 class ReadCSV(FileTypeHandler):
     skip_header: int = 0
-    quote: str | None = None
+    quote: str | None = ""  # Snowflake's default NONE disables CSV quoting.
     delimiter: str = ","
-    null_if: list[str] | None = None
+    null_if: list[str] | None = field(default_factory=lambda: ["", "\\N"])
     compression: str | None = None
 
     def read_expression(self, url: str) -> Expr:
@@ -614,7 +613,7 @@ class ReadCSV(FileTypeHandler):
         if self.skip_header:
             args.append(self.make_eq("skip", self.skip_header))
 
-        if self.quote:
+        if self.quote is not None:
             quote = self.quote.replace("'", "''")
             args.append(self.make_eq("quote", quote))
 

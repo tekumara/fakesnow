@@ -40,7 +40,9 @@ cases = [
             FILES=('foo.csv')
             FILE_FORMAT = (TYPE = 'CSV')
             """,
-            expected_inserts=["INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)"],
+            expected_inserts=[
+                "INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, quote = '', nullstr = ['', '\\N'])"
+            ],
             data="1,2\n3,4",
             expected_rows_loaded=2,
             expected_data=[{"A": 1, "B": 2}, {"A": 3, "B": 4}],
@@ -57,7 +59,7 @@ cases = [
             FILE_FORMAT = (TYPE = 'CSV')
             """,
             expected_inserts=[
-                "INSERT INTO SCHEMA1.TABLE1 (B) SELECT column0 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)"
+                "INSERT INTO SCHEMA1.TABLE1 (B) SELECT column0 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, quote = '', nullstr = ['', '\\N'])"
             ],
             data="1,2\n",
             expected_rows_loaded=1,
@@ -75,7 +77,7 @@ cases = [
             FILE_FORMAT = (TYPE = 'CSV' SKIP_HEADER = 1)
             """,
             expected_inserts=[
-                "INSERT INTO TABLE1 (A, B) SELECT column0, column1 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, skip = 1)"
+                "INSERT INTO TABLE1 (A, B) SELECT column0, column1 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, skip = 1, quote = '', nullstr = ['', '\\N'])"
             ],
             data="a,b\n1,2\n",
             expected_rows_loaded=1,
@@ -90,7 +92,9 @@ cases = [
             FROM 's3://{bucket}/'
             FILES=('foo.csv')
             """,
-            expected_inserts=["INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)"],
+            expected_inserts=[
+                "INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, quote = '', nullstr = ['', '\\N'])"
+            ],
             data="1,2\n",
             expected_rows_loaded=1,
             expected_data=[{"A": 1, "B": 2}],
@@ -107,7 +111,7 @@ cases = [
             FILE_FORMAT = (TYPE = 'CSV' FIELD_DELIMITER = '|')
             """,
             expected_inserts=[
-                "INSERT INTO TABLE1 (A, B) SELECT column0, column1 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, sep = '|')"
+                "INSERT INTO TABLE1 (A, B) SELECT column0, column1 FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, quote = '', sep = '|', nullstr = ['', '\\N'])"
             ],
             data="1|2\n",
             expected_rows_loaded=1,
@@ -264,6 +268,41 @@ def test_copy_uses_named_csv_with_default_options(dcur: snowflake.connector.curs
         assert dcur.fetchall() == [{"A": 1, "B": 2}]
 
 
+def test_copy_named_csv_default_null_if(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE TABLE default_null_target (value VARCHAR, id INTEGER)")
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("\\N,1\nhello,2\n")
+        temp_file.flush()
+
+        dcur.execute("CREATE STAGE default_null_stage")
+        dcur.execute(f"PUT 'file://{temp_file.name}' @default_null_stage")
+        dcur.execute("CREATE FILE FORMAT default_null_format TYPE='CSV'")
+        dcur.execute(
+            "COPY INTO default_null_target FROM @default_null_stage FILE_FORMAT = (FORMAT_NAME = 'default_null_format')"
+        )
+
+        dcur.execute("SELECT * FROM default_null_target ORDER BY id")
+        assert dcur.fetchall() == [{"VALUE": None, "ID": 1}, {"VALUE": "hello", "ID": 2}]
+
+
+def test_copy_named_csv_default_quotes_are_literal(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE TABLE default_quote_target (value VARCHAR, id INTEGER)")
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write('"hello",1\nplain,2\n')
+        temp_file.flush()
+
+        dcur.execute("CREATE STAGE default_quote_stage")
+        dcur.execute(f"PUT 'file://{temp_file.name}' @default_quote_stage")
+        dcur.execute("CREATE FILE FORMAT default_quote_format TYPE='CSV'")
+        dcur.execute(
+            "COPY INTO default_quote_target FROM @default_quote_stage "
+            "FILE_FORMAT = (FORMAT_NAME = 'default_quote_format')"
+        )
+
+        dcur.execute("SELECT * FROM default_quote_target ORDER BY id")
+        assert dcur.fetchall() == [{"VALUE": '"hello"', "ID": 1}, {"VALUE": "plain", "ID": 2}]
+
+
 def test_copy_format_name_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     dcur.execute("CREATE STAGE stage3")
@@ -294,8 +333,8 @@ def test_copy_two_files(
     dcur.execute(sql.format(bucket=bucket))
 
     excepted_inserts = [
-        f"INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/bar.csv', header = FALSE)",
-        f"INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE)",
+        f"INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/bar.csv', header = FALSE, quote = '', nullstr = ['', '\\N'])",
+        f"INSERT INTO TABLE1 SELECT * FROM READ_CSV('s3://{bucket}/foo.csv', header = FALSE, quote = '', nullstr = ['', '\\N'])",
     ]
     assert captured_inserts(mock_log_sql) == excepted_inserts
     mock_log_sql.reset_mock()
@@ -949,7 +988,7 @@ def test_params_csv_empty_field_as_null_false():
     FILE_FORMAT = (TYPE='CSV' EMPTY_FIELD_AS_NULL=FALSE)
     """)
 
-    assert params.file_format == ReadCSV(null_if=[])
+    assert params.file_format == ReadCSV(null_if=["\\N"])
 
 
 def test_params_on_error_quoted():
