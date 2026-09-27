@@ -17,7 +17,8 @@ from sqlglot import Expr, exp
 import fakesnow.transforms.stage as stage
 from fakesnow import logger
 from fakesnow.params import MutableParams, pop_qmark_param
-from fakesnow.transforms.file_format import format_options, lookup_file_format
+from fakesnow.transforms.file_format import lookup_file_format
+from fakesnow.transforms.options import parse_options
 
 Params = Sequence[Any] | dict[Any, Any]
 
@@ -229,7 +230,7 @@ def _params(
             if kwargs.get("file_format"):
                 raise ValueError(cparams)
 
-            options = format_options(list(param.expressions))
+            options = parse_options(param.expressions)
             if format_name := options.pop("FORMAT_NAME", None):
                 if options.get("TYPE"):
                     raise ValueError("Cannot specify both FORMAT_NAME and TYPE in FILE_FORMAT")
