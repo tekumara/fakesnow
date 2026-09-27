@@ -903,49 +903,50 @@ def test_load_history_is_per_table(dcur: snowflake.connector.cursor.DictCursor, 
     assert dcur.fetchall()[0]["status"] == "LOADED"
 
 
-def test_params_csv_options_compose_into_read_csv():
-    # a complete inline csv format, as a bulk-load job sends it, renders as a single read_csv call
+def test_params_csv_default():
+    # Snowflake defaults are
+    # TYPE='CSV' SKIP_HEADER = 0 FIELD_OPTIONALLY_ENCLOSED_BY = NONE FIELD_DELIMITER = ',' NULL_IF = '\N' COMPRESSION = 'AUTO'
     _, params = parse("""
     COPY INTO table1
     FROM 's3://mybucket/data/'
-    FILE_FORMAT = (TYPE='CSV' FIELD_DELIMITER=',' SKIP_HEADER=1 FIELD_OPTIONALLY_ENCLOSED_BY='"'
-        EMPTY_FIELD_AS_NULL=TRUE NULL_IF=('') ESCAPE_UNENCLOSED_FIELD='NONE' COMPRESSION='GZIP')
     """)
 
+    assert params.file_format == ReadCSV()
     assert (
         params.file_format.read_expression("s3://mybucket/data/file1.csv").sql(dialect="duckdb")
-        == "READ_CSV('s3://mybucket/data/file1.csv', header = FALSE, skip = 1, quote = '\"', nullstr = [''], compression = 'gzip')"
+        == "READ_CSV('s3://mybucket/data/file1.csv', header = FALSE, quote = '', nullstr = ['', '\\N'])"
     )
 
 
-def test_params_csv_skip_header_count():
+def test_params_csv_custom():
     _, params = parse("""
     COPY INTO table1
     FROM 's3://mybucket/data/'
-    FILE_FORMAT = (TYPE='CSV' SKIP_HEADER=2)
+    FILE_FORMAT = (TYPE='CSV' SKIP_HEADER=2 FIELD_OPTIONALLY_ENCLOSED_BY='"' FIELD_DELIMITER='|'
+        NULL_IF=('') COMPRESSION='GZIP')
     """)
 
-    assert params.file_format == ReadCSV(skip_header=2)
-
-
-def test_params_csv_compression_gzip():
-    _, params = parse("""
-    COPY INTO table1
-    FROM 's3://mybucket/data/'
-    FILE_FORMAT = (TYPE='CSV' COMPRESSION='GZIP')
-    """)
-
-    assert params.file_format == ReadCSV(compression="gzip")
+    assert params.file_format == ReadCSV(
+        skip_header=2,
+        quote='"',
+        sep="|",
+        null_if=[""],
+        compression="gzip",
+    )
+    assert (
+        params.file_format.read_expression("s3://mybucket/data/file1.csv").sql(dialect="duckdb")
+        == "READ_CSV('s3://mybucket/data/file1.csv', header = FALSE, skip = 2, quote = '\"', sep = '|', nullstr = [''], compression = 'gzip')"
+    )
 
 
 def test_params_csv_escape_unenclosed_field_none():
+    # duckdb does not escape unenclosed fields, so NONE is only valid value
     _, params = parse("""
     COPY INTO table1
     FROM 's3://mybucket/data/'
     FILE_FORMAT = (TYPE='CSV' ESCAPE_UNENCLOSED_FIELD='NONE')
     """)
 
-    # duckdb does not escape unenclosed fields, so NONE needs no read_csv argument
     assert params.file_format == ReadCSV()
 
 
@@ -956,8 +957,7 @@ def test_params_csv_null_if_multiple():
     FILE_FORMAT = (TYPE='CSV' NULL_IF=('NULL', 'null'))
     """)
 
-    # DuckDB's nullstr list replaces its default empty-string null marker. Keep that marker
-    # alongside explicit NULL_IF values: Snowflake's default EMPTY_FIELD_AS_NULL is TRUE.
+    # Snowflake's default EMPTY_FIELD_AS_NULL is TRUE, so null_if contains "" in addition to specified values
     assert params.file_format == ReadCSV(null_if=["", "NULL", "null"])
 
 
@@ -972,7 +972,6 @@ def test_params_csv_empty_field_as_null_false():
 
 
 def test_params_on_error_quoted():
-    # the connector sends copy options as quoted strings
     _, params = parse("""
     COPY INTO table1
     FROM 's3://mybucket/data/'

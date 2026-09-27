@@ -244,7 +244,7 @@ def _params(
             elif var_type == "PARQUET":
                 kwargs["file_format"] = ReadParquet()
             else:
-                raise NotImplementedError(f"{var_type} FILE_FORMAT is not currently implemented")
+                raise NotImplementedError(f"{var_type} FILE_FORMAT")
         elif var == "FORCE":
             force = True
         elif var == "FILES":
@@ -533,9 +533,9 @@ def handle_csv(options: dict[str, Any]) -> ReadCSV:
     """Translate Snowflake FILE_FORMAT options into DuckDB read_csv settings."""
     skip_header = ReadCSV.skip_header
     quote = ReadCSV.quote
-    delimiter = ReadCSV.delimiter
+    sep = ReadCSV.sep
     null_if = ["\\N"]  # Snowflake's default NULL_IF; explicit NULL_IF replaces it.
-    compression: str | None = None
+    compression = ReadCSV.compression
     empty_field_as_null = True
 
     for name, value in options.items():
@@ -547,24 +547,25 @@ def handle_csv(options: dict[str, Any]) -> ReadCSV:
         elif name == "FIELD_OPTIONALLY_ENCLOSED_BY":
             quote = "" if str(value).upper() == "NONE" else str(value)
         elif name == "FIELD_DELIMITER":
-            delimiter = str(value)
+            sep = str(value)
         elif name == "NULL_IF":
             null_if = [str(v) for v in value] if isinstance(value, list) else [str(value)]
         elif name == "EMPTY_FIELD_AS_NULL":
             empty_field_as_null = bool(value)
         elif name == "ESCAPE_UNENCLOSED_FIELD":
-            # duckdb does not escape unenclosed fields, which matches ESCAPE_UNENCLOSED_FIELD = NONE
+            # duckdb does not support escaping in unenclosed fields, which matches ESCAPE_UNENCLOSED_FIELD = NONE
+            # The Snowflake default is \ which is not supported by DuckDB. So fakesnow behaviour differs.
             if str(value).upper() != "NONE":
-                raise NotImplementedError(f"ESCAPE_UNENCLOSED_FIELD = {value} is not currently implemented")
+                raise NotImplementedError(f"ESCAPE_UNENCLOSED_FIELD = {value}")
         elif name == "COMPRESSION":
             comp = str(value).upper()
             if comp in {"GZIP", "NONE"}:
                 compression = comp.lower()
             elif comp not in {"AUTO", "AUTO_DETECT"}:
                 # AUTO matches duckdb's default of detecting compression from the file extension
-                raise NotImplementedError(f"COMPRESSION = {value} is not currently implemented")
+                raise NotImplementedError(f"COMPRESSION = {value}")
         else:
-            raise NotImplementedError(f"{name} is not currently implemented")
+            raise NotImplementedError(f"FILE_FORMAT option {name}")
 
     # DuckDB's nullstr replaces its empty-field marker; preserve it when Snowflake
     # treats empty fields as null, alongside the default or explicit NULL_IF values.
@@ -572,12 +573,12 @@ def handle_csv(options: dict[str, Any]) -> ReadCSV:
         if "" not in null_if:
             null_if = ["", *null_if]
     elif "" in null_if:
-        raise NotImplementedError("EMPTY_FIELD_AS_NULL = FALSE with NULL_IF containing '' is not currently implemented")
+        raise NotImplementedError("EMPTY_FIELD_AS_NULL = FALSE with NULL_IF containing ''")
 
     return ReadCSV(
         skip_header=skip_header,
         quote=quote,
-        delimiter=delimiter,
+        sep=sep,
         null_if=null_if,
         compression=compression,
     )
@@ -601,11 +602,18 @@ class FileTypeHandler(Protocol):
 
 @dataclass
 class ReadCSV(FileTypeHandler):
+    """DuckDB read_csv settings.
+
+    Defaults match equivalent Snowflake's CSV defaults.
+    """
+
     skip_header: int = 0
-    quote: str | None = ""  # Snowflake's default NONE disables CSV quoting.
-    delimiter: str = ","
-    null_if: list[str] | None = field(default_factory=lambda: ["", "\\N"])
-    compression: str | None = None
+    quote: str | None = ""  # Snowflake disables CSV quoting by default.
+    sep: str = ","
+    null_if: list[str] | None = field(
+        default_factory=lambda: ["", "\\N"]  # combines Snowflake's defaults of EMPTY_FIELD_AS_NULL=TRUE + NULL_IF='\N'
+    )
+    compression: str | None = None  # when unspecified, DuckDB auto-detects based on file extension
 
     def read_expression(self, url: str) -> Expr:
         # don't parse header and use as column names, keep them as column0, column1, etc
@@ -618,8 +626,8 @@ class ReadCSV(FileTypeHandler):
             quote = self.quote.replace("'", "''")
             args.append(self.make_eq("quote", quote))
 
-        if self.delimiter and self.delimiter != ",":
-            delimiter = self.delimiter.replace("'", "''")
+        if self.sep and self.sep != ",":
+            delimiter = self.sep.replace("'", "''")
             args.append(self.make_eq("sep", delimiter))
 
         if self.null_if is not None:

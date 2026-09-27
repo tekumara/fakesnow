@@ -9,9 +9,8 @@ import sqlglot
 from duckdb import DuckDBPyConnection
 from sqlglot import Expr, exp
 
-from fakesnow.transforms.stage import parts_from_var
-
 from fakesnow.transforms.options import parse_options
+from fakesnow.transforms.stage import parts_from_var
 
 # Defaults reported by SHOW FILE FORMATS, including options not explicitly set by CREATE.
 DEFAULT_OPTIONS: dict[str, dict[str, Any]] = {
