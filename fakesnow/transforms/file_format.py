@@ -6,9 +6,11 @@ from typing import Any
 
 import snowflake.connector.errors
 import sqlglot
+from duckdb import DuckDBPyConnection
 from sqlglot import Expr, exp
 
 from fakesnow.transforms.options import parse_options
+from fakesnow.transforms.stage import parts_from_var
 
 # Defaults reported by SHOW FILE FORMATS, including options not explicitly set by CREATE.
 DEFAULT_OPTIONS: dict[str, dict[str, Any]] = {
@@ -145,3 +147,39 @@ def create_file_format(
     transformed.args["create_file_format_name"] = format_name
     transformed.args["create_file_format_if_not_exists"] = if_not_exists
     return transformed
+
+
+def lookup_file_format(
+    duck_conn: DuckDBPyConnection,
+    name: str,
+    current_database: str | None,
+    current_schema: str | None,
+) -> dict[str, Any]:
+    """Return named format overrides for COPY, excluding synthesized SHOW defaults.
+
+    Raises if the file format does not exist.
+    """
+    database_name, schema_name, format_name = parts_from_var(name, current_database, current_schema)
+
+    duck_conn.execute(
+        """
+        SELECT options FROM _fs_global._fs_information_schema._fs_file_formats
+        WHERE database_name = ? AND schema_name = ? AND name = ?
+        """,
+        (database_name, schema_name, format_name),
+    )
+    if result := duck_conn.fetchone():
+        return _non_default_options(json.loads(result[0]))
+
+    raise snowflake.connector.errors.ProgrammingError(
+        msg=f"SQL compilation error:\nFile format '{format_name}' does not exist or not authorized.",
+        errno=2003,
+        sqlstate="02000",
+    )
+
+
+def _non_default_options(options: dict[str, Any]) -> dict[str, Any]:
+    # CREATE stores every SHOW FILE FORMATS default, including options COPY cannot translate
+    # to DuckDB. Passing them all to handle_csv would reject even a default-only format.
+    defaults = DEFAULT_OPTIONS.get(str(options.get("TYPE", "CSV")).upper(), {})
+    return {name: value for name, value in options.items() if name not in defaults or defaults[name] != value}

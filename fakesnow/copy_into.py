@@ -17,6 +17,8 @@ from sqlglot import Expr, exp
 import fakesnow.transforms.stage as stage
 from fakesnow import logger
 from fakesnow.params import MutableParams, pop_qmark_param
+from fakesnow.transforms.file_format import lookup_file_format
+from fakesnow.transforms.options import parse_options
 
 Params = Sequence[Any] | dict[Any, Any]
 
@@ -46,7 +48,9 @@ def copy_into(
     expr: exp.Copy,
     params: MutableParams | None = None,
 ) -> str:
-    cparams = _params(expr, params)
+    cparams = _params(
+        expr, params, duck_conn=duck_conn, current_database=current_database, current_schema=current_schema
+    )
 
     from_source = _from_source(expr)
     source = (
@@ -206,7 +210,13 @@ def _get_table_columns(
     return [col[0].upper() for col in columns]
 
 
-def _params(expr: exp.Copy, params: MutableParams | None = None) -> CopyParams:
+def _params(
+    expr: exp.Copy,
+    params: MutableParams | None = None,
+    duck_conn: DuckDBPyConnection | None = None,
+    current_database: str | None = None,
+    current_schema: str | None = None,
+) -> CopyParams:
     kwargs = {}
     force = False
     purge = False
@@ -220,16 +230,23 @@ def _params(expr: exp.Copy, params: MutableParams | None = None) -> CopyParams:
             if kwargs.get("file_format"):
                 raise ValueError(cparams)
 
-            var_type = next((e.args["value"].this for e in param.expressions if e.this.this == "TYPE"), None)
-            if not var_type:
-                raise NotImplementedError("FILE_FORMAT without TYPE is not currently implemented")
+            options = parse_options(param.expressions)
+            if format_name := options.pop("FORMAT_NAME", None):
+                # other options in the same FILE_FORMAT clause override the named format's settings
+                assert duck_conn, "duck_conn is required to resolve FORMAT_NAME"
+                options = {
+                    **lookup_file_format(duck_conn, str(format_name), current_database, current_schema),
+                    **options,
+                }
 
+            # Snowflake defaults to CSV when FILE_FORMAT omits TYPE.
+            var_type = str(options.get("TYPE", "CSV")).upper()
             if var_type == "CSV":
-                kwargs["file_format"] = handle_csv(param.expressions)
+                kwargs["file_format"] = handle_csv(options)
             elif var_type == "PARQUET":
                 kwargs["file_format"] = ReadParquet()
             else:
-                raise NotImplementedError(f"{var_type} FILE_FORMAT is not currently implemented")
+                raise NotImplementedError(f"{var_type} FILE_FORMAT")
         elif var == "FORCE":
             force = True
         elif var == "FILES":
@@ -237,7 +254,7 @@ def _params(expr: exp.Copy, params: MutableParams | None = None) -> CopyParams:
         elif var == "PURGE":
             purge = True
         elif var == "ON_ERROR":
-            if isinstance(param.expression, exp.Var):
+            if isinstance(param.expression, (exp.Var, exp.Literal)):
                 on_error = param.expression.name.upper()
             elif isinstance(param.expression, exp.Placeholder):
                 on_error = pop_qmark_param(params, expr, param.expression)
@@ -514,29 +531,58 @@ def _strip_json_extract(expr: exp.Select) -> exp.Select:
     return expr
 
 
-def handle_csv(expressions: list[exp.Property]) -> ReadCSV:
+def handle_csv(options: dict[str, Any]) -> ReadCSV:
+    """Translate Snowflake FILE_FORMAT options into DuckDB read_csv settings."""
     skip_header = ReadCSV.skip_header
     quote = ReadCSV.quote
-    delimiter = ReadCSV.delimiter
+    sep = ReadCSV.sep
+    null_if = ["\\N"]  # Snowflake's default NULL_IF; explicit NULL_IF replaces it.
+    compression = ReadCSV.compression
+    empty_field_as_null = True
 
-    for expression in expressions:
-        exp_type = expression.name
-        if exp_type in {"TYPE"}:
+    for name, value in options.items():
+        if name == "TYPE":
             continue
 
-        elif exp_type == "SKIP_HEADER":
-            skip_header = True
-        elif exp_type == "FIELD_OPTIONALLY_ENCLOSED_BY":
-            quote = expression.args["value"].this
-        elif exp_type == "FIELD_DELIMITER":
-            delimiter = expression.args["value"].this
+        elif name == "SKIP_HEADER":
+            skip_header = int(value)
+        elif name == "FIELD_OPTIONALLY_ENCLOSED_BY":
+            quote = "" if str(value).upper() == "NONE" else str(value)
+        elif name == "FIELD_DELIMITER":
+            sep = str(value)
+        elif name == "NULL_IF":
+            null_if = [str(v) for v in value] if isinstance(value, list) else [str(value)]
+        elif name == "EMPTY_FIELD_AS_NULL":
+            empty_field_as_null = bool(value)
+        elif name == "ESCAPE_UNENCLOSED_FIELD":
+            # duckdb does not support escaping in unenclosed fields, which matches ESCAPE_UNENCLOSED_FIELD = NONE
+            # The Snowflake default is \ which is not supported by DuckDB. So fakesnow behaviour differs.
+            if str(value).upper() != "NONE":
+                raise NotImplementedError(f"ESCAPE_UNENCLOSED_FIELD = {value}")
+        elif name == "COMPRESSION":
+            comp = str(value).upper()
+            if comp in {"GZIP", "NONE"}:
+                compression = comp.lower()
+            elif comp not in {"AUTO", "AUTO_DETECT"}:
+                # AUTO matches duckdb's default of detecting compression from the file extension
+                raise NotImplementedError(f"COMPRESSION = {value}")
         else:
-            raise NotImplementedError(f"{exp_type} is not currently implemented")
+            raise NotImplementedError(f"FILE_FORMAT option {name}")
+
+    # DuckDB's nullstr replaces its empty-field marker; preserve it when Snowflake
+    # treats empty fields as null, alongside the default or explicit NULL_IF values.
+    if empty_field_as_null:
+        if "" not in null_if:
+            null_if = ["", *null_if]
+    elif "" in null_if:
+        raise NotImplementedError("EMPTY_FIELD_AS_NULL = FALSE with NULL_IF containing ''")
 
     return ReadCSV(
         skip_header=skip_header,
         quote=quote,
-        delimiter=delimiter,
+        sep=sep,
+        null_if=null_if,
+        compression=compression,
     )
 
 
@@ -558,24 +604,39 @@ class FileTypeHandler(Protocol):
 
 @dataclass
 class ReadCSV(FileTypeHandler):
-    skip_header: bool = False
-    quote: str | None = None
-    delimiter: str = ","
+    """DuckDB read_csv settings.
+
+    Defaults match equivalent Snowflake's CSV defaults.
+    """
+
+    skip_header: int = 0
+    quote: str | None = ""  # Snowflake disables CSV quoting by default.
+    sep: str = ","
+    null_if: list[str] | None = field(
+        default_factory=lambda: ["", "\\N"]  # combines Snowflake's defaults of EMPTY_FIELD_AS_NULL=TRUE + NULL_IF='\N'
+    )
+    compression: str | None = None  # when unspecified, DuckDB auto-detects based on file extension
 
     def read_expression(self, url: str) -> Expr:
         # don't parse header and use as column names, keep them as column0, column1, etc
         args = [self.make_eq("header", False)]
 
         if self.skip_header:
-            args.append(self.make_eq("skip", 1))
+            args.append(self.make_eq("skip", self.skip_header))
 
-        if self.quote:
+        if self.quote is not None:
             quote = self.quote.replace("'", "''")
             args.append(self.make_eq("quote", quote))
 
-        if self.delimiter and self.delimiter != ",":
-            delimiter = self.delimiter.replace("'", "''")
+        if self.sep and self.sep != ",":
+            delimiter = self.sep.replace("'", "''")
             args.append(self.make_eq("sep", delimiter))
+
+        if self.null_if is not None:
+            args.append(self.make_eq("nullstr", [v.replace("'", "''") for v in self.null_if]))
+
+        if self.compression:
+            args.append(self.make_eq("compression", self.compression))
 
         return exp.func("read_csv", exp.Literal(this=url, is_string=True), *args)
 
