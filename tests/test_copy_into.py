@@ -245,11 +245,12 @@ def test_copy_uses_named_csv_with_inline_override(dcur: snowflake.connector.curs
         temp_file.write("1;2\n3;4\n")
         temp_file.flush()
 
-        dcur.execute("CREATE STAGE stage4")
-        dcur.execute(f"PUT 'file://{temp_file.name}' @stage4")
+        dcur.execute("CREATE STAGE inline_override_stage")
+        dcur.execute(f"PUT 'file://{temp_file.name}' @inline_override_stage")
         dcur.execute("CREATE FILE FORMAT my_pipe_format TYPE='CSV' FIELD_DELIMITER='|'")
         dcur.execute(
-            "COPY INTO table1 FROM @stage4 FILE_FORMAT = (FORMAT_NAME = 'my_pipe_format' FIELD_DELIMITER = ';')"
+            "COPY INTO table1 FROM @inline_override_stage "
+            "FILE_FORMAT = (FORMAT_NAME = 'my_pipe_format' FIELD_DELIMITER = ';')"
         )
 
         dcur.execute("SELECT * FROM table1")
