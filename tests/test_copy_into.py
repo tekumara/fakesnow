@@ -238,8 +238,25 @@ def test_copy_uses_named_csv_field_delimiter(dcur: snowflake.connector.cursor.Di
         assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
 
 
+def test_copy_uses_named_csv_with_inline_override(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    # an option given inline alongside FORMAT_NAME overrides that option in the named format
+    create_table(dcur)
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1;2\n3;4\n")
+        temp_file.flush()
+
+        dcur.execute("CREATE STAGE stage4")
+        dcur.execute(f"PUT 'file://{temp_file.name}' @stage4")
+        dcur.execute("CREATE FILE FORMAT my_pipe_format TYPE='CSV' FIELD_DELIMITER='|'")
+        dcur.execute(
+            "COPY INTO table1 FROM @stage4 FILE_FORMAT = (FORMAT_NAME = 'my_pipe_format' FIELD_DELIMITER = ';')"
+        )
+
+        dcur.execute("SELECT * FROM table1")
+        assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
+
+
 def test_copy_uses_named_csv_with_default_options(dcur: snowflake.connector.cursor.DictCursor) -> None:
-    # A default-only named format must load even though SHOW FILE FORMATS stores unsupported CSV defaults.
     create_table(dcur)
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         temp_file.write("1,2\n")

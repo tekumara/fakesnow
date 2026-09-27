@@ -232,10 +232,12 @@ def _params(
 
             options = parse_options(param.expressions)
             if format_name := options.pop("FORMAT_NAME", None):
-                if options.get("TYPE"):
-                    raise ValueError("Cannot specify both FORMAT_NAME and TYPE in FILE_FORMAT")
+                # other options in the same FILE_FORMAT clause override the named format's settings
                 assert duck_conn, "duck_conn is required to resolve FORMAT_NAME"
-                options = lookup_file_format(duck_conn, str(format_name), current_database, current_schema)
+                options = {
+                    **lookup_file_format(duck_conn, str(format_name), current_database, current_schema),
+                    **options,
+                }
 
             # Snowflake defaults to CSV when FILE_FORMAT omits TYPE.
             var_type = str(options.get("TYPE", "CSV")).upper()
