@@ -1,23 +1,23 @@
 ---
 name: snowflake-check
-description: Inspect the Git diff from `origin/main...HEAD` to identify tests it added or changed, validate the applicable runtime behavior against a real Snowflake instance, and produce a concise report of failures and behavioral differences. Use when a user asks to run tests from the current branch on real Snowflake, compare fake/local Snowflake behavior to actual Snowflake behavior, or verify whether newly added Snowflake-facing tests match live semantics.
+description: Inspect the working-tree diff from `origin/main` to identify tests it added or changed, validate the applicable runtime behavior against a real Snowflake instance, and produce a concise report of failures and behavioral differences. Use when a user asks to run working-tree tests on real Snowflake, compare fake/local Snowflake behavior to actual Snowflake behavior, or verify whether added or changed Snowflake-facing tests match live semantics.
 ---
 
 # Snowflake Check
 
-Identify the tests introduced by the current branch diff against `origin/main`, separate live-applicable runtime checks from local-only unit tests, reproduce the runtime behavior against a real Snowflake account with isolated temporary objects, and report any divergence precisely.
+Identify the tests introduced or changed in the working-tree diff against `origin/main`, separate live-applicable runtime checks from local-only unit tests, reproduce the runtime behavior against a real Snowflake account with isolated temporary objects, and report any divergence precisely.
 
 Prefer reproducing the behavior in a small one-off script over patching the repo tests to force them through live credentials. Treat the repo tests as specifications to validate, not as the only executable surface.
 
 ## Workflow
 
-1. Inspect the current branch diff.
+1. Inspect the working-tree diff.
 
-- Run `git diff --stat --name-only origin/main...HEAD` to identify touched files.
-- Run `git diff origin/main...HEAD -- <candidate test files>` to isolate the exact newly added test bodies.
-- Note that the review scope is `origin/main...HEAD` in the final report.
+- Run `git diff --stat --name-only origin/main` to identify touched files. This includes committed branch changes plus staged and unstaged working-tree changes.
+- Run `git diff origin/main -- <candidate test files>` to isolate the exact added or changed test bodies.
+- Note that the review scope is `origin/main` to the working tree in the final report.
 
-2. Classify each added test before running anything live.
+2. Classify each added or changed test before running anything live.
 
 - Read `tests/conftest.py` and any local fixtures to see whether the default path is fake Snowflake, an embedded server, or a real account.
 - Mark tests as one of:
@@ -33,12 +33,12 @@ Prefer reproducing the behavior in a small one-off script over patching the repo
 - Reuse the repo's known account, role, warehouse, database, schema, and authenticator values when possible.
 - If the repo uses `externalbrowser`, expect sandboxed runs to fail before reaching Snowflake because the connector needs a local callback socket.
 
-4. Reproduce the added runtime behavior against real Snowflake.
+4. Reproduce the added or changed runtime behavior against real Snowflake.
 
 - Use the project venv if present, for example `.venv/bin/python`.
 - Create isolated object names with `uuid` and prefer `temporary` tables or similarly disposable objects.
 - Keep the live probe minimal and targeted to the behavior under test.
-- Reproduce the exact query shape from the added test first. If that fails, keep the failure text.
+- Reproduce the exact query shape from the test under review first. If that fails, keep the failure text.
 - If the failure suggests a type restriction or Snowflake-specific syntax rule, run one focused follow-up probe to isolate the actual behavioral difference.
 - Do not edit repo tests just to execute them against live credentials unless the user explicitly asks for that.
 
@@ -50,8 +50,8 @@ Prefer reproducing the behavior in a small one-off script over patching the repo
 
 6. Produce the report.
 
-- Report that the review scope was `origin/main...HEAD` and the exact added tests reviewed.
-- For each added test, state one of:
+- Report that the review scope was `origin/main` to the working tree and the exact added or changed tests reviewed.
+- For each added or changed test, state one of:
   - `passes on real Snowflake as written`
   - `fails on real Snowflake as written`
   - `not applicable to real Snowflake`
@@ -102,8 +102,8 @@ PY
 
 ## Output Template
 
-- `Diff scope:` `origin/main...HEAD`
-- `Added tests reviewed:` `<file:line>` entries
+- `Diff scope:` `origin/main` to working tree
+- `Added or changed tests reviewed:` `<file:line>` entries
 - `Live-applicable tests:` short list
 - `Local-only tests:` short list
 - `Findings:` one flat item per failure or confirmed behavior difference, each beginning with the test function name such as `test_object_agg:` or `test_object_agg_skips_nulls:`

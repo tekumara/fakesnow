@@ -25,3 +25,5 @@ CLAUDE.md
 TODO.md
 notebooks/*.ipynb
 .realsnow.toml
+# roborev snapshots
+/.roborev/
