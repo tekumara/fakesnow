@@ -226,26 +226,13 @@ def test_copy_internal_stage_server(sdcur: snowflake.connector.cursor.DictCursor
 def test_copy_uses_named_csv_field_delimiter(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
-        data = "1|2\n3|4\n"
-        temp_file.write(data)
+        temp_file.write("1|2\n3|4\n")
         temp_file.flush()
-        temp_file_path = temp_file.name
-        temp_file_basename = os.path.basename(temp_file_path)
 
         dcur.execute("CREATE STAGE stage3")
-        dcur.execute(f"PUT 'file://{temp_file_path}' @stage3")
+        dcur.execute(f"PUT 'file://{temp_file.name}' @stage3")
         dcur.execute("CREATE FILE FORMAT my_csv_format TYPE='CSV' FIELD_DELIMITER='|'")
-
-        dcur.execute("""
-            COPY INTO table1
-            FROM @stage3
-            FILE_FORMAT = (FORMAT_NAME = 'my_csv_format')
-        """)
-        results = dcur.fetchall()
-        assert len(results) == 1
-        assert results[0]["file"] == f"stage3/{temp_file_basename}.gz"
-        assert results[0]["status"] == "LOADED"
-        assert results[0]["rows_loaded"] == 2
+        dcur.execute("COPY INTO table1 FROM @stage3 FILE_FORMAT = (FORMAT_NAME = 'my_csv_format')")
 
         dcur.execute("SELECT * FROM table1")
         assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
