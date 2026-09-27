@@ -268,7 +268,7 @@ def test_copy_uses_named_csv_with_default_options(dcur: snowflake.connector.curs
         assert dcur.fetchall() == [{"A": 1, "B": 2}]
 
 
-def test_copy_named_csv_default_null_if(dcur: snowflake.connector.cursor.DictCursor) -> None:
+def test_copy_default_null_if(dcur: snowflake.connector.cursor.DictCursor) -> None:
     dcur.execute("CREATE TABLE default_null_target (value VARCHAR, id INTEGER)")
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         temp_file.write("\\N,1\nhello,2\n")
@@ -276,16 +276,13 @@ def test_copy_named_csv_default_null_if(dcur: snowflake.connector.cursor.DictCur
 
         dcur.execute("CREATE STAGE default_null_stage")
         dcur.execute(f"PUT 'file://{temp_file.name}' @default_null_stage")
-        dcur.execute("CREATE FILE FORMAT default_null_format TYPE='CSV'")
-        dcur.execute(
-            "COPY INTO default_null_target FROM @default_null_stage FILE_FORMAT = (FORMAT_NAME = 'default_null_format')"
-        )
+        dcur.execute("COPY INTO default_null_target FROM @default_null_stage")
 
         dcur.execute("SELECT * FROM default_null_target ORDER BY id")
         assert dcur.fetchall() == [{"VALUE": None, "ID": 1}, {"VALUE": "hello", "ID": 2}]
 
 
-def test_copy_named_csv_default_quotes_are_literal(dcur: snowflake.connector.cursor.DictCursor) -> None:
+def test_copy_default_quotes_are_literal(dcur: snowflake.connector.cursor.DictCursor) -> None:
     dcur.execute("CREATE TABLE default_quote_target (value VARCHAR, id INTEGER)")
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         temp_file.write('"hello",1\nplain,2\n')
@@ -293,11 +290,7 @@ def test_copy_named_csv_default_quotes_are_literal(dcur: snowflake.connector.cur
 
         dcur.execute("CREATE STAGE default_quote_stage")
         dcur.execute(f"PUT 'file://{temp_file.name}' @default_quote_stage")
-        dcur.execute("CREATE FILE FORMAT default_quote_format TYPE='CSV'")
-        dcur.execute(
-            "COPY INTO default_quote_target FROM @default_quote_stage "
-            "FILE_FORMAT = (FORMAT_NAME = 'default_quote_format')"
-        )
+        dcur.execute("COPY INTO default_quote_target FROM @default_quote_stage")
 
         dcur.execute("SELECT * FROM default_quote_target ORDER BY id")
         assert dcur.fetchall() == [{"VALUE": '"hello"', "ID": 1}, {"VALUE": "plain", "ID": 2}]
