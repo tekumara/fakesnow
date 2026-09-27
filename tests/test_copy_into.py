@@ -256,26 +256,22 @@ def test_copy_uses_named_csv_with_inline_override(dcur: snowflake.connector.curs
         assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
 
 
-def test_copy_uses_named_csv_with_default_options(dcur: snowflake.connector.cursor.DictCursor) -> None:
+def test_copy_format_name_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
-    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
-        temp_file.write("1,2\n")
-        temp_file.flush()
+    dcur.execute("CREATE STAGE stage3")
 
-        dcur.execute("CREATE STAGE default_format_stage")
-        dcur.execute(f"PUT 'file://{temp_file.name}' @default_format_stage")
-        dcur.execute("CREATE FILE FORMAT default_csv_format TYPE='CSV'")
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("COPY INTO table1 FROM @stage3 FILE_FORMAT = (FORMAT_NAME = 'unknown_format')")
 
-        dcur.execute("COPY INTO table1 FROM @default_format_stage FILE_FORMAT = (FORMAT_NAME = 'default_csv_format')")
-
-        dcur.execute("SELECT * FROM table1")
-        assert dcur.fetchall() == [{"A": 1, "B": 2}]
+    assert str(excinfo.value) == (
+        "002003 (02000): SQL compilation error:\nFile format 'UNKNOWN_FORMAT' does not exist or not authorized."
+    )
 
 
-def test_copy_default_null_if(dcur: snowflake.connector.cursor.DictCursor) -> None:
+def test_copy_default_nulls(dcur: snowflake.connector.cursor.DictCursor) -> None:
     dcur.execute("CREATE TABLE default_null_target (value VARCHAR, id INTEGER)")
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
-        temp_file.write("\\N,1\nhello,2\n")
+        temp_file.write("\\N,1\n,2\nhello,3\n")
         temp_file.flush()
 
         dcur.execute("CREATE STAGE default_null_stage")
@@ -283,7 +279,11 @@ def test_copy_default_null_if(dcur: snowflake.connector.cursor.DictCursor) -> No
         dcur.execute("COPY INTO default_null_target FROM @default_null_stage")
 
         dcur.execute("SELECT * FROM default_null_target ORDER BY id")
-        assert dcur.fetchall() == [{"VALUE": None, "ID": 1}, {"VALUE": "hello", "ID": 2}]
+        assert dcur.fetchall() == [
+            {"VALUE": None, "ID": 1},  # literal \N marker (NULL_IF default)
+            {"VALUE": None, "ID": 2},  # empty field (EMPTY_FIELD_AS_NULL default)
+            {"VALUE": "hello", "ID": 3},
+        ]
 
 
 def test_copy_default_quotes_are_literal(dcur: snowflake.connector.cursor.DictCursor) -> None:
@@ -297,19 +297,8 @@ def test_copy_default_quotes_are_literal(dcur: snowflake.connector.cursor.DictCu
         dcur.execute("COPY INTO default_quote_target FROM @default_quote_stage")
 
         dcur.execute("SELECT * FROM default_quote_target ORDER BY id")
+        # FIELD_OPTIONALLY_ENCLOSED_BY defaults to NONE, so the quote marks are kept literally
         assert dcur.fetchall() == [{"VALUE": '"hello"', "ID": 1}, {"VALUE": "plain", "ID": 2}]
-
-
-def test_copy_format_name_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
-    create_table(dcur)
-    dcur.execute("CREATE STAGE stage3")
-
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute("COPY INTO table1 FROM @stage3 FILE_FORMAT = (FORMAT_NAME = 'unknown_format')")
-
-    assert str(excinfo.value) == (
-        "002003 (02000): SQL compilation error:\nFile format 'UNKNOWN_FORMAT' does not exist or not authorized."
-    )
 
 
 @patch("fakesnow.copy_into.logger.log_sql", side_effect=logger.log_sql)
@@ -954,6 +943,17 @@ def test_params_csv_custom():
         params.file_format.read_expression("s3://mybucket/data/file1.csv").sql(dialect="duckdb")
         == "READ_CSV('s3://mybucket/data/file1.csv', header = FALSE, skip = 2, quote = '\"', sep = '|', nullstr = [''], compression = 'gzip')"
     )
+
+
+def test_params_csv_file_format_without_type():
+    # a FILE_FORMAT clause with options but no TYPE and no FORMAT_NAME defaults to CSV
+    _, params = parse("""
+    COPY INTO table1
+    FROM 's3://mybucket/data/'
+    FILE_FORMAT = (SKIP_HEADER = 1)
+    """)
+
+    assert params.file_format == ReadCSV(skip_header=1)
 
 
 def test_params_csv_escape_unenclosed_field_none():
