@@ -675,6 +675,23 @@ def test_copy_parquet_match_by_column_name(dcur: snowflake.connector.cursor.Dict
     assert dcur.fetchall() == [{"A": 1, "B": 10}, {"A": 2, "B": 20}]
 
 
+def test_copy_parquet_schema_uses_literal_stage_path(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE TABLE literal_parquet_target (a INT)")
+    dcur.execute("CREATE STAGE literal_parquet_stage")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = f"{tmp_dir}/data.parquet"
+        for folder, data in (("dir0tag", {"other": [1]}), ("dir?tag", {"a": [3]})):
+            pd.DataFrame(data).to_parquet(path)
+            dcur.execute(f"PUT 'file://{path}' @literal_parquet_stage/{folder} AUTO_COMPRESS=FALSE")
+
+        dcur.execute("""
+            COPY INTO literal_parquet_target FROM @literal_parquet_stage/dir?tag/data.parquet
+            MATCH_BY_COLUMN_NAME = CASE_INSENSITIVE FILE_FORMAT = (TYPE = 'PARQUET')
+        """)
+        dcur.execute("SELECT * FROM literal_parquet_target")
+        assert dcur.fetchall() == [{"A": 3}]
+
+
 def test_copy_parquet_match_by_column_name_case_sensitive(
     dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client
 ) -> None:
