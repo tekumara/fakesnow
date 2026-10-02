@@ -279,6 +279,21 @@ def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor, s
         assert dcur.fetchall() == [{"A": 3, "B": 4}]
 
 
+def test_copy_internal_stage_path_is_literal(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    create_table(dcur)
+    dcur.execute("CREATE STAGE literal_path_stage")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = f"{tmp_dir}/data.csv"
+        for folder, data in (("dirXtag", "1,2\n"), ("dir?tag", "3,4\n")):
+            with open(path, "w") as f:
+                f.write(data)
+            dcur.execute(f"PUT 'file://{path}' @literal_path_stage/{folder} AUTO_COMPRESS=FALSE")
+
+        dcur.execute("COPY INTO table1 FROM @literal_path_stage/dir?tag/data.csv")
+        dcur.execute("SELECT * FROM table1 ORDER BY a")
+        assert dcur.fetchall() == [{"A": 3, "B": 4}]
+
+
 @pytest.mark.parametrize(
     ("stage_name", "create_stage_sql", "stage_path", "auto_compress", "expected_file"),
     [

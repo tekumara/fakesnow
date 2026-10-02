@@ -5,6 +5,7 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+from glob import escape as glob_escape
 from typing import Any, NamedTuple, Protocol, cast
 from urllib.parse import urlparse, urlunparse
 
@@ -352,7 +353,8 @@ def _source_glob(source: str, duck_conn: DuckDBPyConnection) -> list[str]:
     if stage.is_internal(source):
         # keep the plain path: duckdb does not decode percent-encoded file URIs
         # a stage path suffix is a prefix match, eg: @stage1/dir/file matches dir/file*
-        glob = f"{source.rstrip('/')}/*" if os.path.isdir(source) else f"{source}*"
+        prefix = glob_escape(source.rstrip("/"))
+        glob = f"{prefix}/*" if os.path.isdir(source) else f"{prefix}*"
     else:
         scheme, _netloc, _path, _params, _query, _fragment = urlparse(source)
         glob = f"{source}/*" if scheme == "file" else f"{source}*"
@@ -594,6 +596,10 @@ class FileTypeHandler(Protocol):
     def read_expression(self, url: str) -> Expr: ...
 
     @staticmethod
+    def file_literal(url: str) -> exp.Literal:
+        return exp.Literal.string(glob_escape(url) if stage.is_internal(url) else url)
+
+    @staticmethod
     def make_eq(name: str, value: list | str | int | bool) -> exp.EQ:
         if isinstance(value, list):
             expression = exp.array(*[exp.Literal(this=str(v), is_string=isinstance(v, str)) for v in value])
@@ -641,13 +647,13 @@ class ReadCSV(FileTypeHandler):
         if self.compression:
             args.append(self.make_eq("compression", self.compression))
 
-        return exp.func("read_csv", exp.Literal(this=url, is_string=True), *args)
+        return exp.func("read_csv", self.file_literal(url), *args)
 
 
 @dataclass
 class ReadParquet(FileTypeHandler):
     def read_expression(self, url: str) -> Expr:
-        return exp.func("read_parquet", exp.Literal(this=url, is_string=True))
+        return exp.func("read_parquet", self.file_literal(url))
 
 
 @dataclass
