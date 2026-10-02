@@ -166,15 +166,8 @@ def copy_into(
 
 
 def _result_file_name(url: str) -> str:
-    if not stage.is_internal(urlparse(url).path):
-        return url
-
-    parts = url.split("/")
-    # table stages return just the file name, without the %table prefix
-    if stage.is_table_stage(parts[-2]):
-        return parts[-1]
-    # named internal stages include the lowercased stage name
-    return f"{parts[-2].lower()}/{parts[-1]}"
+    path = urlparse(url).path
+    return stage.internal_file_name(path) if stage.is_internal(path) else url
 
 
 def _extract_table(target: Expr) -> exp.Table:

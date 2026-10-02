@@ -193,8 +193,8 @@ def put_stage(
             errno=1003,
             sqlstate="42000",
         )
-    # strip leading @
-    var = this[1:]
+    # strip leading @ and separate the case-sensitive path from the stage name
+    var, _, path = this[1:].partition("/")
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
     options = parse_options(expression.args.get("properties") or [])
@@ -213,7 +213,7 @@ def put_stage(
         "stageInfo": {
             # use LOCAL_FS otherwise we need to mock S3 with HTTPS which requires a certificate
             "locationType": "LOCAL_FS",
-            "location": internal_dir(fqname),
+            "location": f"{internal_dir(fqname)}{path}",
             "creds": {},
         },
         "src_locations": [src_path],
@@ -295,6 +295,13 @@ def internal_dir(fqname: str) -> str:
     """
     catalog, schema, stage_name = fqname.split(".")
     return f"{LOCAL_BUCKET_PATH}/{catalog}/{schema}/{stage_name}/"
+
+
+def internal_file_name(path: str) -> str:
+    """Return a Snowflake result filename, preserving the path within its stage."""
+    _, _, stage_name, *file_parts = PurePath(path).relative_to(LOCAL_BUCKET_PATH).parts
+    file_name = "/".join(file_parts)
+    return file_name if is_table_stage(stage_name) else f"{stage_name.lower()}/{file_name}"
 
 
 def list_stage_files_sql(stage_name: str) -> str:

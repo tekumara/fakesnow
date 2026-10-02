@@ -279,6 +279,33 @@ def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor, s
         assert dcur.fetchall() == [{"A": 3, "B": 4}]
 
 
+@pytest.mark.parametrize(
+    ("stage_name", "create_stage_sql", "expected_file"),
+    [
+        ("file_name_stage", "CREATE STAGE file_name_stage", "file_name_stage/%incoming/data.csv.gz"),
+        ("%table1", None, "%incoming/data.csv.gz"),
+    ],
+)
+def test_copy_internal_stage_subdirectory_file_name(
+    dcur: snowflake.connector.cursor.DictCursor,
+    stage_name: str,
+    create_stage_sql: str | None,
+    expected_file: str,
+) -> None:
+    create_table(dcur)
+    if create_stage_sql:
+        dcur.execute(create_stage_sql)
+
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = f"{tmp_dir}/data.csv"
+        with open(path, "w") as f:
+            f.write("1,2\n")
+
+        dcur.execute(f"PUT 'file://{path}' @{stage_name}/%incoming")
+        dcur.execute(f"COPY INTO table1 FROM @{stage_name}/%incoming/data.csv.gz")
+        assert [r["file"] for r in dcur.fetchall()] == [expected_file]
+
+
 def test_copy_internal_table_stage(dcur: snowflake.connector.cursor.DictCursor) -> None:
     """PUT and COPY compose through an implicit table stage, preserving filenames and rows."""
     create_table(dcur)
