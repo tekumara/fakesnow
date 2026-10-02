@@ -185,6 +185,26 @@ def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
         dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage5\"")
 
 
+@pytest.mark.parametrize("bound_target", [False, True], ids=["sql", "bound"])
+def test_put_rejects_path_outside_stage(_fakesnow: None, bound_target: bool) -> None:
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+        tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file,
+    ):
+        temp_file.write("1,2\n")
+        temp_file.flush()
+        cur.execute("CREATE STAGE source_stage")
+        cur.execute("CREATE STAGE other_stage")
+        target = "@source_stage/../OTHER_STAGE"
+
+        with pytest.raises(snowflake.connector.errors.Error):
+            if bound_target:
+                cur.execute(f"PUT 'file://{temp_file.name}' ?", (target,))
+            else:
+                cur.execute(f"PUT 'file://{temp_file.name}' {target}")
+
+
 def test_put_unquoted_src(dcur: snowflake.connector.cursor.DictCursor) -> None:
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         temp_file.write("1,2\n")

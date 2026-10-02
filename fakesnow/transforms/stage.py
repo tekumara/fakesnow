@@ -213,7 +213,7 @@ def put_stage(
         "stageInfo": {
             # use LOCAL_FS otherwise we need to mock S3 with HTTPS which requires a certificate
             "locationType": "LOCAL_FS",
-            "location": f"{internal_dir(fqname)}{path}",
+            "location": internal_dir(fqname, path),
             "creds": {},
         },
         "src_locations": [src_path],
@@ -289,12 +289,18 @@ def is_internal(s: str) -> bool:
     return PurePath(s).is_relative_to(LOCAL_BUCKET_PATH)
 
 
-def internal_dir(fqname: str) -> str:
-    """
-    Given a fully qualified stage name, return the directory path where the stage files are stored.
-    """
+def internal_dir(fqname: str, path: str = "") -> str:
+    """Return a directory within the stage, rejecting paths that escape its root."""
     catalog, schema, stage_name = fqname.split(".")
-    return f"{LOCAL_BUCKET_PATH}/{catalog}/{schema}/{stage_name}/"
+    root = f"{LOCAL_BUCKET_PATH}/{catalog}/{schema}/{stage_name}/"
+    directory = f"{root}{path}"
+    if not PurePath(os.path.realpath(directory)).is_relative_to(os.path.realpath(root)):
+        raise snowflake.connector.errors.ProgrammingError(
+            msg="SQL compilation error:\nStage path escapes the stage directory.",
+            errno=1003,
+            sqlstate="42000",
+        )
+    return directory
 
 
 def internal_file_name(path: str) -> str:
