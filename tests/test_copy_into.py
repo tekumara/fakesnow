@@ -279,6 +279,22 @@ def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor, s
         assert dcur.fetchall() == [{"A": 3, "B": 4}]
 
 
+def test_copy_internal_stage_missing_directory_prefix(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    create_table(dcur)
+    dcur.execute("CREATE STAGE directory_prefix_stage")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        path = f"{tmp_dir}/missing.csv"
+        with open(path, "w") as f:
+            f.write("1,2\n")
+        dcur.execute(f"PUT 'file://{path}' @directory_prefix_stage AUTO_COMPRESS=FALSE")
+
+        dcur.execute("COPY INTO table1 FROM @directory_prefix_stage/missing/")
+        assert dcur.fetchall() == [{"status": "Copy executed with 0 files processed."}]
+
+        dcur.execute("SELECT * FROM table1")
+        assert dcur.fetchall() == []
+
+
 def test_copy_internal_stage_path_is_literal(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     dcur.execute("CREATE STAGE literal_path_stage")

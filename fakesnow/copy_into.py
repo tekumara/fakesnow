@@ -353,8 +353,7 @@ def _source_glob(source: str, duck_conn: DuckDBPyConnection) -> list[str]:
     if stage.is_internal(source):
         # keep the plain path: duckdb does not decode percent-encoded file URIs
         # a stage path suffix is a prefix match, eg: @stage1/dir/file matches dir/file*
-        prefix = glob_escape(source.rstrip("/"))
-        glob = f"{prefix}/*" if os.path.isdir(source) else f"{prefix}*"
+        glob = f"{glob_escape(source.rstrip('/'))}/*" if os.path.isdir(source) else f"{glob_escape(source)}*"
     else:
         scheme, _netloc, _path, _params, _query, _fragment = urlparse(source)
         glob = f"{source}/*" if scheme == "file" else f"{source}*"
