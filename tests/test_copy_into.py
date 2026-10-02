@@ -258,7 +258,8 @@ def test_copy_uses_named_csv_with_inline_override(dcur: snowflake.connector.curs
         assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
 
 
-def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor) -> None:
+@pytest.mark.parametrize("stage_path", ["second.csv.gz", "second"])
+def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor, stage_path: str) -> None:
     create_table(dcur)
     with tempfile.TemporaryDirectory() as tmp_dir:
         for name, data in (("first.csv", "1,2\n"), ("second.csv", "3,4\n")):
@@ -270,7 +271,7 @@ def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor) -
         dcur.execute(f"PUT 'file://{tmp_dir}/second.csv' @stage3")
 
         # a path suffix restricts the copy to the matching files within the stage
-        dcur.execute("COPY INTO table1 FROM @stage3/second.csv.gz")
+        dcur.execute(f"COPY INTO table1 FROM @stage3/{stage_path}")
         results = dcur.fetchall()
         assert [r["file"] for r in results] == ["stage3/second.csv.gz"]
 
