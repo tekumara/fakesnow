@@ -311,6 +311,24 @@ def test_put_table_stage_non_existent_table(dcur: snowflake.connector.cursor.Dic
         )
 
 
+def test_copy_empty_table_stage(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE TABLE empty_stage_table (a INT, b INT)")
+
+    dcur.execute("COPY INTO empty_stage_table FROM @%empty_stage_table")
+    assert dcur.fetchall() == [{"status": "Copy executed with 0 files processed."}]
+
+
+def test_copy_table_stage_non_existent_table(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    create_table(dcur)
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("COPY INTO table1 FROM @%foobar")
+
+    assert str(excinfo.value).startswith(
+        "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.\"%FOOBAR\"' does not exist or not authorized."
+    )
+
+
 def test_copy_format_name_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     dcur.execute("CREATE STAGE stage3")

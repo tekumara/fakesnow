@@ -321,6 +321,9 @@ def stage_url_from_var(
     fqname = f"{database_name}.{schema_name}.{name}"
 
     if stage.is_table_stage(name):
+        duck_conn.execute(stage.stage_lookup_sql(database_name, schema_name, name))
+        if not duck_conn.fetchone():
+            raise stage.not_found_error(fqname)
         url = stage.internal_dir(fqname)
     else:
         duck_conn.execute(
