@@ -185,6 +185,18 @@ def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
         dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage5\"")
 
 
+def test_put_list_subdirectory(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE STAGE nested_stage")
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2\n")
+        temp_file.flush()
+        basename = os.path.basename(temp_file.name)
+
+        dcur.execute(f"PUT 'file://{temp_file.name}' @nested_stage/subdir/deeper")
+        dcur.execute("LIST @nested_stage")
+        assert [r["name"] for r in dcur.fetchall()] == [f"nested_stage/subdir/deeper/{basename}.gz"]
+
+
 @pytest.mark.parametrize("bound_target", [False, True], ids=["sql", "bound"])
 def test_put_rejects_path_outside_stage(_fakesnow: None, bound_target: bool) -> None:
     with (

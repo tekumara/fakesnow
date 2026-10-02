@@ -303,11 +303,14 @@ def internal_dir(fqname: str, path: str = "") -> str:
     return directory
 
 
+def _file_name_prefix(stage_name: str) -> str:
+    return "" if is_table_stage(stage_name) else f"{stage_name.lower()}/"
+
+
 def internal_file_name(path: str) -> str:
     """Return a Snowflake result filename, preserving the path within its stage."""
     _, _, stage_name, *file_parts = PurePath(path).relative_to(LOCAL_BUCKET_PATH).parts
-    file_name = "/".join(file_parts)
-    return file_name if is_table_stage(stage_name) else f"{stage_name.lower()}/{file_name}"
+    return f"{_file_name_prefix(stage_name)}{'/'.join(file_parts)}"
 
 
 def list_stage_files_sql(stage_name: str) -> str:
@@ -315,13 +318,15 @@ def list_stage_files_sql(stage_name: str) -> str:
     Generate SQL to list files in a stage directory, matching Snowflake's LIST output format.
     """
     sdir = internal_dir(stage_name)
+    prefix = exp.Literal.string(_file_name_prefix(stage_name.rsplit(".", 1)[-1])).sql(dialect="duckdb")
+    glob = exp.Literal.string(f"{sdir}**/*").sql(dialect="duckdb")
     return f"""
         select
-            lower(split_part(filename, '/', -2)) || '/' || split_part(filename, '/', -1) AS name,
+            {prefix} || substr(filename, {len(sdir) + 1}) AS name,
             size,
             md5(content) as md5,
             strftime(last_modified, '%a, %d %b %Y %H:%M:%S GMT') as last_modified
-        from read_blob('{sdir}/*')
+        from read_blob({glob})
     """
 
 
