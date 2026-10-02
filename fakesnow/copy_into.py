@@ -166,7 +166,8 @@ def copy_into(
 
 
 def _result_file_name(url: str) -> str:
-    path = urlparse(url).path
+    # Internal globs return filesystem paths, where # and ? are literal characters.
+    path = url if stage.is_internal(url) else urlparse(url).path
     return stage.internal_file_name(path) if stage.is_internal(path) else url
 
 

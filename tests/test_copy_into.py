@@ -280,16 +280,20 @@ def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor, s
 
 
 @pytest.mark.parametrize(
-    ("stage_name", "create_stage_sql", "expected_file"),
+    ("stage_name", "create_stage_sql", "stage_path", "auto_compress", "expected_file"),
     [
-        ("file_name_stage", "CREATE STAGE file_name_stage", "file_name_stage/%incoming/data.csv.gz"),
-        ("%table1", None, "%incoming/data.csv.gz"),
+        ("file_name_stage", "CREATE STAGE file_name_stage", "%incoming", True, "file_name_stage/%incoming/data.csv.gz"),
+        ("%table1", None, "%incoming", True, "%incoming/data.csv.gz"),
+        ("hash_stage", "CREATE STAGE hash_stage", "dir#tag", True, "hash_stage/dir#tag/data.csv.gz"),
+        ("query_stage", "CREATE STAGE query_stage", "dir?tag", False, "query_stage/dir?tag/data.csv"),
     ],
 )
 def test_copy_internal_stage_subdirectory_file_name(
     dcur: snowflake.connector.cursor.DictCursor,
     stage_name: str,
     create_stage_sql: str | None,
+    stage_path: str,
+    auto_compress: bool,
     expected_file: str,
 ) -> None:
     create_table(dcur)
@@ -301,8 +305,9 @@ def test_copy_internal_stage_subdirectory_file_name(
         with open(path, "w") as f:
             f.write("1,2\n")
 
-        dcur.execute(f"PUT 'file://{path}' @{stage_name}/%incoming")
-        dcur.execute(f"COPY INTO table1 FROM @{stage_name}/%incoming/data.csv.gz")
+        dcur.execute(f"PUT 'file://{path}' @{stage_name}/{stage_path} AUTO_COMPRESS={str(auto_compress).upper()}")
+        target_file = "data.csv.gz" if auto_compress else "data.csv"
+        dcur.execute(f"COPY INTO table1 FROM @{stage_name}/{stage_path}/{target_file}")
         assert [r["file"] for r in dcur.fetchall()] == [expected_file]
 
 
