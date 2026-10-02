@@ -384,6 +384,20 @@ def test_server_put_list(sdcur: snowflake.connector.cursor.DictCursor) -> None:
         dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage2\"")
 
 
+def test_server_put_relative_source(sdcur: snowflake.connector.cursor.DictCursor) -> None:
+    with tempfile.TemporaryDirectory(dir=".") as directory:
+        source = os.path.join(directory, "input.csv")
+        with open(source, "wb") as file:
+            file.write(b"1,2\n")
+
+        sdcur.execute("CREATE STAGE relative_stage")
+        sdcur.execute(f"PUT 'file://{os.path.relpath(source)}' @relative_stage AUTO_COMPRESS=FALSE")
+        assert sdcur.fetchall()[0]["status"] == "UPLOADED"
+
+        sdcur.execute("LIST @relative_stage")
+        assert [row["name"] for row in sdcur.fetchall()] == ["relative_stage/input.csv"]
+
+
 def test_server_put_qmark_quoted(server: dict) -> None:
     with (
         snowflake.connector.connect(
@@ -435,6 +449,30 @@ def test_server_put_non_existent_stage(sdcur: snowflake.connector.cursor.DictCur
             str(excinfo.value)
             == "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.FOOBAR' does not exist or not authorized."
         )
+
+
+def test_server_put_qmark_target_stays_local(sconn: snowflake.connector.SnowflakeConnection) -> None:
+    # the connector re-requests a presigned url by executing the PUT without bindings, which
+    # cannot resolve a ? target, so a bound target keeps the local filesystem upload
+    conn = sconn
+    with conn.cursor() as cur, tempfile.NamedTemporaryFile(suffix=".csv") as temp_file:
+        cur.execute("CREATE STAGE qmark_stage")
+
+        result = conn.cmd_query(
+            f"PUT 'file://{temp_file.name}' ?",
+            conn._next_sequence_counter(),  # noqa: SLF001
+            uuid.uuid4(),
+            binding_params={"1": {"type": "TEXT", "value": "@qmark_stage"}},
+            is_file_transfer=True,
+        )
+
+        assert result["data"]["stageInfo"]["locationType"] == "LOCAL_FS"
+
+
+def test_server_bucket_upload_rejects_path_outside_bucket(server: dict) -> None:
+    response = requests.put(f"http://{server['host']}:{server['port']}/fs_bucket//etc/passwd", data=b"x", timeout=5)
+
+    assert response.status_code == 400
 
 
 def test_server_response_params(server: dict) -> None:
