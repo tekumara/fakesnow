@@ -295,10 +295,13 @@ def internal_dir(fqname: str, path: str = "") -> str:
     root = f"{LOCAL_BUCKET_PATH}/{catalog}/{schema}/{stage_name}/"
     directory = f"{root}{path}"
     if not PurePath(os.path.realpath(directory)).is_relative_to(os.path.realpath(root)):
-        raise snowflake.connector.errors.ProgrammingError(
-            msg="SQL compilation error:\nStage path escapes the stage directory.",
-            errno=1003,
-            sqlstate="42000",
+        error_details = f"HTTPError('403 Client Error: Forbidden for url: {directory}')"
+        raise snowflake.connector.errors.OperationalError(
+            msg=(
+                f"While putting file(s) there was an error: '{error_details}', "
+                "this might be caused by your access to the blob storage provider, or by Snowflake."
+            ),
+            errno=253003,
         )
     return directory
 

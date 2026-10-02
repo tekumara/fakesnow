@@ -1,5 +1,6 @@
 import gzip
 import os
+import re
 import tempfile
 from datetime import timezone
 
@@ -210,11 +211,20 @@ def test_put_rejects_path_outside_stage(_fakesnow: None, bound_target: bool) -> 
         cur.execute("CREATE STAGE other_stage")
         target = "@source_stage/../OTHER_STAGE"
 
-        with pytest.raises(snowflake.connector.errors.Error):
+        with pytest.raises(snowflake.connector.errors.OperationalError) as excinfo:
             if bound_target:
                 cur.execute(f"PUT 'file://{temp_file.name}' ?", (target,))
             else:
                 cur.execute(f"PUT 'file://{temp_file.name}' {target}")
+
+        assert excinfo.value.errno == 253003
+        assert str(excinfo.value) == IsStr(
+            regex=re.escape(
+                "253003: While putting file(s) there was an error: 'HTTPError('403 Client Error: Forbidden for url: "
+            )
+            + r".*/DB1/SCHEMA1/SOURCE_STAGE/\.\./OTHER_STAGE"
+            + re.escape("')', this might be caused by your access to the blob storage provider, or by Snowflake.")
+        )
 
 
 def test_put_unquoted_src(dcur: snowflake.connector.cursor.DictCursor) -> None:
