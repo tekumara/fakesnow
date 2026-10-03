@@ -451,6 +451,26 @@ def test_server_put_non_existent_stage(sdcur: snowflake.connector.cursor.DictCur
         )
 
 
+def test_server_put_rejects_path_outside_stage(server: dict) -> None:
+    with (
+        snowflake.connector.connect(**server | {"network_timeout": 1}, database="db1", schema="schema1") as conn,
+        conn.cursor() as cur,
+        tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file,
+    ):
+        temp_file.write("1,2\n")
+        temp_file.flush()
+        cur.execute("CREATE STAGE source_stage")
+        cur.execute("CREATE STAGE other_stage")
+
+        # The connector maps query-error responses to ProgrammingError, even when
+        # the server's underlying PUT error is an OperationalError.
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute(f"PUT 'file://{temp_file.name}' @source_stage/../OTHER_STAGE")
+
+        assert excinfo.value.errno == 253003
+        assert "While putting file(s) there was an error:" in str(excinfo.value)
+
+
 def test_server_put_qmark_target_stays_local(sconn: snowflake.connector.SnowflakeConnection) -> None:
     # the connector re-requests a presigned url by executing the PUT without bindings, which
     # cannot resolve a ? target, so a bound target keeps the local filesystem upload

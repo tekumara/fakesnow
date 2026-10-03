@@ -168,8 +168,8 @@ async def query_request(request: Request) -> JSONResponse:
                     }
                 )
 
-        except snowflake.connector.errors.ProgrammingError as e:
-            logger.info(f"{sql_text=} ProgrammingError {e}")
+        except (snowflake.connector.errors.ProgrammingError, snowflake.connector.errors.OperationalError) as e:
+            logger.info(f"{sql_text=} {type(e).__name__} {e}")
             code = f"{e.errno:06d}"
             return JSONResponse(
                 {
