@@ -1178,37 +1178,30 @@ def test_force(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client)
     # TODO: TRUNCATE TABLE should reset the load history
 
 
-def test_load_history(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+@pytest.mark.parametrize("file_name", ["it's.csv", "both'\"quotes.csv"])
+def test_copy_result_file_name(
+    dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client, file_name: str
+) -> None:
     create_table(dcur)
-    bucket = str(uuid.uuid4())
-    upload_file(s3_client, "1,2\n3,4", bucket=bucket, key="foo.csv")
+    bucket = upload_file(s3_client, "1,2\n", key=file_name)
+    file_literal = exp.Literal.string(file_name).sql(dialect="snowflake")
 
-    sql = """
-    COPY INTO table1
-    FROM 's3://{bucket}/'
-    FILES=('foo.csv')
-    """
+    dcur.execute(f"COPY INTO table1 FROM 's3://{bucket}/' FILES=({file_literal})")
+    assert [row["file"] for row in dcur.fetchall()] == [f"s3://{bucket}/{file_name}"]
 
-    dcur.execute(sql.format(bucket=bucket))
-    assert dcur.fetchall() == [
-        {
-            "file": f"s3://{bucket}/foo.csv",
-            "status": "LOADED",
-            "rows_parsed": 2,
-            "rows_loaded": 2,
-            "error_limit": 1,
-            "errors_seen": 0,
-            "first_error": None,
-            "first_error_line": None,
-            "first_error_character": None,
-            "first_error_column_name": None,
-        }
-    ]
+
+@pytest.mark.parametrize("file_name", ["foo.csv", "None.csv", "it's.csv", "both'\"quotes.csv"])
+def test_load_history(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client, file_name: str) -> None:
+    create_table(dcur)
+    bucket = upload_file(s3_client, "1,2\n3,4", key=file_name)
+    file_literal = exp.Literal.string(file_name).sql(dialect="snowflake")
+
+    dcur.execute(f"COPY INTO table1 FROM 's3://{bucket}/' FILES=({file_literal})")
     dcur.execute("SELECT * FROM information_schema.load_history")
     assert dcur.fetchall() == [
         {
             "SCHEMA_NAME": "SCHEMA1",
-            "FILE_NAME": f"s3://{bucket}/foo.csv",
+            "FILE_NAME": f"s3://{bucket}/{file_name}",
             "TABLE_NAME": "TABLE1",
             "LAST_LOAD_TIME": IsNow(tz=timezone.utc),
             "STATUS": "LOADED",

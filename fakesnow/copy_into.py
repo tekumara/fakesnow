@@ -141,23 +141,43 @@ def copy_into(
             histories.append(history)
 
         if insert_histories := [h for h in histories if h.status != "LOAD_SKIPPED"]:
-            values = "\n ,".join(str(tuple(history)).replace("None", "NULL") for history in insert_histories)
-            sql = f"INSERT INTO _fs_information_schema._fs_load_history VALUES {values}"
-            duck_conn.execute(sql, params)
+            duck_conn.executemany(
+                "INSERT INTO _fs_information_schema._fs_load_history VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [tuple(history) for history in insert_histories],
+            )
 
         columns = (
-            "file, status, rows_parsed, rows_loaded, error_limit, errors_seen, first_error, first_error_line, "
-            "first_error_character, first_error_column_name"
+            "file",
+            "status",
+            "rows_parsed",
+            "rows_loaded",
+            "error_limit",
+            "errors_seen",
+            "first_error",
+            "first_error_line",
+            "first_error_character",
+            "first_error_column_name",
         )
-        values = "\n, ".join(
-            f"('{_result_file_name(h.file_name)}', '{h.status}', {h.row_parsed}, {h.row_count}, "
-            f"{h.error_limit or 'NULL'}, {h.error_count}, "
-            f"{repr(h.first_error_message) if h.first_error_message else 'NULL'}, "
-            f"{h.first_error_line_number or 'NULL'}, {h.first_error_character_position or 'NULL'}, "
-            f"{h.first_error_col_name or 'NULL'})"
-            for h in histories
+        values = exp.values(
+            [
+                (
+                    _result_file_name(h.file_name),
+                    h.status,
+                    h.row_parsed,
+                    h.row_count,
+                    h.error_limit,
+                    h.error_count,
+                    h.first_error_message,
+                    h.first_error_line_number,
+                    h.first_error_character_position,
+                    h.first_error_col_name,
+                )
+                for h in histories
+            ],
+            alias="t",
+            columns=columns,
         )
-        sql = f"SELECT * FROM (VALUES\n  {values}\n) AS t({columns})"
+        sql = exp.select("*").from_(values).sql(dialect="duckdb")
         duck_conn.execute(sql)
 
         return sql
