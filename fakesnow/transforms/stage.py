@@ -248,10 +248,12 @@ def not_found_error(fqname: str) -> snowflake.connector.errors.ProgrammingError:
 def stage_lookup_sql(catalog: str, schema: str, stage_name: str) -> str:
     """SQL that returns a single row when the stage exists."""
     if is_table_stage(stage_name):
+        # duckdb keeps temporary tables in its temp catalog rather than the current database
         return f"""
             SELECT *
             from duckdb_tables()
-            where database_name = '{catalog}' and schema_name = '{schema}' and table_name = '{stage_name[1:]}'
+            where ((database_name = '{catalog}' and schema_name = '{schema}') or temporary)
+            and table_name = '{stage_name[1:]}'
         """
     return f"""
         SELECT *

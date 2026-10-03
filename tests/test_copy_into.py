@@ -298,6 +298,20 @@ def test_copy_internal_table_stage(dcur: snowflake.connector.cursor.DictCursor) 
         assert dcur.fetchall() == [{"A": 1, "B": 2}]
 
 
+def test_copy_internal_table_stage_temporary_table(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    # a temporary table has an implicit table stage like any other table
+    dcur.execute("CREATE TEMPORARY TABLE temp_table1 (a INT, b INT)")
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2\n")
+        temp_file.flush()
+
+        dcur.execute(f"PUT 'file://{temp_file.name}' @%temp_table1")
+        dcur.execute("COPY INTO temp_table1 FROM @%temp_table1")
+
+        dcur.execute("SELECT * FROM temp_table1")
+        assert dcur.fetchall() == [{"A": 1, "B": 2}]
+
+
 def test_put_table_stage_non_existent_table(dcur: snowflake.connector.cursor.DictCursor) -> None:
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         temp_file_path = temp_file.name
