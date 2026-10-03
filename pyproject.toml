@@ -1,7 +1,7 @@
 [project]
 name = "fakesnow"
 description = "Fake Snowflake Connector for Python. Run, mock and test Snowflake DB locally."
-version = "0.11.18"
+version = "0.11.19"
 readme = "README.md"
 license = { file = "LICENSE" }
 classifiers = ["License :: OSI Approved :: MIT License"]
@@ -11,7 +11,7 @@ dependencies = [
     "duckdb~=1.5.6",
     "pyarrow",
     "snowflake-connector-python",
-    "sqlglot~=30.17.0",
+    "sqlglot~=30.20.0",
 ]
 
 [project.urls]

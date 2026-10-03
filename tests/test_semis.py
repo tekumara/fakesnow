@@ -159,10 +159,6 @@ def test_object_construct_star_preserves_json_nulls(cur: snowflake.connector.cur
     ]
 
 
-@pytest.mark.xfail(
-    reason="sqlglot can't parse a qualified star in OBJECT_CONSTRUCT_KEEP_NULL, "
-    "see https://github.com/tobymao/sqlglot/issues/8262",
-)
 def test_object_construct_keep_null_qualified_star(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create or replace table tbl (a int, b varchar)")
     cur.execute("insert into tbl values (1, 'x'), (2, null)")
