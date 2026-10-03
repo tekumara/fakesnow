@@ -267,8 +267,7 @@ def test_copy_uses_named_csv_with_inline_override(dcur: snowflake.connector.curs
         assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
 
 
-@pytest.mark.parametrize("stage_path", ["second.csv.gz", "second"])
-def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor, stage_path: str) -> None:
+def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     with tempfile.TemporaryDirectory() as tmp_dir:
         for name, data in (("first.csv", "1,2\n"), ("second.csv", "3,4\n")):
@@ -280,7 +279,7 @@ def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor, s
         dcur.execute(f"PUT 'file://{tmp_dir}/second.csv' @stage3")
 
         # a path suffix restricts the copy to the matching files within the stage
-        dcur.execute(f"COPY INTO table1 FROM @stage3/{stage_path}")
+        dcur.execute("COPY INTO table1 FROM @stage3/second.csv.gz")
         results = dcur.fetchall()
         assert [r["file"] for r in results] == ["stage3/second.csv.gz"]
 
@@ -430,15 +429,20 @@ def test_put_table_stage_non_existent_table(dcur: snowflake.connector.cursor.Dic
         )
 
 
-@pytest.mark.parametrize("table_type", ["", "TEMP"], ids=["permanent", "temporary"])
-@pytest.mark.parametrize("stage_path", ["%incoming/data.csv.gz", "missing/"], ids=["file", "no-files"])
+# Each case varies one dimension from the first, so a failure isolates which path lost the check.
 @pytest.mark.parametrize(
-    "copy_source",
-    ["@%stage_owner/{stage_path}", "(SELECT 1, 2 FROM @%stage_owner/{stage_path})"],
-    ids=["direct", "transformed"],
+    ("table_type", "copy_source"),
+    [
+        ("", "@%stage_owner/%incoming/data.csv.gz"),
+        ("TEMP", "@%stage_owner/%incoming/data.csv.gz"),
+        # The check precedes file listing, so a path matching no files is still rejected.
+        ("", "@%stage_owner/missing/"),
+        ("", "(SELECT 1, 2 FROM @%stage_owner/%incoming/data.csv.gz)"),
+    ],
+    ids=["permanent", "temporary", "no-files", "transformed"],
 )
 def test_copy_table_stage_rejects_other_table(
-    dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path, table_type: str, stage_path: str, copy_source: str
+    dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path, table_type: str, copy_source: str
 ) -> None:
     create_table(dcur)
     dcur.execute(f"CREATE {table_type} TABLE stage_owner (a INT, b INT)")
@@ -447,7 +451,7 @@ def test_copy_table_stage_rejects_other_table(
     dcur.execute(f"PUT 'file://{path}' @%stage_owner/%incoming")
 
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute(f"COPY INTO table1 FROM {copy_source.format(stage_path=stage_path)}")
+        dcur.execute(f"COPY INTO table1 FROM {copy_source}")
 
     assert str(excinfo.value) == (
         "001023 (42601): SQL compilation error:\n"

@@ -263,27 +263,24 @@ def test_list_requires_stage_reference(request: pytest.FixtureRequest, cursor_fi
     assert excinfo.value.errno == 1003
 
 
-def test_list_rejects_multiple_stage_references(dcur: snowflake.connector.cursor.DictCursor) -> None:
-    dcur.execute("CREATE STAGE first_list_stage")
-    dcur.execute("CREATE STAGE second_list_stage")
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        ", @other_list_stage",
+        "WHERE TRUE",
+        "JOIN @other_list_stage ON TRUE",
+        "TABLESAMPLE (1 ROWS)",
+        "()",
+        "(PATTERN =>)",
+        "(PATTERN => 'no-match')",
+        "(FILE_FORMAT => 'csv_format')",
+    ],
+)
+def test_list_rejects_malformed_argument(dcur: snowflake.connector.cursor.DictCursor, suffix: str) -> None:
+    dcur.execute("CREATE STAGE list_stage")
+    dcur.execute("CREATE STAGE other_list_stage")
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute("LIST @first_list_stage, @second_list_stage")
-    assert excinfo.value.errno == 1003
-
-
-@pytest.mark.parametrize("modifier", ["WHERE TRUE", "JOIN @other_stage ON TRUE", "TABLESAMPLE (1 ROWS)"])
-def test_list_rejects_query_modifiers(dcur: snowflake.connector.cursor.DictCursor, modifier: str) -> None:
-    dcur.execute("CREATE STAGE modified_list_stage")
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute(f"LIST @modified_list_stage {modifier}")
-    assert excinfo.value.errno == 1003
-
-
-@pytest.mark.parametrize("option", ["", "PATTERN =>", "PATTERN => 'no-match'", "FILE_FORMAT => 'csv_format'"])
-def test_list_rejects_stage_query_options(dcur: snowflake.connector.cursor.DictCursor, option: str) -> None:
-    dcur.execute("CREATE STAGE options_list_stage")
-    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute(f"LIST @options_list_stage ({option})")
+        dcur.execute(f"LIST @list_stage {suffix}")
     assert excinfo.value.errno == 1003
 
 
