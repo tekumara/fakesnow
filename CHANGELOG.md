@@ -2,6 +2,26 @@
 
 # Changelog
 
+## [0.11.19](https://github.com/tekumara/fakesnow/compare/v0.11.18...v0.11.19) (2026-10-03)
+
+
+### Features
+
+* support named file formats and Snowflake CSV semantics in COPY INTO ([#423](https://github.com/tekumara/fakesnow/issues/423)) ([1dfe317](https://github.com/tekumara/fakesnow/commit/1dfe317a56d6e46ec6d07899575776c3d5b2f9c3))
+* support table stages and staged file paths ([#424](https://github.com/tekumara/fakesnow/issues/424)) ([28b3933](https://github.com/tekumara/fakesnow/commit/28b3933847490645a2c2bc75822acc50ffc362ab))
+* transfer PUT files over http in server mode ([#422](https://github.com/tekumara/fakesnow/issues/422)) ([ab59783](https://github.com/tekumara/fakesnow/commit/ab597833db6f5eb8e06dd4c1ccc7e1de5407bee8))
+
+
+### Bug Fixes
+
+* report only the CSV defaults handle_csv supports on CREATE FILE FORMAT ([8535d31](https://github.com/tekumara/fakesnow/commit/8535d3182042623ed26940f1a2573ba1497bd06c))
+
+
+### Chores
+
+* **deps-dev:** bump the pip group with 3 updates ([#436](https://github.com/tekumara/fakesnow/issues/436)) ([27e3cbe](https://github.com/tekumara/fakesnow/commit/27e3cbee5cbce3be36625cc3b972d874a09dd5a7))
+* **deps:** update duckdb requirement from ~=1.5.5 to ~=1.5.6 ([#437](https://github.com/tekumara/fakesnow/issues/437)) ([5057214](https://github.com/tekumara/fakesnow/commit/5057214be9aff92306e65e5edbc8d17a00d62972))
+
 ## [0.11.18](https://github.com/tekumara/fakesnow/compare/v0.11.17...v0.11.18) (2026-09-22)
 
 
