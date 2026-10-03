@@ -53,7 +53,16 @@ class TableStages:
         """Observe successful table creation/rename without exposing registry details to callers."""
         if expression.args.get("kind") != "TABLE":
             return
+        if isinstance(expression, exp.Drop):
+            live_oids = {
+                r[0]
+                for r in self._duck_conn.execute("SELECT table_oid FROM duckdb_tables() WHERE temporary").fetchall()
+            }
+            self._temporary = {key: value for key, value in self._temporary.items() if value[0] in live_oids}
+            return
         storage_name = None
+        old_key = None
+        expected_oid = None
         if isinstance(expression, exp.Create) and expression.find(exp.TemporaryProperty):
             table = expression.find(exp.Table)
             assert table
@@ -63,12 +72,12 @@ class TableStages:
             database, namespace = source.catalog or catalog, source.db or schema
             assert database and namespace
             old_key = (database, namespace, source.name)
-            if not (previous := self._temporary.pop(old_key, None)):
+            if not (previous := self._temporary.get(old_key)):
                 return
             table = rename.this
             assert isinstance(table, exp.Table)
             catalog, schema = old_key[:2]
-            storage_name = previous[1]
+            expected_oid, storage_name = previous
         else:
             return
 
@@ -83,6 +92,11 @@ class TableStages:
             assert isinstance(expression, exp.Alter), "Successfully created temporary table must exist"
             return
         oid = result[0]
+        if old_key is not None:
+            # DuckDB preserves the OID across rename. A name match is not enough to move storage.
+            if oid != expected_oid:
+                return
+            del self._temporary[old_key]
         if key not in self._temporary or self._temporary[key][0] != oid:
             # The storage catalog is opaque; filenames expose only the stage and relative path.
             self._temporary[key] = (oid, storage_name or f"{uuid.uuid4().hex}.{key[1]}.%{key[2]}")
@@ -197,8 +211,12 @@ def list_stage(
     if not (isinstance(expression, exp.Command) and expression.name.upper() == "LIST"):
         return expression
 
-    # Reuse Snowflake's stage-reference parser: comments are syntax, not part of the name.
-    reference = sqlglot.parse_one(f"SELECT * FROM {expression.expression.name}", read="snowflake").args["from_"].this
+    if expression.expression is None:
+        raise snowflake.connector.errors.ProgrammingError(
+            msg="SQL compilation error:\nsyntax error unexpected '<EOF>'.", errno=1003, sqlstate="42000"
+        )
+    # Parse the complete argument, not a SELECT whose extra clauses could be silently discarded.
+    reference = sqlglot.parse_one(expression.expression.name, read="snowflake", into=exp.Table)
     if not (
         isinstance(reference, exp.Table)
         and isinstance(reference.this, (exp.Var, exp.Literal))

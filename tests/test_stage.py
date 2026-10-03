@@ -255,6 +255,50 @@ def test_list_stage_with_trailing_comment(
     assert dcur.fetchall() == []
 
 
+@pytest.mark.parametrize("cursor_fixture", ["dcur", "sdcur"])
+def test_list_requires_stage_reference(request: pytest.FixtureRequest, cursor_fixture: str) -> None:
+    cur = request.getfixturevalue(cursor_fixture)
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute("LIST")
+    assert excinfo.value.errno == 1003
+
+
+def test_list_rejects_multiple_stage_references(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE STAGE first_list_stage")
+    dcur.execute("CREATE STAGE second_list_stage")
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("LIST @first_list_stage, @second_list_stage")
+    assert excinfo.value.errno == 1003
+
+
+@pytest.mark.parametrize("modifier", ["WHERE TRUE", "JOIN @other_stage ON TRUE", "TABLESAMPLE (1 ROWS)"])
+def test_list_rejects_query_modifiers(dcur: snowflake.connector.cursor.DictCursor, modifier: str) -> None:
+    dcur.execute("CREATE STAGE modified_list_stage")
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute(f"LIST @modified_list_stage {modifier}")
+    assert excinfo.value.errno == 1003
+
+
+def test_permanent_table_rename_does_not_revive_dropped_temporary_stage(
+    dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path
+) -> None:
+    dcur.execute("CREATE SCHEMA other_schema")
+    dcur.execute("USE SCHEMA schema1")
+    dcur.execute("CREATE TEMP TABLE original_stage_table (a INT)")
+    path = tmp_path / "data.csv"
+    path.write_text("1\n")
+    dcur.execute(f"PUT 'file://{path}' @%original_stage_table AUTO_COMPRESS=FALSE")
+    dcur.execute("DROP TABLE original_stage_table")
+    dcur.execute("CREATE TABLE original_stage_table (a INT)")
+    dcur.execute("USE SCHEMA other_schema")
+    dcur.execute("CREATE TEMP TABLE renamed_stage_table (a INT)")
+    dcur.execute("USE SCHEMA schema1")
+    dcur.execute("ALTER TABLE schema1.original_stage_table RENAME TO renamed_stage_table")
+
+    dcur.execute("LIST @schema1.%renamed_stage_table")
+    assert dcur.fetchall() == []
+
+
 def test_put_unquoted_src(dcur: snowflake.connector.cursor.DictCursor) -> None:
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         temp_file.write("1,2\n")
