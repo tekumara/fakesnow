@@ -262,6 +262,8 @@ def _params(
                 kwargs["file_format"] = handle_csv(options)
             elif var_type == "PARQUET":
                 kwargs["file_format"] = ReadParquet()
+            elif var_type == "JSON":
+                kwargs["file_format"] = ReadJSON()
             else:
                 raise NotImplementedError(f"{var_type} FILE_FORMAT")
         elif var == "FORCE":
@@ -675,6 +677,13 @@ class ReadCSV(FileTypeHandler):
 class ReadParquet(FileTypeHandler):
     def read_expression(self, url: str) -> Expr:
         return exp.func("read_parquet", self.file_literal(url))
+
+
+@dataclass
+class ReadJSON(FileTypeHandler):
+    def read_expression(self, url: str) -> Expr:
+        # Snowflake loads each newline delimited JSON value as a row in a single VARIANT column
+        return exp.func("read_json_objects", exp.Literal(this=url, is_string=True))
 
 
 @dataclass

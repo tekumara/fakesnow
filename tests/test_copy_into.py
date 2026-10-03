@@ -416,6 +416,21 @@ def test_copy_internal_table_stage(dcur: snowflake.connector.cursor.DictCursor) 
         assert dcur.fetchall() == [{"A": 1, "B": 2}]
 
 
+def test_copy_json_single_variant_column(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE TABLE json_table1 (record VARIANT)")
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".json") as temp_file:
+        temp_file.write('{"a": 1}\n{"a": 2}\n')
+        temp_file.flush()
+
+        dcur.execute("CREATE STAGE json_stage")
+        dcur.execute(f"PUT 'file://{temp_file.name}' @json_stage")
+        dcur.execute("COPY INTO json_table1 FROM @json_stage FILE_FORMAT = (TYPE = JSON)")
+
+        dcur.execute("SELECT record FROM json_table1 ORDER BY record:a")
+        # each newline delimited JSON object is loaded as a row
+        assert dindent(dcur.fetchall()) == [{"RECORD": '{\n  "a": 1\n}'}, {"RECORD": '{\n  "a": 2\n}'}]
+
+
 def test_put_table_stage_non_existent_table(dcur: snowflake.connector.cursor.DictCursor) -> None:
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         temp_file_path = temp_file.name
