@@ -47,7 +47,8 @@ class TableStages:
     """Resolve implicit table stages, including session-local temporary tables.
 
     DuckDB keeps temporary tables in one session namespace, so remember the Snowflake schema each was created in.
-    Table OIDs survive renames and are never reused, so dropped tables cannot match a later lookup.
+    Table OIDs survive renames and are never reused. Lookups embed only the live table's OID, and registrations
+    for dropped tables are pruned when another temporary table is created, so session history stays bounded.
     """
 
     def __init__(self, duck_conn: DuckDBPyConnection):
@@ -63,10 +64,11 @@ class TableStages:
             and (table := expression.find(exp.Table))
         ):
             return
-        sql = "SELECT table_oid FROM duckdb_tables() WHERE temporary AND table_name = ?"
-        (oid,) = self._duck_conn.execute(sql, [table.name]).fetchone() or (None,)
-        assert oid is not None, "Successfully created temporary table must exist"
-        self._temporary.setdefault(oid, (table.catalog or catalog, table.db or schema))
+        sql = "SELECT table_name, table_oid FROM duckdb_tables() WHERE temporary"
+        live = dict(self._duck_conn.execute(sql).fetchall())
+        live_oids = set(live.values())
+        self._temporary = {oid: owner for oid, owner in self._temporary.items() if oid in live_oids}
+        self._temporary.setdefault(live[table.name], (table.catalog or catalog, table.db or schema))
 
     def resolve_for_copy(
         self, catalog: str, schema: str, stage_name: str, target: tuple[str | None, str | None, str]
@@ -88,13 +90,15 @@ class TableStages:
         return result[0]
 
     def lookup_sql(self, catalog: str, schema: str, stage_name: str) -> str:
-        oids = ", ".join(str(oid) for oid, owner in self._temporary.items() if owner == (catalog, schema)) or "NULL"
+        sql = "SELECT table_oid FROM duckdb_tables() WHERE temporary AND table_name = ?"
+        live = self._duck_conn.execute(sql, [stage_name[1:]]).fetchone()
+        oid = live[0] if live and self._temporary.get(live[0]) == (catalog, schema) else "NULL"
         logical_name = exp.Literal.string(f"{catalog}.{schema}.{stage_name}").sql(dialect="duckdb")
         return f"""
             SELECT CASE WHEN temporary THEN '{self._session}.' || table_oid || '.%' ELSE {logical_name} END
             FROM duckdb_tables()
             WHERE table_name = '{stage_name[1:]}' AND (
-                (temporary AND table_oid IN ({oids}))
+                (temporary AND table_oid = {oid})
                 OR (NOT temporary AND database_name = '{catalog}' AND schema_name = '{schema}')
             )
             ORDER BY temporary DESC
