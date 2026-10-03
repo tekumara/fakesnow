@@ -54,6 +54,7 @@ class TableStages:
     def __init__(self, duck_conn: DuckDBPyConnection):
         self._duck_conn = duck_conn
         self._session = uuid.uuid4().hex
+        # Temporary table OID -> (catalog, schema) it was created in, which DuckDB does not record.
         self._temporary: dict[int, tuple[str | None, str | None]] = {}
 
     def record_temporary_table(self, expression: Expr, catalog: str | None, schema: str | None) -> None:
@@ -64,10 +65,15 @@ class TableStages:
             and (table := expression.find(exp.Table))
         ):
             return
+        # Temporary table names are unique within the session, so the name identifies the new table's OID.
         sql = "SELECT table_name, table_oid FROM duckdb_tables() WHERE temporary"
         live = dict(self._duck_conn.execute(sql).fetchall())
+        # Forget dropped tables here rather than tracking DROP, so the registry is bounded by live tables.
         live_oids = set(live.values())
         self._temporary = {oid: owner for oid, owner in self._temporary.items() if oid in live_oids}
+        # CREATE TEMP TABLE IF NOT EXISTS succeeds without creating anything when the name is already taken, even
+        # from another schema, so the OID may already be registered. Keep the schema it was created in; overwriting
+        # it would move the existing table's stage to the current schema.
         self._temporary.setdefault(live[table.name], (table.catalog or catalog, table.db or schema))
 
     def resolve_for_copy(
@@ -90,9 +96,16 @@ class TableStages:
         return result[0]
 
     def lookup_sql(self, catalog: str, schema: str, stage_name: str) -> str:
+        """SQL returning the storage name of the table stage, or no rows if the table does not exist.
+
+        A temporary table shadows a permanent table of the same name, but only in the schema it was created in.
+        """
+        # At most one temporary table has this name in the session. Embed its OID only if it was created in the
+        # requested schema; otherwise match nothing (NULL), leaving any permanent table to resolve.
         sql = "SELECT table_oid FROM duckdb_tables() WHERE temporary AND table_name = ?"
         live = self._duck_conn.execute(sql, [stage_name[1:]]).fetchone()
         oid = live[0] if live and self._temporary.get(live[0]) == (catalog, schema) else "NULL"
+        # Temporary storage is keyed by session and OID, so it is isolated between sessions and follows renames.
         logical_name = exp.Literal.string(f"{catalog}.{schema}.{stage_name}").sql(dialect="duckdb")
         return f"""
             SELECT CASE WHEN temporary THEN '{self._session}.' || table_oid || '.%' ELSE {logical_name} END
