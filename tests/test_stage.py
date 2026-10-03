@@ -3,6 +3,7 @@ import os
 import re
 import tempfile
 from datetime import timezone
+from pathlib import Path
 
 import pytest
 import snowflake.connector.cursor
@@ -225,6 +226,20 @@ def test_put_rejects_path_outside_stage(_fakesnow: None, bound_target: bool) -> 
             + r".*/DB1/SCHEMA1/SOURCE_STAGE/\.\./OTHER_STAGE"
             + re.escape("')', this might be caused by your access to the blob storage provider, or by Snowflake.")
         )
+
+
+@pytest.mark.parametrize("cursor_fixture", ["dcur", "sdcur"])
+def test_put_list_shadowed_table_stage(request: pytest.FixtureRequest, cursor_fixture: str, tmp_path: Path) -> None:
+    cur = request.getfixturevalue(cursor_fixture)
+    cur.execute("CREATE TABLE shadowed_stage_table (a INT)")
+    cur.execute("CREATE TEMP TABLE shadowed_stage_table (a INT)")
+    path = tmp_path / "data.csv"
+    path.write_text("1\n")
+
+    cur.execute(f"PUT 'file://{path}' @%shadowed_stage_table AUTO_COMPRESS=FALSE")
+    assert [r["status"] for r in cur.fetchall()] == ["UPLOADED"]
+    cur.execute("LIST @db1.schema1.%shadowed_stage_table")
+    assert [r["name"] for r in cur.fetchall()] == ["data.csv"]
 
 
 def test_put_unquoted_src(dcur: snowflake.connector.cursor.DictCursor) -> None:

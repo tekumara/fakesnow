@@ -5,6 +5,7 @@ import os
 import re
 import tempfile
 import uuid
+from collections.abc import Iterator
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import NamedTuple, cast
@@ -433,18 +434,77 @@ def test_copy_table_stage_non_existent_table(dcur: snowflake.connector.cursor.Di
     )
 
 
-def test_copy_temp_table_stage_in_other_schema_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
+@pytest.mark.parametrize("switch_schema", [False, True])
+def test_copy_temp_table_stage_in_other_schema_does_not_exist(
+    dcur: snowflake.connector.cursor.DictCursor, switch_schema: bool
+) -> None:
     dcur.execute("CREATE SCHEMA other_schema")
     dcur.execute("USE SCHEMA schema1")
     dcur.execute("CREATE TEMP TABLE temporary_stage_table (a INT)")
+    if switch_schema:
+        dcur.execute("USE SCHEMA other_schema")
 
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
-        dcur.execute("COPY INTO temporary_stage_table FROM @other_schema.%temporary_stage_table")
+        dcur.execute("COPY INTO schema1.temporary_stage_table FROM @other_schema.%temporary_stage_table")
 
     assert str(excinfo.value).startswith(
         "002003 (02000): SQL compilation error:\nStage 'DB1.OTHER_SCHEMA.\"%TEMPORARY_STAGE_TABLE\"' "
         "does not exist or not authorized."
     )
+
+
+def test_copy_temp_table_stage_after_schema_switch(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE SCHEMA other_schema")
+    dcur.execute("USE SCHEMA schema1")
+    dcur.execute("CREATE TEMP TABLE temporary_stage_table (a INT)")
+    dcur.execute("USE SCHEMA other_schema")
+
+    dcur.execute("COPY INTO schema1.temporary_stage_table FROM @schema1.%temporary_stage_table")
+    assert dcur.fetchall() == [{"status": "Copy executed with 0 files processed."}]
+
+
+@pytest.fixture
+def temporary_table_stage_sessions(
+    _fakesnow: None, tmp_path: Path
+) -> Iterator[tuple[snowflake.connector.cursor.DictCursor, snowflake.connector.cursor.DictCursor]]:
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1") as first_conn,
+        snowflake.connector.connect(database="db1", schema="schema1") as second_conn,
+        first_conn.cursor(snowflake.connector.cursor.DictCursor) as first,
+        second_conn.cursor(snowflake.connector.cursor.DictCursor) as second,
+    ):
+        for cur in (first, second):
+            cur.execute("CREATE TEMP TABLE session_stage_table (a INT, b INT)")
+        path = tmp_path / "data.csv"
+        path.write_text("1,2\n")
+        first.execute(f"PUT 'file://{path}' @%session_stage_table AUTO_COMPRESS=FALSE")
+        yield cast(snowflake.connector.cursor.DictCursor, first), cast(snowflake.connector.cursor.DictCursor, second)
+
+
+def test_list_temporary_table_stage_is_session_isolated(
+    temporary_table_stage_sessions: tuple[snowflake.connector.cursor.DictCursor, snowflake.connector.cursor.DictCursor],
+) -> None:
+    first, second = temporary_table_stage_sessions
+    second.execute("LIST @db1.schema1.%session_stage_table")
+    assert second.fetchall() == []
+
+    first.execute("LIST @db1.schema1.%session_stage_table")
+    assert [r["name"] for r in first.fetchall()] == ["data.csv"]
+
+
+def test_copy_purge_temporary_table_stage_is_session_isolated(
+    temporary_table_stage_sessions: tuple[snowflake.connector.cursor.DictCursor, snowflake.connector.cursor.DictCursor],
+) -> None:
+    first, second = temporary_table_stage_sessions
+    second.execute("COPY INTO session_stage_table FROM @%session_stage_table PURGE=TRUE")
+    assert second.fetchall() == [{"status": "Copy executed with 0 files processed."}]
+    second.execute("SELECT * FROM session_stage_table")
+    assert second.fetchall() == []
+
+    # The other session's PURGE must not remove this session's staged input.
+    first.execute("COPY INTO session_stage_table FROM @%session_stage_table")
+    first.execute("SELECT * FROM session_stage_table")
+    assert first.fetchall() == [{"A": 1, "B": 2}]
 
 
 def test_copy_format_name_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:

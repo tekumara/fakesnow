@@ -5,6 +5,7 @@ import os
 import re
 import shutil
 import tempfile
+import uuid
 from contextlib import suppress
 from pathlib import PurePath
 from typing import Any, TypedDict
@@ -13,6 +14,7 @@ from urllib.request import url2pathname
 
 import snowflake.connector.errors
 import sqlglot
+from duckdb import DuckDBPyConnection
 from snowflake.connector.file_util import SnowflakeFileUtil
 from sqlglot import Expr, exp
 
@@ -38,6 +40,45 @@ class UploadCommandDict(TypedDict):
     sourceCompression: str
     overwrite: bool
     command: str
+
+
+class TableStages:
+    """Session-local identities for temporary tables and their implicit stages."""
+
+    def __init__(self, duck_conn: DuckDBPyConnection):
+        self._duck_conn = duck_conn
+        self._temporary: dict[tuple[str, str, str], tuple[int, str]] = {}
+
+    def record_creation(self, expression: Expr, catalog: str, schema: str) -> None:
+        if not expression.find(exp.TemporaryProperty):
+            return
+        table = expression.find(exp.Table)
+        assert table
+        key = (table.catalog or catalog, table.db or schema, table.name)
+        result = self._duck_conn.execute(
+            "SELECT table_oid FROM duckdb_tables() WHERE temporary AND table_name = ?", [table.name]
+        ).fetchone()
+        assert result, "Successfully created temporary table must exist"
+        oid = result[0]
+        if key not in self._temporary or self._temporary[key][0] != oid:
+            # The storage catalog is opaque; filenames expose only the stage and relative path.
+            self._temporary[key] = (oid, f"{uuid.uuid4().hex}.{key[1]}.%{key[2]}")
+
+    def lookup_sql(self, catalog: str, schema: str, stage_name: str) -> str:
+        logical_name = exp.Literal.string(f"{catalog}.{schema}.{stage_name}").sql(dialect="duckdb")
+        temporary = self._temporary.get((catalog, schema, stage_name[1:]))
+        temp_predicate = f"temporary AND table_oid = {temporary[0]}" if temporary else "FALSE"
+        storage_name = exp.Literal.string(temporary[1]).sql(dialect="duckdb") if temporary else logical_name
+        return f"""
+            SELECT CASE WHEN temporary THEN {storage_name} ELSE {logical_name} END AS storage_name
+            FROM duckdb_tables()
+            WHERE ({temp_predicate}) OR (
+                NOT temporary AND database_name = '{catalog}' AND schema_name = '{schema}'
+                AND table_name = '{stage_name[1:]}'
+            )
+            ORDER BY temporary DESC
+            LIMIT 1
+        """
 
 
 def create_stage(
@@ -123,28 +164,27 @@ def create_stage(
     return transformed
 
 
-def list_stage(expression: Expr, current_database: str | None, current_schema: str | None) -> Expr:
+def list_stage(
+    expression: Expr, current_database: str | None, current_schema: str | None, table_stages: TableStages
+) -> Expr:
     """Transform LIST to list file system operation.
 
     See https://docs.snowflake.com/en/sql-reference/sql/list
     """
-    if not (
-        isinstance(expression, exp.Alias)
-        and isinstance(expression.this, exp.Column)
-        and isinstance(expression.this.this, exp.Identifier)
-        and isinstance(expression.this.this.this, str)
-        and expression.this.this.this.upper() == "LIST"
-    ):
+    if not (isinstance(expression, exp.Command) and expression.name.upper() == "LIST"):
         return expression
 
-    stage = expression.args["alias"].this
-    if not isinstance(stage, exp.Var):
-        raise ValueError(f"LIST command requires a stage name as a Var, got {stage}")
-
-    var = stage.text("this")
+    var = expression.expression.name
+    if var.startswith("'"):
+        literal = sqlglot.parse_one(var, read="snowflake")
+        assert isinstance(literal, exp.Literal)
+        var = literal.name
+    if not re.fullmatch(r"@\S+", var):
+        raise NotImplementedError("LIST requires a single stage reference")
+    var = var[1:]
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
-    transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name), read="duckdb")
+    transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name, table_stages), read="duckdb")
     transformed.args["list_stage_name"] = f"{catalog}.{schema}.{stage_name}"
     return transformed
 
@@ -157,6 +197,7 @@ def put_stage(
     current_database: str | None,
     current_schema: str | None,
     params: MutableParams | None,
+    table_stages: TableStages,
 ) -> Expr:
     """Transform PUT to a SELECT statement to locate the stage.
 
@@ -206,14 +247,16 @@ def put_stage(
             sqlstate="42601",
         )
 
-    transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name), read="duckdb")
+    transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name, table_stages), read="duckdb")
     fqname = f"{catalog}.{schema}.{stage_name}"
     transformed.args["put_stage_name"] = fqname
+    transformed.args["put_stage_path"] = path
     transformed.args["put_stage_data"] = {
         "stageInfo": {
             # use LOCAL_FS otherwise we need to mock S3 with HTTPS which requires a certificate
             "locationType": "LOCAL_FS",
-            "location": internal_dir(fqname, path),
+            # Filled after the lookup resolves the table instance (including temporary shadowing).
+            "location": "",
             "creds": {},
         },
         "src_locations": [src_path],
@@ -245,23 +288,30 @@ def not_found_error(fqname: str) -> snowflake.connector.errors.ProgrammingError:
     )
 
 
-def stage_lookup_sql(catalog: str, schema: str, stage_name: str) -> str:
-    """SQL that returns a single row when the stage exists."""
+def stage_lookup_sql(catalog: str, schema: str, stage_name: str, table_stages: TableStages) -> str:
+    """SQL returning the storage identity of the single resolved stage, or no rows."""
     if is_table_stage(stage_name):
-        return f"""
-            SELECT *
-            from duckdb_tables()
-            where table_name = '{stage_name[1:]}'
-              and (
-                  (database_name = '{catalog}' and schema_name = '{schema}')
-                  or (temporary and current_database() = '{catalog}' and current_schema() = '{schema}')
-              )
-        """
+        return table_stages.lookup_sql(catalog, schema, stage_name)
+    storage_name = exp.Literal.string(f"{catalog}.{schema}.{stage_name}").sql(dialect="duckdb")
     return f"""
-        SELECT *
+        SELECT {storage_name} AS storage_name
         from _fs_global._fs_information_schema._fs_stages
         where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
     """
+
+
+def complete_stage_lookup(expression: Expr, result: tuple | None) -> str:
+    """Complete PUT/LIST using resolved storage without leaking lookup details to the cursor."""
+    stage_name = expression.args.get("list_stage_name") or expression.args["put_stage_name"]
+    if result is None:
+        raise not_found_error(stage_name)
+    storage_name = result[0]
+    if expression.args.get("list_stage_name"):
+        return list_stage_files_sql(storage_name)
+    expression.args["put_stage_data"]["stageInfo"]["location"] = internal_dir(
+        storage_name, expression.args["put_stage_path"]
+    )
+    return "SELECT 'Statement executed successfully.' AS status"
 
 
 def parts_from_var(var: str, current_database: str | None, current_schema: str | None) -> tuple[str, str, str]:

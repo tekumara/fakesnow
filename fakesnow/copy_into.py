@@ -46,6 +46,7 @@ def copy_into(
     current_database: str | None,
     current_schema: str | None,
     expr: exp.Copy,
+    table_stages: stage.TableStages,
     params: MutableParams | None = None,
 ) -> str:
     cparams = _params(
@@ -54,7 +55,7 @@ def copy_into(
 
     from_source = _from_source(expr)
     source = (
-        stage_url_from_var(from_source[1:], duck_conn, current_database, current_schema)
+        stage_url_from_var(from_source[1:], duck_conn, current_database, current_schema, table_stages)
         if from_source.startswith("@")
         else from_source
     )
@@ -307,7 +308,11 @@ def _from_source(expr: exp.Copy) -> str:
 
 
 def stage_url_from_var(
-    var: str, duck_conn: DuckDBPyConnection, current_database: str | None, current_schema: str | None
+    var: str,
+    duck_conn: DuckDBPyConnection,
+    current_database: str | None,
+    current_schema: str | None,
+    table_stages: stage.TableStages,
 ) -> str:
     # a stage reference can include a path suffix, eg: @stage1/dir/file.csv.gz
     stage_var, _, path = var.partition("/")
@@ -315,10 +320,10 @@ def stage_url_from_var(
     fqname = f"{database_name}.{schema_name}.{name}"
 
     if stage.is_table_stage(name):
-        duck_conn.execute(stage.stage_lookup_sql(database_name, schema_name, name))
-        if not duck_conn.fetchone():
+        duck_conn.execute(stage.stage_lookup_sql(database_name, schema_name, name, table_stages))
+        if not (result := duck_conn.fetchone()):
             raise stage.not_found_error(fqname)
-        url = stage.internal_dir(fqname)
+        url = stage.internal_dir(result[0])
     else:
         duck_conn.execute(
             """
