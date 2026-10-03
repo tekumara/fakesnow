@@ -7,6 +7,7 @@ import shutil
 import tempfile
 import uuid
 from contextlib import suppress
+from glob import escape as glob_escape
 from pathlib import PurePath
 from typing import Any, TypedDict
 from urllib.parse import urlparse
@@ -437,6 +438,15 @@ def internal_dir(fqname: str, path: str = "") -> str:
 
 def _file_name_prefix(stage_name: str) -> str:
     return "" if is_table_stage(stage_name) else f"{stage_name.lower()}/"
+
+
+def internal_files_sql(prefix: str) -> str:
+    """Match an opaque stage prefix without interpreting its suffix as filesystem traversal."""
+    catalog, schema, stage_name, *_ = PurePath(prefix).relative_to(LOCAL_BUCKET_PATH).parts
+    root = internal_dir(f"{catalog}.{schema}.{stage_name}")
+    glob = exp.Literal.string(f"{glob_escape(root)}**/*").sql(dialect="duckdb")
+    literal_prefix = exp.Literal.string(prefix).sql(dialect="duckdb")
+    return f"SELECT file FROM glob({glob}) WHERE starts_with(file, {literal_prefix})"
 
 
 def internal_file_name(path: str) -> str:

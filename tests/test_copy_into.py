@@ -455,6 +455,32 @@ def test_copy_table_stage_rejects_other_table(
     )
 
 
+@pytest.mark.parametrize(
+    "copy_source",
+    ["@%table1/../%TRAVERSAL_OWNER/data.csv.gz", "(SELECT 1, 2 FROM @%table1/../%TRAVERSAL_OWNER/data.csv.gz)"],
+    ids=["direct", "transformed"],
+)
+def test_copy_table_stage_path_cannot_load_or_purge_other_table(
+    dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path, copy_source: str
+) -> None:
+    create_table(dcur)
+    dcur.execute("CREATE TABLE traversal_owner (a INT, b INT)")
+    target_path = tmp_path / "target.csv"
+    target_path.write_text("1,2\n")
+    owner_path = tmp_path / "data.csv"
+    owner_path.write_text("7,8\n")
+    # Both directories must exist for the filesystem traversal to reach the other stage.
+    dcur.execute(f"PUT 'file://{target_path}' @%table1")
+    dcur.execute(f"PUT 'file://{owner_path}' @%traversal_owner")
+
+    dcur.execute(f"COPY INTO table1 FROM {copy_source} PURGE=TRUE")
+    assert dcur.fetchall() == [{"status": "Copy executed with 0 files processed."}]
+    dcur.execute("SELECT * FROM table1")
+    assert dcur.fetchall() == []
+    dcur.execute("LIST @%traversal_owner")
+    assert [r["name"] for r in dcur.fetchall()] == ["data.csv.gz"]
+
+
 def test_copy_table_stage_rejects_same_name_in_other_schema(
     dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path
 ) -> None:
