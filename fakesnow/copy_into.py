@@ -352,12 +352,15 @@ def _source_glob(source: str, duck_conn: DuckDBPyConnection) -> list[str]:
     """List files from the source using duckdb glob."""
     if stage.is_internal(source):
         # keep the plain path: duckdb does not decode percent-encoded file URIs
-        # a stage path suffix is a prefix match, eg: @stage1/dir/file matches dir/file*
-        glob = f"{glob_escape(source.rstrip('/'))}/*" if os.path.isdir(source) else f"{glob_escape(source)}*"
+        # Match the literal prefix both in this directory and recursively beneath it.
+        # An existing directory must not exclude sibling filenames sharing its prefix.
+        prefix = glob_escape(source)
+        patterns = exp.array(exp.Literal.string(f"{prefix}*"), exp.Literal.string(f"{prefix}*/**/*"))
+        sql = f"SELECT DISTINCT file FROM glob({patterns.sql(dialect='duckdb')})"
     else:
         scheme, _netloc, _path, _params, _query, _fragment = urlparse(source)
         glob = f"{source}/*" if scheme == "file" else f"{source}*"
-    sql = f"SELECT file FROM glob('{glob}')"
+        sql = f"SELECT file FROM glob('{glob}')"
     logger.log_sql(sql)
     result = duck_conn.execute(sql).fetchall()
     return [r[0] for r in result]

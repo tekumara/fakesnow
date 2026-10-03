@@ -279,6 +279,38 @@ def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor, s
         assert dcur.fetchall() == [{"A": 3, "B": 4}]
 
 
+@pytest.fixture
+def directory_stage(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    create_table(dcur)
+    dcur.execute("CREATE OR REPLACE STAGE recursive_prefix_stage")
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        for name, stage_path, data in (
+            ("incoming.csv", "", "1,2\n"),
+            ("nested.csv", "/incoming/deeper", "3,4\n"),
+            ("other.csv", "", "5,6\n"),
+        ):
+            path = f"{tmp_dir}/{name}"
+            with open(path, "w") as f:
+                f.write(data)
+            dcur.execute(f"PUT 'file://{path}' @recursive_prefix_stage{stage_path} AUTO_COMPRESS=FALSE")
+
+
+def test_copy_internal_stage_root_includes_nested_files(
+    dcur: snowflake.connector.cursor.DictCursor, directory_stage: None
+) -> None:
+    dcur.execute("COPY INTO table1 FROM @recursive_prefix_stage")
+    dcur.execute("SELECT * FROM table1 ORDER BY a")
+    assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}, {"A": 5, "B": 6}]
+
+
+def test_copy_internal_stage_directory_is_a_prefix(
+    dcur: snowflake.connector.cursor.DictCursor, directory_stage: None
+) -> None:
+    dcur.execute("COPY INTO table1 FROM @recursive_prefix_stage/incoming")
+    dcur.execute("SELECT * FROM table1 ORDER BY a")
+    assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
+
+
 def test_copy_internal_stage_missing_directory_prefix(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     dcur.execute("CREATE STAGE directory_prefix_stage")
@@ -311,10 +343,10 @@ def test_copy_internal_stage_path_is_literal(dcur: snowflake.connector.cursor.Di
 
 
 @pytest.mark.parametrize(
-    ("stage_name", "create_stage_sql", "stage_path", "auto_compress", "expected_file"),
+    ("stage_name", "create_source_sql", "stage_path", "auto_compress", "expected_file"),
     [
         ("file_name_stage", "CREATE STAGE file_name_stage", "%incoming", True, "file_name_stage/%incoming/data.csv.gz"),
-        ("%table1", None, "%incoming", True, "%incoming/data.csv.gz"),
+        ("%file_name_table", "CREATE TABLE file_name_table (a INT, b INT)", "%incoming", True, "%incoming/data.csv.gz"),
         ("hash_stage", "CREATE STAGE hash_stage", "dir#tag", True, "hash_stage/dir#tag/data.csv.gz"),
         ("query_stage", "CREATE STAGE query_stage", "dir?tag", False, "query_stage/dir?tag/data.csv"),
     ],
@@ -322,14 +354,13 @@ def test_copy_internal_stage_path_is_literal(dcur: snowflake.connector.cursor.Di
 def test_copy_internal_stage_subdirectory_file_name(
     dcur: snowflake.connector.cursor.DictCursor,
     stage_name: str,
-    create_stage_sql: str | None,
+    create_source_sql: str,
     stage_path: str,
     auto_compress: bool,
     expected_file: str,
 ) -> None:
     create_table(dcur)
-    if create_stage_sql:
-        dcur.execute(create_stage_sql)
+    dcur.execute(create_source_sql)
 
     with tempfile.TemporaryDirectory() as tmp_dir:
         path = f"{tmp_dir}/data.csv"
