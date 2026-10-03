@@ -352,18 +352,33 @@ def test_copy_internal_stage_path_is_literal(dcur: snowflake.connector.cursor.Di
 
 
 @pytest.mark.parametrize(
-    ("stage_name", "create_source_sql", "stage_path", "auto_compress", "expected_file"),
+    ("stage_name", "create_source_sql", "target_table", "stage_path", "auto_compress", "expected_file"),
     [
-        ("file_name_stage", "CREATE STAGE file_name_stage", "%incoming", True, "file_name_stage/%incoming/data.csv.gz"),
-        ("%file_name_table", "CREATE TABLE file_name_table (a INT, b INT)", "%incoming", True, "%incoming/data.csv.gz"),
-        ("hash_stage", "CREATE STAGE hash_stage", "dir#tag", True, "hash_stage/dir#tag/data.csv.gz"),
-        ("query_stage", "CREATE STAGE query_stage", "dir?tag", False, "query_stage/dir?tag/data.csv"),
+        (
+            "file_name_stage",
+            "CREATE STAGE file_name_stage",
+            "table1",
+            "%incoming",
+            True,
+            "file_name_stage/%incoming/data.csv.gz",
+        ),
+        (
+            "%file_name_table",
+            "CREATE TABLE file_name_table (a INT, b INT)",
+            "file_name_table",
+            "%incoming",
+            True,
+            "%incoming/data.csv.gz",
+        ),
+        ("hash_stage", "CREATE STAGE hash_stage", "table1", "dir#tag", True, "hash_stage/dir#tag/data.csv.gz"),
+        ("query_stage", "CREATE STAGE query_stage", "table1", "dir?tag", False, "query_stage/dir?tag/data.csv"),
     ],
 )
 def test_copy_internal_stage_subdirectory_file_name(
     dcur: snowflake.connector.cursor.DictCursor,
     stage_name: str,
     create_source_sql: str,
+    target_table: str,
     stage_path: str,
     auto_compress: bool,
     expected_file: str,
@@ -378,7 +393,7 @@ def test_copy_internal_stage_subdirectory_file_name(
 
         dcur.execute(f"PUT 'file://{path}' @{stage_name}/{stage_path} AUTO_COMPRESS={str(auto_compress).upper()}")
         target_file = "data.csv.gz" if auto_compress else "data.csv"
-        dcur.execute(f"COPY INTO table1 FROM @{stage_name}/{stage_path}/{target_file}")
+        dcur.execute(f"COPY INTO {target_table} FROM @{stage_name}/{stage_path}/{target_file}")
         assert [r["file"] for r in dcur.fetchall()] == [expected_file]
 
 
@@ -413,6 +428,51 @@ def test_put_table_stage_non_existent_table(dcur: snowflake.connector.cursor.Dic
             str(excinfo.value)
             == "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.\"%FOOBAR\"' does not exist or not authorized."
         )
+
+
+@pytest.mark.parametrize("table_type", ["", "TEMP"], ids=["permanent", "temporary"])
+@pytest.mark.parametrize("stage_path", ["%incoming/data.csv.gz", "missing/"], ids=["file", "no-files"])
+@pytest.mark.parametrize(
+    "copy_source",
+    ["@%stage_owner/{stage_path}", "(SELECT 1, 2 FROM @%stage_owner/{stage_path})"],
+    ids=["direct", "transformed"],
+)
+def test_copy_table_stage_rejects_other_table(
+    dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path, table_type: str, stage_path: str, copy_source: str
+) -> None:
+    create_table(dcur)
+    dcur.execute(f"CREATE {table_type} TABLE stage_owner (a INT, b INT)")
+    path = tmp_path / "data.csv"
+    path.write_text("1,2\n")
+    dcur.execute(f"PUT 'file://{path}' @%stage_owner/%incoming")
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute(f"COPY INTO table1 FROM {copy_source.format(stage_path=stage_path)}")
+
+    assert str(excinfo.value) == (
+        "001023 (42601): SQL compilation error:\n"
+        "Access to the stage area of a table (STAGE_OWNER) with the schema of another table (TABLE1) is not allowed."
+    )
+
+
+def test_copy_table_stage_rejects_same_name_in_other_schema(
+    dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path
+) -> None:
+    dcur.execute("CREATE SCHEMA other_schema")
+    dcur.execute("USE SCHEMA schema1")
+    dcur.execute("CREATE TABLE stage_owner (a INT, b INT)")
+    dcur.execute("CREATE TABLE other_schema.stage_owner (a INT, b INT)")
+    path = tmp_path / "data.csv"
+    path.write_text("1,2\n")
+    dcur.execute(f"PUT 'file://{path}' @other_schema.%stage_owner")
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("COPY INTO stage_owner FROM @other_schema.%stage_owner")
+
+    assert str(excinfo.value) == (
+        "001023 (42601): SQL compilation error:\n"
+        "Access to the stage area of a table (STAGE_OWNER) with the schema of another table (STAGE_OWNER) is not allowed."
+    )
 
 
 @pytest.mark.parametrize("table_type", ["", "TEMP"], ids=["permanent", "temporary"])

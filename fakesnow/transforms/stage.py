@@ -43,7 +43,7 @@ class UploadCommandDict(TypedDict):
 
 
 class TableStages:
-    """Session-local identities for temporary tables and their implicit stages."""
+    """Resolve implicit table stages, including session-local temporary-table identities and ownership."""
 
     def __init__(self, duck_conn: DuckDBPyConnection):
         self._duck_conn = duck_conn
@@ -100,6 +100,25 @@ class TableStages:
         if key not in self._temporary or self._temporary[key][0] != oid:
             # The storage catalog is opaque; filenames expose only the stage and relative path.
             self._temporary[key] = (oid, storage_name or f"{uuid.uuid4().hex}.{key[1]}.%{key[2]}")
+
+    def resolve_for_copy(
+        self, catalog: str, schema: str, stage_name: str, target: tuple[str | None, str | None, str]
+    ) -> str:
+        """Resolve a table stage for loading, which is allowed only into its owning table."""
+        result = self._duck_conn.execute(self.lookup_sql(catalog, schema, stage_name)).fetchone()
+        if not result:
+            raise not_found_error(f"{catalog}.{schema}.{stage_name}")
+        owner = (catalog, schema, stage_name[1:])
+        if owner != target:
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=(
+                    f"SQL compilation error:\nAccess to the stage area of a table ({owner[2]}) "
+                    f"with the schema of another table ({target[2]}) is not allowed."
+                ),
+                errno=1023,
+                sqlstate="42601",
+            )
+        return result[0]
 
     def lookup_sql(self, catalog: str, schema: str, stage_name: str) -> str:
         logical_name = exp.Literal.string(f"{catalog}.{schema}.{stage_name}").sql(dialect="duckdb")

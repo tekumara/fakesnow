@@ -53,9 +53,10 @@ def copy_into(
         expr, params, duck_conn=duck_conn, current_database=current_database, current_schema=current_schema
     )
 
+    table = _extract_table(expr.this)
     from_source = _from_source(expr)
     source = (
-        stage_url_from_var(from_source[1:], duck_conn, current_database, current_schema, table_stages)
+        stage_url_from_var(from_source[1:], duck_conn, current_database, current_schema, table_stages, table)
         if from_source.startswith("@")
         else from_source
     )
@@ -65,7 +66,6 @@ def copy_into(
         duck_conn.execute(sql)
         return sql
 
-    table = _extract_table(expr.this)
     schema = table.db or current_schema
     assert schema
 
@@ -313,6 +313,7 @@ def stage_url_from_var(
     current_database: str | None,
     current_schema: str | None,
     table_stages: stage.TableStages,
+    target_table: exp.Table,
 ) -> str:
     # a stage reference can include a path suffix, eg: @stage1/dir/file.csv.gz
     stage_var, _, path = var.partition("/")
@@ -320,10 +321,8 @@ def stage_url_from_var(
     fqname = f"{database_name}.{schema_name}.{name}"
 
     if stage.is_table_stage(name):
-        duck_conn.execute(stage.stage_lookup_sql(database_name, schema_name, name, table_stages))
-        if not (result := duck_conn.fetchone()):
-            raise stage.not_found_error(fqname)
-        url = stage.internal_dir(result[0])
+        target = (target_table.catalog or current_database, target_table.db or current_schema, target_table.name)
+        url = stage.internal_dir(table_stages.resolve_for_copy(database_name, schema_name, name, target))
     else:
         duck_conn.execute(
             """
