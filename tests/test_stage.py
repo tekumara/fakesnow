@@ -279,6 +279,19 @@ def test_list_rejects_query_modifiers(dcur: snowflake.connector.cursor.DictCurso
     assert excinfo.value.errno == 1003
 
 
+@pytest.mark.parametrize("option", ["PATTERN => 'no-match'", "FILE_FORMAT => 'csv_format'"])
+def test_list_rejects_stage_query_options(dcur: snowflake.connector.cursor.DictCursor, option: str) -> None:
+    dcur.execute("CREATE STAGE options_list_stage")
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute(f"LIST @options_list_stage ({option})")
+    assert excinfo.value.errno == 1003
+
+
+def test_execute_string_with_list(conn: snowflake.connector.SnowflakeConnection) -> None:
+    cursors = list(conn.execute_string("CREATE STAGE script_stage; LIST @script_stage;"))
+    assert cursors[-1].fetchall() == []
+
+
 def test_permanent_table_rename_does_not_revive_dropped_temporary_stage(
     dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path
 ) -> None:

@@ -220,10 +220,12 @@ def list_stage(
     if not (
         isinstance(reference, exp.Table)
         and isinstance(reference.this, (exp.Var, exp.Literal))
-        and not reference.args.get("alias")
+        and all(value is None for key, value in reference.args.items() if key != "this")
         and reference.this.name.startswith("@")
     ):
-        raise NotImplementedError("LIST requires a single stage reference")
+        raise snowflake.connector.errors.ProgrammingError(
+            msg="SQL compilation error:\nsyntax error in LIST stage reference.", errno=1003, sqlstate="42000"
+        )
     var = reference.this.name[1:]
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
