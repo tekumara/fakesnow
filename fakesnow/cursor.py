@@ -30,6 +30,7 @@ import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 from fakesnow import logger
 from fakesnow.copy_into import copy_into
+from fakesnow.dialect import SnowflakeWithStageCommands
 from fakesnow.params import MutableParams
 from fakesnow.rowtype import describe_as_result_metadata
 from fakesnow.transforms import stage
@@ -161,7 +162,7 @@ class FakeSnowflakeCursor:
         Returns None for statements we can only describe by running them.
         """
 
-        expression = sqlglot.parse_one(command, read="snowflake")
+        expression = sqlglot.parse_one(command, read=SnowflakeWithStageCommands)
 
         if result_sql := DESCRIBE_RESULT_SQL.get(type(expression)):
             describe = result_sql
@@ -222,7 +223,7 @@ class FakeSnowflakeCursor:
                 self._execute(transformed, params)
                 return self
 
-            expression = parse_one(command, read="snowflake")
+            expression = parse_one(command, read=SnowflakeWithStageCommands)
             self.check_db_and_schema(expression)
 
             for statement in self._transform_explode(expression):
@@ -374,8 +375,14 @@ class FakeSnowflakeCursor:
             .transform(transforms.numeric_agg_implicit_cast)
             .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
             .transform(lambda e: transforms.create_file_format(e, self._conn.database, self._conn.schema))
-            .transform(lambda e: transforms.list_stage(e, self._conn.database, self._conn.schema))
-            .transform(lambda e: transforms.put_stage(e, self._conn.database, self._conn.schema, params))
+            .transform(
+                lambda e: transforms.list_stage(e, self._conn.database, self._conn.schema, self._conn.table_stages)
+            )
+            .transform(
+                lambda e: transforms.put_stage(
+                    e, self._conn.database, self._conn.schema, params, self._conn.table_stages
+                )
+            )
             .transform(lambda e: transforms.create_table_as(e, self._duck_conn))
         )
 
@@ -474,7 +481,14 @@ class FakeSnowflakeCursor:
         affected_count = None
         try:
             if isinstance(transformed, exp.Copy):
-                sql = copy_into(self._duck_conn, self._conn.database, self._conn.schema, transformed, params)
+                sql = copy_into(
+                    self._duck_conn,
+                    self._conn.database,
+                    self._conn.schema,
+                    transformed,
+                    self._conn.table_stages,
+                    params,
+                )
             elif transformed.args.get("create_file_format_name"):
                 # File formats persist without committing the caller's DML. A separate DuckDB
                 # cursor uses an independent transaction, avoiding cross-database writes too.
@@ -509,6 +523,8 @@ class FakeSnowflakeCursor:
             # snowflake reports this as an error rather than failing, message content may differ.
             msg = cast(str, e.args[0]).split("\n")[0]
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100035, sqlstate="22007") from e
+
+        self._conn.table_stages.record_temporary_table(transformed, self._conn.database, self._conn.schema)
 
         if set_database := transformed.args.get("set_database"):
             self._conn.database = set_database
@@ -556,13 +572,8 @@ class FakeSnowflakeCursor:
                     sqlstate="42710",
                 )
 
-        elif stage_name := transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
-            if self._duck_conn.to_arrow_table().num_rows != 1:
-                raise stage.not_found_error(stage_name)
-            if transformed.args.get("list_stage_name"):
-                result_sql = stage.list_stage_files_sql(stage_name)
-            elif transformed.args.get("put_stage_name"):
-                result_sql = SQL_SUCCESS
+        elif transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
+            result_sql = stage.complete_stage_lookup(transformed, self._duck_conn.fetchone())
 
         elif cmd == "INSERT":
             (affected_count,) = self._duck_conn.fetchall()[0]

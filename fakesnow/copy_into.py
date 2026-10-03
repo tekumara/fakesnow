@@ -5,6 +5,7 @@ import os
 from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
+from glob import escape as glob_escape
 from typing import Any, NamedTuple, Protocol, cast
 from urllib.parse import urlparse, urlunparse
 
@@ -45,15 +46,17 @@ def copy_into(
     current_database: str | None,
     current_schema: str | None,
     expr: exp.Copy,
+    table_stages: stage.TableStages,
     params: MutableParams | None = None,
 ) -> str:
     cparams = _params(
         expr, params, duck_conn=duck_conn, current_database=current_database, current_schema=current_schema
     )
 
+    table = _extract_table(expr.this)
     from_source = _from_source(expr)
     source = (
-        stage_url_from_var(from_source[1:], duck_conn, current_database, current_schema)
+        stage_url_from_var(from_source[1:], duck_conn, current_database, current_schema, table_stages, table)
         if from_source.startswith("@")
         else from_source
     )
@@ -63,7 +66,6 @@ def copy_into(
         duck_conn.execute(sql)
         return sql
 
-    table = _extract_table(expr.this)
     schema = table.db or current_schema
     assert schema
 
@@ -116,7 +118,7 @@ def copy_into(
                 error_limit = 1
                 error_count = 0
                 first_error_message = None
-                path = urlparse(url).path
+                path = stage.file_path(url)
                 if cparams.purge and stage.is_internal(path):
                     # If the file is internal, we can remove it from the stage
                     os.remove(path)
@@ -139,23 +141,43 @@ def copy_into(
             histories.append(history)
 
         if insert_histories := [h for h in histories if h.status != "LOAD_SKIPPED"]:
-            values = "\n ,".join(str(tuple(history)).replace("None", "NULL") for history in insert_histories)
-            sql = f"INSERT INTO _fs_information_schema._fs_load_history VALUES {values}"
-            duck_conn.execute(sql, params)
+            duck_conn.executemany(
+                "INSERT INTO _fs_information_schema._fs_load_history VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                [tuple(history) for history in insert_histories],
+            )
 
         columns = (
-            "file, status, rows_parsed, rows_loaded, error_limit, errors_seen, first_error, first_error_line, "
-            "first_error_character, first_error_column_name"
+            "file",
+            "status",
+            "rows_parsed",
+            "rows_loaded",
+            "error_limit",
+            "errors_seen",
+            "first_error",
+            "first_error_line",
+            "first_error_character",
+            "first_error_column_name",
         )
-        values = "\n, ".join(
-            f"('{_result_file_name(h.file_name)}', '{h.status}', {h.row_parsed}, {h.row_count}, "
-            f"{h.error_limit or 'NULL'}, {h.error_count}, "
-            f"{repr(h.first_error_message) if h.first_error_message else 'NULL'}, "
-            f"{h.first_error_line_number or 'NULL'}, {h.first_error_character_position or 'NULL'}, "
-            f"{h.first_error_col_name or 'NULL'})"
-            for h in histories
+        values = exp.values(
+            [
+                (
+                    _result_file_name(h.file_name),
+                    h.status,
+                    h.row_parsed,
+                    h.row_count,
+                    h.error_limit,
+                    h.error_count,
+                    h.first_error_message,
+                    h.first_error_line_number,
+                    h.first_error_character_position,
+                    h.first_error_col_name,
+                )
+                for h in histories
+            ],
+            alias="t",
+            columns=columns,
         )
-        sql = f"SELECT * FROM (VALUES\n  {values}\n) AS t({columns})"
+        sql = exp.select("*").from_(values).sql(dialect="duckdb")
         duck_conn.execute(sql)
 
         return sql
@@ -166,15 +188,8 @@ def copy_into(
 
 
 def _result_file_name(url: str) -> str:
-    if not stage.is_internal(urlparse(url).path):
-        return url
-
-    parts = url.split("/")
-    # table stages return just the file name, without the %table prefix
-    if stage.is_table_stage(parts[-2]):
-        return parts[-1]
-    # named internal stages include the lowercased stage name
-    return f"{parts[-2].lower()}/{parts[-1]}"
+    path = stage.file_path(url)
+    return stage.internal_file_name(path) if stage.is_internal(path) else url
 
 
 def _extract_table(target: Expr) -> exp.Table:
@@ -313,7 +328,12 @@ def _from_source(expr: exp.Copy) -> str:
 
 
 def stage_url_from_var(
-    var: str, duck_conn: DuckDBPyConnection, current_database: str | None, current_schema: str | None
+    var: str,
+    duck_conn: DuckDBPyConnection,
+    current_database: str | None,
+    current_schema: str | None,
+    table_stages: stage.TableStages,
+    target_table: exp.Table,
 ) -> str:
     # a stage reference can include a path suffix, eg: @stage1/dir/file.csv.gz
     stage_var, _, path = var.partition("/")
@@ -321,7 +341,8 @@ def stage_url_from_var(
     fqname = f"{database_name}.{schema_name}.{name}"
 
     if stage.is_table_stage(name):
-        url = stage.internal_dir(fqname)
+        target = (target_table.catalog or current_database, target_table.db or current_schema, target_table.name)
+        url = stage.internal_dir(table_stages.resolve_for_copy(database_name, schema_name, name, target))
     else:
         duck_conn.execute(
             """
@@ -353,13 +374,11 @@ def _source_urls(source: str, files: list[str]) -> list[str]:
 def _source_glob(source: str, duck_conn: DuckDBPyConnection) -> list[str]:
     """List files from the source using duckdb glob."""
     if stage.is_internal(source):
-        # keep the plain path: duckdb does not decode percent-encoded file URIs
-        # a stage path suffix is a prefix match, eg: @stage1/dir/file matches dir/file*
-        glob = f"{source.rstrip('/')}/*" if os.path.isdir(source) else f"{source}*"
+        sql = stage.internal_files_sql(source)
     else:
         scheme, _netloc, _path, _params, _query, _fragment = urlparse(source)
         glob = f"{source}/*" if scheme == "file" else f"{source}*"
-    sql = f"SELECT file FROM glob('{glob}')"
+        sql = f"SELECT file FROM glob('{glob}')"
     logger.log_sql(sql)
     result = duck_conn.execute(sql).fetchall()
     return [r[0] for r in result]
@@ -484,7 +503,8 @@ def _inserts(
 
 def _get_parquet_column_names(url: str, duck_conn: DuckDBPyConnection) -> list[str]:
     """Get column names from a parquet file."""
-    result = duck_conn.execute(f"DESCRIBE SELECT * FROM read_parquet('{url}')").fetchall()
+    read = ReadParquet().read_expression(url).sql(dialect="duckdb")
+    result = duck_conn.execute(f"DESCRIBE SELECT * FROM {read}").fetchall()
     return [r[0] for r in result]
 
 
@@ -597,6 +617,10 @@ class FileTypeHandler(Protocol):
     def read_expression(self, url: str) -> Expr: ...
 
     @staticmethod
+    def file_literal(url: str) -> exp.Literal:
+        return exp.Literal.string(glob_escape(url) if stage.is_internal(url) else url)
+
+    @staticmethod
     def make_eq(name: str, value: list | str | int | bool) -> exp.EQ:
         if isinstance(value, list):
             expression = exp.array(*[exp.Literal(this=str(v), is_string=isinstance(v, str)) for v in value])
@@ -644,13 +668,13 @@ class ReadCSV(FileTypeHandler):
         if self.compression:
             args.append(self.make_eq("compression", self.compression))
 
-        return exp.func("read_csv", exp.Literal(this=url, is_string=True), *args)
+        return exp.func("read_csv", self.file_literal(url), *args)
 
 
 @dataclass
 class ReadParquet(FileTypeHandler):
     def read_expression(self, url: str) -> Expr:
-        return exp.func("read_parquet", exp.Literal(this=url, is_string=True))
+        return exp.func("read_parquet", self.file_literal(url))
 
 
 @dataclass

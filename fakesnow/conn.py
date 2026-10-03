@@ -16,6 +16,8 @@ from typing_extensions import Self
 import fakesnow.info_schema as info_schema
 import fakesnow.macros as macros
 from fakesnow.cursor import FakeSnowflakeCursor
+from fakesnow.dialect import SnowflakeWithStageCommands
+from fakesnow.transforms.stage import TableStages
 from fakesnow.variables import Variables
 
 
@@ -52,6 +54,7 @@ class FakeSnowflakeConnection:
         self.nop_regexes = nop_regexes
         self._paramstyle = kwargs.get("paramstyle", snowflake.connector.paramstyle)
         self.variables = Variables()
+        self.table_stages = TableStages(duck_conn)
         self.results_cache = results_cache
         self._autocommit = kwargs.get("autocommit", True)
         self._in_transaction = False
@@ -160,7 +163,7 @@ class FakeSnowflakeConnection:
     ) -> Iterable[FakeSnowflakeCursor]:
         cursors = [
             self.cursor(cursor_class).execute(e.sql(dialect="snowflake"))
-            for e in sqlglot.parse(sql_text, read="snowflake")
+            for e in sqlglot.parse(sql_text, read=SnowflakeWithStageCommands)
             if e and not isinstance(e, exp.Semicolon)  # ignore comments
         ]
         return cursors if return_cursors else []

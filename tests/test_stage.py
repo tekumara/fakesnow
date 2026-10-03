@@ -1,7 +1,9 @@
 import gzip
 import os
+import re
 import tempfile
 from datetime import timezone
+from pathlib import Path
 
 import pytest
 import snowflake.connector.cursor
@@ -183,6 +185,128 @@ def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
         # fully qualified stage name quoted
         dcur.execute('CREATE STAGE db1.schema1."stage5"')
         dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage5\"")
+
+
+def test_put_list_subdirectory(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE STAGE nested_stage")
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2\n")
+        temp_file.flush()
+        basename = os.path.basename(temp_file.name)
+
+        dcur.execute(f"PUT 'file://{temp_file.name}' @nested_stage/subdir/deeper")
+        dcur.execute("LIST @nested_stage")
+        assert [r["name"] for r in dcur.fetchall()] == [f"nested_stage/subdir/deeper/{basename}.gz"]
+
+
+@pytest.mark.parametrize("bound_target", [False, True], ids=["sql", "bound"])
+def test_put_rejects_path_outside_stage(_fakesnow: None, bound_target: bool) -> None:
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+        tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file,
+    ):
+        temp_file.write("1,2\n")
+        temp_file.flush()
+        cur.execute("CREATE STAGE source_stage")
+        cur.execute("CREATE STAGE other_stage")
+        target = "@source_stage/../OTHER_STAGE"
+
+        with pytest.raises(snowflake.connector.errors.OperationalError) as excinfo:
+            if bound_target:
+                cur.execute(f"PUT 'file://{temp_file.name}' ?", (target,))
+            else:
+                cur.execute(f"PUT 'file://{temp_file.name}' {target}")
+
+        assert excinfo.value.errno == 253003
+        assert str(excinfo.value) == IsStr(
+            regex=re.escape(
+                "253003: While putting file(s) there was an error: 'HTTPError('403 Client Error: Forbidden for url: "
+            )
+            + r".*/DB1/SCHEMA1/SOURCE_STAGE/\.\./OTHER_STAGE"
+            + re.escape("')', this might be caused by your access to the blob storage provider, or by Snowflake.")
+        )
+
+
+@pytest.mark.parametrize("cursor_fixture", ["dcur", "sdcur"])
+def test_put_list_shadowed_table_stage(request: pytest.FixtureRequest, cursor_fixture: str, tmp_path: Path) -> None:
+    cur = request.getfixturevalue(cursor_fixture)
+    cur.execute("CREATE TABLE shadowed_stage_table (a INT)")
+    cur.execute("CREATE TEMP TABLE shadowed_stage_table (a INT)")
+    path = tmp_path / "data.csv"
+    path.write_text("1\n")
+
+    cur.execute(f"PUT 'file://{path}' @%shadowed_stage_table AUTO_COMPRESS=FALSE")
+    assert [r["status"] for r in cur.fetchall()] == ["UPLOADED"]
+    cur.execute("LIST @db1.schema1.%shadowed_stage_table")
+    assert [r["name"] for r in cur.fetchall()] == ["data.csv"]
+
+
+@pytest.mark.parametrize("comment", ["-- uploaded files", "/* uploaded files */"])
+@pytest.mark.parametrize(
+    ("stage_name", "reference"),
+    [("commented_stage", "@commented_stage"), ('"commented -- stage"', "'@\"commented -- stage\"'")],
+)
+def test_list_stage_with_trailing_comment(
+    dcur: snowflake.connector.cursor.DictCursor, comment: str, stage_name: str, reference: str
+) -> None:
+    dcur.execute(f"CREATE STAGE {stage_name}")
+    dcur.execute(f"LIST {reference} {comment}")
+    assert dcur.fetchall() == []
+
+
+@pytest.mark.parametrize("cursor_fixture", ["dcur", "sdcur"])
+def test_list_requires_stage_reference(request: pytest.FixtureRequest, cursor_fixture: str) -> None:
+    cur = request.getfixturevalue(cursor_fixture)
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute("LIST")
+    assert excinfo.value.errno == 1003
+
+
+@pytest.mark.parametrize(
+    "suffix",
+    [
+        ", @other_list_stage",
+        "WHERE TRUE",
+        "JOIN @other_list_stage ON TRUE",
+        "TABLESAMPLE (1 ROWS)",
+        "()",
+        "(PATTERN =>)",
+        "(PATTERN => 'no-match')",
+        "(FILE_FORMAT => 'csv_format')",
+    ],
+)
+def test_list_rejects_malformed_argument(dcur: snowflake.connector.cursor.DictCursor, suffix: str) -> None:
+    dcur.execute("CREATE STAGE list_stage")
+    dcur.execute("CREATE STAGE other_list_stage")
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute(f"LIST @list_stage {suffix}")
+    assert excinfo.value.errno == 1003
+
+
+def test_execute_string_with_list(conn: snowflake.connector.SnowflakeConnection) -> None:
+    cursors = list(conn.execute_string("CREATE STAGE script_stage; LIST @script_stage;"))
+    assert cursors[-1].fetchall() == []
+
+
+def test_permanent_table_rename_does_not_revive_dropped_temporary_stage(
+    dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path
+) -> None:
+    dcur.execute("CREATE SCHEMA other_schema")
+    dcur.execute("USE SCHEMA schema1")
+    dcur.execute("CREATE TEMP TABLE original_stage_table (a INT)")
+    path = tmp_path / "data.csv"
+    path.write_text("1\n")
+    dcur.execute(f"PUT 'file://{path}' @%original_stage_table AUTO_COMPRESS=FALSE")
+    dcur.execute("DROP TABLE original_stage_table")
+    dcur.execute("CREATE TABLE original_stage_table (a INT)")
+    dcur.execute("USE SCHEMA other_schema")
+    dcur.execute("CREATE TEMP TABLE renamed_stage_table (a INT)")
+    dcur.execute("USE SCHEMA schema1")
+    dcur.execute("ALTER TABLE schema1.original_stage_table RENAME TO renamed_stage_table")
+
+    dcur.execute("LIST @schema1.%renamed_stage_table")
+    assert dcur.fetchall() == []
 
 
 def test_put_unquoted_src(dcur: snowflake.connector.cursor.DictCursor) -> None:
