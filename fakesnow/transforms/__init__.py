@@ -59,6 +59,7 @@ from fakesnow.transforms.transforms import (
     indices_to_json_extract as indices_to_json_extract,
     information_schema_databases as information_schema_databases,
     information_schema_fs as information_schema_fs,
+    insert_overwrite as insert_overwrite,
     integer_precision as integer_precision,
     json_extract_cased_as_varchar as json_extract_cased_as_varchar,
     json_extract_cast_as_varchar as json_extract_cast_as_varchar,

@@ -757,3 +757,15 @@ def test_numeric_aggs_varchar_implicit_cast(dcur: snowflake.connector.cursor.Dic
     assert row["STDDEV_POP(AMOUNT)"] == 81.64965809277261
     assert row["VARIANCE_POP(AMOUNT)"] == 6666.666666666667
     assert row["MEDIAN(AMOUNT)"] == 200.0
+
+
+def test_insert_overwrite(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("CREATE TABLE example (a INT)")
+    dcur.execute("INSERT INTO example VALUES (1), (2)")
+
+    dcur.execute("INSERT OVERWRITE INTO example SELECT 3")
+    # only the inserted rows are counted, not the truncated ones
+    assert dcur.fetchall() == [{"number of rows inserted": 1}]
+
+    dcur.execute("SELECT a FROM example")
+    assert dcur.fetchall() == [{"A": 3}]

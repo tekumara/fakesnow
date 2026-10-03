@@ -402,6 +402,10 @@ class FakeSnowflakeCursor:
         if len(alter_result) > 1:
             return alter_result
 
+        overwrite_result = transforms.insert_overwrite(expression)
+        if len(overwrite_result) > 1:
+            return overwrite_result
+
         # Return original expression if no transform applied
         return [expression]
 

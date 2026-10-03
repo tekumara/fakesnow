@@ -1764,3 +1764,20 @@ def timestamp_offsets(expression: Expr) -> Expr:
             literal.set("this", collapsed)
 
     return expression
+
+
+def insert_overwrite(expression: Expr) -> list[Expr]:
+    """Transform INSERT OVERWRITE, which duckdb lacks, into a DELETE of the existing rows and a plain INSERT.
+
+    Snowflake truncates the table within the current transaction, see
+    https://docs.snowflake.com/en/sql-reference/sql/insert#optional-parameters
+    A DELETE rather than a TRUNCATE keeps the removal in the same implicit transaction as the INSERT.
+    """
+    if not (isinstance(expression, exp.Insert) and expression.args.get("overwrite")):
+        return [expression]
+
+    target = expression.this
+    table = target.this if isinstance(target, exp.Schema) else target
+    insert = expression.copy()
+    insert.set("overwrite", None)
+    return [exp.Delete(this=table.copy()), insert]
