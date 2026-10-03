@@ -251,7 +251,11 @@ def stage_lookup_sql(catalog: str, schema: str, stage_name: str) -> str:
         return f"""
             SELECT *
             from duckdb_tables()
-            where database_name = '{catalog}' and schema_name = '{schema}' and table_name = '{stage_name[1:]}'
+            where table_name = '{stage_name[1:]}'
+              and (
+                  (database_name = '{catalog}' and schema_name = '{schema}')
+                  or (temporary and current_database() = '{catalog}' and current_schema() = '{schema}')
+              )
         """
     return f"""
         SELECT *
@@ -287,6 +291,11 @@ def parts_from_var(var: str, current_database: str | None, current_schema: str |
 
 def is_internal(s: str) -> bool:
     return PurePath(s).is_relative_to(LOCAL_BUCKET_PATH)
+
+
+def file_path(url: str) -> str:
+    """Extract a URL's path, keeping internal-stage filesystem paths literal."""
+    return url if is_internal(url) else urlparse(url).path
 
 
 def internal_dir(fqname: str, path: str = "") -> str:

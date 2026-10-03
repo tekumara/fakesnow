@@ -177,7 +177,11 @@ def test_copy(
     assert dcur.fetchall() == case.expected_data
 
 
-def test_copy_internal_stage_server(sdcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
+@pytest.mark.parametrize(("stage_path", "auto_compress"), [("", True), ("/dir#tag", True), ("/dir?tag", False)])
+def test_copy_internal_stage_server(
+    sdcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client, stage_path: str, auto_compress: bool
+) -> None:
+    """COPY with PURGE loads the rows and removes the source, including literal URL delimiters."""
     dcur = sdcur
 
     create_table(dcur)
@@ -188,24 +192,25 @@ def test_copy_internal_stage_server(sdcur: snowflake.connector.cursor.DictCursor
         temp_file_path = temp_file.name
         temp_file_basename = os.path.basename(temp_file_path)
 
-        # use internal stage
-        dcur.execute("CREATE STAGE stage3")
-        dcur.execute(f"PUT 'file://{temp_file_path}' @stage3")
+        # Each parameter case starts with an empty internal stage.
+        dcur.execute("CREATE OR REPLACE STAGE stage3")
+        dcur.execute(f"PUT 'file://{temp_file_path}' @stage3{stage_path} AUTO_COMPRESS={str(auto_compress).upper()}")
+        target_basename = f"{temp_file_basename}.gz" if auto_compress else temp_file_basename
 
         dcur.execute("LIST @stage3")
         results = dcur.fetchall()
         assert len(results) == 1
 
-        sql = """
+        sql = f"""
         COPY INTO table1
-        FROM @stage3
+        FROM @stage3{stage_path}
         PURGE = TRUE
         """
 
         dcur.execute(sql)
         assert dcur.fetchall() == [
             {
-                "file": f"stage3/{temp_file_basename}.gz",
+                "file": f"stage3{stage_path}/{target_basename}",
                 "status": "LOADED",
                 "rows_parsed": 1,
                 "rows_loaded": 1,
@@ -222,6 +227,9 @@ def test_copy_internal_stage_server(sdcur: snowflake.connector.cursor.DictCursor
         dcur.execute("LIST @stage3")
         results = dcur.fetchall()
         assert len(results) == 0
+
+        dcur.execute("SELECT * FROM table1")
+        assert dcur.fetchall() == [{"A": 1, "B": 2}]
 
 
 def test_copy_uses_named_csv_field_delimiter(dcur: snowflake.connector.cursor.DictCursor) -> None:
@@ -406,8 +414,9 @@ def test_put_table_stage_non_existent_table(dcur: snowflake.connector.cursor.Dic
         )
 
 
-def test_copy_empty_table_stage(dcur: snowflake.connector.cursor.DictCursor) -> None:
-    dcur.execute("CREATE TABLE empty_stage_table (a INT, b INT)")
+@pytest.mark.parametrize("table_type", ["", "TEMP"], ids=["permanent", "temporary"])
+def test_copy_empty_table_stage(dcur: snowflake.connector.cursor.DictCursor, table_type: str) -> None:
+    dcur.execute(f"CREATE {table_type} TABLE empty_stage_table (a INT, b INT)")
 
     dcur.execute("COPY INTO empty_stage_table FROM @%empty_stage_table")
     assert dcur.fetchall() == [{"status": "Copy executed with 0 files processed."}]
@@ -421,6 +430,20 @@ def test_copy_table_stage_non_existent_table(dcur: snowflake.connector.cursor.Di
 
     assert str(excinfo.value).startswith(
         "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.\"%FOOBAR\"' does not exist or not authorized."
+    )
+
+
+def test_copy_temp_table_stage_in_other_schema_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE SCHEMA other_schema")
+    dcur.execute("USE SCHEMA schema1")
+    dcur.execute("CREATE TEMP TABLE temporary_stage_table (a INT)")
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("COPY INTO temporary_stage_table FROM @other_schema.%temporary_stage_table")
+
+    assert str(excinfo.value).startswith(
+        "002003 (02000): SQL compilation error:\nStage 'DB1.OTHER_SCHEMA.\"%TEMPORARY_STAGE_TABLE\"' "
+        "does not exist or not authorized."
     )
 
 

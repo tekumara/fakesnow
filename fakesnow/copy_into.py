@@ -117,7 +117,7 @@ def copy_into(
                 error_limit = 1
                 error_count = 0
                 first_error_message = None
-                path = urlparse(url).path
+                path = stage.file_path(url)
                 if cparams.purge and stage.is_internal(path):
                     # If the file is internal, we can remove it from the stage
                     os.remove(path)
@@ -167,8 +167,7 @@ def copy_into(
 
 
 def _result_file_name(url: str) -> str:
-    # Internal globs return filesystem paths, where # and ? are literal characters.
-    path = url if stage.is_internal(url) else urlparse(url).path
+    path = stage.file_path(url)
     return stage.internal_file_name(path) if stage.is_internal(path) else url
 
 
