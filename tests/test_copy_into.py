@@ -5,7 +5,8 @@ import os
 import re
 import tempfile
 import uuid
-from datetime import timezone
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import NamedTuple, cast
 from unittest.mock import MagicMock, patch
 
@@ -338,6 +339,37 @@ def test_copy_default_nulls(dcur: snowflake.connector.cursor.DictCursor) -> None
             {"VALUE": None, "ID": 2},  # empty field (EMPTY_FIELD_AS_NULL default)
             {"VALUE": "hello", "ID": 3},
         ]
+
+
+@pytest.mark.parametrize(
+    ("column_type", "csv_field", "expected"),
+    [
+        pytest.param("VARIANT", '"{""a"": 1}"', '{\n  "a": 1\n}', id="variant-object"),
+        pytest.param("VARIANT", "", None, id="variant-null"),
+        pytest.param("TIMESTAMP", "2024-01-01 00:00:00", datetime(2024, 1, 1), id="timestamp"),
+    ],
+)
+def test_copy_csv_column_types(
+    sdcur: snowflake.connector.cursor.DictCursor,
+    tmp_path: Path,
+    column_type: str,
+    csv_field: str,
+    expected: str | datetime | None,
+) -> None:
+    dcur = sdcur
+    dcur.execute(f"CREATE TABLE csv_typed_target (value {column_type}, id INT)")
+    dcur.execute("CREATE OR REPLACE STAGE csv_typed_stage")
+    path = tmp_path / "data.csv"
+    # A second field keeps a null value from becoming a blank CSV record.
+    path.write_text(f"{csv_field},1\n")
+    dcur.execute(f"PUT 'file://{path}' @csv_typed_stage AUTO_COMPRESS=FALSE")
+    dcur.execute("""
+        COPY INTO csv_typed_target FROM @csv_typed_stage/data.csv
+        FILE_FORMAT = (TYPE='CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"')
+    """)
+
+    dcur.execute("SELECT value FROM csv_typed_target")
+    assert dindent(dcur.fetchall()) == [{"VALUE": expected}]
 
 
 def test_copy_default_quotes_are_literal(dcur: snowflake.connector.cursor.DictCursor) -> None:
