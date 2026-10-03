@@ -216,12 +216,18 @@ def list_stage(
             msg="SQL compilation error:\nsyntax error unexpected '<EOF>'.", errno=1003, sqlstate="42000"
         )
     # Parse the complete argument, not a SELECT whose extra clauses could be silently discarded.
-    reference = sqlglot.parse_one(expression.expression.name, read="snowflake", into=exp.Table)
+    argument = expression.expression.name
+    reference = sqlglot.parse_one(argument, read="snowflake", into=exp.Table)
+    dialect = sqlglot.Dialect.get_or_raise("snowflake")
+    argument_tokens = [(token.token_type, token.text) for token in dialect.tokenize(argument)]
     if not (
         isinstance(reference, exp.Table)
         and isinstance(reference.this, (exp.Var, exp.Literal))
         and all(value is None for key, value in reference.args.items() if key != "this")
         and reference.this.name.startswith("@")
+        # Some malformed options are consumed but discarded by SQLGlot, so also check the original syntax.
+        and argument_tokens
+        == [(token.token_type, token.text) for token in dialect.tokenize(reference.this.sql(dialect="snowflake"))]
     ):
         raise snowflake.connector.errors.ProgrammingError(
             msg="SQL compilation error:\nsyntax error in LIST stage reference.", errno=1003, sqlstate="42000"

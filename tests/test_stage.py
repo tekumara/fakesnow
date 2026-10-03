@@ -279,7 +279,7 @@ def test_list_rejects_query_modifiers(dcur: snowflake.connector.cursor.DictCurso
     assert excinfo.value.errno == 1003
 
 
-@pytest.mark.parametrize("option", ["PATTERN => 'no-match'", "FILE_FORMAT => 'csv_format'"])
+@pytest.mark.parametrize("option", ["", "PATTERN =>", "PATTERN => 'no-match'", "FILE_FORMAT => 'csv_format'"])
 def test_list_rejects_stage_query_options(dcur: snowflake.connector.cursor.DictCursor, option: str) -> None:
     dcur.execute("CREATE STAGE options_list_stage")
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
