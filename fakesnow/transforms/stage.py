@@ -208,31 +208,20 @@ def list_stage(
 
     See https://docs.snowflake.com/en/sql-reference/sql/list
     """
-    if not (isinstance(expression, exp.Command) and expression.name.upper() == "LIST"):
+    if not isinstance(expression, exp.ListStage):
         return expression
 
-    if expression.expression is None:
-        raise snowflake.connector.errors.ProgrammingError(
-            msg="SQL compilation error:\nsyntax error unexpected '<EOF>'.", errno=1003, sqlstate="42000"
-        )
-    # Parse the complete argument, not a SELECT whose extra clauses could be silently discarded.
-    argument = expression.expression.name
-    reference = sqlglot.parse_one(argument, read="snowflake", into=exp.Table)
-    dialect = sqlglot.Dialect.get_or_raise("snowflake")
-    argument_tokens = [(token.token_type, token.text) for token in dialect.tokenize(argument)]
-    if not (
-        isinstance(reference, exp.Table)
-        and isinstance(reference.this, (exp.Var, exp.Literal))
-        and all(value is None for key, value in reference.args.items() if key != "this")
-        and reference.this.name.startswith("@")
-        # Some malformed options are consumed but discarded by SQLGlot, so also check the original syntax.
-        and argument_tokens
-        == [(token.token_type, token.text) for token in dialect.tokenize(reference.this.sql(dialect="snowflake"))]
-    ):
+    if expression.args.get("pattern") is not None:
+        raise NotImplementedError("LIST with PATTERN")
+
+    argument = expression.this.name
+    if argument.startswith("'"):
+        argument = sqlglot.parse_one(argument, read="snowflake").name
+    if not argument.startswith("@"):
         raise snowflake.connector.errors.ProgrammingError(
             msg="SQL compilation error:\nsyntax error in LIST stage reference.", errno=1003, sqlstate="42000"
         )
-    var = reference.this.name[1:]
+    var = argument[1:]
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
     transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name, table_stages), read="duckdb")

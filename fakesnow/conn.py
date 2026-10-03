@@ -7,7 +7,6 @@ from types import TracebackType
 from typing import Any
 
 import snowflake.connector
-import sqlglot
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import DictCursor, SnowflakeCursor
 from sqlglot import exp
@@ -16,7 +15,7 @@ from typing_extensions import Self
 import fakesnow.info_schema as info_schema
 import fakesnow.macros as macros
 from fakesnow.cursor import FakeSnowflakeCursor
-from fakesnow.dialect import SnowflakeWithStageCommands
+from fakesnow.dialect import parse
 from fakesnow.transforms.stage import TableStages
 from fakesnow.variables import Variables
 
@@ -163,7 +162,7 @@ class FakeSnowflakeConnection:
     ) -> Iterable[FakeSnowflakeCursor]:
         cursors = [
             self.cursor(cursor_class).execute(e.sql(dialect="snowflake"))
-            for e in sqlglot.parse(sql_text, read=SnowflakeWithStageCommands)
+            for e in parse(sql_text)
             if e and not isinstance(e, exp.Semicolon)  # ignore comments
         ]
         return cursors if return_cursors else []

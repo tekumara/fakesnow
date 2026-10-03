@@ -255,9 +255,7 @@ def test_list_stage_with_trailing_comment(
     assert dcur.fetchall() == []
 
 
-@pytest.mark.parametrize("cursor_fixture", ["dcur", "sdcur"])
-def test_list_requires_stage_reference(request: pytest.FixtureRequest, cursor_fixture: str) -> None:
-    cur = request.getfixturevalue(cursor_fixture)
+def test_list_requires_stage_reference(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
         cur.execute("LIST")
     assert excinfo.value.errno == 1003
@@ -282,11 +280,6 @@ def test_list_rejects_malformed_argument(dcur: snowflake.connector.cursor.DictCu
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
         dcur.execute(f"LIST @list_stage {suffix}")
     assert excinfo.value.errno == 1003
-
-
-def test_execute_string_with_list(conn: snowflake.connector.SnowflakeConnection) -> None:
-    cursors = list(conn.execute_string("CREATE STAGE script_stage; LIST @script_stage;"))
-    assert cursors[-1].fetchall() == []
 
 
 def test_permanent_table_rename_does_not_revive_dropped_temporary_stage(

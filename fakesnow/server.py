@@ -11,7 +11,7 @@ from typing import Any
 from urllib.parse import quote
 
 import snowflake.connector.errors
-from sqlglot import Expr, exp, parse_one
+from sqlglot import Expr, exp
 from starlette.applications import Starlette
 from starlette.concurrency import run_in_threadpool
 from starlette.requests import Request
@@ -22,7 +22,7 @@ from fakesnow import statement_type
 from fakesnow.arrow import to_ipc, to_sf
 from fakesnow.converter import from_binding
 from fakesnow.cursor import FakeSnowflakeCursor
-from fakesnow.dialect import SnowflakeWithStageCommands
+from fakesnow.dialect import parse_one
 from fakesnow.expr import normalise_ident
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
@@ -125,20 +125,21 @@ async def query_request(request: Request) -> JSONResponse:
                 params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
             logger.debug(f"Bindings: {batch if batch is not None else params}")
 
-        expr = parse_one(sql_text, read=SnowflakeWithStageCommands)
-        type_id = statement_type_id(expr)
-
-        if body_json.get("describeOnly"):
-            cur = conn.cursor()
-            if (described := await run_in_threadpool(cur._describe_only, sql_text)) is not None:  # noqa: SLF001
-                return describe_only_response(conn, cur, describe_as_rowtype(described), expr, type_id)
-            # we can only describe this statement by running it, which is what we've always done
-
         batch_rowcount = 0
 
         try:
-            # only a single sql statement is sent at a time by the python snowflake connector
+            expr = parse_one(sql_text)
+            type_id = statement_type_id(expr)
             cur = conn.cursor()
+
+            if (
+                body_json.get("describeOnly")
+                and (described := await run_in_threadpool(cur._describe_only, sql_text)) is not None  # noqa: SLF001
+            ):
+                return describe_only_response(conn, cur, describe_as_rowtype(described), expr, type_id)
+            # Statements without a describe-only shortcut are described by executing them.
+
+            # only a single sql statement is sent at a time by the python snowflake connector
             if batch is None:
                 await run_in_threadpool(cur.execute, sql_text, binding_params=params, server=True)
             else:

@@ -16,11 +16,11 @@ import pyarrow  # needed by to_arrow_table()
 import snowflake.connector.converter
 import snowflake.connector.errors
 import sqlglot
-import sqlglot.errors
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import ResultMetadata
 from snowflake.connector.result_batch import ResultBatch
-from sqlglot import Expr, exp, parse_one
+from sqlglot import Expr, exp
+from sqlglot.errors import ParseError
 from typing_extensions import Self
 
 import fakesnow.checks as checks
@@ -30,7 +30,7 @@ import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 from fakesnow import logger
 from fakesnow.copy_into import copy_into
-from fakesnow.dialect import SnowflakeWithStageCommands
+from fakesnow.dialect import parse_one, syntax_error
 from fakesnow.params import MutableParams
 from fakesnow.rowtype import describe_as_result_metadata
 from fakesnow.transforms import stage
@@ -162,7 +162,7 @@ class FakeSnowflakeCursor:
         Returns None for statements we can only describe by running them.
         """
 
-        expression = sqlglot.parse_one(command, read=SnowflakeWithStageCommands)
+        expression = parse_one(command)
 
         if result_sql := DESCRIBE_RESULT_SQL.get(type(expression)):
             describe = result_sql
@@ -223,7 +223,7 @@ class FakeSnowflakeCursor:
                 self._execute(transformed, params)
                 return self
 
-            expression = parse_one(command, read=SnowflakeWithStageCommands)
+            expression = parse_one(command)
             self.check_db_and_schema(expression)
 
             for statement in self._transform_explode(expression):
@@ -239,11 +239,10 @@ class FakeSnowflakeCursor:
         except snowflake.connector.errors.ProgrammingError as e:
             self._sqlstate = e.sqlstate
             raise e
-        except sqlglot.errors.ParseError as e:
-            self._sqlstate = "42000"
-            # strip highlight for better readability, TODO: show pointer to start of error
-            msg = str(e).replace("\x1b[4m", "").replace("\x1b[0m", "")
-            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=1003, sqlstate="42000") from None
+        except ParseError as e:
+            error = syntax_error(e)
+            self._sqlstate = error.sqlstate
+            raise error from None
         except NotImplementedError as e:
             msg = f"{e} not implemented. Please raise an issue via https://github.com/tekumara/fakesnow/issues/new"
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=9999, sqlstate="99999") from e
