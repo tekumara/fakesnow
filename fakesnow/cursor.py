@@ -525,7 +525,7 @@ class FakeSnowflakeCursor:
             msg = cast(str, e.args[0]).split("\n")[0]
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100035, sqlstate="22007") from e
 
-        self._conn.table_stages.record_ddl(transformed, self._conn.database, self._conn.schema)
+        self._conn.table_stages.record_temporary_table(transformed, self._conn.database, self._conn.schema)
 
         if set_database := transformed.args.get("set_database"):
             self._conn.database = set_database

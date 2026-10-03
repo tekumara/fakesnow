@@ -44,63 +44,29 @@ class UploadCommandDict(TypedDict):
 
 
 class TableStages:
-    """Resolve implicit table stages, including session-local temporary-table identities and ownership."""
+    """Resolve implicit table stages, including session-local temporary tables.
+
+    DuckDB keeps temporary tables in one session namespace, so remember the Snowflake schema each was created in.
+    Table OIDs survive renames and are never reused, so dropped tables cannot match a later lookup.
+    """
 
     def __init__(self, duck_conn: DuckDBPyConnection):
         self._duck_conn = duck_conn
-        self._temporary: dict[tuple[str, str, str], tuple[int, str]] = {}
+        self._session = uuid.uuid4().hex
+        self._temporary: dict[int, tuple[str | None, str | None]] = {}
 
-    def record_ddl(self, expression: Expr, catalog: str | None, schema: str | None) -> None:
-        """Observe successful table creation/rename without exposing registry details to callers."""
-        if expression.args.get("kind") != "TABLE":
+    def record_temporary_table(self, expression: Expr, catalog: str | None, schema: str | None) -> None:
+        if not (
+            isinstance(expression, exp.Create)
+            and expression.args.get("kind") == "TABLE"
+            and expression.find(exp.TemporaryProperty)
+            and (table := expression.find(exp.Table))
+        ):
             return
-        if isinstance(expression, exp.Drop):
-            live_oids = {
-                r[0]
-                for r in self._duck_conn.execute("SELECT table_oid FROM duckdb_tables() WHERE temporary").fetchall()
-            }
-            self._temporary = {key: value for key, value in self._temporary.items() if value[0] in live_oids}
-            return
-        storage_name = None
-        old_key = None
-        expected_oid = None
-        if isinstance(expression, exp.Create) and expression.find(exp.TemporaryProperty):
-            table = expression.find(exp.Table)
-            assert table
-        elif isinstance(expression, exp.Alter) and (rename := expression.find(exp.AlterRename)):
-            source = expression.this
-            assert isinstance(source, exp.Table)
-            database, namespace = source.catalog or catalog, source.db or schema
-            assert database and namespace
-            old_key = (database, namespace, source.name)
-            if not (previous := self._temporary.get(old_key)):
-                return
-            table = rename.this
-            assert isinstance(table, exp.Table)
-            catalog, schema = old_key[:2]
-            expected_oid, storage_name = previous
-        else:
-            return
-
-        database, namespace = table.catalog or catalog, table.db or schema
-        assert database and namespace
-        key = (database, namespace, table.name)
-        result = self._duck_conn.execute(
-            "SELECT table_oid FROM duckdb_tables() WHERE temporary AND table_name = ?", [table.name]
-        ).fetchone()
-        if not result:
-            # A stale registration must not turn a later permanent-table rename into a failure.
-            assert isinstance(expression, exp.Alter), "Successfully created temporary table must exist"
-            return
-        oid = result[0]
-        if old_key is not None:
-            # DuckDB preserves the OID across rename. A name match is not enough to move storage.
-            if oid != expected_oid:
-                return
-            del self._temporary[old_key]
-        if key not in self._temporary or self._temporary[key][0] != oid:
-            # The storage catalog is opaque; filenames expose only the stage and relative path.
-            self._temporary[key] = (oid, storage_name or f"{uuid.uuid4().hex}.{key[1]}.%{key[2]}")
+        sql = "SELECT table_oid FROM duckdb_tables() WHERE temporary AND table_name = ?"
+        (oid,) = self._duck_conn.execute(sql, [table.name]).fetchone() or (None,)
+        assert oid is not None, "Successfully created temporary table must exist"
+        self._temporary.setdefault(oid, (table.catalog or catalog, table.db or schema))
 
     def resolve_for_copy(
         self, catalog: str, schema: str, stage_name: str, target: tuple[str | None, str | None, str]
@@ -122,16 +88,14 @@ class TableStages:
         return result[0]
 
     def lookup_sql(self, catalog: str, schema: str, stage_name: str) -> str:
+        oids = ", ".join(str(oid) for oid, owner in self._temporary.items() if owner == (catalog, schema)) or "NULL"
         logical_name = exp.Literal.string(f"{catalog}.{schema}.{stage_name}").sql(dialect="duckdb")
-        temporary = self._temporary.get((catalog, schema, stage_name[1:]))
-        temp_predicate = f"temporary AND table_oid = {temporary[0]}" if temporary else "FALSE"
-        storage_name = exp.Literal.string(temporary[1]).sql(dialect="duckdb") if temporary else logical_name
         return f"""
-            SELECT CASE WHEN temporary THEN {storage_name} ELSE {logical_name} END AS storage_name
+            SELECT CASE WHEN temporary THEN '{self._session}.' || table_oid || '.%' ELSE {logical_name} END
             FROM duckdb_tables()
-            WHERE ({temp_predicate}) OR (
-                NOT temporary AND database_name = '{catalog}' AND schema_name = '{schema}'
-                AND table_name = '{stage_name[1:]}'
+            WHERE table_name = '{stage_name[1:]}' AND (
+                (temporary AND table_oid IN ({oids}))
+                OR (NOT temporary AND database_name = '{catalog}' AND schema_name = '{schema}')
             )
             ORDER BY temporary DESC
             LIMIT 1
