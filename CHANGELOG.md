@@ -2,6 +2,24 @@
 
 # Changelog
 
+## [0.11.20](https://github.com/tekumara/fakesnow/compare/v0.11.19...v0.11.20) (2026-10-03)
+
+
+### Features
+
+* support INSERT OVERWRITE ([#441](https://github.com/tekumara/fakesnow/issues/441)) ([0e3b8b3](https://github.com/tekumara/fakesnow/commit/0e3b8b35c2b36719f016dca58459ac25bb95d7b4))
+* support JSON file format in COPY INTO ([#440](https://github.com/tekumara/fakesnow/issues/440)) ([f725d46](https://github.com/tekumara/fakesnow/commit/f725d46ceeb6b37325298937183c21030159b239))
+
+
+### Bug Fixes
+
+* align stage PUT, LIST and COPY INTO behaviour with Snowflake ([#442](https://github.com/tekumara/fakesnow/issues/442)) ([ea8994d](https://github.com/tekumara/fakesnow/commit/ea8994d7e938f9f9d112101de8e294df8e024b92))
+
+
+### Chores
+
+* **deps:** update sqlglot requirement from ~=30.17.0 to ~=30.20.0 ([#438](https://github.com/tekumara/fakesnow/issues/438)) ([59c81be](https://github.com/tekumara/fakesnow/commit/59c81bef9d4c364c775b86761ae2c40f2264e82f))
+
 ## [0.11.19](https://github.com/tekumara/fakesnow/compare/v0.11.18...v0.11.19) (2026-10-03)
 
 
