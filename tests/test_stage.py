@@ -242,6 +242,19 @@ def test_put_list_shadowed_table_stage(request: pytest.FixtureRequest, cursor_fi
     assert [r["name"] for r in cur.fetchall()] == ["data.csv"]
 
 
+@pytest.mark.parametrize("comment", ["-- uploaded files", "/* uploaded files */"])
+@pytest.mark.parametrize(
+    ("stage_name", "reference"),
+    [("commented_stage", "@commented_stage"), ('"commented -- stage"', "'@\"commented -- stage\"'")],
+)
+def test_list_stage_with_trailing_comment(
+    dcur: snowflake.connector.cursor.DictCursor, comment: str, stage_name: str, reference: str
+) -> None:
+    dcur.execute(f"CREATE STAGE {stage_name}")
+    dcur.execute(f"LIST {reference} {comment}")
+    assert dcur.fetchall() == []
+
+
 def test_put_unquoted_src(dcur: snowflake.connector.cursor.DictCursor) -> None:
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         temp_file.write("1,2\n")

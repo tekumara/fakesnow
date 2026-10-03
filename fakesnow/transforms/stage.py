@@ -49,20 +49,43 @@ class TableStages:
         self._duck_conn = duck_conn
         self._temporary: dict[tuple[str, str, str], tuple[int, str]] = {}
 
-    def record_creation(self, expression: Expr, catalog: str, schema: str) -> None:
-        if not expression.find(exp.TemporaryProperty):
+    def record_ddl(self, expression: Expr, catalog: str | None, schema: str | None) -> None:
+        """Observe successful table creation/rename without exposing registry details to callers."""
+        if expression.args.get("kind") != "TABLE":
             return
-        table = expression.find(exp.Table)
-        assert table
-        key = (table.catalog or catalog, table.db or schema, table.name)
+        storage_name = None
+        if isinstance(expression, exp.Create) and expression.find(exp.TemporaryProperty):
+            table = expression.find(exp.Table)
+            assert table
+        elif isinstance(expression, exp.Alter) and (rename := expression.find(exp.AlterRename)):
+            source = expression.this
+            assert isinstance(source, exp.Table)
+            database, namespace = source.catalog or catalog, source.db or schema
+            assert database and namespace
+            old_key = (database, namespace, source.name)
+            if not (previous := self._temporary.pop(old_key, None)):
+                return
+            table = rename.this
+            assert isinstance(table, exp.Table)
+            catalog, schema = old_key[:2]
+            storage_name = previous[1]
+        else:
+            return
+
+        database, namespace = table.catalog or catalog, table.db or schema
+        assert database and namespace
+        key = (database, namespace, table.name)
         result = self._duck_conn.execute(
             "SELECT table_oid FROM duckdb_tables() WHERE temporary AND table_name = ?", [table.name]
         ).fetchone()
-        assert result, "Successfully created temporary table must exist"
+        if not result:
+            # A stale registration must not turn a later permanent-table rename into a failure.
+            assert isinstance(expression, exp.Alter), "Successfully created temporary table must exist"
+            return
         oid = result[0]
         if key not in self._temporary or self._temporary[key][0] != oid:
             # The storage catalog is opaque; filenames expose only the stage and relative path.
-            self._temporary[key] = (oid, f"{uuid.uuid4().hex}.{key[1]}.%{key[2]}")
+            self._temporary[key] = (oid, storage_name or f"{uuid.uuid4().hex}.{key[1]}.%{key[2]}")
 
     def lookup_sql(self, catalog: str, schema: str, stage_name: str) -> str:
         logical_name = exp.Literal.string(f"{catalog}.{schema}.{stage_name}").sql(dialect="duckdb")
@@ -174,14 +197,16 @@ def list_stage(
     if not (isinstance(expression, exp.Command) and expression.name.upper() == "LIST"):
         return expression
 
-    var = expression.expression.name
-    if var.startswith("'"):
-        literal = sqlglot.parse_one(var, read="snowflake")
-        assert isinstance(literal, exp.Literal)
-        var = literal.name
-    if not re.fullmatch(r"@\S+", var):
+    # Reuse Snowflake's stage-reference parser: comments are syntax, not part of the name.
+    reference = sqlglot.parse_one(f"SELECT * FROM {expression.expression.name}", read="snowflake").args["from_"].this
+    if not (
+        isinstance(reference, exp.Table)
+        and isinstance(reference.this, (exp.Var, exp.Literal))
+        and not reference.args.get("alias")
+        and reference.this.name.startswith("@")
+    ):
         raise NotImplementedError("LIST requires a single stage reference")
-    var = var[1:]
+    var = reference.this.name[1:]
     catalog, schema, stage_name = parts_from_var(var, current_database=current_database, current_schema=current_schema)
 
     transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name, table_stages), read="duckdb")

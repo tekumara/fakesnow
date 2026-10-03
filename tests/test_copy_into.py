@@ -507,6 +507,21 @@ def test_copy_purge_temporary_table_stage_is_session_isolated(
     assert first.fetchall() == [{"A": 1, "B": 2}]
 
 
+def test_copy_renamed_temporary_table_stage(dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path) -> None:
+    """A rename keeps the staged files attached to the same temporary-table instance."""
+    dcur.execute("CREATE TEMP TABLE original_stage_table (a INT, b INT)")
+    path = tmp_path / "data.csv"
+    path.write_text("1,2\n")
+    dcur.execute(f"PUT 'file://{path}' @%original_stage_table AUTO_COMPRESS=FALSE")
+
+    dcur.execute("ALTER TABLE original_stage_table RENAME TO renamed_stage_table")
+    dcur.execute("LIST @%renamed_stage_table")
+    assert [r["name"] for r in dcur.fetchall()] == ["data.csv"]
+    dcur.execute("COPY INTO renamed_stage_table FROM @%renamed_stage_table")
+    dcur.execute("SELECT * FROM renamed_stage_table")
+    assert dcur.fetchall() == [{"A": 1, "B": 2}]
+
+
 def test_copy_format_name_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     dcur.execute("CREATE STAGE stage3")

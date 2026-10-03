@@ -525,6 +525,8 @@ class FakeSnowflakeCursor:
             msg = cast(str, e.args[0]).split("\n")[0]
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100035, sqlstate="22007") from e
 
+        self._conn.table_stages.record_ddl(transformed, self._conn.database, self._conn.schema)
+
         if set_database := transformed.args.get("set_database"):
             self._conn.database = set_database
             self._conn.database_set = True
@@ -622,7 +624,6 @@ class FakeSnowflakeCursor:
                     catalog = table.catalog or self._conn.database
                     schema = table.db or self._conn.schema
                     assert catalog and schema
-                    self._conn.table_stages.record_creation(transformed, catalog, schema)
                     self._duck_conn.execute(
                         f"DELETE FROM {catalog}._fs_information_schema._fs_load_history "
                         "WHERE SCHEMA_NAME = ? AND TABLE_NAME = ?",
