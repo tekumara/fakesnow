@@ -5,7 +5,8 @@ import os
 import re
 import tempfile
 import uuid
-from datetime import timezone
+from datetime import datetime, timezone
+from pathlib import Path
 from typing import NamedTuple, cast
 from unittest.mock import MagicMock, patch
 
@@ -257,6 +258,59 @@ def test_copy_uses_named_csv_with_inline_override(dcur: snowflake.connector.curs
         assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
 
 
+def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    create_table(dcur)
+    with tempfile.TemporaryDirectory() as tmp_dir:
+        for name, data in (("first.csv", "1,2\n"), ("second.csv", "3,4\n")):
+            with open(f"{tmp_dir}/{name}", "w") as f:
+                f.write(data)
+
+        dcur.execute("CREATE STAGE stage3")
+        dcur.execute(f"PUT 'file://{tmp_dir}/first.csv' @stage3")
+        dcur.execute(f"PUT 'file://{tmp_dir}/second.csv' @stage3")
+
+        # a path suffix restricts the copy to the matching files within the stage
+        dcur.execute("COPY INTO table1 FROM @stage3/second.csv.gz")
+        results = dcur.fetchall()
+        assert [r["file"] for r in results] == ["stage3/second.csv.gz"]
+
+        dcur.execute("SELECT * FROM table1")
+        assert dcur.fetchall() == [{"A": 3, "B": 4}]
+
+
+def test_copy_internal_table_stage(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    """PUT and COPY compose through an implicit table stage, preserving filenames and rows."""
+    create_table(dcur)
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2\n")
+        temp_file.flush()
+        temp_file_basename = os.path.basename(temp_file.name)
+
+        # a table stage exists implicitly for every table
+        dcur.execute(f"PUT 'file://{temp_file.name}' @db1.schema1.%table1")
+        assert [r["target"] for r in dcur.fetchall()] == [f"{temp_file_basename}.gz"]
+
+        dcur.execute("COPY INTO table1 FROM @db1.schema1.%table1")
+        # unlike named stages, table stages do not prefix the returned file name
+        assert [r["file"] for r in dcur.fetchall()] == [f"{temp_file_basename}.gz"]
+
+        dcur.execute("SELECT * FROM table1")
+        assert dcur.fetchall() == [{"A": 1, "B": 2}]
+
+
+def test_put_table_stage_non_existent_table(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file_path = temp_file.name
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            dcur.execute(f"PUT 'file://{temp_file_path}' @%foobar")
+
+        assert (
+            str(excinfo.value)
+            == "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.\"%FOOBAR\"' does not exist or not authorized."
+        )
+
+
 def test_copy_format_name_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     dcur.execute("CREATE STAGE stage3")
@@ -285,6 +339,37 @@ def test_copy_default_nulls(dcur: snowflake.connector.cursor.DictCursor) -> None
             {"VALUE": None, "ID": 2},  # empty field (EMPTY_FIELD_AS_NULL default)
             {"VALUE": "hello", "ID": 3},
         ]
+
+
+@pytest.mark.parametrize(
+    ("column_type", "csv_field", "expected"),
+    [
+        pytest.param("VARIANT", '"{""a"": 1}"', '{\n  "a": 1\n}', id="variant-object"),
+        pytest.param("VARIANT", "", None, id="variant-null"),
+        pytest.param("TIMESTAMP", "2024-01-01 00:00:00", datetime(2024, 1, 1), id="timestamp"),
+    ],
+)
+def test_copy_csv_column_types(
+    sdcur: snowflake.connector.cursor.DictCursor,
+    tmp_path: Path,
+    column_type: str,
+    csv_field: str,
+    expected: str | datetime | None,
+) -> None:
+    dcur = sdcur
+    dcur.execute(f"CREATE TABLE csv_typed_target (value {column_type}, id INT)")
+    dcur.execute("CREATE OR REPLACE STAGE csv_typed_stage")
+    path = tmp_path / "data.csv"
+    # A second field keeps a null value from becoming a blank CSV record.
+    path.write_text(f"{csv_field},1\n")
+    dcur.execute(f"PUT 'file://{path}' @csv_typed_stage AUTO_COMPRESS=FALSE")
+    dcur.execute("""
+        COPY INTO csv_typed_target FROM @csv_typed_stage/data.csv
+        FILE_FORMAT = (TYPE='CSV' FIELD_OPTIONALLY_ENCLOSED_BY='"')
+    """)
+
+    dcur.execute("SELECT value FROM csv_typed_target")
+    assert dindent(dcur.fetchall()) == [{"VALUE": expected}]
 
 
 def test_copy_default_quotes_are_literal(dcur: snowflake.connector.cursor.DictCursor) -> None:

@@ -559,11 +559,7 @@ class FakeSnowflakeCursor:
 
         elif stage_name := transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
             if self._duck_conn.to_arrow_table().num_rows != 1:
-                raise snowflake.connector.errors.ProgrammingError(
-                    msg=f"SQL compilation error:\nStage '{stage_name}' does not exist or not authorized.",
-                    errno=2003,
-                    sqlstate="02000",
-                )
+                raise stage.not_found_error(stage_name)
             if transformed.args.get("list_stage_name"):
                 result_sql = stage.list_stage_files_sql(stage_name)
             elif transformed.args.get("put_stage_name"):
