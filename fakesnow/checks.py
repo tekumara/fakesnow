@@ -46,6 +46,9 @@ def _relevant_tables(expression: Expr) -> list[exp.Table]:
     elif isinstance(this, exp.Schema) and isinstance(this.this, exp.Table):
         tables.append(this.this)
 
+    if isinstance(expression, exp.Drop):
+        tables.extend(t for t in expression.args.get("tables") or [] if isinstance(t, exp.Table))
+
     if isinstance(scope := expression.args.get("scope"), exp.Table):
         tables.append(scope)
 

@@ -22,6 +22,7 @@ from fakesnow import statement_type
 from fakesnow.arrow import to_ipc, to_sf
 from fakesnow.converter import from_binding
 from fakesnow.cursor import FakeSnowflakeCursor
+from fakesnow.dialect import SnowflakeWithStageCommands
 from fakesnow.expr import normalise_ident
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
@@ -124,7 +125,7 @@ async def query_request(request: Request) -> JSONResponse:
                 params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
             logger.debug(f"Bindings: {batch if batch is not None else params}")
 
-        expr = parse_one(sql_text, read="snowflake")
+        expr = parse_one(sql_text, read=SnowflakeWithStageCommands)
         type_id = statement_type_id(expr)
 
         if body_json.get("describeOnly"):
@@ -168,8 +169,8 @@ async def query_request(request: Request) -> JSONResponse:
                     }
                 )
 
-        except snowflake.connector.errors.ProgrammingError as e:
-            logger.info(f"{sql_text=} ProgrammingError {e}")
+        except (snowflake.connector.errors.ProgrammingError, snowflake.connector.errors.OperationalError) as e:
+            logger.info(f"{sql_text=} {type(e).__name__} {e}")
             code = f"{e.errno:06d}"
             return JSONResponse(
                 {
