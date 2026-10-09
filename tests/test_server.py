@@ -230,6 +230,21 @@ def test_server_merge_response_total(sconn: snowflake.connector.SnowflakeConnect
     assert result["data"]["total"] == 1
 
 
+def test_server_explicit_begin(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    # clients that manage transactions themselves send BEGIN rather than relying on the
+    # connector, eg: database/sql in Go calls it from Tx.Begin
+    scur.execute("create table test_begin (i int)")
+
+    scur.execute("BEGIN TRANSACTION")
+    assert scur.fetchall() == [("Statement executed successfully.",)]
+
+    scur.execute("insert into test_begin values (1)")
+    scur.execute("ROLLBACK")
+
+    scur.execute("select count(*) from test_begin")
+    assert scur.fetchall() == [(0,)]
+
+
 def test_server_close(server: dict) -> None:
     conn = snowflake.connector.connect(**server)
 
