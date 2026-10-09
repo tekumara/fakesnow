@@ -591,7 +591,7 @@ class FakeSnowflakeCursor:
             (affected_count,) = self._duck_conn.fetchall()[0]
             result_sql = SQL_DELETED_ROWS.substitute(count=affected_count)
 
-        elif cmd in {"TRUNCATETABLE", "COMMIT", "ROLLBACK"}:
+        elif cmd in {"TRUNCATETABLE", "COMMIT", "ROLLBACK", "TRANSACTION"}:
             result_sql = SQL_SUCCESS
 
         elif cmd in {"DESCRIBE TABLE", "DESCRIBE VIEW"}:
