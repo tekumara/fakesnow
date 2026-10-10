@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.11.21](https://github.com/tekumara/fakesnow/compare/v0.11.20...v0.11.21) (2026-10-10)
+
+
+### Bug Fixes
+
+* return a result for BEGIN so the server can describe it ([#444](https://github.com/tekumara/fakesnow/issues/444)) ([27acf08](https://github.com/tekumara/fakesnow/commit/27acf082f304aa1422ff0a9c2dea57b36d71cdee))
+
 ## [0.11.20](https://github.com/tekumara/fakesnow/compare/v0.11.19...v0.11.20) (2026-10-03)
 
 
