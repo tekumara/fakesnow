@@ -367,7 +367,6 @@ def test_server_session_heartbeat(server: dict) -> None:
         assert response.json()["success"] is True
 
 
-
 def test_server_session_heartbeat_missing_authorization(server: dict) -> None:
     response = requests.post(
         f"http://{server['host']}:{server['port']}/session/heartbeat",
