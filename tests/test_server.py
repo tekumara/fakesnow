@@ -346,6 +346,52 @@ def test_server_no_gzip(server: dict) -> None:
     assert response.json()["success"]
 
 
+def test_server_session_heartbeat(server: dict) -> None:
+    headers = {
+        "Accept": "application/snowflake",
+        "Content-Type": "application/json",
+    }
+    # Let the connector issue a complete login request, as it does for a real Snowflake session.
+    with snowflake.connector.connect(**server) as conn:
+        assert conn.rest
+        token = conn.rest.token
+        assert token
+        auth_headers = headers | {"Authorization": f'Snowflake Token="{token}"'}
+
+        response = requests.post(
+            f"http://{server['host']}:{server['port']}/session/heartbeat",
+            headers=auth_headers,
+            timeout=5,
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
+
+
+def test_server_session_heartbeat_missing_authorization(server: dict) -> None:
+    response = requests.post(
+        f"http://{server['host']}:{server['port']}/session/heartbeat",
+        timeout=5,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["success"] is False
+    assert response.json()["code"] == "390103"
+    assert response.json()["message"] == "Session token not found in the request data."
+
+
+def test_server_session_heartbeat_invalid_authorization(server: dict) -> None:
+    response = requests.post(
+        f"http://{server['host']}:{server['port']}/session/heartbeat",
+        headers={"Authorization": 'Snowflake Token="invalid"'},
+        timeout=5,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["success"] is False
+    assert response.json()["code"] == "390104"
+    assert response.json()["message"] == "User must login again to access the service."
+
+
 def test_server_nop_regexes(server: dict) -> None:
     with snowflake.connector.connect(**server | {"session_parameters": {"nop_regexes": ["^CALL.*"]}}) as conn:
         cur = conn.cursor()

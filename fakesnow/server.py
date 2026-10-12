@@ -315,7 +315,7 @@ def describe_only_response(
 
 def to_token(request: Request) -> str:
     if not (auth := request.headers.get("Authorization")):
-        raise ServerError(status_code=401, code="390101", message="Authorization header not found in the request data.")
+        raise ServerError(status_code=401, code="390103", message="Session token not found in the request data.")
 
     return auth[17:-1]
 
@@ -364,6 +364,7 @@ routes = [
         methods=["POST"],
     ),
     Route("/session", session, methods=["POST"]),
+    Route("/session/heartbeat", session, methods=["POST"]),
     Route(
         "/queries/v1/query-request",
         query_request,
