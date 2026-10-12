@@ -364,6 +364,7 @@ routes = [
         methods=["POST"],
     ),
     Route("/session", session, methods=["POST"]),
+    Route("/session/heartbeat", session, methods=["POST"]),
     Route(
         "/queries/v1/query-request",
         query_request,
