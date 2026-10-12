@@ -315,7 +315,7 @@ def describe_only_response(
 
 def to_token(request: Request) -> str:
     if not (auth := request.headers.get("Authorization")):
-        raise ServerError(status_code=401, code="390101", message="Authorization header not found in the request data.")
+        raise ServerError(status_code=401, code="390103", message="Session token not found in the request data.")
 
     return auth[17:-1]
 

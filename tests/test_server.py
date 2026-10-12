@@ -376,6 +376,8 @@ def test_server_session_heartbeat_missing_authorization(server: dict) -> None:
 
     assert response.status_code == 401
     assert response.json()["success"] is False
+    assert response.json()["code"] == "390103"
+    assert response.json()["message"] == "Session token not found in the request data."
 
 
 def test_server_session_heartbeat_invalid_authorization(server: dict) -> None:
