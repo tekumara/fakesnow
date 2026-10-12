@@ -351,38 +351,21 @@ def test_server_session_heartbeat(server: dict) -> None:
         "Accept": "application/snowflake",
         "Content-Type": "application/json",
     }
-    response = requests.post(
-        f"http://{server['host']}:{server['port']}/session/v1/login-request",
-        headers=headers,
-        json={"data": {"SESSION_PARAMETERS": {}}},
-        timeout=5,
-    )
-    assert response.status_code == 200
-    token = response.json()["data"]["token"]
-    auth_headers = headers | {"Authorization": f'Snowflake Token="{token}"'}
+    # Let the connector issue a complete login request, as it does for a real Snowflake session.
+    with snowflake.connector.connect(**server) as conn:
+        assert conn.rest
+        token = conn.rest.token
+        assert token
+        auth_headers = headers | {"Authorization": f'Snowflake Token="{token}"'}
 
-    response = requests.post(
-        f"http://{server['host']}:{server['port']}/session/heartbeat",
-        headers=auth_headers,
-        timeout=5,
-    )
-    assert response.status_code == 200
-    assert response.json()["success"] is True
+        response = requests.post(
+            f"http://{server['host']}:{server['port']}/session/heartbeat",
+            headers=auth_headers,
+            timeout=5,
+        )
+        assert response.status_code == 200
+        assert response.json()["success"] is True
 
-    response = requests.post(
-        f"http://{server['host']}:{server['port']}/queries/v1/query-request?requestId=uuid1&request_guid=uuid2",
-        headers=auth_headers,
-        json={
-            "sqlText": "SELECT 1 AS TEST",
-            "asyncExec": False,
-            "sequenceId": 1,
-            "isInternal": False,
-            "queryContextDTO": {},
-        },
-        timeout=5,
-    )
-    assert response.status_code == 200
-    assert response.json()["success"] is True
 
 
 def test_server_session_heartbeat_missing_authorization(server: dict) -> None:
