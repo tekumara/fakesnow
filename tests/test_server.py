@@ -389,6 +389,8 @@ def test_server_session_heartbeat_invalid_authorization(server: dict) -> None:
 
     assert response.status_code == 401
     assert response.json()["success"] is False
+    assert response.json()["code"] == "390104"
+    assert response.json()["message"] == "User must login again to access the service."
 
 
 def test_server_nop_regexes(server: dict) -> None:
