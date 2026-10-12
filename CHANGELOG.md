@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.11.22](https://github.com/tekumara/fakesnow/compare/v0.11.21...v0.11.22) (2026-10-12)
+
+
+### Features
+
+* **server:** support session heartbeat endpoint ([#446](https://github.com/tekumara/fakesnow/issues/446)) ([d1a6027](https://github.com/tekumara/fakesnow/commit/d1a602795d6747721defdeb63ad1c23b6465abd4))
+
 ## [0.11.21](https://github.com/tekumara/fakesnow/compare/v0.11.20...v0.11.21) (2026-10-10)
 
 
