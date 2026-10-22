@@ -2,7 +2,7 @@ import gzip
 import os
 import re
 import tempfile
-from datetime import timezone
+from datetime import UTC
 from pathlib import Path
 
 import pytest
@@ -31,7 +31,7 @@ def test_create_stage(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert str(excinfo.value) == "002002 (42710): SQL compilation error:\nObject 'STAGE1' already exists."
 
     common_fields = {
-        "created_on": IsNow(tz=timezone.utc),
+        "created_on": IsNow(tz=UTC),
         "has_credentials": "N",
         "has_encryption_key": "N",
         "owner": "SYSADMIN",

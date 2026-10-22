@@ -6,7 +6,7 @@ import re
 import tempfile
 import uuid
 from collections.abc import Iterator
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import NamedTuple, cast
 from unittest.mock import MagicMock, patch
@@ -1222,7 +1222,7 @@ def test_load_history(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3
             "SCHEMA_NAME": "SCHEMA1",
             "FILE_NAME": f"s3://{bucket}/{file_name}",
             "TABLE_NAME": "TABLE1",
-            "LAST_LOAD_TIME": IsNow(tz=timezone.utc),
+            "LAST_LOAD_TIME": IsNow(tz=UTC),
             "STATUS": "LOADED",
             "ROW_COUNT": 2,  # number of rows loaded
             "ROW_PARSED": 2,

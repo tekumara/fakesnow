@@ -6,7 +6,7 @@ readme = "README.md"
 license = { file = "LICENSE" }
 classifiers = ["License :: OSI Approved :: MIT License"]
 keywords = ["snowflake", "snowflakedb", "fake", "local", "mock", "testing"]
-requires-python = ">=3.10"
+requires-python = ">=3.11"
 dependencies = [
     "duckdb~=1.5.6",
     "pyarrow",

@@ -52,7 +52,7 @@ def create_file_format(
     catalog = table.catalog or current_database
     schema = table.db or current_schema
     format_name = ident.this
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
 
     replace = expression.args.get("replace")
     if_not_exists = expression.args.get("exists")

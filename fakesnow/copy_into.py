@@ -93,7 +93,7 @@ def copy_into(
     inserts = _inserts(expr, cparams, urls, parquet_info)
 
     histories: list[LoadHistoryRecord] = []
-    load_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    load_time = datetime.datetime.now(datetime.UTC).isoformat()
     try:
         check_sql = (
             "SELECT 1 FROM _fs_information_schema._fs_load_history "

@@ -4,13 +4,12 @@ import os
 from collections.abc import Iterable
 from pathlib import Path
 from types import TracebackType
-from typing import Any
+from typing import Any, Self
 
 import snowflake.connector
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import DictCursor, SnowflakeCursor
 from sqlglot import exp
-from typing_extensions import Self
 
 import fakesnow.info_schema as info_schema
 import fakesnow.macros as macros

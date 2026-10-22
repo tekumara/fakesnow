@@ -38,13 +38,13 @@ def test_from_time() -> None:
 
 
 def test_from_datetime() -> None:
-    value = datetime.datetime(2023, 1, 2, 12, 30, 45, 123456, tzinfo=datetime.timezone.utc)
+    value = datetime.datetime(2023, 1, 2, 12, 30, 45, 123456, tzinfo=datetime.UTC)
     assert from_datetime(converter._datetime_to_snowflake_bindings("TIMESTAMP_NTZ", value)) == value
 
 
 def test_from_binding_timestamps() -> None:
     # the JDBC driver binds setTimestamp as TIMESTAMP_LTZ, the python connector as TIMESTAMP_NTZ
-    value = datetime.datetime(2023, 1, 2, 12, 30, 45, 123456, tzinfo=datetime.timezone.utc)
+    value = datetime.datetime(2023, 1, 2, 12, 30, 45, 123456, tzinfo=datetime.UTC)
     for type_ in ["TIMESTAMP_NTZ", "TIMESTAMP_LTZ", "TIMESTAMP_TZ"]:
         binding = {"type": type_, "value": converter._datetime_to_snowflake_bindings(type_, value)}
         assert from_binding(binding) == value, type_

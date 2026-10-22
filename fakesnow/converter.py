@@ -42,14 +42,14 @@ def from_boolean(s: str) -> bool:
 def from_date(s: str) -> date:
     milliseconds = int(s)
     seconds = milliseconds / 1000
-    return datetime.datetime.fromtimestamp(seconds, timezone.utc).date()
+    return datetime.datetime.fromtimestamp(seconds, datetime.UTC).date()
 
 
 def from_time(s: str) -> time:
     nanoseconds = int(s)
     microseconds = nanoseconds / 1000
     return (
-        datetime.datetime.fromtimestamp(microseconds / 1_000_000, timezone.utc)
+        datetime.datetime.fromtimestamp(microseconds / 1_000_000, datetime.UTC)
         .replace(microsecond=int(microseconds % 1_000_000))
         .time()
     )
@@ -58,7 +58,7 @@ def from_time(s: str) -> time:
 def from_datetime(s: str) -> datetime.datetime:
     nanoseconds = int(s)
     microseconds = nanoseconds / 1000
-    return datetime.datetime.fromtimestamp(microseconds / 1_000_000, timezone.utc).replace(
+    return datetime.datetime.fromtimestamp(microseconds / 1_000_000, datetime.UTC).replace(
         microsecond=int(microseconds % 1_000_000)
     )
 

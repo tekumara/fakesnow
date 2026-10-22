@@ -9,7 +9,7 @@ import uuid
 from collections.abc import Callable, Iterator, Sequence
 from string import Template
 from types import TracebackType
-from typing import TYPE_CHECKING, Any, cast
+from typing import TYPE_CHECKING, Any, Self, cast
 
 import duckdb
 import pyarrow  # needed by to_arrow_table()
@@ -21,7 +21,6 @@ from snowflake.connector.cursor import ResultMetadata
 from snowflake.connector.result_batch import ResultBatch
 from sqlglot import Expr, exp
 from sqlglot.errors import ParseError
-from typing_extensions import Self
 
 import fakesnow.checks as checks
 import fakesnow.expr as expr

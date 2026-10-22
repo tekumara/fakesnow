@@ -144,7 +144,7 @@ def create_stage(
     catalog = table.catalog or current_database
     schema = table.db or current_schema
     stage_name = ident.this
-    now = datetime.datetime.now(datetime.timezone.utc).isoformat()
+    now = datetime.datetime.now(datetime.UTC).isoformat()
 
     is_temp = False
     url = ""
