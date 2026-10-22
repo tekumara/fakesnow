@@ -2,6 +2,23 @@
 
 # Changelog
 
+## [0.12.0](https://github.com/tekumara/fakesnow/compare/v0.11.22...v0.12.0) (2026-10-22)
+
+
+### ⚠ BREAKING CHANGES
+
+* require Python 3.11
+
+### Features
+
+* information_schema.schemata with Snowflake's columns ([#448](https://github.com/tekumara/fakesnow/issues/448)) ([1d99895](https://github.com/tekumara/fakesnow/commit/1d99895eecf0d1a8f702d70afd8bed9d81c1c080))
+
+
+### Chores
+
+* require Python 3.11 ([733f421](https://github.com/tekumara/fakesnow/commit/733f421dc04f407cb301798da25ab1e86906ac38))
+* upgrade DuckDB to 2.0 ([3651d7c](https://github.com/tekumara/fakesnow/commit/3651d7c67bc29120622e975ba8fe89cad73f9171))
+
 ## [0.11.22](https://github.com/tekumara/fakesnow/compare/v0.11.21...v0.11.22) (2026-10-12)
 
 
