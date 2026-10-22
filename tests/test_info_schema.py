@@ -332,6 +332,8 @@ def test_info_schema_schemata(dcur: snowflake.connector.cursor.DictCursor):
             "CREATED": datetime(1970, 1, 1, tzinfo=pytz.utc),
             "LAST_ALTERED": datetime(1970, 1, 1, tzinfo=pytz.utc),
             "COMMENT": None,
+            "REPLICABLE_WITH_FAILOVER_GROUPS": "UNSET",
+            "OWNER_ROLE_TYPE": "ROLE",
         }
     ]
 

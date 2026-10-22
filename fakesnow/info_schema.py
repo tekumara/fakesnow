@@ -208,7 +208,9 @@ select
     null::VARCHAR as SQL_PATH,
     to_timestamp(0)::timestamptz as CREATED,
     to_timestamp(0)::timestamptz as LAST_ALTERED,
-    null::VARCHAR as COMMENT
+    null::VARCHAR as COMMENT,
+    'UNSET' as REPLICABLE_WITH_FAILOVER_GROUPS,
+    'ROLE' as OWNER_ROLE_TYPE
 from system.information_schema.schemata
 where catalog_name = '${catalog}'
   and schema_name not in ('main', 'pg_catalog')
