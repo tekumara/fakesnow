@@ -537,6 +537,10 @@ def test_information_schema_fs() -> None:
         == "SELECT * FROM _FS_INFORMATION_SCHEMA._FS_VIEWS"
     )
     assert (
+        sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.SCHEMATA").transform(information_schema_fs).sql()
+        == "SELECT * FROM _FS_INFORMATION_SCHEMA._FS_SCHEMATA"
+    )
+    assert (
         sqlglot.parse_one("SELECT * FROM INFORMATION_SCHEMA.LOAD_HISTORY").transform(information_schema_fs).sql()
         == "SELECT * FROM _FS_INFORMATION_SCHEMA._FS_LOAD_HISTORY"
     )
