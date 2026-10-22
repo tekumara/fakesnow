@@ -276,6 +276,7 @@ class FakeSnowflakeCursor:
         _df = pyarrow.Table.from_pylist(results)
         self._duck_conn.execute("select * from _df")
         self._arrow_table = self._duck_conn.to_arrow_table()
+        assert self._arrow_table is not None
         self._rowcount = self._arrow_table.num_rows
 
     def check_db_and_schema(self, expression: Expr) -> None:
@@ -369,6 +370,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.sha256)
             .transform(transforms.create_clone)
             .transform(transforms.alias_in_join)
+            .transform(transforms.alias_in_where)
             .transform(transforms.alter_table_strip_cluster_by)
             .transform(transforms.numeric_agg_implicit_cast)
             .transform(lambda e: transforms.create_stage(e, self._conn.database, self._conn.schema))
@@ -502,8 +504,12 @@ class FakeSnowflakeCursor:
                 self._duck_conn.execute(sql, params)
         except duckdb.BinderException as e:
             msg = e.args[0]
-            errno, sqlstate = (100103, "22000") if "Duplicate struct entry name" in msg else (2043, "02000")
+            duplicate_key = "Duplicate struct entry name" in msg or "Duplicate named argument" in msg
+            errno, sqlstate = (100103, "22000") if duplicate_key else (2043, "02000")
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=errno, sqlstate=sqlstate) from e
+        except duckdb.ResourceInUseException as e:
+            # DuckDB reports a duplicate CREATE DATABASE as an attach conflict.
+            raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=2002, sqlstate="42710") from e
         except duckdb.CatalogException as e:
             # minimal processing to make it look like a snowflake exception, message content may differ
             msg = cast(str, e.args[0]).split("\n")[0]
@@ -679,6 +685,7 @@ class FakeSnowflakeCursor:
             self._duck_conn.execute(result_sql)
 
         self._arrow_table = self._duck_conn.to_arrow_table()
+        assert self._arrow_table is not None
         if transformed.args.get("merge_counts"):
             # a merge returns a count per operation, but snowflake reports their total as the
             # rows affected, not the single row those counts are in

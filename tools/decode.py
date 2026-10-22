@@ -15,7 +15,7 @@ def dump_field_metadata(field: pa.Field, index: int) -> None:
     for key, value in field.metadata.items():
         try:
             print(f"    {key.decode('utf-8')}: {value.decode('utf-8')}")
-        except UnicodeDecodeError:  # noqa: PERF203
+        except UnicodeDecodeError:
             print(f"    {key.decode('utf-8')}: <binary data>")
     print()
 

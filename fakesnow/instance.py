@@ -26,7 +26,9 @@ class FakeSnow:
         self.nop_regexes = nop_regexes
 
         self.results_cache: dict[str, tuple] = {}
-        self.duck_conn = duckdb.connect(database=":memory:")
+        # SQLGlot's DuckDB transpilation still emits legacy arrow lambdas; keep the
+        # DuckDB 2.0 compatibility setting enabled.
+        self.duck_conn = duckdb.connect(database=":memory:", config={"lambda_syntax": "ENABLE_SINGLE_ARROW"})
 
         # create a "global" database for storing objects which span databases.
         self.duck_conn.execute(f"ATTACH IF NOT EXISTS ':memory:' AS {GLOBAL_DATABASE_NAME}")

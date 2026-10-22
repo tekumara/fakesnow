@@ -18,11 +18,11 @@ CREATE OR REPLACE MACRO ${catalog}._fs_flatten(input) AS TABLE
             CASE WHEN json_type(TO_JSON(input)) = 'OBJECT'
                  THEN list_transform(
                     json_keys(TO_JSON(input)),
-                    x -> struct_pack(k := x, v := CAST(TO_JSON(input) -> x AS JSON))
+                    lambda x: struct_pack(k := x, v := CAST(TO_JSON(input) -> x AS JSON))
                  )
                  ELSE list_transform(
                     CAST(TO_JSON(input) AS JSON[]),
-                    x -> struct_pack(k := NULL::VARCHAR, v := x)
+                    lambda x: struct_pack(k := NULL::VARCHAR, v := x)
                  )
             END, recursive := true
         )

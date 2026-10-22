@@ -19,6 +19,7 @@ class ColumnInfo(TypedDict):
 
 
 duckdb_to_sf_type = {
+    '"NULL"': "text",
     "BIGINT": "fixed",
     "BLOB": "binary",
     "BOOLEAN": "boolean",

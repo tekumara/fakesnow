@@ -7,7 +7,7 @@ import pandas as pd
 import pyarrow as pa
 import pytz
 
-from fakesnow.arrow import timestamp_to_sf_struct, to_ipc, to_sf_schema
+from fakesnow.arrow import timestamp_to_sf_struct, to_ipc, to_sf, to_sf_schema
 from fakesnow.rowtype import ColumnInfo, describe_as_rowtype
 
 
@@ -32,6 +32,17 @@ def test_with_sf_schema() -> None:
         b"scale": b"2",
         b"charLength": b"0",
     }
+
+
+def test_to_sf_casts_all_null_column_to_text() -> None:
+    table = pa.table({"NULL_ONLY": pa.nulls(2)})
+    result = to_sf(table, rowtype(['"NULL"']))
+
+    assert result.schema.field(0).type == pa.string()
+    metadata = result.schema.field(0).metadata
+    assert metadata is not None
+    assert metadata[b"logicalType"] == b"TEXT"
+    assert result.column(0).to_pylist() == [None, None]
 
 
 def test_ipc() -> None:

@@ -32,6 +32,7 @@ from fakesnow.transforms.transforms import (
     SERVER_VERSION as SERVER_VERSION,
     SUCCESS_NOP as SUCCESS_NOP,
     alias_in_join as alias_in_join,
+    alias_in_where as alias_in_where,
     alter_session as alter_session,
     array_agg as array_agg,
     array_agg_within_group as array_agg_within_group,

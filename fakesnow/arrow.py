@@ -66,9 +66,14 @@ def to_sf(table: pa.Table, rowtype: list[ColumnInfo]) -> pa.Table:
         elif pa.types.is_time(col.type):
             # as nanoseconds
             return pc.multiply(col.cast(pa.int64()), 1000)
+        elif pa.types.is_null(col.type):
+            # Snowflake returns untyped NULL results as TEXT.
+            return col.cast(pa.string())
         return col
 
-    return pa.Table.from_arrays([to_sf_col(c) for c in table.columns], schema=to_sf_schema(table.schema, rowtype))
+    arrays = [to_sf_col(c) for c in table.columns]
+    schema = pa.schema([field.with_type(array.type) for field, array in zip(table.schema, arrays, strict=True)])
+    return pa.Table.from_arrays(arrays, schema=to_sf_schema(schema, rowtype))
 
 
 def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:

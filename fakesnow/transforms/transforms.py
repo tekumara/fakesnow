@@ -41,6 +41,23 @@ def alias_in_join(expression: Expr) -> Expr:
     return expression
 
 
+def alias_in_where(expression: Expr) -> Expr:
+    """Inline OBJECT_CONSTRUCT aliases in WHERE clauses.
+
+    DuckDB 2.0 rejects references to aliases whose expression expands to an aggregate macro.
+    """
+    if isinstance(expression, exp.Select) and (where := expression.args.get("where")):
+        aliases = {e.alias: e.this for e in expression.expressions if isinstance(e, exp.Alias)}
+        for column in where.find_all(exp.Column):
+            if (
+                not column.table
+                and (alias := aliases.get(column.name))
+                and any(function.name.upper() == "_FS_OBJECT_CONSTRUCT" for function in alias.find_all(exp.Anonymous))
+            ):
+                column.replace(alias.copy())
+    return expression
+
+
 def array_construct_etc(expression: Expr) -> Expr:
     """Handle ARRAY_CONSTRUCT_* and ARRAY_CAT
 

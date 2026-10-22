@@ -165,9 +165,10 @@ def test_create_database_respects_if_not_exists() -> None:
         cursor = snowflake.connector.connect().cursor()
         cursor.execute("CREATE DATABASE db2")
 
-        with pytest.raises(ProgrammingError, match=r'Cannot attach "DB2" - the database file .* is already attached'):
+        with pytest.raises(ProgrammingError) as excinfo:
             cursor.execute("CREATE DATABASE db2")  # Fails as db already exists.
 
+        assert (excinfo.value.errno, excinfo.value.sqlstate) == (2002, "42710")
         cursor.execute("CREATE DATABASE IF NOT EXISTS db2")
 
 
