@@ -191,6 +191,30 @@ where tables.database_name = '${catalog}'
 """
 )
 
+# replicates https://docs.snowflake.com/sql-reference/info-schema/schemata
+SQL_CREATE_INFORMATION_SCHEMA_SCHEMATA_VIEW = Template(
+    """
+create view if not exists ${catalog}._fs_information_schema._fs_schemata AS
+select
+    catalog_name as CATALOG_NAME,
+    case when schema_name = '_fs_information_schema' then 'INFORMATION_SCHEMA' else schema_name end as SCHEMA_NAME,
+    'SYSADMIN' as SCHEMA_OWNER,
+    'NO' as IS_TRANSIENT,
+    'NO' as IS_MANAGED_ACCESS,
+    1 as RETENTION_TIME,
+    null::VARCHAR as DEFAULT_CHARACTER_SET_CATALOG,
+    null::VARCHAR as DEFAULT_CHARACTER_SET_SCHEMA,
+    null::VARCHAR as DEFAULT_CHARACTER_SET_NAME,
+    null::VARCHAR as SQL_PATH,
+    to_timestamp(0)::timestamptz as CREATED,
+    to_timestamp(0)::timestamptz as LAST_ALTERED,
+    null::VARCHAR as COMMENT
+from system.information_schema.schemata
+where catalog_name = '${catalog}'
+  and schema_name not in ('main', 'pg_catalog')
+"""
+)
+
 # replicates https://docs.snowflake.com/sql-reference/info-schema/views
 SQL_CREATE_INFORMATION_SCHEMA_VIEWS_VIEW = Template(
     """
@@ -280,6 +304,7 @@ def per_db_creation_sql(catalog: str) -> str:
         {SQL_CREATE_INFORMATION_SCHEMA_COLUMNS_VIEW.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_DATABASES_VIEW.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_TABLES_VIEW.substitute(catalog=catalog)};
+        {SQL_CREATE_INFORMATION_SCHEMA_SCHEMATA_VIEW.substitute(catalog=catalog)};
         {SQL_CREATE_INFORMATION_SCHEMA_VIEWS_VIEW.substitute(catalog=catalog)};
         {SQL_CREATE_LOAD_HISTORY_TABLE.substitute(catalog=catalog)};
     """

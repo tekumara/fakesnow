@@ -308,6 +308,45 @@ def test_info_schema_views(dcur: snowflake.connector.cursor.DictCursor):
     ]
 
 
+def test_info_schema_schemata(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("CREATE SCHEMA db1.schema2")
+    dcur.execute("CREATE DATABASE db2")
+    # should not be returned
+    dcur.execute("CREATE SCHEMA db2.schema3")
+
+    dcur.execute("USE SCHEMA db1.schema1")
+    dcur.execute("SELECT * FROM information_schema.schemata WHERE schema_name = 'SCHEMA2'")
+
+    assert dcur.fetchall() == [
+        {
+            "CATALOG_NAME": "DB1",
+            "SCHEMA_NAME": "SCHEMA2",
+            "SCHEMA_OWNER": "SYSADMIN",
+            "IS_TRANSIENT": "NO",
+            "IS_MANAGED_ACCESS": "NO",
+            "RETENTION_TIME": 1,
+            "DEFAULT_CHARACTER_SET_CATALOG": None,
+            "DEFAULT_CHARACTER_SET_SCHEMA": None,
+            "DEFAULT_CHARACTER_SET_NAME": None,
+            "SQL_PATH": None,
+            "CREATED": datetime(1970, 1, 1, tzinfo=pytz.utc),
+            "LAST_ALTERED": datetime(1970, 1, 1, tzinfo=pytz.utc),
+            "COMMENT": None,
+        }
+    ]
+
+
+def test_info_schema_schemata_lists_only_current_database(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("CREATE DATABASE db2")
+    cur.execute("CREATE SCHEMA db2.schema3")
+
+    cur.execute("USE SCHEMA db1.schema1")
+    cur.execute(
+        "SELECT catalog_name, schema_name FROM information_schema.schemata WHERE schema_name IN ('INFORMATION_SCHEMA', 'SCHEMA1', 'SCHEMA3') ORDER BY schema_name"
+    )
+    assert cur.fetchall() == [("DB1", "INFORMATION_SCHEMA"), ("DB1", "SCHEMA1")]
+
+
 def test_type_column_is_not_null(
     cur: snowflake.connector.cursor.SnowflakeCursor,
 ) -> None:
