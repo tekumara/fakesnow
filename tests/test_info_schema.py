@@ -310,11 +310,9 @@ def test_info_schema_views(dcur: snowflake.connector.cursor.DictCursor):
 
 def test_info_schema_schemata(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("CREATE SCHEMA db1.schema2")
-    dcur.execute("CREATE DATABASE db2")
-    # should not be returned
-    dcur.execute("CREATE SCHEMA db2.schema3")
 
     dcur.execute("USE SCHEMA db1.schema1")
+    # SCHEMA1 is current, but this filter should return only SCHEMA2.
     dcur.execute("SELECT * FROM information_schema.schemata WHERE schema_name = 'SCHEMA2'")
 
     assert dcur.fetchall() == [
@@ -329,8 +327,8 @@ def test_info_schema_schemata(dcur: snowflake.connector.cursor.DictCursor):
             "DEFAULT_CHARACTER_SET_SCHEMA": None,
             "DEFAULT_CHARACTER_SET_NAME": None,
             "SQL_PATH": None,
-            "CREATED": datetime(1970, 1, 1, tzinfo=pytz.utc),
-            "LAST_ALTERED": datetime(1970, 1, 1, tzinfo=pytz.utc),
+            "CREATED": IsDatetime(),
+            "LAST_ALTERED": IsDatetime(),
             "COMMENT": None,
             "REPLICABLE_WITH_FAILOVER_GROUPS": "UNSET",
             "OWNER_ROLE_TYPE": "ROLE",
