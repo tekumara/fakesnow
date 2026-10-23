@@ -1,7 +1,7 @@
 # ruff: noqa: SLF001
-
 from __future__ import annotations
 
+import importlib
 import os
 import re
 import sys
@@ -13,7 +13,11 @@ from typing import TYPE_CHECKING, Any, Self, cast
 
 import duckdb
 import pyarrow  # needed by to_arrow_table()
-import snowflake.connector.converter
+
+try:  # connector 5.x
+    _Converter = importlib.import_module("snowflake.connector._internal.binding_converters").ClientSideBindingConverter
+except ModuleNotFoundError:  # connector 4.x
+    _Converter = importlib.import_module("snowflake.connector.converter").SnowflakeConverter
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
@@ -107,7 +111,7 @@ class FakeSnowflakeCursor:
         self._arrow_table_fetch_index = None
         self._rowcount = None
         self._sfqid = None
-        self._converter = snowflake.connector.converter.SnowflakeConverter()
+        self._converter = _Converter()
         self._prefetch_hook: Callable[[], None] | None = None
 
     def __enter__(self) -> Self:
@@ -809,7 +813,7 @@ class FakeResultBatch(ResultBatch):
         self._batch = batch
 
     def create_iter(
-        self, **kwargs: dict[str, Any]
+        self, *args: Any, **kwargs: Any
     ) -> Iterator[dict | Exception] | Iterator[tuple | Exception] | Iterator[pyarrow.Table] | Iterator[pd.DataFrame]:
         if self._use_dict_result:
             return iter(self._batch.to_pylist())
@@ -820,10 +824,10 @@ class FakeResultBatch(ResultBatch):
     def rowcount(self) -> int:
         return self._batch.num_rows
 
-    def to_pandas(self) -> pd.DataFrame:
+    def to_pandas(self, *args: Any, **kwargs: Any) -> pd.DataFrame:
         return self._batch.to_pandas()
 
-    def to_arrow(self) -> pyarrow.Table:
+    def to_arrow(self, *args: Any, **kwargs: Any) -> pyarrow.Table:
         raise NotImplementedError()
 
     def populate_data(self, connection: SnowflakeConnection | None = None, **kwargs: Any) -> Self:
