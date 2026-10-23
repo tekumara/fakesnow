@@ -4,8 +4,11 @@ import pandas as pd
 import pytest
 import snowflake.connector
 import snowflake.connector.cursor
+import sqlglot
 from dirty_equals import IsUUID
 from pandas.testing import assert_frame_equal
+
+from fakesnow.cursor import FakeSnowflakeCursor
 
 
 def test_binding_pyformat(conn: snowflake.connector.SnowflakeConnection):
@@ -249,3 +252,12 @@ def test_get_results_from_sfqid_not_found(cur: snowflake.connector.cursor.Snowfl
     ) as exc:
         cur.fetchall()
     assert exc.value.errno == -1
+
+
+def test_transform_leaves_input_unchanged(cur: FakeSnowflakeCursor):
+    expression = sqlglot.parse_one("select id::number from table1 where name = 'foo'", read="snowflake")
+    before = expression.sql(dialect="snowflake")
+
+    cur._transform(expression, None)  # noqa: SLF001
+
+    assert expression.sql(dialect="snowflake") == before

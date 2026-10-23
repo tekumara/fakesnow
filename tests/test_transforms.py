@@ -1,3 +1,4 @@
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -7,6 +8,7 @@ from sqlglot import Expr, exp
 from fakesnow.transforms import (
     SUCCESS_NOP,
     alias_in_join,
+    alter_session,
     array_agg,
     array_agg_within_group,
     array_size,
@@ -49,10 +51,22 @@ from fakesnow.transforms import (
     to_variant,
     trim_cast_varchar,
     try_parse_json,
+    update_variables,
     upper_case_unquoted_identifiers,
     values_columns,
 )
 from fakesnow.transforms.transforms import _get_to_number_args
+from fakesnow.variables import Variables
+
+
+def assert_attached_once(expression: Expr) -> None:
+    # the cursor runs transforms in place, so a node shared by two parents is only rewritten in one of them
+    seen = set()
+    for node in expression.walk():
+        assert id(node) not in seen, f"{node.sql()} appears more than once"
+        seen.add(id(node))
+        for child in node.iter_expressions():
+            assert child.parent is node, f"{child.sql()} is not attached to its parent"
 
 
 def test_alias_in_join() -> None:
@@ -86,11 +100,23 @@ def test_alias_in_join() -> None:
     )
 
 
+def test_alias_in_join_copies_the_aliased_expression() -> None:
+    expression = sqlglot.parse_one("SELECT SUBSTR(T.COL, 4) AS ALIAS FROM T JOIN J ON ALIAS = J.COL")
+
+    assert_attached_once(expression.transform(alias_in_join, copy=False))
+
+
 def test_array_size() -> None:
     assert (
         sqlglot.parse_one("""select array_size(parse_json('["a","b"]'))""").transform(array_size).sql(dialect="duckdb")
         == """SELECT CASE WHEN JSON_TYPE(JSON('["a","b"]')) = 'ARRAY' THEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) END"""
     )
+
+
+def test_array_size_copies_its_argument() -> None:
+    expression = sqlglot.parse_one("SELECT array_size(names)")
+
+    assert_attached_once(expression.transform(array_size, copy=False))
 
 
 def test_array_agg() -> None:
@@ -689,6 +715,12 @@ def test_regex_replace() -> None:
     )
 
 
+def test_regex_replace_attaches_its_arguments() -> None:
+    expression = sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D')")
+
+    assert_attached_once(expression.transform(regex_replace, copy=False))
+
+
 def test_regex_substr() -> None:
     assert (
         sqlglot.parse_one("SELECT regexp_substr(string1, 'the\\\\W+\\\\w+')", read="snowflake")
@@ -823,6 +855,25 @@ def test_tag() -> None:
         == SUCCESS_NOP
     )
     assert sqlglot.parse_one("DROP TAG test_tag", read="snowflake").transform(tag) == SUCCESS_NOP
+
+
+@pytest.mark.parametrize(
+    "sql,transform",
+    [
+        ("use role foo", lambda e: set_schema(e, current_database=None)),
+        ("alter session set quoted_identifiers_ignore_case = false", alter_session),
+        ("set x = 1", lambda e: update_variables(e, Variables())),
+        ("alter table table1 set tag foo='bar'", tag),
+        ("alter table table1 modify column name1 set tag foo='bar'", tag),
+        ("create tag cost_center", tag),
+    ],
+)
+def test_success_nop_is_returned_as_a_copy(sql: str, transform: Callable[[Expr], Expr]) -> None:
+    # later passes transform the result in place, so it must not be the shared SUCCESS_NOP
+    transformed = transform(sqlglot.parse_one(sql, read="snowflake"))
+
+    assert transformed == SUCCESS_NOP
+    assert transformed is not SUCCESS_NOP
 
 
 def test_timestamp_ntz_ns() -> None:

@@ -69,6 +69,14 @@ def test_array_size(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == [(0,)]
 
 
+def test_array_size_of_array_agg_within_group(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table table1 (id number)")
+    cur.execute("insert into table1 values (1), (2), (3)")
+
+    cur.execute("select array_size(array_agg(id) within group (order by id)) from table1")
+    assert cur.fetchall() == [(3,)]
+
+
 def test_array_agg(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create table table1 (id number, name varchar)")
     values = [(1, "foo"), (2, "bar"), (1, "baz"), (2, "qux")]
