@@ -703,6 +703,72 @@ def test_use_schema_name_is_case_sensitive(cur: snowflake.connector.cursor.Snowf
     )
 
 
+def test_unquoted_column_does_not_match_quoted_lower_case_column(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table customers ("id" int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select id from customers")
+
+    assert "000904 (42000): SQL compilation error:\ninvalid identifier 'ID'" in str(excinfo.value)
+
+
+def test_quoted_lower_case_column_does_not_match_unquoted_column(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table customers (id int)")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute('select "id" from customers')
+
+    assert "000904 (42000): SQL compilation error:\ninvalid identifier '\"id\"'" in str(excinfo.value)
+
+
+def test_qualified_column_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table customers ("id" int)')
+    cur.execute("create table orders (customer_id int)")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select o.customer_id from orders o join customers c on c.id = o.customer_id")
+
+    assert "invalid identifier 'C.ID'" in str(excinfo.value)
+
+
+def test_column_name_case_follows_a_cte(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table customers ("id" int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute('with c as (select "id" from customers) select id from c')
+
+    assert "invalid identifier 'ID'" in str(excinfo.value)
+
+
+def test_insert_column_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table customers (id int)")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute('insert into customers ("Id") values (1)')
+
+    assert "invalid identifier '\"Id\"'" in str(excinfo.value)
+
+
+def test_update_column_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table customers ("id" int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("update customers set id = 1")
+
+    assert "invalid identifier 'ID'" in str(excinfo.value)
+
+
+def test_column_names_match_their_own_case_and_aliases(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table customers ("id" int, name varchar)')
+    cur.execute("insert into customers (\"id\", NAME) values (1, 'a')")
+
+    cur.execute('select "id" as id, Name from customers order by ID')
+    assert cur.fetchall() == [(1, "a")]
+
+    cur.execute('with c as (select "id" as id from customers) select c.id from c where Id = 1')
+    assert cur.fetchall() == [(1,)]
+
+
 def test_timestamp_ltz_with_precision(cur: snowflake.connector.cursor.SnowflakeCursor):
     # snowflake accepts a precision on TIMESTAMP_LTZ, duckdb's TIMESTAMPTZ does not
     cur.execute("CREATE TABLE example (ts TIMESTAMP_LTZ(9))")

@@ -334,14 +334,9 @@ class FakeSnowflakeCursor:
             return
 
         for table in checks.referenced_tables(expression):
-            database = table.catalog or self._conn.database
-            schema = table.db or self._conn._schema
-            if not (database and schema):
-                # check_db_and_schema has already refused what needs a current database or schema
+            if not (location := self._table_location(table)):
                 continue
-            if schema.upper() == "_FS_INFORMATION_SCHEMA":
-                # fakesnow's own views, named in lower case, stand in for Snowflake's upper case ones
-                continue
+            database, schema = location
             found = self._duck_conn.execute(
                 """select database_name, schema_name, table_name from duckdb_tables()
                 where lower(database_name) = lower($1) and lower(schema_name) = lower($2)
@@ -359,6 +354,39 @@ class FakeSnowflakeCursor:
                     errno=2003,
                     sqlstate="42S02",
                 )
+
+        if column := checks.miscased_column(expression, self._table_columns):
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"SQL compilation error:\ninvalid identifier '{column.sql(dialect='snowflake')}'",
+                errno=904,
+                sqlstate="42000",
+            )
+
+    def _table_location(self, table: exp.Table) -> tuple[str, str] | None:
+        """The database and schema a table reference resolves in, or None if it isn't checked."""
+        database = table.catalog or self._conn.database
+        schema = table.db or self._conn._schema
+        if not (database and schema):
+            # check_db_and_schema has already refused what needs a current database or schema
+            return None
+        if schema.upper() == "_FS_INFORMATION_SCHEMA":
+            # fakesnow's own views, named in lower case, stand in for Snowflake's upper case ones
+            return None
+        return database, schema
+
+    def _table_columns(self, table: exp.Table) -> list[str] | None:
+        """A table or view's column names exactly as stored, or None if it doesn't exist under its exact name."""
+        if not (isinstance(table.this, exp.Identifier) and (location := self._table_location(table))):
+            return None
+        names = [
+            name
+            for (name,) in self._duck_conn.execute(
+                """select column_name from duckdb_columns()
+                where database_name = ? and schema_name = ? and table_name = ?""",
+                [*location, table.name],
+            ).fetchall()
+        ]
+        return names or None
 
     def _transform(self, expression: Expr, params: MutableParams | None) -> Expr:
         expression = expression.transform(lambda e: transforms.identifier(e, params)).transform(
