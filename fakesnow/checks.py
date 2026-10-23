@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+from collections.abc import Callable, Collection, Mapping
+
 from sqlglot import Expr, exp
-from sqlglot.optimizer.scope import traverse_scope
+from sqlglot.optimizer.scope import Scope, traverse_scope
 
 
 def is_unqualified_table_expression(expression: Expr) -> tuple[bool, bool]:
@@ -158,6 +160,75 @@ def referenced_tables(expression: Expr) -> list[exp.Table]:
         if isinstance(t.this, exp.Identifier)
         and not (isinstance(db := t.args.get("db"), exp.Identifier) and db.name.upper() == "INFORMATION_SCHEMA")
     ]
+
+
+def miscased_column(expression: Expr, columns_of: Callable[[exp.Table], Collection[str] | None]) -> exp.Expr | None:
+    """The first column a statement names in a case that matches none of its sources' columns.
+
+    `columns_of` gives a table's column names, exactly as stored, or None when they aren't known.
+    A column is only judged when every source it could come from is known: the tables, CTEs,
+    subqueries and laterals in its scope, and the select's own aliases. So a name is refused only
+    when it can't be anything but a column in the wrong case.
+    """
+
+    for scope in traverse_scope(expression):
+        sources = {name: _source_columns(source, columns_of) for name, source in scope.sources.items()}
+        if isinstance(scope.expression, exp.Select):
+            # Snowflake lets WHERE, GROUP BY, HAVING and QUALIFY name a select's aliases
+            sources[""] = {e.alias for e in scope.expression.expressions if isinstance(e, exp.Alias)}
+        if found := _miscased(scope.columns, sources):
+            return found
+
+    if isinstance(expression, (exp.Update, exp.Delete, exp.Merge)):
+        # their SET, WHERE and ON clauses aren't part of any scope
+        sources = {
+            source.alias_or_name: columns_of(source) if isinstance(source, exp.Table) else None
+            for source in expression.find_all(exp.Table, exp.Subquery)
+            if not source.find_ancestor(exp.Select)
+        }
+        columns = [c for c in expression.find_all(exp.Column) if not c.find_ancestor(exp.Select)]
+        if found := _miscased(columns, sources):
+            return found
+
+    if (
+        isinstance(expression, exp.Insert)
+        and isinstance(target := expression.this, exp.Schema)
+        and isinstance(target.this, exp.Table)
+    ):
+        identifiers = [i for i in target.expressions if isinstance(i, exp.Identifier)]
+        if found := _miscased(identifiers, {"": columns_of(target.this)}):
+            return found
+
+    return None
+
+
+def _source_columns(
+    source: exp.Table | Scope, columns_of: Callable[[exp.Table], Collection[str] | None]
+) -> set[str] | None:
+    if isinstance(source, exp.Table):
+        known = columns_of(source)
+        return set(known) if known is not None else None
+    names = set(source.expression.named_selects) if isinstance(source.expression, exp.Query) else set()
+    # a star, or a source sqlglot can't name the columns of (eg: TABLE(FLATTEN(...)))
+    return names if names and "*" not in names else None
+
+
+def _miscased(
+    columns: Collection[exp.Column | exp.Identifier], sources: Mapping[str, Collection[str] | None]
+) -> exp.Column | exp.Identifier | None:
+    for column in columns:
+        if isinstance(column, exp.Column):
+            if not isinstance(column.this, exp.Identifier):
+                continue
+            candidates = [sources.get(column.table)] if column.table else list(sources.values())
+        else:
+            candidates = list(sources.values())
+        if not candidates or any(c is None for c in candidates):
+            continue
+        names = {name for c in candidates for name in c or ()}
+        if column.name not in names and column.name.upper() in {name.upper() for name in names}:
+            return column
+    return None
 
 
 def equal(left: exp.Identifier, right: exp.Identifier) -> bool:
