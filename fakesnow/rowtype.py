@@ -1,7 +1,16 @@
+import importlib
 import re
 from typing import TypedDict
 
 from snowflake.connector.cursor import ResultMetadata
+
+try:  # connector 5.x
+    _type_code = importlib.import_module("snowflake.connector._internal.type_codes").get_type_code
+except ModuleNotFoundError:  # connector 4.x
+    _field_name_to_id = importlib.import_module("snowflake.connector.constants").FIELD_NAME_TO_ID
+
+    def _type_code(snowflake_type: str) -> int:
+        return _field_name_to_id[snowflake_type.upper()]
 
 
 class ColumnInfo(TypedDict):
@@ -89,4 +98,15 @@ def describe_as_rowtype(describe_results: list) -> list[ColumnInfo]:
 
 
 def describe_as_result_metadata(describe_results: list) -> list[ResultMetadata]:
-    return [ResultMetadata.from_column(c) for c in describe_as_rowtype(describe_results)]  # pyright: ignore[reportArgumentType]
+    return [
+        ResultMetadata(
+            c["name"],
+            _type_code(c.get("extTypeName") or c["type"]),
+            None,
+            c["length"],
+            c["precision"],
+            c["scale"],
+            c["nullable"],
+        )
+        for c in describe_as_rowtype(describe_results)
+    ]
