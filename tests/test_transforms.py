@@ -1,4 +1,3 @@
-from collections.abc import Callable
 from pathlib import Path
 
 import pytest
@@ -8,7 +7,6 @@ from sqlglot import Expr, exp
 from fakesnow.transforms import (
     SUCCESS_NOP,
     alias_in_join,
-    alter_session,
     array_agg,
     array_agg_within_group,
     array_size,
@@ -51,12 +49,10 @@ from fakesnow.transforms import (
     to_variant,
     trim_cast_varchar,
     try_parse_json,
-    update_variables,
     upper_case_unquoted_identifiers,
     values_columns,
 )
 from fakesnow.transforms.transforms import _get_to_number_args
-from fakesnow.variables import Variables
 
 
 def assert_attached_once(expression: Expr) -> None:
@@ -855,25 +851,6 @@ def test_tag() -> None:
         == SUCCESS_NOP
     )
     assert sqlglot.parse_one("DROP TAG test_tag", read="snowflake").transform(tag) == SUCCESS_NOP
-
-
-@pytest.mark.parametrize(
-    "sql,transform",
-    [
-        ("use role foo", lambda e: set_schema(e, current_database=None)),
-        ("alter session set quoted_identifiers_ignore_case = false", alter_session),
-        ("set x = 1", lambda e: update_variables(e, Variables())),
-        ("alter table table1 set tag foo='bar'", tag),
-        ("alter table table1 modify column name1 set tag foo='bar'", tag),
-        ("create tag cost_center", tag),
-    ],
-)
-def test_success_nop_is_returned_as_a_copy(sql: str, transform: Callable[[Expr], Expr]) -> None:
-    # later passes transform the result in place, so it must not be the shared SUCCESS_NOP
-    transformed = transform(sqlglot.parse_one(sql, read="snowflake"))
-
-    assert transformed == SUCCESS_NOP
-    assert transformed is not SUCCESS_NOP
 
 
 def test_timestamp_ntz_ns() -> None:

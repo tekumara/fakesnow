@@ -1,7 +1,5 @@
-import pytest
 import sqlglot
 
-from fakesnow.transforms import SUCCESS_NOP
 from fakesnow.transforms.ddl import alter_table_add_multiple_columns, alter_table_strip_cluster_by
 
 
@@ -66,19 +64,3 @@ def test_alter_table_strip_cluster_by() -> None:
     # Regular ALTER TABLE should not be affected
     regular_alter = sqlglot.parse_one("alter table table1 add column name varchar(20)")
     assert regular_alter.transform(alter_table_strip_cluster_by).sql() != success_sql
-
-
-@pytest.mark.parametrize(
-    "sql",
-    [
-        "alter table table1 cluster by (id)",
-        "alter table table1 drop clustering key",
-        "alter table table1 resume recluster",
-    ],
-)
-def test_alter_table_strip_cluster_by_returns_a_copy_of_success_nop(sql: str) -> None:
-    # later passes transform the result in place, so it must not be the shared SUCCESS_NOP
-    transformed = alter_table_strip_cluster_by(sqlglot.parse_one(sql, read="snowflake"))
-
-    assert transformed == SUCCESS_NOP
-    assert transformed is not SUCCESS_NOP

@@ -441,7 +441,7 @@ def extract_comment_on_columns(expression: Expr) -> Expr:
             else:
                 new_actions.append(a)
         if not new_actions:
-            expression = SUCCESS_NOP.copy()
+            expression = SUCCESS_NOP
         else:
             expression.set("actions", new_actions)
         expression.args["col_comments"] = col_comments
@@ -486,7 +486,7 @@ def extract_comment_on_table(expression: Expr) -> Expr:
         and (cexp := expression.args.get("expression"))
         and (table := expression.find(exp.Table))
     ):
-        new = SUCCESS_NOP.copy()
+        new = SUCCESS_NOP
         new.args["table_comment"] = (table, cexp.this)
         return new
     elif (
@@ -496,7 +496,7 @@ def extract_comment_on_table(expression: Expr) -> Expr:
         and isinstance(scp.this, exp.Literal)
         and (table := expression.find(exp.Table))
     ):
-        new = SUCCESS_NOP.copy()
+        new = SUCCESS_NOP
         new.args["table_comment"] = (table, scp.this.this)
         return new
 
@@ -1083,7 +1083,7 @@ def set_schema(expression: Expr, current_database: str | None) -> Expr:
     ):
         if kind.name.upper() not in ["SCHEMA", "DATABASE"]:
             # duckdb has no roles or warehouses, so USE ROLE/WAREHOUSE is a NOP
-            return SUCCESS_NOP.copy()
+            return SUCCESS_NOP
 
         assert expression.this, f"No identifier for USE expression {expression}"
 
@@ -1146,7 +1146,7 @@ def tag(expression: Expr) -> Expr:
     if isinstance(expression, exp.Alter) and (actions := expression.args.get("actions")):
         for a in actions:
             if isinstance(a, exp.AlterSet) and a.args.get("tag"):
-                return SUCCESS_NOP.copy()
+                return SUCCESS_NOP
     elif (
         isinstance(expression, exp.Command)
         and (cexp := expression.args.get("expression"))
@@ -1154,14 +1154,14 @@ def tag(expression: Expr) -> Expr:
         and "SET TAG" in cexp.upper()
     ):
         # alter table modify column set tag
-        return SUCCESS_NOP.copy()
+        return SUCCESS_NOP
     elif (
         isinstance(expression, (exp.Create, exp.Drop))
         and (kind := expression.args.get("kind"))
         and isinstance(kind, str)
         and kind.upper() == "TAG"
     ):
-        return SUCCESS_NOP.copy()
+        return SUCCESS_NOP
 
     return expression
 
@@ -1524,7 +1524,7 @@ def alter_session(expression: Expr) -> Expr:
                     and rhs.this is False
                 )
             ):
-                return SUCCESS_NOP.copy()
+                return SUCCESS_NOP
 
             elif (
                 name == "AUTOCOMMIT"
@@ -1532,7 +1532,7 @@ def alter_session(expression: Expr) -> Expr:
                 and (rhs := items[0].this.args.get("expression"))
                 and isinstance(rhs, exp.Boolean)
             ):
-                new = SUCCESS_NOP.copy()
+                new = SUCCESS_NOP
                 new.args["set_autocommit"] = rhs.this
                 return new
 
@@ -1547,7 +1547,7 @@ def update_variables(
 ) -> Expr:
     if Variables.is_variable_modifier(expression):
         variables.update_variables(expression)
-        return SUCCESS_NOP.copy()  # Nothing further to do if its a SET/UNSET operation.
+        return SUCCESS_NOP  # Nothing further to do if its a SET/UNSET operation.
     return expression
 
 

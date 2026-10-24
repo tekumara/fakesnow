@@ -106,11 +106,11 @@ def alter_table_strip_cluster_by(expression: Expr) -> Expr:
     - ALTER TABLE ... SUSPEND RECLUSTER
     """
     if _is_alter_table_cluster_by(expression):
-        return SUCCESS_NOP.copy()
+        return SUCCESS_NOP
     if _is_alter_table_drop_clustering_key(expression):
-        return SUCCESS_NOP.copy()
+        return SUCCESS_NOP
     if _is_alter_table_recluster(expression):
-        return SUCCESS_NOP.copy()
+        return SUCCESS_NOP
     return expression
 
 
