@@ -176,6 +176,15 @@ def test_server_login_reports_server_version(server: dict) -> None:
     assert response.json()["data"]["serverVersion"] == "10.0.0"
 
 
+def test_server_login_with_quoted_schema_keeps_its_case(server: dict) -> None:
+    with (
+        snowflake.connector.connect(**server, database="db1", schema='"quoted_jaffles"') as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("select current_schema()")
+        assert cur.fetchall() == [("quoted_jaffles",)]
+
+
 def test_server_executemany_qmark(server: dict) -> None:
     # the connector reads CLIENT_STAGE_ARRAY_BINDING_THRESHOLD from the login response to decide
     # between binding the values inline and staging them, then sends the inline values as an
