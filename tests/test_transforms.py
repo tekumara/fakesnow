@@ -55,7 +55,7 @@ from fakesnow.transforms import (
 from fakesnow.transforms.transforms import _get_to_number_args
 
 
-def assert_attached_once(expression: Expr) -> None:
+def assert_unique_nodes_with_correct_parents(expression: Expr) -> None:
     # the cursor runs transforms in place, so a node shared by two parents is only rewritten in one of them
     seen = set()
     for node in expression.walk():
@@ -99,7 +99,7 @@ def test_alias_in_join() -> None:
 def test_alias_in_join_copies_the_aliased_expression() -> None:
     expression = sqlglot.parse_one("SELECT SUBSTR(T.COL, 4) AS ALIAS FROM T JOIN J ON ALIAS = J.COL")
 
-    assert_attached_once(expression.transform(alias_in_join, copy=False))
+    assert_unique_nodes_with_correct_parents(expression.transform(alias_in_join, copy=False))
 
 
 def test_array_size() -> None:
@@ -112,7 +112,7 @@ def test_array_size() -> None:
 def test_array_size_copies_its_argument() -> None:
     expression = sqlglot.parse_one("SELECT array_size(names)")
 
-    assert_attached_once(expression.transform(array_size, copy=False))
+    assert_unique_nodes_with_correct_parents(expression.transform(array_size, copy=False))
 
 
 def test_array_agg() -> None:
@@ -714,7 +714,7 @@ def test_regex_replace() -> None:
 def test_regex_replace_attaches_its_arguments() -> None:
     expression = sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D')")
 
-    assert_attached_once(expression.transform(regex_replace, copy=False))
+    assert_unique_nodes_with_correct_parents(expression.transform(regex_replace, copy=False))
 
 
 def test_regex_substr() -> None:
