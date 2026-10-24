@@ -60,6 +60,23 @@ def test_ipc() -> None:
     assert pa.table(batch) == table
 
 
+def test_ipc_multiple_batches() -> None:
+    # to_sf combines timestamp chunks but not other columns, so columns can be chunked differently
+    schema = pa.schema(
+        [
+            pa.field("ID", pa.int64(), metadata={"logicalType": "FIXED"}),
+            pa.field("LABEL", pa.string(), metadata={"logicalType": "TEXT"}),
+        ]
+    )
+    table = pa.Table.from_arrays(
+        [pa.chunked_array([[0, 1], [2, 3, 4]]), pa.chunked_array([["a", None, "é", "c", "d"]])], schema=schema
+    )
+
+    result = pa.ipc.open_stream(to_ipc(table)).read_all()
+
+    assert result.equals(table, check_metadata=True)
+
+
 # TODO: cover to_sf
 
 

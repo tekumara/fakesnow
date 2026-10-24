@@ -46,15 +46,10 @@ def to_sf_schema(schema: pa.Schema, rowtype: list[ColumnInfo]) -> pa.Schema:
 
 
 def to_ipc(table: pa.Table) -> pa.Buffer:
-    batches = table.to_batches()
-    if len(batches) != 1:
-        raise NotImplementedError(f"{len(batches)} batches")
-    batch = batches[0]
-
     sink = pa.BufferOutputStream()
 
     with pa.ipc.new_stream(sink, table.schema) as writer:
-        writer.write_batch(batch)
+        writer.write_table(table)
 
     return sink.getvalue()
 
