@@ -8,6 +8,7 @@ import sqlglot
 from dirty_equals import IsUUID
 from pandas.testing import assert_frame_equal
 
+import fakesnow
 from fakesnow.cursor import FakeSnowflakeCursor
 
 
@@ -70,6 +71,20 @@ def test_execute_string(conn: snowflake.connector.SnowflakeConnection):
         """
     )
     assert cur.fetchall() == [(1,)]
+
+
+def test_success_nop_metadata_is_not_inherited():
+    with fakesnow.patch(nop_regexes=["^CALL.*"]):
+        with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:
+            cur.execute("create table table1 (id int)")
+            # produces a SUCCESS_NOP which carries table_comment metadata
+            cur.execute("comment on table table1 is 'comment'")
+
+        with snowflake.connector.connect() as conn, conn.cursor() as cur:
+            # this produces a SUCCESS_NOP but must not inherit the earlier table_comment metadata
+            # otherwise it will produce an AssertionError
+            cur.execute("call this_procedure_does_not_exist('foo', 'bar);")
+            assert cur.fetchall() == [("Statement executed successfully.",)]
 
 
 def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
