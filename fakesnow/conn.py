@@ -15,6 +15,7 @@ import fakesnow.info_schema as info_schema
 import fakesnow.macros as macros
 from fakesnow.cursor import FakeSnowflakeCursor
 from fakesnow.dialect import parse
+from fakesnow.expr import normalise_ident
 from fakesnow.transforms.stage import TableStages
 from fakesnow.variables import Variables
 
@@ -35,16 +36,16 @@ class FakeSnowflakeConnection:
     ):
         self._duck_conn = duck_conn
         self._is_closed = False
-        # upper case database and schema like snowflake unquoted identifiers
-        # so they appear as upper-cased in information_schema
+        # resolve database and schema as snowflake does identifiers: upper case unless quoted, so
+        # they appear as upper-cased in information_schema, and a quoted name keeps its case.
         # catalog and schema names are not actually case-sensitive in duckdb even though
         # they are as cased in information_schema.schemata, so when selecting from
-        # information_schema.schemata below we use upper-case to match any existing duckdb
+        # information_schema.schemata below we compare upper-case to match any existing duckdb
         # catalog or schemas like "information_schema"
-        self.database = database and database.upper()
-        self._schema = schema and (
-            "_FS_INFORMATION_SCHEMA" if schema.upper() == "INFORMATION_SCHEMA" else schema.upper()
-        )
+        self.database = database and normalise_ident(database)
+        self._schema = schema and normalise_ident(schema)
+        if self._schema and self._schema.upper() == "INFORMATION_SCHEMA":
+            self._schema = "_FS_INFORMATION_SCHEMA"
 
         self.database_set = False
         self.schema_set = False
@@ -63,7 +64,7 @@ class FakeSnowflakeConnection:
             and self.database
             and not duck_conn.execute(
                 f"""select * from information_schema.schemata
-                where upper(catalog_name) = '{self.database}'"""
+                where upper(catalog_name) = upper('{self.database}')"""
             ).fetchone()
         ):
             if self.db_path:
@@ -87,7 +88,7 @@ class FakeSnowflakeConnection:
             and self._schema
             and not duck_conn.execute(
                 f"""select * from information_schema.schemata
-                where upper(catalog_name) = '{self.database}' and upper(schema_name) = '{self._schema}'"""
+                where upper(catalog_name) = upper('{self.database}') and upper(schema_name) = upper('{self._schema}')"""
             ).fetchone()
         ):
             duck_conn.execute(f"CREATE SCHEMA {self.database}.{self._schema}")
@@ -98,7 +99,7 @@ class FakeSnowflakeConnection:
             and self._schema
             and duck_conn.execute(
                 f"""select * from information_schema.schemata
-                where upper(catalog_name) = '{self.database}' and upper(schema_name) = '{self._schema}'"""
+                where upper(catalog_name) = upper('{self.database}') and upper(schema_name) = upper('{self._schema}')"""
             ).fetchone()
         ):
             duck_conn.execute(f"SET schema='{self.database}.{self._schema}'")
@@ -109,7 +110,7 @@ class FakeSnowflakeConnection:
             self.database
             and duck_conn.execute(
                 f"""select * from information_schema.schemata
-                where upper(catalog_name) = '{self.database}'"""
+                where upper(catalog_name) = upper('{self.database}')"""
             ).fetchone()
         ):
             duck_conn.execute(f"SET schema='{self.database}.main'")
