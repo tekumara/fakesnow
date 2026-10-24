@@ -4,6 +4,7 @@ import pytest
 import sqlglot
 from sqlglot import Expr, exp
 
+from fakesnow.dialect import parse_one
 from fakesnow.transforms import (
     SUCCESS_NOP,
     alias_in_join,
@@ -55,6 +56,18 @@ from fakesnow.transforms import (
 from fakesnow.transforms.transforms import _get_to_number_args
 
 
+def assert_unique_nodes_with_correct_parents(expression: Expr) -> None:
+    # transforms occur in place (ie: use copy=False). SQLGlot nodes have one parent pointer, so a shared subtree can
+    # make later transforms rewrite the wrong occurrence or leave one partially transformed. This helper checks that
+    # the transformed AST has unique nodes with correct parent pointers.
+    seen = set()
+    for node in expression.walk():
+        assert id(node) not in seen, f"{node.sql()} appears more than once"
+        seen.add(id(node))
+        for child in node.iter_expressions():
+            assert child.parent is node, f"{child.sql()} is not attached to its parent"
+
+
 def test_alias_in_join() -> None:
     assert (
         sqlglot.parse_one("""
@@ -86,11 +99,37 @@ def test_alias_in_join() -> None:
     )
 
 
+def test_alias_in_join_copies_the_aliased_expression() -> None:
+    expression = sqlglot.parse_one("SELECT SUBSTR(T.COL, 4) AS ALIAS FROM T JOIN J ON ALIAS = J.COL")
+
+    assert_unique_nodes_with_correct_parents(expression.transform(alias_in_join, copy=False))
+
+
 def test_array_size() -> None:
     assert (
         sqlglot.parse_one("""select array_size(parse_json('["a","b"]'))""").transform(array_size).sql(dialect="duckdb")
         == """SELECT CASE WHEN JSON_TYPE(JSON('["a","b"]')) = 'ARRAY' THEN JSON_ARRAY_LENGTH(JSON('["a","b"]')) END"""
     )
+
+
+def test_array_size_of_array_agg_within_group() -> None:
+    # ARRAY_SIZE places its argument in both CASE branches; later in-place aggregate transforms must keep them
+    # equivalent.
+    expression = parse_one("SELECT ARRAY_SIZE(ARRAY_AGG(ID) WITHIN GROUP (ORDER BY ID)) FROM TABLE1")
+    for transform in (array_size, array_agg_within_group, array_agg):
+        expression = expression.transform(transform, copy=False)
+
+    assert expression.sql(dialect="duckdb") == (
+        "SELECT CASE WHEN JSON_TYPE(TO_JSON(ARRAY_AGG(ID ORDER BY ID))) = 'ARRAY' THEN "
+        "JSON_ARRAY_LENGTH(TO_JSON(ARRAY_AGG(ID ORDER BY ID))) END FROM TABLE1"
+    )
+
+
+def test_array_size_copies_its_argument() -> None:
+    # With copy=False, the JSON_TYPE and JSON_ARRAY_LENGTH branches need distinct argument nodes and valid parents.
+    expression = sqlglot.parse_one("SELECT array_size(names)")
+
+    assert_unique_nodes_with_correct_parents(expression.transform(array_size, copy=False))
 
 
 def test_array_agg() -> None:
@@ -687,6 +726,12 @@ def test_regex_replace() -> None:
         sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D', '')").transform(regex_replace).sql()
         == "SELECT REGEXP_REPLACE('abc123', '\\D', '', 'g')"
     )
+
+
+def test_regex_replace_attaches_its_arguments() -> None:
+    expression = sqlglot.parse_one("SELECT regexp_replace('abc123', '\\\\D')")
+
+    assert_unique_nodes_with_correct_parents(expression.transform(regex_replace, copy=False))
 
 
 def test_regex_substr() -> None:

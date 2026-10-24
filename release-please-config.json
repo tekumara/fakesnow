@@ -4,6 +4,7 @@
   "changelog-sections": [
     { "type": "feat", "section": "Features" },
     { "type": "fix", "section": "Bug Fixes" },
+    { "type": "perf", "section": "Performance Improvements" },
     { "type": "chore", "section": "Chores" },
     { "type": "refactor", "section": "Code Refactoring", "hidden": true }
   ],

@@ -1,11 +1,16 @@
 from __future__ import annotations
 
+from typing import cast
+
 import pandas as pd
 import pytest
 import snowflake.connector
 import snowflake.connector.cursor
 from dirty_equals import IsUUID
 from pandas.testing import assert_frame_equal
+
+import fakesnow
+from fakesnow.cursor import FakeSnowflakeCursor
 
 
 def test_binding_pyformat(conn: snowflake.connector.SnowflakeConnection):
@@ -67,6 +72,42 @@ def test_execute_string(conn: snowflake.connector.SnowflakeConnection):
         """
     )
     assert cur.fetchall() == [(1,)]
+
+
+@pytest.mark.parametrize(
+    "metadata_statement,metadata_arg",
+    [
+        # these statements add metadata to SUCCESS_NOP
+        ("ALTER TABLE table1 ALTER id COMMENT 'column comment'", "col_comments"),
+        ("COMMENT ON TABLE table1 IS 'table comment'", "table_comment"),
+        ("ALTER TABLE table1 SET COMMENT = 'table comment'", "table_comment"),
+        ("ALTER SESSION SET AUTOCOMMIT = FALSE", "set_autocommit"),
+    ],
+)
+def test_success_nop_metadata_is_not_inherited(metadata_statement: str, metadata_arg: str):
+    custom_args = {"col_comments", "table_comment", "set_autocommit"}
+
+    with fakesnow.patch(nop_regexes=["^CALL.*"]):
+        with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:
+            fake_cur = cast(FakeSnowflakeCursor, cur)
+            fake_cur.execute("create table table1 (id int)")
+
+            fake_cur.execute(metadata_statement)
+            metadata_result = fake_cur._last_transformed  # noqa: SLF001
+            assert metadata_result is not None
+            assert metadata_arg in metadata_result.args
+
+        with snowflake.connector.connect() as conn, conn.cursor() as cur:
+            # The skipped CALL produces a SUCCESS_NOP which must not inherit metadata from the prior
+            # statement. Leaked table_comment metadata would cause and insert into the
+            # information-schema and produce an AssertionError
+            cur.execute("call this_procedure_does_not_exist('foo', 'bar);")
+            assert cur.fetchall() == [("Statement executed successfully.",)]
+
+            fake_cur = cast(FakeSnowflakeCursor, cur)
+            nop_result = fake_cur._last_transformed  # noqa: SLF001
+            assert nop_result is not None
+            assert custom_args.isdisjoint(nop_result.args)
 
 
 def test_fetchall(conn: snowflake.connector.SnowflakeConnection):
