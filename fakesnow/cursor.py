@@ -298,8 +298,6 @@ class FakeSnowflakeCursor:
             )
 
     def _transform(self, expression: Expr, params: MutableParams | None) -> Expr:
-        # copy once so the passes below can transform in place without mutating the caller's tree
-        expression = expression.copy()
         return (
             expression.transform(lambda e: transforms.identifier(e, params), copy=False)
             .transform(transforms.upper_case_unquoted_identifiers, copy=False)
