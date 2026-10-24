@@ -813,3 +813,18 @@ def test_server_describe_only(server: dict) -> None:
         # nothing ran: the original table is untouched
         cur.execute("select * from example")
         assert cur.fetchall() == [(1, "old")]
+
+
+def test_server_fetch_multiple_arrow_batches(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    # with more than one thread duckdb 2 returns large results as several arrow batches
+    scur.execute(
+        """SELECT ID,
+            IFF(MOD(ID, 2) = 0, NULL, 'héllo') AS LABEL,
+            12.34::NUMBER(10, 2) AS AMOUNT,
+            '2024-01-02 03:04:05.123456'::TIMESTAMP_NTZ AS CREATED_AT
+        FROM (SELECT SEQ4() AS ID FROM TABLE(GENERATOR(ROWCOUNT => 5000)))
+        ORDER BY ID"""
+    )
+
+    timestamp = datetime.datetime(2024, 1, 2, 3, 4, 5, 123456)
+    assert scur.fetchall() == [(i, None if i % 2 == 0 else "héllo", Decimal("12.34"), timestamp) for i in range(5000)]
