@@ -441,7 +441,7 @@ def extract_comment_on_columns(expression: Expr) -> Expr:
             else:
                 new_actions.append(a)
         if not new_actions:
-            expression = SUCCESS_NOP
+            expression = SUCCESS_NOP.copy()
         else:
             expression.set("actions", new_actions)
         expression.args["col_comments"] = col_comments
@@ -486,7 +486,7 @@ def extract_comment_on_table(expression: Expr) -> Expr:
         and (cexp := expression.args.get("expression"))
         and (table := expression.find(exp.Table))
     ):
-        new = SUCCESS_NOP
+        new = SUCCESS_NOP.copy()
         new.args["table_comment"] = (table, cexp.this)
         return new
     elif (
@@ -496,7 +496,7 @@ def extract_comment_on_table(expression: Expr) -> Expr:
         and isinstance(scp.this, exp.Literal)
         and (table := expression.find(exp.Table))
     ):
-        new = SUCCESS_NOP
+        new = SUCCESS_NOP.copy()
         new.args["table_comment"] = (table, scp.this.this)
         return new
 
@@ -1532,7 +1532,7 @@ def alter_session(expression: Expr) -> Expr:
                 and (rhs := items[0].this.args.get("expression"))
                 and isinstance(rhs, exp.Boolean)
             ):
-                new = SUCCESS_NOP
+                new = SUCCESS_NOP.copy()
                 new.args["set_autocommit"] = rhs.this
                 return new
 
