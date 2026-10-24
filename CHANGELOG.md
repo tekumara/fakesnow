@@ -2,6 +2,13 @@
 
 # Changelog
 
+## [0.12.1](https://github.com/tekumara/fakesnow/compare/v0.12.0...v0.12.1) (2026-10-24)
+
+
+### Performance Improvements
+
+* avoid repeated copies during transform ([#455](https://github.com/tekumara/fakesnow/issues/455)) ([daeb08f](https://github.com/tekumara/fakesnow/commit/daeb08fa1e705fd965ddda1f6c35c1e0a41d5d6c))
+
 ## [0.12.0](https://github.com/tekumara/fakesnow/compare/v0.11.22...v0.12.0) (2026-10-22)
 
 
