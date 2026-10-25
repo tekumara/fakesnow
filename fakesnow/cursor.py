@@ -297,11 +297,76 @@ class FakeSnowflakeCursor:
                 sqlstate="22000",
             )
 
+    def check_identifier_case(self, expression: Expr) -> None:
+        """Refuse a name that only matches an existing object under a different case.
+
+        Snowflake looks up an unquoted identifier as upper case and a quoted one exactly, so `foo` and
+        `"foo"` name different objects. DuckDB matches names regardless of case, so without this a
+        statement could reach an object that Snowflake wouldn't find. Call it once every identifier
+        holds the name Snowflake looks up, ie: after upper_case_unquoted_identifiers.
+        """
+        if (
+            isinstance(expression, exp.Use)
+            and isinstance(kind := expression.args.get("kind"), exp.Var)
+            and kind.name.upper() in ("DATABASE", "SCHEMA")
+            and isinstance(target := expression.this, exp.Table)
+        ):
+            if kind.name.upper() == "DATABASE":
+                found = self._duck_conn.execute(
+                    "select database_name from duckdb_databases() where lower(database_name) = lower(?)",
+                    [target.name],
+                ).fetchall()
+                wanted: tuple = (target.name,)
+            else:
+                database = target.catalog or target.db or self._conn.database
+                found = self._duck_conn.execute(
+                    """select database_name, schema_name from duckdb_schemas()
+                    where lower(database_name) = lower(?) and lower(schema_name) = lower(?)""",
+                    [database, target.name],
+                ).fetchall()
+                wanted = (database, target.name)
+            if found and wanted not in found:
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg="SQL compilation error:\nObject does not exist, or operation cannot be performed.",
+                    errno=2043,
+                    sqlstate="02000",
+                )
+            return
+
+        for table in checks.referenced_tables(expression):
+            database = table.catalog or self._conn.database
+            schema = table.db or self._conn._schema
+            if not (database and schema):
+                # check_db_and_schema has already refused what needs a current database or schema
+                continue
+            if schema.upper() == "_FS_INFORMATION_SCHEMA":
+                # fakesnow's own views, named in lower case, stand in for Snowflake's upper case ones
+                continue
+            found = self._duck_conn.execute(
+                """select database_name, schema_name, table_name from duckdb_tables()
+                where lower(database_name) = lower($1) and lower(schema_name) = lower($2)
+                and lower(table_name) = lower($3)
+                union all
+                select database_name, schema_name, view_name from duckdb_views()
+                where lower(database_name) = lower($1) and lower(schema_name) = lower($2)
+                and lower(view_name) = lower($3)""",
+                [database, schema, table.name],
+            ).fetchall()
+            if found and (database, schema, table.name) not in found:
+                name = ".".join(part.sql(dialect="snowflake") for part in table.parts)
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg=f"SQL compilation error:\nObject '{name}' does not exist or not authorized.",
+                    errno=2003,
+                    sqlstate="42S02",
+                )
+
     def _transform(self, expression: Expr, params: MutableParams | None) -> Expr:
+        expression = expression.transform(lambda e: transforms.identifier(e, params), copy=False).transform(
+            transforms.upper_case_unquoted_identifiers, copy=False
+        )
+        self.check_identifier_case(expression)
         return (
-            expression.transform(lambda e: transforms.identifier(e, params), copy=False)
-            .transform(transforms.upper_case_unquoted_identifiers, copy=False)
-            .transform(transforms.alter_session, copy=False)
+            expression.transform(transforms.alter_session, copy=False)
             .transform(transforms.update_variables, variables=self._conn.variables, copy=False)
             .transform(transforms.current_version, copy=False)
             .transform(transforms.set_schema, current_database=self._conn.database, copy=False)

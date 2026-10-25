@@ -630,6 +630,79 @@ def test_unquoted_identifiers_are_upper_cased(dcur: snowflake.connector.cursor.S
     ]
 
 
+def test_unquoted_name_does_not_match_quoted_lower_case_table(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table "customers" (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from customers")
+
+    assert "002003 (42S02): SQL compilation error:\nObject 'CUSTOMERS' does not exist or not authorized." in str(
+        excinfo.value
+    )
+
+
+def test_quoted_lower_case_name_does_not_match_unquoted_table(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table customers (id int)")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute('select * from "customers"')
+
+    assert "002003 (42S02): SQL compilation error:\nObject '\"customers\"' does not exist or not authorized." in str(
+        excinfo.value
+    )
+
+
+def test_quoted_name_matches_its_own_case(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table "customers" (id int)')
+    cur.execute('insert into "customers" values (1)')
+
+    cur.execute('select id from "customers"')
+    assert cur.fetchall() == [(1,)]
+
+
+def test_unquoted_schema_does_not_match_quoted_lower_case_schema(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create schema db1."jaffles"')
+    cur.execute('create table db1."jaffles".customers (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from db1.jaffles.customers")
+
+    assert (
+        "002003 (42S02): SQL compilation error:\nObject 'DB1.JAFFLES.CUSTOMERS' does not exist or not authorized."
+        in str(excinfo.value)
+    )
+
+
+def test_joined_table_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table customers (id int)")
+    cur.execute('create table "orders" (customer_id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from customers c join orders o on o.customer_id = c.id")
+
+    assert "Object 'ORDERS' does not exist or not authorized." in str(excinfo.value)
+
+
+def test_insert_target_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table "customers" (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("insert into customers values (1)")
+
+    assert "Object 'CUSTOMERS' does not exist or not authorized." in str(excinfo.value)
+
+
+def test_use_schema_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create schema db1."jaffles"')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("use schema db1.jaffles")
+
+    assert "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed." in str(
+        excinfo.value
+    )
+
+
 def test_timestamp_ltz_with_precision(cur: snowflake.connector.cursor.SnowflakeCursor):
     # snowflake accepts a precision on TIMESTAMP_LTZ, duckdb's TIMESTAMPTZ does not
     cur.execute("CREATE TABLE example (ts TIMESTAMP_LTZ(9))")

@@ -23,7 +23,6 @@ from fakesnow.arrow import to_ipc, to_sf
 from fakesnow.converter import from_binding
 from fakesnow.cursor import FakeSnowflakeCursor
 from fakesnow.dialect import parse_one
-from fakesnow.expr import normalise_ident
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.rowtype import ColumnInfo, describe_as_rowtype
@@ -47,8 +46,9 @@ class ServerError(Exception):
 
 
 async def login_request(request: Request) -> JSONResponse:
-    database = (d := request.query_params.get("databaseName")) and normalise_ident(d)
-    schema = (s := request.query_params.get("schemaName")) and normalise_ident(s)
+    # the connection resolves these as identifiers: upper case unless quoted
+    database = request.query_params.get("databaseName")
+    schema = request.query_params.get("schemaName")
     body = await request.body()
     if request.headers.get("Content-Encoding") == "gzip":
         body = gzip.decompress(body)
@@ -66,7 +66,7 @@ async def login_request(request: Request) -> JSONResponse:
         fs = shared_fs
     token = secrets.token_urlsafe(32)
     logger.info(f"Session login {database=} {schema=} {nop_regexes=}")
-    sessions[token] = fs.connect(database, schema, nop_regexes=nop_regexes, autocommit=autocommit)
+    sessions[token] = conn = fs.connect(database, schema, nop_regexes=nop_regexes, autocommit=autocommit)
     return JSONResponse(
         {
             "data": {
@@ -82,8 +82,8 @@ async def login_request(request: Request) -> JSONResponse:
                     {"name": "CLIENT_STAGE_ARRAY_BINDING_THRESHOLD", "value": 0},
                 ],
                 "sessionInfo": {
-                    "databaseName": database,
-                    "schemaName": schema,
+                    "databaseName": conn.database,
+                    "schemaName": conn.schema,
                 },
             },
             "success": True,
