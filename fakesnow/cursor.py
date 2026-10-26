@@ -454,9 +454,6 @@ class FakeSnowflakeCursor:
 
         result_sql = None
 
-        if isinstance(transformed, exp.Commit):
-            self._conn._raise_if_transaction_aborted()
-
         if not self._conn._autocommit:
             # Snowflake implicitly commits the active transaction before executing DDL statements
             # This will also cause the DDL statement to run in its own transaction and commit
@@ -485,11 +482,16 @@ class FakeSnowflakeCursor:
             # In transaction book keeping
             elif isinstance(transformed, exp.Transaction):
                 self._conn._in_transaction = True
-            elif isinstance(transformed, (exp.Commit, exp.Rollback)):
-                self._conn._in_transaction = False
 
         affected_count = None
         try:
+            if isinstance(transformed, exp.Commit):
+                self._conn._raise_if_transaction_aborted()
+            elif (set_autocommit := transformed.args.get("set_autocommit")) is not None:
+                # ALTER SESSION is transformed to a success SELECT. Commit before that
+                # query, which would otherwise fail first in an aborted transaction.
+                self._conn.autocommit(set_autocommit)
+
             if isinstance(transformed, exp.Copy):
                 sql = copy_into(
                     self._duck_conn,
@@ -538,6 +540,9 @@ class FakeSnowflakeCursor:
             msg = cast(str, e.args[0]).split("\n")[0]
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100035, sqlstate="22007") from e
 
+        if isinstance(transformed, (exp.Commit, exp.Rollback)):
+            self._conn._in_transaction = False
+
         self._conn.table_stages.record_temporary_table(transformed, self._conn.database, self._conn.schema)
 
         if set_database := transformed.args.get("set_database"):
@@ -550,9 +555,6 @@ class FakeSnowflakeCursor:
             self._conn._schema = set_schema
             self._conn.schema_set = True
             result_sql = SQL_SUCCESS
-
-        elif (set_autocommit := transformed.args.get("set_autocommit")) is not None:
-            self._conn.autocommit(set_autocommit)
 
         elif create_db_name := transformed.args.get("create_db_name"):
             # we created a new database, so create the info schema extensions

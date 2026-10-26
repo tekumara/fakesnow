@@ -125,13 +125,14 @@ class FakeSnowflakeConnection:
         exc_value: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        if not self._autocommit:
-            if exc_tb is None:
-                self.commit()
-            else:
-                self.rollback()
-
-        self.close()
+        try:
+            if not self._autocommit:
+                if exc_tb is None:
+                    self.commit()
+                else:
+                    self.rollback()
+        finally:
+            self.close()
 
     def autocommit(self, mode: bool) -> None:
         # see https://docs.snowflake.com/en/sql-reference/transactions#autocommit
@@ -175,7 +176,7 @@ class FakeSnowflakeConnection:
         self.cursor().execute("ROLLBACK")
 
     def _raise_if_transaction_aborted(self) -> None:
-        """Roll back and raise if a failed statement aborted the transaction, before committing it.
+        """Reject a commit if a failed statement aborted the transaction.
 
         Snowflake rolls back only the failed statement, see
         https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
@@ -183,14 +184,17 @@ class FakeSnowflakeConnection:
         error) aborts the whole transaction, and committing it would silently discard the earlier writes.
         """
         try:
+            # DuckDB's Python API exposes no transaction-validity flag. This query raises in
+            # an aborted transaction and does not leave a transaction open outside BEGIN.
             self._duck_conn.execute("SELECT 1")
         except duckdb.TransactionException as e:
             if "Current transaction is aborted" not in str(e):
                 raise
-            self._duck_conn.rollback()
-            self._in_transaction = False
+            # Keep it aborted until an explicit rollback (or close). In particular, the real
+            # connector's autocommit() suppresses errors from ALTER SESSION; a later commit
+            # must still report the lost writes instead of silently succeeding.
             msg = (
-                "The transaction was aborted by a failed statement and has been rolled back. "
+                "The transaction was aborted by a failed statement. Roll back before starting a new transaction. "
                 "Snowflake rolls back only the failed statement, but fakesnow can't."
             )
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=9999, sqlstate="99999") from e
