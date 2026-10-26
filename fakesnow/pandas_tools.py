@@ -92,7 +92,8 @@ def write_pandas(
     **kwargs: Any,
 ) -> WritePandasResult:
     if not quote_identifiers:
-        # the connector's _sql_column_identifier check, raised before any SQL is sent
+        # Follow connector 4.8.1 even with older installed connectors. Its private
+        # _sql_column_identifier helper isn't available before 4.8.1.
         for col in df.columns:
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", str(col)):
                 raise ProgrammingError(
