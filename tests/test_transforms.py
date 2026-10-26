@@ -18,10 +18,9 @@ from fakesnow.transforms import (
     datediff_string_literal_timestamp_cast,
     describe_table,
     drop_schema_cascade,
+    extract_column_metadata,
     extract_comment_on_columns,
     extract_comment_on_table,
-    extract_semi_structured_types,
-    extract_text_length,
     float_to_double,
     identifier,
     indices_to_json_extract,
@@ -457,41 +456,47 @@ def test_extract_comment_on_table() -> None:
     assert e.args["table_comment"] == (table1, "comment1")
 
 
-def test_extract_semi_structured_types() -> None:
+def test_extract_column_metadata_semi_structured() -> None:
     sql = "CREATE TABLE table1 (a ARRAY, a2 ARRAY(INT), o OBJECT, v VARIANT, i1 BIGINT)"
-    e = sqlglot.parse_one(sql, read="snowflake").transform(extract_semi_structured_types)
-    assert e.args["semi_structured_types"] == [("a", "ARRAY"), ("a2", "ARRAY"), ("o", "OBJECT"), ("v", "VARIANT")]
+    e = sqlglot.parse_one(sql, read="snowflake").transform(extract_column_metadata)
+    assert e.args["column_metadata"] == [
+        ("a", None, "ARRAY"),
+        ("a2", None, "ARRAY"),
+        ("o", None, "OBJECT"),
+        ("v", None, "VARIANT"),
+    ]
 
-    # test ctas column name is correct with alias
+
+def test_extract_column_metadata_semi_structured_ctas() -> None:
     sql = "CREATE TABLE table1 AS SELECT PARSE_JSON(C1)::ARRAY AS A, C1 FROM (VALUES ('[]')) AS T(C1)"
-    e = sqlglot.parse_one(sql, read="snowflake").transform(extract_semi_structured_types)
-    assert e.args["semi_structured_types"] == [("A", "ARRAY")]
+    e = sqlglot.parse_one(sql, read="snowflake").transform(extract_column_metadata)
+    assert e.args["column_metadata"] == [("A", None, "ARRAY")]
 
 
-def test_extract_text_length() -> None:
+def test_extract_column_metadata_text() -> None:
     sql = "CREATE TABLE table1 (t1 VARCHAR, t2 VARCHAR(10), t3 TEXT(20), i1 BIGINT)"
-    e = sqlglot.parse_one(sql).transform(extract_text_length)
+    e = sqlglot.parse_one(sql).transform(extract_column_metadata)
     assert e.sql() == sql
-    assert e.args["text_lengths"] == [("t1", 16777216), ("t2", 10), ("t3", 20)]
+    assert e.args["column_metadata"] == [("t1", 16777216, None), ("t2", 10, None), ("t3", 20, None)]
 
     sql = "ALTER TABLE t1 ALTER COLUMN c4 SET DATA TYPE VARCHAR(50)"
-    e = sqlglot.parse_one(sql).transform(extract_text_length)
+    e = sqlglot.parse_one(sql).transform(extract_column_metadata)
     assert e.sql() == sql
-    assert e.args["text_lengths"] == [("c4", 50)]
+    assert e.args["column_metadata"] == [("c4", 50, None)]
 
     # test column name is correct with alias
     sql = """CREATE TABLE table1 AS (
                 SELECT CAST(C1 AS TEXT) AS K, CAST(C2 AS TEXT(10)) AS V
                 FROM (VALUES (1, 2)) AS T(C1, C2))"""
-    e = sqlglot.parse_one(sql).transform(extract_text_length)
-    assert e.args["text_lengths"] == [("K", 16777216), ("V", 10)]
+    e = sqlglot.parse_one(sql).transform(extract_column_metadata)
+    assert e.args["column_metadata"] == [("K", 16777216, None), ("V", 10, None)]
 
     # test ctas column name is correct for combined field
     sql = """CREATE TABLE SOME_TABLE AS (
                 SELECT CAST(C1 AS TEXT) || '-' || CAST(C1 AS TEXT) AS K
                 FROM VALUES (1), (2) AS T (C1))"""
-    e = sqlglot.parse_one(sql).transform(extract_text_length)
-    assert e.args["text_lengths"] == [("K", 16777216)]
+    e = sqlglot.parse_one(sql).transform(extract_column_metadata)
+    assert e.args["column_metadata"] == [("K", 16777216, None)]
 
 
 def test_float_to_double() -> None:
