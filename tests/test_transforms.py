@@ -243,7 +243,7 @@ def test_date_trunc_date() -> None:
         sqlglot.parse_one("SELECT DATE_TRUNC('month', d) FROM t", read="snowflake")
         .transform(date_trunc_date)
         .sql(dialect="duckdb")
-        == "SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC(d, DATE_TRUNC('MONTH', d)) FROM t"
+        == "SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC('MONTH', d) FROM t"
     )
 
 
@@ -254,6 +254,16 @@ def test_date_trunc_date_timestamp_noop() -> None:
         .sql(dialect="duckdb")
         == "SELECT CAST(DATE_TRUNC('MONTH', CAST(ts AS TIMESTAMP)) AS TIMESTAMP) FROM t"
     )
+
+
+def test_date_trunc_date_nested() -> None:
+    sql = "d"
+    for _ in range(8):
+        sql = f"DATE_TRUNC('month', {sql})"
+    expression = sqlglot.parse_one(sql, read="snowflake").transform(date_trunc_date, copy=False)
+    # Each input must occur only once, otherwise nested truncation grows the query exponentially.
+    assert expression.sql(dialect="duckdb").count("_FS_DATE_TRUNC") == 8
+    assert_unique_nodes_with_correct_parents(expression)
 
 
 def test_dateadd_date_cast() -> None:

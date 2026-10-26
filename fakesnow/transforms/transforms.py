@@ -378,7 +378,7 @@ def date_trunc_date(expression: Expr) -> Expr:
         >>> sqlglot.parse_one("SELECT DATE_TRUNC('month', d) FROM t", read="snowflake").transform(
         ...     date_trunc_date
         ... ).sql(dialect="duckdb")
-        "SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC(d, DATE_TRUNC('MONTH', d)) FROM t"
+        "SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC('MONTH', d) FROM t"
     """
     if not isinstance(expression, (exp.DateTrunc, exp.TimestampTrunc)):
         return expression
@@ -388,9 +388,10 @@ def date_trunc_date(expression: Expr) -> Expr:
         return expression
 
     # the replacement's children aren't visited, so transform any DATE_TRUNC nested in the input
-    expression.set("this", input_.transform(date_trunc_date, copy=False))
-
-    return exp.Anonymous(this="_fs_global.main._fs_date_trunc", expressions=[expression.this.copy(), expression])
+    return exp.Anonymous(
+        this="_fs_global.main._fs_date_trunc",
+        expressions=[exp.Literal.string(expression.text("unit")), input_.transform(date_trunc_date, copy=False)],
+    )
 
 
 def dateadd_string_literal_timestamp_cast(expression: Expr) -> Expr:
