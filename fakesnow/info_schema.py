@@ -102,7 +102,7 @@ case when starts_with(columns.data_type, 'DECIMAL') or columns.data_type='BIGINT
      when columns.data_type='DOUBLE' then 'FLOAT'
      when columns.data_type='BLOB' then 'BINARY'
      when columns.data_type='TIMESTAMP' then 'TIMESTAMP_NTZ'
-     when columns.data_type='TIMESTAMP WITH TIME ZONE' then 'TIMESTAMP_TZ'
+     when columns.data_type='TIMESTAMP WITH TIME ZONE' then coalesce(ext_data_type, 'TIMESTAMP_TZ')
      when columns.data_type='JSON' then coalesce(ext_data_type, 'VARIANT')
      else columns.data_type end as DATA_TYPE,
 ext_character_maximum_length as CHARACTER_MAXIMUM_LENGTH, ext_character_octet_length as CHARACTER_OCTET_LENGTH,
@@ -131,6 +131,18 @@ LEFT JOIN duckdb_columns ddb_columns
  AND ddb_columns.table_name = columns.table_name
  AND ddb_columns.column_name = columns.column_name
 where schema_name != '_fs_information_schema'
+"""
+
+
+# the snowflake data type of each column of the named tables, in any database or schema
+SQL_SELECT_COLUMN_TYPES = """
+select database_name, schema_name, table_name, column_name, ext_data_type
+from duckdb_columns()
+left join _fs_global._fs_information_schema._fs_columns_ext
+    on database_name = ext_table_catalog and schema_name = ext_table_schema
+    and table_name = ext_table_name and column_name = ext_column_name
+where list_contains(?, table_name)
+order by column_index
 """
 
 

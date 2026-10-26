@@ -47,7 +47,6 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         ResultMetadata(name='XTIMESTAMP_NTZ', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP_NTZ9', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP_TZ', type_code=7, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
-        # TODO: TIMESTAMP_LTZ type_code=6
         ResultMetadata(name='XDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XTIME', type_code=12, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XBINARY', type_code=11, display_size=None, internal_size=8388608, precision=None, scale=None, is_nullable=True),
@@ -79,6 +78,34 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         ]
     )
     # fmt: on
+
+
+def test_describe_timestamp_ltz_cast(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # duckdb has one type for both, snowflake describes them with their own type codes, see
+    # https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-api#label-python-connector-type-codes
+    cur.execute("select '2026-10-26 01:02:03'::timestamp_ltz as l, '2026-10-26 01:02:03'::timestamp_tz as z")
+
+    assert [(d.name, d.type_code) for d in cur.description] == [("L", 6), ("Z", 7)]
+
+
+def test_describe_current_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/functions/current_timestamp
+    cur.execute("select current_timestamp as c, getdate() as g, systimestamp() as s")
+
+    assert [(d.name, d.type_code) for d in cur.description] == [("C", 6), ("G", 6), ("S", 6)]
+
+
+def test_describe_timestamp_ltz_column(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (l timestamp_ltz, z timestamp_tz)")
+
+    assert [(d.name, d.type_code) for d in cur.describe("select * from example")] == [("L", 6), ("Z", 7)]
+
+
+def test_describe_table_timestamp_ltz(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (l timestamp_ltz, z timestamp_tz)")
+
+    cur.execute("describe table example")
+    assert [(r[0], r[1]) for r in cur.fetchall()] == [("L", "TIMESTAMP_LTZ(9)"), ("Z", "TIMESTAMP_TZ(9)")]
 
 
 def test_describe_table(dcur: snowflake.connector.cursor.DictCursor):
@@ -317,3 +344,80 @@ def test_description_update(dcur: snowflake.connector.cursor.DictCursor):
         ResultMetadata(name='number of multi-joined rows updated', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)
     ]
     # fmt: on
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "select l from example",
+        "select * from (select * from example)",
+        "with c as (select * from example) select * from c",
+        "select dateadd(day, 1, l) from example",
+    ],
+)
+def test_describe_timestamp_ltz_projection(cur: snowflake.connector.cursor.SnowflakeCursor, query: str):
+    cur.execute("create table example (l timestamp_ltz)")
+    cur.execute(query)
+    assert [d.type_code for d in cur.description] == [6]
+
+
+def test_describe_timestamp_ltz_quoted(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("""create table "MiXeD" ("l'Column" timestamp_ltz)""")
+    cur.execute("""select "l'Column" from "MiXeD" """)
+    assert [(d.name, d.type_code) for d in cur.description] == [("l'Column", 6)]
+
+
+@pytest.mark.parametrize(
+    "ddl,query",
+    [
+        ("create table if not exists example (l timestamp_tz)", "select l from example"),
+        ("alter table example add column if not exists l timestamp_tz", "select l from example"),
+        ("alter table example rename column l to m", "select m from example"),
+        ("alter table example rename to renamed", "select l from renamed"),
+    ],
+)
+def test_describe_timestamp_ltz_preserved(cur: snowflake.connector.cursor.SnowflakeCursor, ddl: str, query: str):
+    cur.execute("create table example (l timestamp_ltz)")
+    cur.execute(ddl)
+    cur.execute(query)
+    assert [d.type_code for d in cur.description] == [6]
+
+
+def test_describe_timestamp_ltz_replaced(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (l timestamp_ltz)")
+    cur.execute("create or replace table example (l timestamp_tz)")
+    cur.execute("select l from example")
+    assert [d.type_code for d in cur.description] == [7]
+
+
+def test_describe_timestamp_ltz_dropped_column(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (l timestamp_ltz, n int)")
+    cur.execute("alter table example drop column l")
+    cur.execute("alter table example add column l timestamp_tz")
+    cur.execute("select l from example")
+    assert [d.type_code for d in cur.description] == [7]
+
+
+@pytest.mark.parametrize("kind", ["table", "view"])
+def test_describe_timestamp_ltz_created_as_cast(cur: snowflake.connector.cursor.SnowflakeCursor, kind: str):
+    cur.execute(f"create {kind} example as select '2026-10-26'::timestamp_ltz as l")
+    cur.execute("select l from example")
+    assert [d.type_code for d in cur.description] == [6]
+
+
+@pytest.mark.parametrize("stage", ["qualify", "annotate_types"])
+@pytest.mark.parametrize("error", [ValueError, TypeError, AssertionError, KeyError])
+def test_describe_timestamp_annotation_failure(stage: str, error: type[Exception]):
+    # Fake-only: failed optional type inference must preserve DuckDB's fallback and the result set.
+    from unittest.mock import patch
+
+    import fakesnow
+
+    with fakesnow.patch():
+        cur = snowflake.connector.connect(database="db1", schema="s1").cursor()
+        with patch(f"fakesnow.cursor.{stage}", side_effect=error("unsupported expression")):
+            cur.execute("select '2026-10-26'::timestamp_ltz as l")
+            assert [d.type_code for d in cur.description] == [7]
+            row = cur.fetchone()
+            assert row is not None
+            assert row[0].isoformat() == "2026-10-26T00:00:00+00:00"

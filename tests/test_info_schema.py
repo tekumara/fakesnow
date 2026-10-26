@@ -277,6 +277,20 @@ def test_info_schema_columns_semi_structured_namespace(cur: snowflake.connector.
     assert cur.fetchall() == [("ARRAY",)]
 
 
+def test_info_schema_columns_timestamp_ltz(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/data-types-datetime
+    cur.execute("create table example (l timestamp_ltz, z timestamp_tz)")
+
+    cur.execute(
+        """
+        select column_name,data_type
+        from information_schema.columns where table_name = 'EXAMPLE' order by ordinal_position
+        """
+    )
+
+    assert cur.fetchall() == [("L", "TIMESTAMP_LTZ"), ("Z", "TIMESTAMP_TZ")]
+
+
 def test_info_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCursor):
     # see https://docs.snowflake.com/en/sql-reference/data-types-text
     cur.execute(

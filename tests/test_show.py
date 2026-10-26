@@ -8,6 +8,8 @@ import pytest
 import pytz
 import snowflake.connector.cursor
 
+from tests.utils import indent
+
 
 def test_show_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("""create or replace table example (
@@ -100,6 +102,15 @@ def test_show_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
         "database_name",
         "autoincrement",
         "schema_evolution_record",
+    ]
+
+
+def test_show_columns_timestamp_ltz(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (l timestamp_ltz)")
+
+    cur.execute("show columns in example")
+    assert indent([(r[2], r[3]) for r in cur.fetchall()]) == [
+        ("L", '{\n  "type": "TIMESTAMP_LTZ",\n  "precision": 0,\n  "scale": 9,\n  "nullable": true\n}')
     ]
 
 
