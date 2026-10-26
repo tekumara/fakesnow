@@ -477,11 +477,19 @@ def test_write_pandas_column_case_mismatch(
 
 def test_write_pandas_unquoted_column_requires_valid_identifier(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
-        cur.execute('create table example ("MY-COL" int)')
-        df = pd.DataFrame({"MY-COL": [1]})
+        cur.execute('create table example ("my col" int)')
+        df = pd.DataFrame({"my col": [1]})
 
-        with pytest.raises(snowflake.connector.errors.ProgrammingError, match="Invalid unquoted identifier"):
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", quote_identifiers=False)
+
+        # raised by the connector itself before any SQL is sent
+        assert excinfo.value.errno == -1
+        assert str(excinfo.value) == (
+            "Invalid unquoted identifier 'my col'. Column names used with quote_identifiers=False must be valid "
+            "Snowflake unquoted identifiers (letter or underscore, then letters, digits, underscores, or dollar "
+            "signs). Set quote_identifiers=True to use arbitrary column names."
+        )
 
 
 def test_write_pandas_overwrite_quoted_table_name(conn: snowflake.connector.SnowflakeConnection):
