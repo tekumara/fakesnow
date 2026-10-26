@@ -684,29 +684,79 @@ def test_unquoted_names_reserved_by_duckdb_are_upper_cased(cur: snowflake.connec
     cur.execute("select table_name, column_name from information_schema.columns where table_name = 'PIVOT'")
     assert cur.fetchall() == [("PIVOT", "SEMI")]
 
+
+def test_quoted_lookup_of_unquoted_names_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int)")
     cur.execute('insert into "PIVOT" ("SEMI") values (1)')
     cur.execute('select "SEMI" from "PIVOT"')
     assert cur.fetchall() == [(1,)]
 
 
-def test_alter_and_drop_names_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_quoted_names_reserved_by_duckdb_keep_their_case(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute('create table "pIvOt" ("sEmI" int)')
+    dcur.execute('insert into "pIvOt" values (1)')
+    dcur.execute('select "sEmI" from "pIvOt"')
+    assert dcur.fetchall() == [{"sEmI": 1}]
+
+
+def test_add_column_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table pivot (x int)")
     cur.execute("alter table pivot add column semi int")
-    cur.execute("alter table pivot rename to unpivot")
-    cur.execute("insert into unpivot (x, semi) values (1, 2)")
-    cur.execute("select semi from unpivot")
+    cur.execute("insert into pivot (x, semi) values (1, 2)")
+    cur.execute("select semi from pivot")
     assert cur.fetchall() == [(2,)]
 
-    cur.execute("alter table unpivot drop column semi")
-    cur.execute("drop table unpivot")
-    assert cur.fetchall() == [("UNPIVOT successfully dropped.",)]
+
+def test_rename_table_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (x int)")
+    cur.execute("insert into pivot values (1)")
+    cur.execute("alter table pivot rename to unpivot")
+    cur.execute("select x from unpivot")
+    assert cur.fetchall() == [(1,)]
 
 
-def test_update_delete_and_merge_names_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+def test_rename_column_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int)")
+    cur.execute("insert into pivot values (1)")
+    cur.execute("alter table pivot rename column semi to anti")
+    cur.execute("select anti from pivot")
+    assert cur.fetchall() == [(1,)]
+
+
+def test_drop_column_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (x int, semi int)")
+    cur.execute("insert into pivot values (1, 2)")
+    cur.execute("alter table pivot drop column semi")
+    cur.execute("select * from pivot")
+    assert cur.fetchall() == [(1,)]
+    assert [c.name for c in cur.description] == ["X"]
+
+
+def test_drop_table_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (x int)")
+    cur.execute("drop table pivot")
+    assert cur.fetchall() == [("PIVOT successfully dropped.",)]
+
+
+def test_update_names_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int, anti int)")
+    cur.execute("insert into pivot values (1, 10)")
+    cur.execute("update pivot set anti = 11 where semi = 1")
+    cur.execute("select anti from pivot")
+    assert cur.fetchall() == [(11,)]
+
+
+def test_delete_names_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table pivot (semi int, anti int)")
     cur.execute("insert into pivot values (1, 10), (2, 20)")
-    cur.execute("update pivot set anti = 11 where semi = 1")
     cur.execute("delete from pivot where semi = 2")
+    cur.execute("select semi, anti from pivot")
+    assert cur.fetchall() == [(1, 10)]
+
+
+def test_merge_names_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int, anti int)")
+    cur.execute("insert into pivot values (1, 10)")
     cur.execute(
         """
         merge into pivot using (select 1 as semi, 12 as anti) as lambda on pivot.semi = lambda.semi
@@ -715,6 +765,14 @@ def test_update_delete_and_merge_names_reserved_by_duckdb(cur: snowflake.connect
     )
     cur.execute("select semi, anti from pivot")
     assert cur.fetchall() == [(1, 12)]
+
+
+def test_create_table_as_star_from_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int)")
+    cur.execute("insert into pivot values (1)")
+    cur.execute("create table copied (anti int) as select * from pivot")
+    cur.execute("select anti from copied")
+    assert cur.fetchall() == [(1,)]
 
 
 def test_cte_and_aliases_reserved_by_duckdb(dcur: snowflake.connector.cursor.DictCursor):
