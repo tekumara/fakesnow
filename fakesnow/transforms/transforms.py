@@ -3,7 +3,7 @@ from __future__ import annotations
 import re
 from pathlib import Path
 from string import Template
-from typing import TYPE_CHECKING, cast
+from typing import cast
 
 import snowflake.connector.errors
 import sqlglot
@@ -12,9 +12,6 @@ from sqlglot import Expr, exp
 
 from fakesnow.params import MutableParams, pop_qmark_param
 from fakesnow.variables import Variables
-
-if TYPE_CHECKING:
-    from fakesnow.transforms.stage import TableStages
 
 SUCCESS_NOP = sqlglot.parse_one("SELECT 'Statement executed successfully.' as status")
 
@@ -1165,45 +1162,6 @@ def tag(expression: Expr) -> Expr:
         and kind.upper() == "TAG"
     ):
         return SUCCESS_NOP
-
-    return expression
-
-
-def temporary_table(
-    expression: Expr, current_database: str | None, current_schema: str | None, table_stages: TableStages
-) -> Expr:
-    """Resolve database and schema qualifiers of temporary tables.
-
-    Snowflake temporary tables belong to a database and schema, whereas duckdb keeps them all in the temp catalog.
-    Create them unqualified, recording the schema they belong to, and point qualified references at the temp catalog.
-    See https://docs.snowflake.com/en/user-guide/tables-temp-transient
-
-    Example:
-        CREATE TEMP TABLE db1.schema1.table1 (id int) -> CREATE TEMPORARY TABLE table1 (id INT)
-        SELECT * FROM db1.schema1.table1 -> SELECT * FROM temp.main.table1
-    """
-
-    if (
-        isinstance(expression, exp.Create)
-        and expression.kind == "TABLE"
-        and expression.find(exp.TemporaryProperty)
-        and (table := expression.find(exp.Table))
-    ):
-        expression.set("temporary_table_owner", (table.catalog or current_database, table.db or current_schema))
-        table.set("catalog", None)
-        table.set("db", None)
-    elif (
-        isinstance(expression, exp.Table)
-        and expression.db
-        # a permanent table can be created with the name of a temporary table
-        and not isinstance(parent := expression.parent, exp.Create)
-        and not (isinstance(parent, exp.Schema) and isinstance(parent.parent, exp.Create))
-        # COPY INTO resolves its target by its Snowflake name, to match the table stage and load history
-        and not isinstance(parent, exp.Copy)
-        and table_stages.is_temporary(expression.catalog or current_database, expression.db, expression.name)
-    ):
-        expression.set("catalog", exp.to_identifier("temp"))
-        expression.set("db", exp.to_identifier("main"))
 
     return expression
 
