@@ -838,6 +838,20 @@ def test_varchar_length_error_value_truncated(cur: snowflake.connector.cursor.Sn
     assert str(excinfo.value) == f"100078 (22000): String '{shown}' is too long and would be truncated"
 
 
+def test_varchar_length_error_column_contains_message(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # Truncate only the value, even when the column contains the message's delimiter.
+    column = "String '" + "a" * 210
+    cur.execute(f'create table example ("{column}" varchar(2))')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("insert into example values ('abc')")
+
+    assert str(excinfo.value) == (
+        f"100078 (22000): DML operation to table EXAMPLE failed on column {column} with error: "
+        "String 'abc' is too long and would be truncated"
+    )
+
+
 def test_varchar_length_counts_characters(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table example (name varchar(5))")
 

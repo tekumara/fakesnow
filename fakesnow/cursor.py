@@ -1,6 +1,7 @@
 # ruff: noqa: SLF001
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -580,10 +581,10 @@ class FakeSnowflakeCursor:
             raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=1003, sqlstate="42000") from e
         except duckdb.InvalidInputException as e:
             msg = cast(str, e.args[0]).removeprefix("Invalid Input Error: ")
-            if not msg.endswith("is too long and would be truncated"):
+            if not msg.startswith(transforms.TEXT_LENGTH_ERROR_PREFIX):
                 raise e
             # a string longer than its text column, see transforms.enforce_text_length
-            prefix, value = msg.removesuffix("' is too long and would be truncated").split("String '", maxsplit=1)
+            prefix, value = json.loads(msg.removeprefix(transforms.TEXT_LENGTH_ERROR_PREFIX))
             if len(shown := value.encode()) > 200:
                 # snowflake shows the first 200 bytes of the string, without splitting a character
                 value = shown[:200].decode(errors="ignore") + "..."
