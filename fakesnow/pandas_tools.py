@@ -89,14 +89,14 @@ def write_pandas(
     use_logical_type: bool | None = None,
     **kwargs: Any,
 ) -> WritePandasResult:
-    name = table_name
-    if schema:
-        name = f"{schema}.{name}"
-    if database:
-        name = f"{database}.{name}"
+    # qualify the name like the connector's qualify_name: each part is quoted, or none are
+    name = ".".join(_quote(p) if quote_identifiers else p for p in (database, schema, table_name) if p is not None)
 
     if auto_create_table:
-        cols = [f"{c} {sql_type(t, use_logical_type=bool(use_logical_type))}" for c, t in df.dtypes.to_dict().items()]
+        cols = [
+            f"{_quote(c) if quote_identifiers else c} {sql_type(t, use_logical_type=bool(use_logical_type))}"
+            for c, t in df.dtypes.to_dict().items()
+        ]
 
         if overwrite:
             # overwrite drops and recreates the table, so its schema matches the dataframe
@@ -114,6 +114,10 @@ def write_pandas(
 
     # return success
     return (True, len(mock_copy_results), count, mock_copy_results)
+
+
+def _quote(name: object) -> str:
+    return '"' + str(name).replace('"', '""') + '"'
 
 
 def _insert_df(duck_conn: DuckDBPyConnection, df: pd.DataFrame, table_name: str) -> int:
@@ -143,7 +147,7 @@ def _insert_df(duck_conn: DuckDBPyConnection, df: pd.DataFrame, table_name: str)
         # don't jsonify string
         df[col] = df[col].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x)
 
-    escaped_cols = ",".join(f'"{col}"' for col in df.columns.to_list())
+    escaped_cols = ",".join(_quote(col) for col in df.columns.to_list())
     duck_conn.execute(f"INSERT INTO {table_name}({escaped_cols}) SELECT * FROM df")
 
     return duck_conn.fetchall()[0][0]
