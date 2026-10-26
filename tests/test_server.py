@@ -156,6 +156,25 @@ def test_server_connect_autocommit_false(server: dict) -> None:
         assert row and row[0] == 1
 
 
+def test_server_autocommit_false_failed_statement_keeps_transaction(server: dict) -> None:
+    # a failed statement rolls back only its own changes, the transaction stays active and can be committed
+    # see https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
+    with (
+        snowflake.connector.connect(**server | {"autocommit": False}, database="db1", schema="schema1") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create or replace table failed_statement (i int)")
+        cur.execute("insert into failed_statement values (1)")
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("select * from missing_table")
+
+        conn.commit()
+        conn.rollback()
+        cur.execute("select count(*) from failed_statement")
+        assert cur.fetchone() == (1,)
+
+
 def test_server_client_session_keep_alive(server: dict) -> None:
     with snowflake.connector.connect(**server | {"client_session_keep_alive": True}):
         # shouldn't error

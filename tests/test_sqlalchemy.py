@@ -47,3 +47,20 @@ def test_reflect(snowflake_engine: Engine):
 
         assert result
         assert result.fetchall() == [(1, "one")]
+
+
+def test_create_checkfirst_keeps_transaction(snowflake_engine: Engine):
+    # runs with autocommit=False, and checkfirst probes for the missing table with a statement that fails,
+    # which leaves the transaction and its earlier insert intact
+    metadata = MetaData()
+    foo = cast(Table, Table("foo", metadata, Column(types.Integer, name="id")))
+    bar = cast(Table, Table("bar", metadata, Column(types.Integer, name="id")))
+
+    with snowflake_engine.connect() as conn:
+        foo.create(conn)
+        conn.execute(foo.insert().values(id=1))
+        bar.create(conn, checkfirst=True)
+        conn.commit()
+
+    with snowflake_engine.connect() as conn:
+        assert conn.execute(foo.select()).fetchall() == [(1,)]

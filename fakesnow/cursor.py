@@ -454,6 +454,9 @@ class FakeSnowflakeCursor:
 
         result_sql = None
 
+        if isinstance(transformed, exp.Commit):
+            self._conn._raise_if_transaction_aborted()
+
         if not self._conn._autocommit:
             # Snowflake implicitly commits the active transaction before executing DDL statements
             # This will also cause the DDL statement to run in its own transaction and commit
@@ -463,6 +466,7 @@ class FakeSnowflakeCursor:
             if isinstance(transformed, (exp.Alter, exp.Comment, exp.Create, exp.Drop)) or transformed.args.get(
                 "create_stage_name"
             ):
+                self._conn._raise_if_transaction_aborted()
                 self._duck_conn.commit()
                 self._conn._in_transaction = False
 

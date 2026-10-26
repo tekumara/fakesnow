@@ -6,6 +6,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
+import duckdb
 import snowflake.connector
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import DictCursor, SnowflakeCursor
@@ -135,6 +136,7 @@ class FakeSnowflakeConnection:
     def autocommit(self, mode: bool) -> None:
         # see https://docs.snowflake.com/en/sql-reference/transactions#autocommit
         if not self._autocommit:
+            self._raise_if_transaction_aborted()
             self._duck_conn.commit()
             self._in_transaction = False
 
@@ -171,6 +173,27 @@ class FakeSnowflakeConnection:
 
     def rollback(self) -> None:
         self.cursor().execute("ROLLBACK")
+
+    def _raise_if_transaction_aborted(self) -> None:
+        """Roll back and raise if a failed statement aborted the transaction, before committing it.
+
+        Snowflake rolls back only the failed statement, see
+        https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
+        but DuckDB has no savepoints, so a statement that fails at runtime (eg: a conversion or constraint
+        error) aborts the whole transaction, and committing it would silently discard the earlier writes.
+        """
+        try:
+            self._duck_conn.execute("SELECT 1")
+        except duckdb.TransactionException as e:
+            if "Current transaction is aborted" not in str(e):
+                raise
+            self._duck_conn.rollback()
+            self._in_transaction = False
+            msg = (
+                "The transaction was aborted by a failed statement and has been rolled back. "
+                "Snowflake rolls back only the failed statement, but fakesnow can't."
+            )
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=9999, sqlstate="99999") from e
 
     @property
     def schema(self) -> str | None:
