@@ -326,11 +326,45 @@ def test_date_trunc_date_null(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.description[0].type_code == 3  # DATE
 
 
-def test_date_trunc_untyped_null(cur: snowflake.connector.cursor.SnowflakeCursor):
-    # an untyped NULL isn't a DATE, Snowflake returns it as TEXT
-    cur.execute("select date_trunc('month', NULL) as d, trunc(NULL, 'month') as t")
-    assert cur.fetchall() == [(None, None)]
-    assert [c.type_code for c in cur.description] == [2, 2]  # TEXT
+@pytest.mark.parametrize("sql", ["date_trunc('month', NULL)", "trunc(NULL, 'month')", "date_trunc('hour', NULL)"])
+def test_date_trunc_untyped_null(cur: snowflake.connector.cursor.SnowflakeCursor, sql: str):
+    # An untyped NULL isn't a DATE; Snowflake describes the result as TEXT.
+    cur.execute(f"select {sql} as d")
+    assert cur.fetchall() == [(None,)]
+    assert cur.description[0].type_code == 2  # TEXT
+
+
+@pytest.mark.parametrize(
+    "sql",
+    ["date_trunc('month', NULL)", "trunc(NULL, 'month')", "date_trunc('month', NULL) = d"],
+)
+def test_date_trunc_untyped_null_column_name(cur: snowflake.connector.cursor.SnowflakeCursor, sql: str):
+    cur.execute(f"select {sql} from (select '2024-05-09'::date as d)")
+    assert cur.description[0].name == sql.upper()
+
+
+@pytest.mark.parametrize("alias", ["d", '"mixedCase"'])
+def test_date_trunc_untyped_null_alias(cur: snowflake.connector.cursor.SnowflakeCursor, alias: str):
+    cur.execute(f"select date_trunc('month', NULL) as {alias}")
+    assert cur.description[0].name == ("mixedCase" if alias.startswith('"') else "D")
+
+
+def test_date_trunc_untyped_null_distinct_columns(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # Rewriting both projections to an unaliased NULL loses a column when fetching rows.
+    cur.execute("select date_trunc('month', NULL), trunc(NULL, 'month'), date_trunc('hour', NULL)")
+    assert cur.fetchall() == [(None, None, None)]
+
+
+def test_date_trunc_untyped_null_comparison(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select date_trunc('month', NULL) = d as eq from (select '2024-05-09'::date as d)")
+    assert cur.fetchall() == [(None,)]
+    assert cur.description[0].type_code == 13  # BOOLEAN
+
+
+def test_date_trunc_untyped_null_coalesce(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select coalesce(date_trunc('month', NULL), '2024-05-09'::date) as d")
+    assert cur.fetchall() == [(datetime.date(2024, 5, 9),)]
+    assert cur.description[0].type_code == 3  # DATE
 
 
 def test_date_trunc_date_nested(cur: snowflake.connector.cursor.SnowflakeCursor):

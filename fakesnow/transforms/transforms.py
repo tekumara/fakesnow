@@ -380,6 +380,19 @@ def date_trunc_date(expression: Expr) -> Expr:
         ... ).sql(dialect="duckdb")
         "SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC('MONTH', d) FROM t"
     """
+    if isinstance(expression, exp.Select):
+        for projection in expression.expressions:
+            if not isinstance(projection, exp.Alias) and any(
+                isinstance(trunc.this, exp.Null) for trunc in projection.find_all(exp.DateTrunc, exp.TimestampTrunc)
+            ):
+                # Preserve projection names before replacing calls with NULL, including in larger expressions.
+                # Otherwise distinct calls all become "NULL", and dict-based row fetching loses columns.
+                name = projection.transform(
+                    lambda e: exp.Trunc(this=e.this, decimals=e.args["unit"]) if isinstance(e, exp.DateTrunc) else e
+                ).sql(dialect="snowflake")
+                projection.replace(exp.alias_(projection, name.upper(), quoted=True))
+        return expression
+
     if not isinstance(expression, (exp.DateTrunc, exp.TimestampTrunc)):
         return expression
 
