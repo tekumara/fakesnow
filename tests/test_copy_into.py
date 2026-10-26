@@ -267,6 +267,21 @@ def test_copy_uses_named_csv_with_inline_override(dcur: snowflake.connector.curs
         assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
 
 
+def test_copy_into_table_name_reserved_by_duckdb(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    # DuckDB reserves PIVOT, Snowflake doesn't
+    dcur.execute("CREATE TABLE pivot (a INT, b INT)")
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2\n")
+        temp_file.flush()
+
+        dcur.execute("CREATE STAGE reserved_word_stage")
+        dcur.execute(f"PUT 'file://{temp_file.name}' @reserved_word_stage")
+        dcur.execute("COPY INTO pivot FROM @reserved_word_stage")
+
+        dcur.execute("SELECT * FROM pivot")
+        assert dcur.fetchall() == [{"A": 1, "B": 2}]
+
+
 def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor) -> None:
     create_table(dcur)
     with tempfile.TemporaryDirectory() as tmp_dir:

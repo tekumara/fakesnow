@@ -828,3 +828,12 @@ def test_server_fetch_multiple_arrow_batches(scur: snowflake.connector.cursor.Sn
 
     timestamp = datetime.datetime(2024, 1, 2, 3, 4, 5, 123456)
     assert scur.fetchall() == [(i, None if i % 2 == 0 else "héllo", Decimal("12.34"), timestamp) for i in range(5000)]
+
+
+def test_server_unquoted_names_reserved_by_duckdb(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    # DuckDB reserves these words, Snowflake doesn't
+    scur.execute("create table pivot (semi int)")
+    scur.execute("insert into pivot values (1)")
+    scur.execute("select semi from pivot")
+    assert scur.fetchall() == [(1,)]
+    assert [c.name for c in scur.description] == ["SEMI"]

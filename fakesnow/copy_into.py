@@ -16,6 +16,7 @@ from sqlglot import Expr, exp
 
 import fakesnow.transforms.stage as stage
 from fakesnow import logger
+from fakesnow.dialect import FakesnowDuckDB
 from fakesnow.params import MutableParams, pop_qmark_param
 from fakesnow.transforms.file_format import lookup_file_format
 from fakesnow.transforms.options import parse_options
@@ -110,7 +111,7 @@ def copy_into(
                 error_count = 1
                 first_error_message = "File was loaded before."
             else:
-                sql = i.sql(dialect="duckdb")
+                sql = i.sql(dialect=FakesnowDuckDB)
                 logger.log_sql(sql, params)
                 duck_conn.execute(sql, params)
                 (affected_count,) = duck_conn.fetchall()[0]
