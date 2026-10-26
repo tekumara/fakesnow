@@ -143,6 +143,32 @@ def test_create_stage_qmark_quoted(_fakesnow: None):
         assert dcur.fetchall() == [{"status": "Stage area stage1 successfully created."}]
 
 
+def test_create_stage_quoted_name_with_single_quote(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("""CREATE STAGE "o'brien stage" """)
+    dcur.execute("SHOW STAGES")
+    assert [r["name"] for r in dcur.fetchall()] == ["o'brien stage"]
+
+
+def test_create_stage_quoted_name_status(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("""CREATE STAGE "o'brien stage" """)
+    assert dcur.fetchall() == [{"status": "Stage area o'brien stage successfully created."}]
+
+
+def test_create_stage_if_not_exists_quoted_name_with_single_quote(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("""CREATE STAGE "o'brien stage" """)
+    dcur.execute("""CREATE STAGE IF NOT EXISTS "o'brien stage" """)
+
+    dcur.execute("SHOW STAGES")
+    assert len(dcur.fetchall()) == 1
+
+
+def test_create_stage_url_with_single_quote(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("CREATE STAGE stage1 URL='s3://bucket/it''s/'")
+
+    dcur.execute("SHOW STAGES")
+    assert [r["url"] for r in dcur.fetchall()] == ["s3://bucket/it's/"]
+
+
 def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
         data = "1,2\n"
@@ -253,6 +279,49 @@ def test_list_stage_with_trailing_comment(
     dcur.execute(f"CREATE STAGE {stage_name}")
     dcur.execute(f"LIST {reference} {comment}")
     assert dcur.fetchall() == []
+
+
+def test_list_quoted_stage_name_with_single_quote(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("""CREATE STAGE "o'brien stage" """)
+    dcur.execute("""LIST '@"o''brien stage"'""")
+    assert dcur.fetchall() == []
+
+
+def test_list_stage_name_resembling_sql_does_not_exist(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("CREATE STAGE stage1")
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        dcur.execute("""LIST '@"x'' OR ''1''=''1"'""")
+
+    assert excinfo.value.errno == 2003
+
+
+@pytest.mark.parametrize(
+    "reference",
+    [
+        "@%\"o''brien\"",
+        """@"o''brien".schema1.%t1""",
+        """@db1."o''brien".%t1""",
+    ],
+    ids=["table", "database", "schema"],
+)
+def test_list_missing_table_stage_with_single_quote(
+    cur: snowflake.connector.cursor.SnowflakeCursor, reference: str
+) -> None:
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute(f"LIST '{reference}'")
+
+    assert excinfo.value.errno == 2003
+
+
+def test_put_quoted_stage_name_with_single_quote(dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path) -> None:
+    dcur.execute("""CREATE STAGE "o'brien" """)
+    path = tmp_path / "data.csv"
+    path.write_text("1\n")
+
+    # fakesnow's PUT parser does not yet accept Snowflake's single-quoted target form.
+    dcur.execute(f"""PUT 'file://{path}' @"o'brien" """)
+    assert [r["status"] for r in dcur.fetchall()] == ["UPLOADED"]
 
 
 def test_list_requires_stage_reference(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:

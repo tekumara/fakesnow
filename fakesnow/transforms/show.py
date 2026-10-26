@@ -514,9 +514,9 @@ def show_stages(expression: Expr, current_database: str | None, current_schema: 
 
     where = ["1=1"]
     if catalog:
-        where.append(f"database_name = '{catalog}'")
+        where.append(f"database_name = {exp.Literal.string(catalog).sql(dialect='duckdb')}")
     if schema:
-        where.append(f"schema_name = '{schema}'")
+        where.append(f"schema_name = {exp.Literal.string(schema).sql(dialect='duckdb')}")
     where_clause = " AND ".join(where)
 
     query = f"""

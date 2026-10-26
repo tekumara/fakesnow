@@ -105,13 +105,16 @@ class TableStages:
         live = self._duck_conn.execute(sql, [stage_name[1:]]).fetchone()
         oid = live[0] if live and self._temporary.get(live[0]) == (catalog, schema) else "NULL"
         # Temporary storage is keyed by session and OID, so it is isolated between sessions and follows renames.
-        logical_name = exp.Literal.string(f"{catalog}.{schema}.{stage_name}").sql(dialect="duckdb")
+        logical_name, table_sql, catalog_sql, schema_sql = (
+            exp.Literal.string(value).sql(dialect="duckdb")
+            for value in (f"{catalog}.{schema}.{stage_name}", stage_name[1:], catalog, schema)
+        )
         return f"""
             SELECT CASE WHEN temporary THEN '{self._session}.' || table_oid || '.%' ELSE {logical_name} END
             FROM duckdb_tables()
-            WHERE table_name = '{stage_name[1:]}' AND (
+            WHERE table_name = {table_sql} AND (
                 (temporary AND table_oid = {oid})
-                OR (NOT temporary AND database_name = '{catalog}' AND schema_name = '{schema}')
+                OR (NOT temporary AND database_name = {catalog_sql} AND schema_name = {schema_sql})
             )
             ORDER BY temporary DESC
             LIMIT 1
@@ -170,13 +173,17 @@ def create_stage(
     replace = expression.args.get("replace")
     if_not_exists = expression.args.get("exists")
 
+    # Quoted identifiers and the URL may contain any character, so embed them as escaped literals.
+    name_sql, catalog_sql, schema_sql, url_sql = (
+        exp.Literal.string(value).sql(dialect="duckdb") for value in (stage_name, catalog, schema, url)
+    )
     guard = (
         ""
         if replace
         else f"""
         WHERE NOT EXISTS (
             SELECT 1 FROM _fs_global._fs_information_schema._fs_stages
-            WHERE name = '{stage_name}' AND database_name = '{catalog}' AND schema_name = '{schema}'
+            WHERE name = {name_sql} AND database_name = {catalog_sql} AND schema_name = {schema_sql}
         )"""
     )
     insert_sql = f"""
@@ -185,7 +192,7 @@ def create_stage(
         comment, region, type, cloud, notification_channel, storage_integration, endpoint, owner_role_type,
         directory_enabled)
         SELECT
-            '{now}', '{stage_name}', '{catalog}', '{schema}', '{url}', 'N', 'N', 'SYSADMIN',
+            '{now}', {name_sql}, {catalog_sql}, {schema_sql}, {url_sql}, 'N', 'N', 'SYSADMIN',
             '', NULL, '{stage_type}', {f"'{cloud}'" if cloud else "NULL"}, NULL, NULL, NULL, 'ROLE',
             'N'
         {guard}
@@ -323,11 +330,14 @@ def stage_lookup_sql(catalog: str, schema: str, stage_name: str, table_stages: T
     """SQL returning the storage identity of the single resolved stage, or no rows."""
     if is_table_stage(stage_name):
         return table_stages.lookup_sql(catalog, schema, stage_name)
-    storage_name = exp.Literal.string(f"{catalog}.{schema}.{stage_name}").sql(dialect="duckdb")
+    storage_name, catalog_sql, schema_sql, name_sql = (
+        exp.Literal.string(value).sql(dialect="duckdb")
+        for value in (f"{catalog}.{schema}.{stage_name}", catalog, schema, stage_name)
+    )
     return f"""
         SELECT {storage_name} AS storage_name
         from _fs_global._fs_information_schema._fs_stages
-        where database_name = '{catalog}' and schema_name = '{schema}' and name = '{stage_name}'
+        where database_name = {catalog_sql} and schema_name = {schema_sql} and name = {name_sql}
     """
 
 
