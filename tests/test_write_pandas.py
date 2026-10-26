@@ -483,7 +483,7 @@ def test_write_pandas_unquoted_column_requires_valid_identifier(conn: snowflake.
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", quote_identifiers=False)
 
-        # raised by the connector itself before any SQL is sent
+        # Connector 4.8.1 raises this before sending SQL; older versions lack this check.
         assert excinfo.value.errno == -1
         assert str(excinfo.value) == (
             "Invalid unquoted identifier 'my col'. Column names used with quote_identifiers=False must be valid "
