@@ -439,8 +439,10 @@ def test_merge_varchar_length(conn: snowflake.connector.SnowflakeConnection):
             """
         )
 
-    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
-    assert "String 'abcdef' is too long and would be truncated" in str(excinfo.value)
+    assert str(excinfo.value) == (
+        "100078 (22000): DML operation to table T1 failed on column VAL with error: "
+        "String 'abcdef' is too long and would be truncated"
+    )
 
 
 def test_merge_varchar_length_insert_columns(conn: snowflake.connector.SnowflakeConnection):

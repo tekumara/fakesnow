@@ -778,8 +778,10 @@ def test_varchar_length_insert(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(ProgrammingError) as excinfo:
         cur.execute("insert into example (name, id) values ('abcdef', 1)")
 
-    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
-    assert "String 'abcdef' is too long and would be truncated" in str(excinfo.value)
+    assert str(excinfo.value) == (
+        "100078 (22000): DML operation to table EXAMPLE failed on column NAME with error: "
+        "String 'abcdef' is too long and would be truncated"
+    )
 
 
 def test_varchar_length_update(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -789,8 +791,51 @@ def test_varchar_length_update(cur: snowflake.connector.cursor.SnowflakeCursor):
     with pytest.raises(ProgrammingError) as excinfo:
         cur.execute("update example set name = name || 'def' where id = 1")
 
-    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
-    assert "String 'abcdef' is too long and would be truncated" in str(excinfo.value)
+    assert str(excinfo.value) == (
+        "100078 (22000): DML operation to table EXAMPLE failed on column NAME with error: "
+        "String 'abcdef' is too long and would be truncated"
+    )
+
+
+@pytest.mark.parametrize(
+    ("table", "expected"),
+    [
+        ('"EXAMPLE"', "EXAMPLE"),
+        ("db1.schema1.example", "DB1.SCHEMA1.EXAMPLE"),
+        ('"Mixed table"', '"Mixed table"'),
+        ('schema1."Mixed table"', 'SCHEMA1."Mixed table"'),
+    ],
+)
+def test_varchar_length_error_names(cur: snowflake.connector.cursor.SnowflakeCursor, table: str, expected: str):
+    # Snowflake names the table as written, with unquoted parts upper-cased, and the column unquoted.
+    cur.execute('create table example ("name" varchar(5))')
+    cur.execute('create table "Mixed table" ("name" varchar(5))')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(f"insert into {table} values ('abcdef')")
+
+    assert str(excinfo.value) == (
+        f"100078 (22000): DML operation to table {expected} failed on column name with error: "
+        "String 'abcdef' is too long and would be truncated"
+    )
+
+
+@pytest.mark.parametrize(
+    ("value", "shown"),
+    [
+        ("x" * 200, "x" * 200),
+        ("x" * 201, "x" * 200 + "..."),
+        ("é" * 101, "é" * 100 + "..."),
+        ("a" * 199 + "é", "a" * 199 + "..."),
+    ],
+    ids=["200 bytes", "201 bytes", "multibyte", "split character"],
+)
+def test_varchar_length_error_value_truncated(cur: snowflake.connector.cursor.SnowflakeCursor, value: str, shown: str):
+    # Snowflake shows at most the first 200 bytes of the value, without splitting a character.
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(f"select '{value}'::varchar(5)")
+
+    assert str(excinfo.value) == f"100078 (22000): String '{shown}' is too long and would be truncated"
 
 
 def test_varchar_length_counts_characters(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -880,15 +925,30 @@ def test_varchar_length_default(cur: snowflake.connector.cursor.SnowflakeCursor,
         "select cast('abcdef' as varchar(5))",
         "select ('abcdef'::varchar(5))::varchar(10)",
         "select try_cast('abcdef'::varchar(5) as varchar(10))",
-        "create table example (name varchar(5)) as select 'abcdef'",
     ],
 )
 def test_varchar_length_cast(cur: snowflake.connector.cursor.SnowflakeCursor, query: str):
     # https://docs.snowflake.com/en/sql-reference/functions/cast
     with pytest.raises(ProgrammingError) as excinfo:
         cur.execute(query)
-    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
-    assert "String 'abcdef' is too long and would be truncated" in str(excinfo.value)
+    assert str(excinfo.value) == "100078 (22000): String 'abcdef' is too long and would be truncated"
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "create table example (name varchar(5)) as select 'abcdef'",
+        "create table example as select 'abcdef'::varchar(5) as name",
+    ],
+)
+def test_varchar_length_create_table_as(cur: snowflake.connector.cursor.SnowflakeCursor, query: str):
+    # Snowflake reports CTAS as a DML operation on the fully qualified table.
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(query)
+    assert str(excinfo.value) == (
+        "100078 (22000): DML operation to table DB1.SCHEMA1.EXAMPLE failed on column NAME with error: "
+        "String 'abcdef' is too long and would be truncated"
+    )
 
 
 @pytest.mark.parametrize("value", ["'abcde'", "NULL", "123"])
