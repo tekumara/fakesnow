@@ -21,6 +21,9 @@ from snowflake.connector.cursor import ResultMetadata
 from snowflake.connector.result_batch import ResultBatch
 from sqlglot import Expr, exp
 from sqlglot.errors import ParseError
+from sqlglot.optimizer.annotate_types import annotate_types
+from sqlglot.optimizer.qualify import qualify
+from sqlglot.schema import MappingSchema
 
 import fakesnow.checks as checks
 import fakesnow.expr as expr
@@ -146,7 +149,8 @@ class FakeSnowflakeCursor:
 
         describe = f"DESCRIBE {command}"
         self.execute(describe, *args, **kwargs)
-        return describe_as_result_metadata(self.fetchall())
+        assert self._last_transformed
+        return describe_as_result_metadata(self._describe_timestamp_ltz(self.fetchall(), self._last_transformed.this))
 
     @property
     def description(self) -> list[ResultMetadata]:
@@ -182,7 +186,8 @@ class FakeSnowflakeCursor:
             return None
 
         self.execute(f"DESCRIBE {describe}")
-        return self.fetchall()
+        assert self._last_transformed
+        return self._describe_timestamp_ltz(self.fetchall(), self._last_transformed.this)
 
     def _describe_last_sql(self) -> list:
         # use a separate cursor to avoid consuming the result set on this cursor
@@ -190,7 +195,57 @@ class FakeSnowflakeCursor:
             # TODO: can we replace with self._duck_conn.description?
             expression = sqlglot.parse_one(f"DESCRIBE {self._last_sql}", read="duckdb")
             cur._execute(expression, self._last_params)
-            return cur.fetchall()
+            return self._describe_timestamp_ltz(cur.fetchall(), self._last_transformed)
+
+    def _describe_timestamp_ltz(self, describe_results: list, expression: Expr | None) -> list:
+        """Describe the TIMESTAMPTZ columns that snowflake types as TIMESTAMP_LTZ.
+
+        duckdb has one TIMESTAMPTZ type for snowflake's TIMESTAMP_LTZ and TIMESTAMP_TZ. So sqlglot types
+        the query's columns, using the timestamp types recorded for the tables it reads.
+        """
+
+        tz_columns = [
+            i for i, (_, column_type, *_) in enumerate(describe_results) if column_type == "TIMESTAMP WITH TIME ZONE"
+        ]
+        if not (tz_columns and isinstance(expression, exp.Query)):
+            return describe_results
+
+        try:
+            # Only timestamp types matter; the remaining columns resolve names and expand stars.
+            types = {"TIMESTAMP_LTZ": "TIMESTAMPLTZ", "TIMESTAMP_TZ": "TIMESTAMPTZ"}
+            tables = list({table.name for table in expression.find_all(exp.Table)})
+            columns: dict = {}
+            if tables:
+                for catalog, db, table, column, data_type in self._duck_conn.execute(
+                    info_schema.SQL_SELECT_COLUMN_TYPES, [tables]
+                ).fetchall():
+                    columns.setdefault(catalog, {}).setdefault(db, {}).setdefault(table, {})[column] = types.get(
+                        data_type, "UNKNOWN"
+                    )
+            # Names from the catalog are already normalized; preserve quoted mixed-case identifiers.
+            schema = MappingSchema(columns, dialect="snowflake", normalize=False)
+            query = qualify(
+                expression.copy(),
+                schema=schema,
+                catalog=self._conn.database,
+                db=self._conn.schema,
+                dialect="snowflake",
+                validate_qualify_columns=False,
+            )
+            query = annotate_types(query, schema=schema, dialect="snowflake")
+            if len(query.selects) != len(describe_results):
+                return describe_results
+
+            return [
+                (name, "TIMESTAMP_LTZ", *rest)
+                if i in tz_columns and query.selects[i].is_type(exp.DataType.Type.TIMESTAMPLTZ)
+                else (name, column_type, *rest)
+                for i, (name, column_type, *rest) in enumerate(describe_results)
+            ]
+        except Exception:
+            # Type inference is best effort. SQLGlot can also raise non-SqlglotError exceptions
+            # on unsupported expressions; never let optional metadata break a successful query.
+            return describe_results
 
     def execute(
         self,
@@ -312,6 +367,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.information_schema_databases, current_schema=self._conn.schema, copy=False)
             .transform(transforms.drop_schema_cascade, copy=False)
             .transform(transforms.tag, copy=False)
+            .transform(transforms.extract_column_metadata, copy=False)
             .transform(transforms.semi_structured_types, copy=False)
             .transform(transforms.try_parse_json, copy=False)
             .transform(transforms.split, copy=False)
@@ -338,7 +394,6 @@ class FakeSnowflakeCursor:
             .transform(transforms.timestamp_ntz, copy=False)
             .transform(transforms.float_to_double, copy=False)
             .transform(transforms.integer_precision, copy=False)
-            .transform(transforms.extract_text_length, copy=False)
             .transform(transforms.sample, copy=False)
             .transform(transforms.array_size, copy=False)
             .transform(transforms.random, copy=False)
@@ -484,6 +539,9 @@ class FakeSnowflakeCursor:
             elif isinstance(transformed, (exp.Commit, exp.Rollback)):
                 self._conn._in_transaction = False
 
+        column_updates = info_schema.column_metadata_updates(
+            self._duck_conn, transformed, self._conn.database, self._conn.schema
+        )
         affected_count = None
         try:
             if isinstance(transformed, exp.Copy):
@@ -673,14 +731,8 @@ class FakeSnowflakeCursor:
             assert catalog and schema
             self._duck_conn.execute(info_schema.insert_table_comment_sql(catalog, schema, table.name, comment))
 
-        if (text_lengths := cast(list[tuple[str, int]], transformed.args.get("text_lengths"))) and (
-            table := transformed.find(exp.Table)
-        ):
-            # record text lengths
-            catalog = table.catalog or self._conn.database
-            schema = table.db or self._conn.schema
-            assert catalog and schema
-            self._duck_conn.execute(info_schema.insert_text_lengths_sql(catalog, schema, table.name, text_lengths))
+        for metadata_sql, metadata_params in column_updates:
+            self._duck_conn.execute(metadata_sql, metadata_params)
 
         if result_sql:
             logger.log_sql(result_sql)

@@ -37,7 +37,7 @@ SELECT
                 WHEN character_maximum_length = 16777216 THEN 16777216
                 ELSE coalesce(character_maximum_length*4,16777216)
             END  || ',"nullable":true,"fixed":false}'
-        WHEN data_type in ('TIMESTAMP_NTZ','TIMESTAMP_TZ','TIME') THEN
+        WHEN data_type in ('TIMESTAMP_NTZ','TIMESTAMP_TZ','TIMESTAMP_LTZ','TIME') THEN
             '{"type":"' || data_type || '","precision":0,"scale":9,"nullable":true}'
         WHEN data_type = 'FLOAT' THEN '{"type":"REAL","nullable":true}'
         WHEN data_type = 'BINARY' THEN

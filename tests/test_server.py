@@ -828,3 +828,18 @@ def test_server_fetch_multiple_arrow_batches(scur: snowflake.connector.cursor.Sn
 
     timestamp = datetime.datetime(2024, 1, 2, 3, 4, 5, 123456)
     assert scur.fetchall() == [(i, None if i % 2 == 0 else "héllo", Decimal("12.34"), timestamp) for i in range(5000)]
+
+
+def test_server_timestamp_ltz_description(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    scur.execute(
+        "select '2026-10-26 01:02:03+09:00'::timestamp_ltz as l, '2026-10-26 01:02:03+09:00'::timestamp_tz as z"
+    )
+
+    assert [(d.name, d.type_code) for d in scur.description] == [("L", 6), ("Z", 7)]
+
+
+def test_server_timestamp_ltz_value(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    # the connector reads a timestamp_ltz in the session's TIMEZONE, it's the same instant in any zone
+    scur.execute("select '2026-10-26 01:02:03+09:00'::timestamp_ltz as l")
+
+    assert scur.fetchall() == [(datetime.datetime(2026, 10, 25, 16, 2, 3, tzinfo=pytz.utc),)]
