@@ -430,3 +430,37 @@ def column_metadata_updates(
                 )
             )
     return updates
+
+
+def text_columns(
+    conn: duckdb.DuckDBPyConnection, catalog: str, schema: str, table: str
+) -> list[tuple[str, int | None, str | None]]:
+    """Return columns in write order, with their text limits and defaults.
+
+    Most tables have no limited text columns. Check the extension table first, then describe only the target
+    when necessary, instead of enumerating every catalog's columns through duckdb_columns() for every write.
+    """
+    sizes = dict(
+        conn.execute(
+            """SELECT ext_column_name, ext_character_maximum_length
+            FROM _fs_global._fs_information_schema._fs_columns_ext
+            WHERE ext_table_catalog = ? AND ext_table_schema = ? AND ext_table_name = ?
+                AND ext_character_maximum_length < 16777216""",
+            [catalog, schema, table],
+        ).fetchall()
+    )
+    if not sizes:
+        return []
+    target = exp.Table(
+        this=exp.to_identifier(table, quoted=True),
+        db=exp.to_identifier(schema, quoted=True),
+        catalog=exp.to_identifier(catalog, quoted=True),
+    )
+    try:
+        columns = conn.execute(f"DESCRIBE {target.sql(dialect='duckdb')}").fetchall()
+    except duckdb.CatalogException:
+        # Let the write itself report a missing table through the cursor's Snowflake error mapping.
+        return []
+    return [
+        (name, sizes.get(name) if dtype == "VARCHAR" else None, default) for name, dtype, _, _, default, _ in columns
+    ]

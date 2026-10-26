@@ -770,3 +770,211 @@ def test_insert_overwrite(dcur: snowflake.connector.cursor.DictCursor):
 
     dcur.execute("SELECT a FROM example")
     assert dcur.fetchall() == [{"A": 3}]
+
+
+def test_varchar_length_insert(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (id int, name varchar(5))")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("insert into example (name, id) values ('abcdef', 1)")
+
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
+    assert "String 'abcdef' is too long and would be truncated" in str(excinfo.value)
+
+
+def test_varchar_length_update(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (id int, name varchar(5))")
+    cur.execute("insert into example values (1, 'abc')")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("update example set name = name || 'def' where id = 1")
+
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
+    assert "String 'abcdef' is too long and would be truncated" in str(excinfo.value)
+
+
+def test_varchar_length_counts_characters(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (name varchar(5))")
+
+    # five 2-byte characters fit in VARCHAR(5), the length is in characters not bytes
+    cur.execute("insert into example values ('ééééé')")
+
+    cur.execute("select name from example")
+    assert cur.fetchall() == [("ééééé",)]
+
+
+def test_varchar_length_after_alter_set_data_type(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (name varchar(5))")
+    cur.execute("alter table example alter column name set data type varchar(10)")
+
+    cur.execute("insert into example values ('abcdef')")
+
+    cur.execute("select name from example")
+    assert cur.fetchall() == [("abcdef",)]
+
+
+def test_varchar_length_of_dropped_table(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (name varchar(5))")
+    cur.execute("drop table example")
+    cur.execute("create table example as select 'abc' as name")
+
+    cur.execute("insert into example values ('abcdef')")
+
+    cur.execute("select name from example order by name")
+    assert cur.fetchall() == [("abc",), ("abcdef",)]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "select 'abcdef'",
+        "select 'abc' union all select 'abcdef'",
+        "with src as (select 'abcdef' as name) select name from src",
+    ],
+)
+def test_varchar_length_insert_query(cur: snowflake.connector.cursor.SnowflakeCursor, source: str):
+    cur.execute('create table example ("name" varchar(5))')
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(f'insert into db1.schema1.example ("name") {source}')
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
+
+
+@pytest.mark.parametrize("value", ["123", "NULL"])
+def test_varchar_length_insert_conversion(cur: snowflake.connector.cursor.SnowflakeCursor, value: str):
+    cur.execute("create table example (name varchar(5))")
+    cur.execute(f"insert into example values ({value})")
+    cur.execute("select name from example")
+    assert cur.fetchall() == [(None if value == "NULL" else value,)]
+
+
+def test_varchar_length_update_conversion(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (name varchar(5))")
+    cur.execute("insert into example values ('abc')")
+    cur.execute("update example set name = 123")
+    cur.execute("select name from example")
+    assert cur.fetchall() == [("123",)]
+
+
+@pytest.mark.parametrize("statement", ["insert into example values (123456)", "update example set name = 123456"])
+def test_varchar_length_numeric_overflow(cur: snowflake.connector.cursor.SnowflakeCursor, statement: str):
+    cur.execute("create table example (name varchar(5))")
+    cur.execute("insert into example values ('abc')")
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(statement)
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
+
+
+@pytest.mark.parametrize("statement", ["insert into example values (default)", "update example set name = default"])
+def test_varchar_length_default(cur: snowflake.connector.cursor.SnowflakeCursor, statement: str):
+    cur.execute("create table example (name varchar(5) default 'abc')")
+    cur.execute("insert into example values ('abc')")
+    cur.execute(statement)
+    cur.execute("select distinct name from example")
+    assert cur.fetchall() == [("abc",)]
+
+
+@pytest.mark.parametrize(
+    "query",
+    [
+        "select 'abcdef'::varchar(5)",
+        "select cast('abcdef' as varchar(5))",
+        "select ('abcdef'::varchar(5))::varchar(10)",
+        "select try_cast('abcdef'::varchar(5) as varchar(10))",
+        "create table example (name varchar(5)) as select 'abcdef'",
+    ],
+)
+def test_varchar_length_cast(cur: snowflake.connector.cursor.SnowflakeCursor, query: str):
+    # https://docs.snowflake.com/en/sql-reference/functions/cast
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(query)
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
+    assert "String 'abcdef' is too long and would be truncated" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("value", ["'abcde'", "NULL", "123"])
+def test_varchar_length_cast_within_limit(cur: snowflake.connector.cursor.SnowflakeCursor, value: str):
+    cur.execute(f"select {value}::varchar(5)")
+    assert cur.fetchall() == [(None if value == "NULL" else value.strip("'"),)]
+
+
+def test_varchar_length_try_cast(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select try_cast('abcdef' as varchar(5))")
+    assert cur.fetchall() == [(None,)]
+
+
+@pytest.mark.parametrize("statement", ["insert into example values (?)", "update example set name = ?"])
+def test_varchar_length_bound_parameter(_fakesnow: None, statement: str):
+    with snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn:
+        cur = conn.cursor()
+        cur.execute("create table example (name varchar(5))")
+        cur.execute("insert into example values ('abc')")
+        with pytest.raises(ProgrammingError) as excinfo:
+            cur.execute(statement, ("abcdef",))
+        assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
+
+
+def test_varchar_length_metadata_quoted_table(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # Quoted identifiers retain their case and spaces in metadata lookup.
+    cur.execute('create table "Mixed table" (id int)')
+    cur.execute('insert into "Mixed table" values (1)')
+    cur.execute('select id from "Mixed table"')
+    assert cur.fetchall() == [(1,)]
+
+
+@pytest.mark.parametrize("cast_sql", ["cast(? as varchar(5))", "try_cast(? as varchar(5))"])
+def test_varchar_length_cast_bound_parameter(_fakesnow: None, cast_sql: str):
+    with snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn:
+        cur = conn.cursor()
+        cur.execute(f"select {cast_sql}", ("abcde",))
+        assert cur.fetchall() == [("abcde",)]
+
+
+def test_varchar_length_cast_flatten_value(cur: snowflake.connector.cursor.SnowflakeCursor):
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select value::varchar(5) from table(flatten(input => parse_json('[\"abcdef\"]')))")
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
+
+
+@pytest.mark.parametrize(
+    ("ddl", "table", "column"),
+    [
+        ("alter table example rename column name to renamed", "example", "renamed"),
+        ("alter table example rename to renamed", "renamed", "name"),
+        ("create table if not exists example (name varchar(10))", "example", "name"),
+        ("alter table example add column if not exists name varchar(10)", "example", "name"),
+    ],
+)
+def test_varchar_length_metadata_preserved(
+    cur: snowflake.connector.cursor.SnowflakeCursor, ddl: str, table: str, column: str
+):
+    # Each DDL must preserve the existing column's enforced limit.
+    cur.execute("create table example (name varchar(5))")
+    cur.execute(ddl)
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(f"insert into {table} ({column}) values ('abcdef')")
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
+
+
+def test_varchar_length_failed_replace(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (name varchar(5))")
+    with pytest.raises(ProgrammingError):
+        cur.execute("create or replace table example as select missing_column")
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("insert into example values ('abcdef')")
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
+
+
+@pytest.mark.parametrize(
+    "ddl",
+    [
+        ["create or replace table example (id int, name varchar)"],
+        ["alter table example drop column name", "alter table example add column name varchar"],
+    ],
+)
+def test_varchar_length_metadata_removed(cur: snowflake.connector.cursor.SnowflakeCursor, ddl: list[str]):
+    cur.execute("create table example (id int, name varchar(5))")
+    for statement in ddl:
+        cur.execute(statement)
+    cur.execute("insert into example (name) values ('abcdef')")
+    cur.execute("select name from example")
+    assert cur.fetchall() == [("abcdef",)]

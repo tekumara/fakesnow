@@ -386,6 +386,11 @@ class FakeSnowflakeCursor:
                 copy=False,
             )
             .transform(lambda e: transforms.create_table_as(e, self._duck_conn), copy=False)
+            .transform(
+                lambda e: transforms.enforce_text_length(e, self._duck_conn, self._conn.database, self._conn.schema),
+                copy=False,
+            )
+            .transform(transforms.enforce_cast_text_length, copy=False)
         )
 
     def _transform_explode(self, expression: Expr) -> list[Expr]:
@@ -531,6 +536,12 @@ class FakeSnowflakeCursor:
             raise snowflake.connector.errors.DatabaseError(msg=e.args[0], errno=250002, sqlstate="08003") from e
         except duckdb.ParserException as e:
             raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=1003, sqlstate="42000") from e
+        except duckdb.InvalidInputException as e:
+            msg = cast(str, e.args[0]).removeprefix("Invalid Input Error: ")
+            if not msg.endswith("is too long and would be truncated"):
+                raise e
+            # a string longer than its text column, see transforms.enforce_text_length
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100078, sqlstate="22000") from e
         except duckdb.ConversionException as e:
             # a value that can't be cast, eg: a time zone name snowflake wouldn't accept either.
             # snowflake reports this as an error rather than failing, message content may differ.
