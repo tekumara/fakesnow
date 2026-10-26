@@ -10,6 +10,7 @@ import sqlglot
 from duckdb import DuckDBPyConnection
 from sqlglot import Expr, exp
 
+from fakesnow import info_schema
 from fakesnow.params import MutableParams, pop_qmark_param
 from fakesnow.variables import Variables
 
@@ -546,6 +547,106 @@ def extract_column_metadata(expression: Expr) -> Expr:
     return expression
 
 
+def enforce_text_length(
+    expression: Expr, duck_conn: DuckDBPyConnection, current_database: str | None, current_schema: str | None
+) -> Expr:
+    """Enforce the length of text columns on INSERT and UPDATE.
+
+    duckdb ignores the size of text types, so values written to a column with a length captured by
+    extract_column_metadata are checked, raising Snowflake's error when a string has more characters than the
+    column allows. A MERGE is checked by the INSERT and UPDATE it's split into.
+
+    Args:
+        expression (Expr): the expression that will be transformed.
+
+    Returns:
+        Expr: The transformed expression, with values of text columns checked for length.
+    """
+
+    target = expression.this
+    if isinstance(expression, exp.Insert) and isinstance(expression.expression, (exp.Query, exp.Values)):
+        table = target.this if isinstance(target, exp.Schema) else target
+    elif isinstance(expression, exp.Update):
+        table = target
+    else:
+        return expression
+
+    if not isinstance(table, exp.Table) or not (catalog := table.catalog or current_database):
+        return expression
+    if not (schema := table.db or current_schema):
+        return expression
+
+    columns = info_schema.text_columns(duck_conn, catalog, schema, table.name)
+    sizes = {name.lower(): size for name, size, _ in columns if size}
+    if not sizes:
+        return expression
+    defaults = {name.lower(): default for name, _, default in columns}
+
+    if isinstance(expression, exp.Update):
+        for eq in expression.expressions:
+            if isinstance(eq, exp.EQ) and (size := sizes.get(eq.this.name.lower())):
+                value = eq.expression
+                if isinstance(value, exp.Column) and not value.this.quoted and value.name.upper() == "DEFAULT":
+                    value = sqlglot.parse_one(defaults[eq.this.name.lower()] or "NULL", read="duckdb")
+                eq.set("expression", _check_text_length(value, size))
+        return expression
+
+    # check the source rows on their way into the table, by position
+    names = [c.name for c in target.expressions] if isinstance(target, exp.Schema) else [c[0] for c in columns]
+    # DEFAULT is only valid directly inside INSERT VALUES, not in the source subquery below.
+    if isinstance(expression.expression, exp.Values):
+        for row in expression.expression.expressions:
+            for name, value in zip(names, row.expressions, strict=False):
+                if isinstance(value, exp.Var) and value.name.upper() == "DEFAULT":
+                    value.replace(sqlglot.parse_one(defaults.get(name.lower()) or "NULL", read="duckdb"))
+    aliases = [f"_fs_col{i}" for i in range(len(names))]
+    checks = [
+        exp.alias_(_check_text_length(exp.column(aliases[i]), size), aliases[i])
+        for i, name in enumerate(names)
+        if (size := sizes.get(name.lower()))
+    ]
+    source = exp.Subquery(this=expression.expression, alias=exp.TableAlias(this="_fs_src", columns=aliases))
+    expression.set("expression", exp.select(exp.Star(replace=checks)).from_(source))
+    return expression
+
+
+def enforce_cast_text_length(expression: Expr) -> Expr:
+    """Check sized text casts, returning NULL for an over-length TRY_CAST."""
+    if not (
+        isinstance(expression, exp.Cast)
+        and expression.to.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT, exp.DataType.Type.CHAR)
+        and (size := expression.to.find(exp.DataTypeParam))
+        and isinstance(size.this, exp.Literal)
+    ):
+        return expression
+
+    # A replacement is not visited by transform, so check any nested casts first.
+    expression.set("this", expression.this.transform(enforce_cast_text_length, copy=False))
+    # SQLGlot otherwise expands sized TRY_CAST into a CASE that repeats its input (and any placeholders).
+    expression.to.set("expressions", [])
+    return _check_text_length(expression, int(size.this.this), safe=isinstance(expression, exp.TryCast))
+
+
+# Reuse the syntax tree, copying it for each value instead of parsing SQL on every write.
+_TEXT_LENGTH_CHECK = sqlglot.parse_one(
+    """list_transform([CAST(_fs_value AS VARCHAR)], lambda s: case when length(s) > _fs_size
+    then error('String ''' || s || ''' is too long and would be truncated') else s end)[1]""",
+    read="duckdb",
+)
+
+
+def _check_text_length(value: Expr, size: int, safe: bool = False) -> Expr:
+    # list_transform evaluates the value once, so any placeholder in it is still bound once.
+    check = _TEXT_LENGTH_CHECK.copy()
+    if safe:
+        error = check.find(exp.Anonymous)
+        assert error
+        error.replace(exp.Null())
+    for column in check.find_all(exp.Column):
+        column.replace(value if column.name == "_fs_value" else exp.Literal.number(size))
+    return check
+
+
 def flatten(expression: Expr) -> Expr:
     """Flatten an array or object.
 
@@ -577,7 +678,12 @@ def flatten_value_cast_as_varchar(expression: Expr) -> Expr:
         and (select := expression.find_ancestor(exp.Select))
         and select.find(exp.Explode)
     ):
-        return exp.JSONExtractScalar(this=expression.this, expression=exp.JSONPath(expressions=[exp.JSONPathRoot()]))
+        scalar = exp.JSONExtractScalar(this=expression.this, expression=exp.JSONPath(expressions=[exp.JSONPathRoot()]))
+        if expression.to.expressions:
+            # Keep the sized cast for enforce_cast_text_length after extracting the string.
+            expression.set("this", scalar)
+            return expression
+        return scalar
 
     return expression
 

@@ -48,6 +48,8 @@ from fakesnow.transforms.transforms import (
     datediff_string_literal_timestamp_cast as datediff_string_literal_timestamp_cast,
     describe_table as describe_table,
     drop_schema_cascade as drop_schema_cascade,
+    enforce_cast_text_length as enforce_cast_text_length,
+    enforce_text_length as enforce_text_length,
     extract_column_metadata as extract_column_metadata,
     extract_comment_on_columns as extract_comment_on_columns,
     extract_comment_on_table as extract_comment_on_table,

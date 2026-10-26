@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime
 
+import pytest
 import snowflake.connector
 import sqlglot
 
@@ -419,6 +420,27 @@ def test_merge(conn: snowflake.connector.SnowflakeConnection):
         {"T1KEY": 4, "VAL": "Old Value 4", "STATUS": "Old Status 4"},
         {"T1KEY": 5, "VAL": "New Value 5", "STATUS": "New Status 5"},
     ]
+
+
+def test_merge_varchar_length(conn: snowflake.connector.SnowflakeConnection):
+    *_, cur = conn.execute_string(
+        """
+        CREATE OR REPLACE TABLE t1 (t1Key INT, val VARCHAR(5));
+        CREATE OR REPLACE TABLE t2 (t2Key INT, newVal VARCHAR);
+        INSERT INTO t2 VALUES (1, 'abcdef');
+        """
+    )
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute(
+            """
+            MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
+                WHEN NOT MATCHED THEN INSERT (t1Key, val) VALUES (t2.t2Key, t2.newVal)
+            """
+        )
+
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
+    assert "String 'abcdef' is too long and would be truncated" in str(excinfo.value)
 
 
 def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnection):
