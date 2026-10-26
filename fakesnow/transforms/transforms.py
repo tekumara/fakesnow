@@ -229,6 +229,7 @@ SELECT
          WHEN data_type = 'TEXT' THEN 'VARCHAR(' || coalesce(character_maximum_length,16777216)  || ')'
          WHEN data_type = 'TIMESTAMP_NTZ' THEN 'TIMESTAMP_NTZ(9)'
          WHEN data_type = 'TIMESTAMP_TZ' THEN 'TIMESTAMP_TZ(9)'
+         WHEN data_type = 'TIMESTAMP_LTZ' THEN 'TIMESTAMP_LTZ(9)'
          WHEN data_type = 'TIME' THEN 'TIME(9)'
          WHEN data_type = 'BINARY' THEN 'BINARY(8388608)'
         ELSE data_type END AS "type",
@@ -504,7 +505,7 @@ def extract_comment_on_table(expression: Expr) -> Expr:
 
 
 def extract_column_metadata(expression: Expr) -> Expr:
-    """Capture text lengths and declared JSON-backed types before DuckDB discards them."""
+    """Capture text lengths and declared JSON-backed and timestamp types before DuckDB discards them."""
     if not isinstance(expression, (exp.Create, exp.Alter)) or expression.args.get("kind") not in ("TABLE", "VIEW"):
         return expression
 
@@ -534,8 +535,13 @@ def extract_column_metadata(expression: Expr) -> Expr:
             exp.DataType.Type.ARRAY,
             exp.DataType.Type.OBJECT,
             exp.DataType.Type.VARIANT,
+            exp.DataType.Type.TIMESTAMPLTZ,
+            exp.DataType.Type.TIMESTAMPTZ,
         ):
-            data_type = dt.this.value
+            data_type = {
+                exp.DataType.Type.TIMESTAMPLTZ: "TIMESTAMP_LTZ",
+                exp.DataType.Type.TIMESTAMPTZ: "TIMESTAMP_TZ",
+            }.get(dt.this, dt.this.value)
             size = None
 
         if size is not None or data_type:

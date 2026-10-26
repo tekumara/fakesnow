@@ -55,8 +55,11 @@ def to_ipc(table: pa.Table) -> pa.Buffer:
 
 
 def to_sf(table: pa.Table, rowtype: list[ColumnInfo]) -> pa.Table:
-    def to_sf_col(col: pa.ChunkedArray) -> pa.Array | pa.ChunkedArray:
+    def to_sf_col(col: pa.ChunkedArray, c: ColumnInfo) -> pa.Array | pa.ChunkedArray:
         if pa.types.is_timestamp(col.type):
+            if c["type"] == "timestamp_ltz":
+                # snowflake sends a timestamp_ltz without a time zone, the connector uses the session's TIMEZONE
+                col = col.cast(pa.timestamp(col.type.unit))
             return timestamp_to_sf_struct(col)
         elif pa.types.is_time(col.type):
             # as nanoseconds
@@ -66,7 +69,7 @@ def to_sf(table: pa.Table, rowtype: list[ColumnInfo]) -> pa.Table:
             return col.cast(pa.string())
         return col
 
-    arrays = [to_sf_col(c) for c in table.columns]
+    arrays = [to_sf_col(col, c) for col, c in zip(table.columns, rowtype, strict=True)]
     schema = pa.schema([field.with_type(array.type) for field, array in zip(table.schema, arrays, strict=True)])
     return pa.Table.from_arrays(arrays, schema=to_sf_schema(schema, rowtype))
 

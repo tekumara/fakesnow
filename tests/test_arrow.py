@@ -5,6 +5,7 @@ from base64 import b64decode
 
 import pandas as pd
 import pyarrow as pa
+import pytest
 import pytz
 
 from fakesnow.arrow import timestamp_to_sf_struct, to_ipc, to_sf, to_sf_schema
@@ -356,3 +357,27 @@ def test_read_base64_from_actual_snowflake_result() -> None:
         b"byteLength": b"4",
         b"finalType": b"T",
     }
+
+
+@pytest.mark.parametrize("scale", range(10))
+def test_ltz_struct_connector_decode(scale: int) -> None:
+    # Exercise the connector's two-field LTZ wire format at every supported scale.
+    from pyarrow.cffi import ffi
+    from snowflake.connector._internal.arrow_context import ArrowConverterContext
+    from snowflake.connector._internal.arrow_stream_iterator import ArrowStreamIterator
+
+    micros = 123456 // (10 ** max(6 - scale, 0)) * (10 ** max(6 - scale, 0))
+    values = [
+        datetime.datetime(1969, 12, 31, 23, 59, 59, micros, tzinfo=pytz.utc),
+        datetime.datetime(2026, 10, 25, 16, 2, 3, micros, tzinfo=pytz.utc),
+    ]
+    table = pa.table({"L": pa.array(values, type=pa.timestamp("us", tz="UTC"))})
+    metadata = rowtype(["TIMESTAMP_LTZ"])
+    metadata[0]["scale"] = scale
+    encoded = to_sf(table, metadata)
+    # the connector reads results from an Arrow C stream, which the iterator releases
+    stream = ffi.new("struct ArrowArrayStream*")
+    stream_ptr = int(ffi.cast("uintptr_t", stream))
+    pa.ipc.open_stream(to_ipc(encoded))._export_to_c(stream_ptr)  # noqa: SLF001
+    rows = list(ArrowStreamIterator(stream_ptr, ArrowConverterContext("Etc/UTC")))
+    assert rows == [(value,) for value in values]
