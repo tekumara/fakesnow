@@ -36,7 +36,7 @@ def alias_in_join(expression: Expr) -> Expr:
                 # don't rewrite col with table identifier
                 and not col.table
             ):
-                col.args["this"] = alias.this
+                col.set("this", alias.this.copy())
 
     return expression
 
@@ -81,7 +81,7 @@ def array_size(expression: Expr) -> Expr:
         # return null if not json array
         jal = exp.Anonymous(this="json_array_length", expressions=[expression.this])
         is_json_array = exp.EQ(
-            this=exp.Anonymous(this="json_type", expressions=[expression.this]),
+            this=exp.Anonymous(this="json_type", expressions=[expression.this.copy()]),
             expression=exp.Literal(this="ARRAY", is_string=True),
         )
         return exp.Case(ifs=[exp.If(this=is_json_array, true=jal)])
@@ -977,16 +977,14 @@ def regex_replace(expression: Expr) -> Expr:
 
         # pattern: snowflake requires escaping backslashes in single-quoted string constants, but duckdb doesn't
         # see https://docs.snowflake.com/en/sql-reference/functions-regexp#label-regexp-escape-character-caveats
-        expression.args["expression"] = exp.Literal(
-            this=expression.expression.this.replace("\\\\", "\\"), is_string=True
-        )
+        expression.set("expression", exp.Literal(this=expression.expression.this.replace("\\\\", "\\"), is_string=True))
 
         if not expression.args.get("replacement"):
             # if no replacement string, the snowflake default is ''
-            expression.args["replacement"] = exp.Literal(this="", is_string=True)
+            expression.set("replacement", exp.Literal(this="", is_string=True))
 
         # snowflake regex replacements are global
-        expression.args["modifiers"] = exp.Literal(this="g", is_string=True)
+        expression.set("modifiers", exp.Literal(this="g", is_string=True))
 
     return expression
 
