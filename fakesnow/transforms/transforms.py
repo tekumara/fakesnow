@@ -592,7 +592,13 @@ def enforce_text_length(
         return expression
 
     # check the source rows on their way into the table, by position
-    names = [c.name for c in target.expressions] if isinstance(target, exp.Schema) else [c[0] for c in columns]
+    if isinstance(target, exp.Schema):
+        names = [c.name for c in target.expressions]
+    elif (alias := target.args.get("alias")) and alias.columns:
+        # MERGE inserts with INSERT INTO <target> AS <alias> (<columns>), parsed as the alias's columns.
+        names = [c.name for c in alias.columns]
+    else:
+        names = [c[0] for c in columns]
     # DEFAULT is only valid directly inside INSERT VALUES, not in the source subquery below.
     if isinstance(expression.expression, exp.Values):
         for row in expression.expression.expressions:
