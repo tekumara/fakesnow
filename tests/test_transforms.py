@@ -261,8 +261,14 @@ def test_date_trunc_date_untyped_null() -> None:
         sqlglot.parse_one("SELECT DATE_TRUNC('month', NULL)", read="snowflake")
         .transform(date_trunc_date)
         .sql(dialect="duckdb")
-        == "SELECT NULL"
+        == "SELECT NULL AS \"DATE_TRUNC('MONTH', NULL)\""
     )
+
+
+@pytest.mark.parametrize("sql", ["SELECT TRUNC(NULL)", "SELECT TRUNC(NULL, 2)"])
+def test_date_trunc_numeric_null_noop(sql: str) -> None:
+    expression = sqlglot.parse_one(sql, read="snowflake")
+    assert expression.transform(date_trunc_date).sql(dialect="duckdb") == expression.sql(dialect="duckdb")
 
 
 def test_date_trunc_date_nested() -> None:
