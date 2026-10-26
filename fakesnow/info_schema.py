@@ -29,6 +29,7 @@ create table if not exists _fs_global._fs_information_schema._fs_columns_ext (
     ext_column_name varchar,
     ext_character_maximum_length integer,
     ext_character_octet_length integer,
+    ext_data_type varchar,
     PRIMARY KEY(ext_table_catalog, ext_table_schema, ext_table_name, ext_column_name)
 )
 """
@@ -97,7 +98,7 @@ case when starts_with(columns.data_type, 'DECIMAL') or columns.data_type='BIGINT
      when columns.data_type='BLOB' then 'BINARY'
      when columns.data_type='TIMESTAMP' then 'TIMESTAMP_NTZ'
      when columns.data_type='TIMESTAMP WITH TIME ZONE' then 'TIMESTAMP_TZ'
-     when columns.data_type='JSON' then 'VARIANT'
+     when columns.data_type='JSON' then coalesce(ext_data_type, 'VARIANT')
      else columns.data_type end as DATA_TYPE,
 ext_character_maximum_length as CHARACTER_MAXIMUM_LENGTH, ext_character_octet_length as CHARACTER_OCTET_LENGTH,
 case when columns.data_type='BIGINT' then 38
@@ -335,7 +336,7 @@ def insert_table_comment_sql(catalog: str, schema: str, table: str, comment: str
 
 def insert_text_lengths_sql(catalog: str, schema: str, table: str, text_lengths: list[tuple[str, int]]) -> str:
     values = ", ".join(
-        f"('{catalog}', '{schema}', '{table}', '{col_name}', {size}, {min(size * 4, 16777216)})"
+        f"('{catalog}', '{schema}', '{table}', '{col_name}', {size}, {min(size * 4, 16777216)}, NULL)"
         for (col_name, size) in text_lengths
     )
 
@@ -345,4 +346,18 @@ def insert_text_lengths_sql(catalog: str, schema: str, table: str, text_lengths:
         ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name, ext_column_name)
         DO UPDATE SET ext_character_maximum_length = excluded.ext_character_maximum_length,
             ext_character_octet_length = excluded.ext_character_octet_length
+    """
+
+
+def insert_semi_structured_types_sql(catalog: str, schema: str, table: str, data_types: list[tuple[str, str]]) -> str:
+    values = ", ".join(
+        f"('{catalog}', '{schema}', '{table}', '{col_name}', NULL, NULL, '{data_type}')"
+        for (col_name, data_type) in data_types
+    )
+
+    return f"""
+        INSERT INTO _fs_global._fs_information_schema._fs_columns_ext
+        values {values}
+        ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name, ext_column_name)
+        DO UPDATE SET ext_data_type = excluded.ext_data_type
     """

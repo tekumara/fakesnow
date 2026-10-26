@@ -50,6 +50,7 @@ from fakesnow.transforms.transforms import (
     drop_schema_cascade as drop_schema_cascade,
     extract_comment_on_columns as extract_comment_on_columns,
     extract_comment_on_table as extract_comment_on_table,
+    extract_semi_structured_types as extract_semi_structured_types,
     extract_text_length as extract_text_length,
     flatten as flatten,
     flatten_value_cast_as_varchar as flatten_value_cast_as_varchar,

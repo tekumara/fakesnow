@@ -546,6 +546,49 @@ def extract_text_length(expression: Expr) -> Expr:
     return expression
 
 
+def extract_semi_structured_types(expression: Expr) -> Expr:
+    """Extract the declared type of semi-structured columns.
+
+    semi_structured_types turns ARRAY, OBJECT and VARIANT into duckdb's JSON. So we capture the declared type
+    and store that in the semi_structured_types arg. This must run before semi_structured_types.
+
+    Args:
+        expression (Expr): the expression that will be transformed.
+
+    Returns:
+        Expr: The original expression, with any declared types stored in the new 'semi_structured_types' arg.
+    """
+
+    if isinstance(expression, (exp.Create, exp.Alter)):
+        semi_structured = []
+
+        # exp.Select is for a ctas, exp.Schema is a plain definition
+        if cols := expression.find(exp.Select, exp.Schema):
+            expressions = cols.expressions
+        else:
+            # alter table
+            expressions = expression.args.get("actions") or []
+        for e in expressions:
+            if isinstance(e, exp.ColumnDef):
+                dt = e.args.get("kind")
+            elif isinstance(col := e.unalias(), exp.Cast):
+                dt = col.to
+            else:
+                continue
+            if isinstance(dt, exp.DataType) and dt.this in (
+                exp.DataType.Type.ARRAY,
+                exp.DataType.Type.OBJECT,
+                exp.DataType.Type.VARIANT,
+            ):
+                col_name = e.alias if isinstance(e, exp.Alias) else e.name
+                semi_structured.append((col_name, dt.this.value))
+
+        if semi_structured:
+            expression.args["semi_structured_types"] = semi_structured
+
+    return expression
+
+
 def flatten(expression: Expr) -> Expr:
     """Flatten an array or object.
 

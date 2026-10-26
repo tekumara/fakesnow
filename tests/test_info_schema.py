@@ -143,7 +143,7 @@ def test_info_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCurs
         """
         create or replace table example (
             XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ TIMESTAMP_NTZ, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XTIMESTAMP_TZ TIMESTAMP_TZ, XDATE DATE, XTIME TIME,
-            XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT */ XVARIANT VARIANT
+            XBINARY BINARY, XARRAY ARRAY, XOBJECT OBJECT, XVARIANT VARIANT
         )
         """
     )
@@ -163,11 +163,33 @@ def test_info_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCurs
         ("XDATE", "DATE"),
         ("XTIME", "TIME"),
         ("XBINARY", "BINARY"),
-        # TODO: support these types https://github.com/tekumara/fakesnow/issues/27
-        # ("XARRAY", "ARRAY"),
-        # ("XOBJECT", "OBJECT"),
+        ("XARRAY", "ARRAY"),
+        ("XOBJECT", "OBJECT"),
         ("XVARIANT", "VARIANT"),
     ]
+
+
+def test_info_schema_columns_semi_structured_added(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table example (id int)")
+    cur.execute("alter table example add column xarray array, xobject object")
+
+    cur.execute(
+        """
+        select column_name,data_type
+        from information_schema.columns where table_name = 'EXAMPLE' order by ordinal_position
+        """
+    )
+
+    assert cur.fetchall() == [("ID", "NUMBER"), ("XARRAY", "ARRAY"), ("XOBJECT", "OBJECT")]
+
+
+def test_info_schema_columns_semi_structured_replaced(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table example (x array)")
+    cur.execute("create or replace table example (x variant)")
+
+    cur.execute("select data_type from information_schema.columns where table_name = 'EXAMPLE'")
+
+    assert cur.fetchall() == [("VARIANT",)]
 
 
 def test_info_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCursor):

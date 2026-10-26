@@ -312,6 +312,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.information_schema_databases, current_schema=self._conn.schema, copy=False)
             .transform(transforms.drop_schema_cascade, copy=False)
             .transform(transforms.tag, copy=False)
+            .transform(transforms.extract_semi_structured_types, copy=False)
             .transform(transforms.semi_structured_types, copy=False)
             .transform(transforms.try_parse_json, copy=False)
             .transform(transforms.split, copy=False)
@@ -681,6 +682,17 @@ class FakeSnowflakeCursor:
             schema = table.db or self._conn.schema
             assert catalog and schema
             self._duck_conn.execute(info_schema.insert_text_lengths_sql(catalog, schema, table.name, text_lengths))
+
+        if (semi_structured_types := cast(list[tuple[str, str]], transformed.args.get("semi_structured_types"))) and (
+            table := transformed.find(exp.Table)
+        ):
+            # record declared semi-structured types
+            catalog = table.catalog or self._conn.database
+            schema = table.db or self._conn.schema
+            assert catalog and schema
+            self._duck_conn.execute(
+                info_schema.insert_semi_structured_types_sql(catalog, schema, table.name, semi_structured_types)
+            )
 
         if result_sql:
             logger.log_sql(result_sql)
