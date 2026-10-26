@@ -326,6 +326,13 @@ def test_date_trunc_date_null(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.description[0].type_code == 3  # DATE
 
 
+def test_date_trunc_untyped_null(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # an untyped NULL isn't a DATE, Snowflake returns it as TEXT
+    cur.execute("select date_trunc('month', NULL) as d, trunc(NULL, 'month') as t")
+    assert cur.fetchall() == [(None, None)]
+    assert [c.type_code for c in cur.description] == [2, 2]  # TEXT
+
+
 def test_date_trunc_date_nested(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select date_trunc('year', date_trunc('month', '2024-05-09'::date))")
     assert cur.fetchall() == [(datetime.date(2024, 1, 1),)]
