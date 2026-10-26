@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import re
+from functools import partial
 from pathlib import Path
 from string import Template
 from typing import cast
@@ -577,18 +578,19 @@ def enforce_text_length(
         return expression
 
     columns = info_schema.text_columns(duck_conn, catalog, schema, table.name)
-    sizes = {name.lower(): size for name, size, _ in columns if size}
+    sizes = {name.lower(): (name, size) for name, size, _ in columns if size}
     if not sizes:
         return expression
     defaults = {name.lower(): default for name, _, default in columns}
+    target_name = _dml_table_name([part.name for part in table.parts])
 
     if isinstance(expression, exp.Update):
         for eq in expression.expressions:
-            if isinstance(eq, exp.EQ) and (size := sizes.get(eq.this.name.lower())):
+            if isinstance(eq, exp.EQ) and (column := sizes.get(eq.this.name.lower())):
                 value = eq.expression
                 if isinstance(value, exp.Column) and not value.this.quoted and value.name.upper() == "DEFAULT":
                     value = sqlglot.parse_one(defaults[eq.this.name.lower()] or "NULL", read="duckdb")
-                eq.set("expression", _check_text_length(value, size))
+                eq.set("expression", _check_text_length(value, column[1], _dml_error(target_name, column[0])))
         return expression
 
     # check the source rows on their way into the table, by position
@@ -607,16 +609,46 @@ def enforce_text_length(
                     value.replace(sqlglot.parse_one(defaults.get(name.lower()) or "NULL", read="duckdb"))
     aliases = [f"_fs_col{i}" for i in range(len(names))]
     checks = [
-        exp.alias_(_check_text_length(exp.column(aliases[i]), size), aliases[i])
+        exp.alias_(
+            _check_text_length(exp.column(aliases[i]), column[1], _dml_error(target_name, column[0])), aliases[i]
+        )
         for i, name in enumerate(names)
-        if (size := sizes.get(name.lower()))
+        if (column := sizes.get(name.lower()))
     ]
     source = exp.Subquery(this=expression.expression, alias=exp.TableAlias(this="_fs_src", columns=aliases))
     expression.set("expression", exp.select(exp.Star(replace=checks)).from_(source))
     return expression
 
 
-def enforce_cast_text_length(expression: Expr) -> Expr:
+def enforce_ctas_text_length(expression: Expr, current_database: str | None, current_schema: str | None) -> Expr:
+    """Report sized text casts in a CTAS's columns as a failed DML operation on the new table, as Snowflake does."""
+    if not (
+        isinstance(expression, exp.Create)
+        and expression.kind == "TABLE"
+        and isinstance(query := expression.expression, (exp.Select, exp.Subquery))
+        and isinstance(select := query.unnest(), exp.Select)
+    ):
+        return expression
+
+    table = expression.this.this if isinstance(expression.this, exp.Schema) else expression.this
+    assert isinstance(table, exp.Table)
+    # Snowflake qualifies the new table with the current database and schema.
+    parts = [table.catalog or current_database, table.db or current_schema, table.name]
+    target_name = _dml_table_name([part for part in parts if part])
+    select.set(
+        "expressions",
+        [
+            projection.transform(
+                partial(enforce_cast_text_length, error_prefix=_dml_error(target_name, projection.alias_or_name)),
+                copy=False,
+            )
+            for projection in select.expressions
+        ],
+    )
+    return expression
+
+
+def enforce_cast_text_length(expression: Expr, error_prefix: str = "") -> Expr:
     """Check sized text casts, returning NULL for an over-length TRY_CAST."""
     if not (
         isinstance(expression, exp.Cast)
@@ -627,10 +659,21 @@ def enforce_cast_text_length(expression: Expr) -> Expr:
         return expression
 
     # A replacement is not visited by transform, so check any nested casts first.
-    expression.set("this", expression.this.transform(enforce_cast_text_length, copy=False))
+    expression.set(
+        "this", expression.this.transform(partial(enforce_cast_text_length, error_prefix=error_prefix), copy=False)
+    )
     # SQLGlot otherwise expands sized TRY_CAST into a CASE that repeats its input (and any placeholders).
     expression.to.set("expressions", [])
-    return _check_text_length(expression, int(size.this.this), safe=isinstance(expression, exp.TryCast))
+    return _check_text_length(expression, int(size.this.this), error_prefix, safe=isinstance(expression, exp.TryCast))
+
+
+def _dml_table_name(parts: list[str]) -> str:
+    # Snowflake names the table as written, quoting only parts that aren't valid unquoted identifiers.
+    return ".".join(part if re.fullmatch(r"[A-Z_][A-Z0-9_$]*", part) else f'"{part}"' for part in parts)
+
+
+def _dml_error(table: str, column: str) -> str:
+    return f"DML operation to table {table} failed on column {column} with error: "
 
 
 # Reuse the syntax tree, copying it for each value instead of parsing SQL on every write.
@@ -641,13 +684,16 @@ _TEXT_LENGTH_CHECK = sqlglot.parse_one(
 )
 
 
-def _check_text_length(value: Expr, size: int, safe: bool = False) -> Expr:
+def _check_text_length(value: Expr, size: int, error_prefix: str = "", safe: bool = False) -> Expr:
     # list_transform evaluates the value once, so any placeholder in it is still bound once.
     check = _TEXT_LENGTH_CHECK.copy()
+    error = check.find(exp.Anonymous)
+    assert error
     if safe:
-        error = check.find(exp.Anonymous)
-        assert error
         error.replace(exp.Null())
+    elif error_prefix:
+        message = next(lit for lit in error.find_all(exp.Literal) if lit.this == "String '")
+        message.replace(exp.Literal.string(error_prefix + message.this))
     for column in check.find_all(exp.Column):
         column.replace(value if column.name == "_fs_value" else exp.Literal.number(size))
     return check

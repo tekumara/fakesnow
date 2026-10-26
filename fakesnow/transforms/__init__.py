@@ -49,6 +49,7 @@ from fakesnow.transforms.transforms import (
     describe_table as describe_table,
     drop_schema_cascade as drop_schema_cascade,
     enforce_cast_text_length as enforce_cast_text_length,
+    enforce_ctas_text_length as enforce_ctas_text_length,
     enforce_text_length as enforce_text_length,
     extract_column_metadata as extract_column_metadata,
     extract_comment_on_columns as extract_comment_on_columns,

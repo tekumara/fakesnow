@@ -390,6 +390,10 @@ class FakeSnowflakeCursor:
                 lambda e: transforms.enforce_text_length(e, self._duck_conn, self._conn.database, self._conn.schema),
                 copy=False,
             )
+            .transform(
+                lambda e: transforms.enforce_ctas_text_length(e, self._conn.database, self._conn.schema),
+                copy=False,
+            )
             .transform(transforms.enforce_cast_text_length, copy=False)
         )
 
@@ -541,6 +545,11 @@ class FakeSnowflakeCursor:
             if not msg.endswith("is too long and would be truncated"):
                 raise e
             # a string longer than its text column, see transforms.enforce_text_length
+            prefix, value = msg.removesuffix("' is too long and would be truncated").split("String '", maxsplit=1)
+            if len(shown := value.encode()) > 200:
+                # snowflake shows the first 200 bytes of the string, without splitting a character
+                value = shown[:200].decode(errors="ignore") + "..."
+            msg = f"{prefix}String '{value}' is too long and would be truncated"
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100078, sqlstate="22000") from e
         except duckdb.ConversionException as e:
             # a value that can't be cast, eg: a time zone name snowflake wouldn't accept either.
