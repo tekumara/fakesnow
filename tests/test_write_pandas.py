@@ -341,6 +341,130 @@ def test_write_pandas_overwrite_auto_create(conn: snowflake.connector.SnowflakeC
         assert cur.fetchall() == [(2, 30)]
 
 
+def test_write_pandas_auto_create_quotes_identifiers(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        df = pd.DataFrame({"id": [1]})
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "lower_t", auto_create_table=True)
+
+        cur.execute("select table_name, column_name from information_schema.columns where table_schema = 'SCHEMA1'")
+
+        # quote_identifiers defaults to True, so the table and column names keep their case
+        assert cur.fetchall() == [("lower_t", "id")]
+
+
+def test_write_pandas_auto_create_unquoted_identifiers(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        df = pd.DataFrame({"id": [1]})
+        snowflake.connector.pandas_tools.write_pandas(
+            conn, df, "lower_t", auto_create_table=True, quote_identifiers=False
+        )
+
+        cur.execute("select table_name, column_name from information_schema.columns where table_schema = 'SCHEMA1'")
+
+        # unquoted names are upper-cased, like any unquoted identifier
+        assert cur.fetchall() == [("LOWER_T", "ID")]
+
+
+def test_write_pandas_auto_create_column_name_with_double_quote(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        df = pd.DataFrame({'a"b': [1]})
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", auto_create_table=True)
+
+        cur.execute("select * from example")
+
+        assert [d.name for d in cur.description] == ['a"b']
+        assert cur.fetchall() == [(1,)]
+
+
+def test_write_pandas_quoted_table_name(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute('create table "my-table" (ID int)')
+
+        df = pd.DataFrame({"ID": [1]})
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "my-table")
+
+        cur.execute('select * from "my-table"')
+
+        assert cur.fetchall() == [(1,)]
+
+
+def test_write_pandas_already_quoted_table_name(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute('create table "my-table" (ID int)')
+
+        df = pd.DataFrame({"ID": [1]})
+        # a name the caller has already quoted isn't quoted again
+        snowflake.connector.pandas_tools.write_pandas(conn, df, '"my-table"')
+
+        cur.execute('select * from "my-table"')
+
+        assert cur.fetchall() == [(1,)]
+
+
+def test_write_pandas_quoted_schema_name(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute('create schema "my-schema"')
+        cur.execute('create table "my-schema".customers (ID int)')
+
+        df = pd.DataFrame({"ID": [1]})
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "CUSTOMERS", schema="my-schema")
+
+        cur.execute('select * from "my-schema".customers')
+
+        assert cur.fetchall() == [(1,)]
+
+
+def test_write_pandas_quoted_column_name_lands_in_quoted_column(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute('create table example ("id" int)')
+
+        df = pd.DataFrame({"id": [1]})
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE")
+
+        cur.execute('select "id" from example')
+
+        assert cur.fetchall() == [(1,)]
+
+
+def test_write_pandas_unquoted_column_name_lands_in_upper_case_column(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create table example (id int)")
+
+        df = pd.DataFrame({"id": [1]})
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "example", quote_identifiers=False)
+
+        cur.execute('select "ID" from example')
+
+        assert cur.fetchall() == [(1,)]
+
+
+def test_write_pandas_overwrite_quoted_table_name(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute('create table "my-table" (ID int)')
+        cur.execute('insert into "my-table" values (1)')
+
+        df = pd.DataFrame({"ID": [2]})
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "my-table", overwrite=True)
+
+        cur.execute('select * from "my-table"')
+
+        assert cur.fetchall() == [(2,)]
+
+
+def test_write_pandas_overwrite_auto_create_quoted_table_name(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute('create table "my-table" (ID int, AGE int)')
+        cur.execute('insert into "my-table" values (1, 20)')
+
+        df = pd.DataFrame({"ID": [2]})
+        snowflake.connector.pandas_tools.write_pandas(conn, df, "my-table", auto_create_table=True, overwrite=True)
+
+        cur.execute('select * from "my-table"')
+
+        # the table is dropped and recreated with the dataframe's columns
+        assert cur.fetchall() == [(2,)]
+
+
 def sort_keys(sdict: str, indent: int | None = 2) -> str:
     return json.dumps(
         json.loads(sdict, object_pairs_hook=lambda x: dict(sorted(x))),
