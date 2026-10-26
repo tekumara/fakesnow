@@ -256,6 +256,15 @@ def test_date_trunc_date_timestamp_noop() -> None:
     )
 
 
+def test_date_trunc_date_untyped_null() -> None:
+    assert (
+        sqlglot.parse_one("SELECT DATE_TRUNC('month', NULL)", read="snowflake")
+        .transform(date_trunc_date)
+        .sql(dialect="duckdb")
+        == "SELECT NULL"
+    )
+
+
 def test_date_trunc_date_nested() -> None:
     sql = "d"
     for _ in range(8):

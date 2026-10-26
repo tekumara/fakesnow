@@ -384,6 +384,9 @@ def date_trunc_date(expression: Expr) -> Expr:
         return expression
 
     input_ = expression.this
+    if isinstance(input_, exp.Null):
+        # Snowflake returns an untyped NULL unchanged, with TEXT metadata
+        return input_
     if input_.type and not input_.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.DATE):
         return expression
 
