@@ -765,6 +765,31 @@ def test_server_monitoring_endpoint_error(scur: snowflake.connector.cursor.Snowf
     assert exc.value.errno == -1
 
 
+def test_server_monitoring_missing_authorization(server: dict) -> None:
+    response = requests.get(
+        f"http://{server['host']}:{server['port']}/monitoring/queries/00000000-0000-0000-0000-000000000000",
+        timeout=5,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["success"] is False
+    assert response.json()["code"] == "390103"
+    assert response.json()["message"] == "Session token not found in the request data."
+
+
+def test_server_monitoring_invalid_authorization(server: dict) -> None:
+    response = requests.get(
+        f"http://{server['host']}:{server['port']}/monitoring/queries/00000000-0000-0000-0000-000000000000",
+        headers={"Authorization": 'Snowflake Token="invalid"'},
+        timeout=5,
+    )
+
+    assert response.status_code == 401
+    assert response.json()["success"] is False
+    assert response.json()["code"] == "390104"
+    assert response.json()["message"] == "User must login again to access the service."
+
+
 def test_server_describe_only(server: dict) -> None:
     # clients describe a statement before executing it, eg: the JDBC driver before a batch
     # insert, and expect the result columns back without the statement having run
