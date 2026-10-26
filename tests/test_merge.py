@@ -445,7 +445,18 @@ def test_merge_varchar_length(conn: snowflake.connector.SnowflakeConnection):
     )
 
 
-def test_merge_varchar_length_insert_columns(conn: snowflake.connector.SnowflakeConnection):
+@pytest.mark.parametrize("target", ["t1 AS t", "t1 t"])
+@pytest.mark.parametrize(
+    ("insertion", "expected"),
+    [
+        ("(t1Key, val) VALUES (s.t2Key, s.newVal)", (1, "abc", None)),
+        ("(val, status, t1Key) VALUES (s.newVal, 'ok', s.t2Key)", (1, "abc", "ok")),
+        ("VALUES (s.t2Key, s.newVal, 'ok')", (1, "abc", "ok")),
+    ],
+)
+def test_merge_varchar_length_insert_columns(
+    conn: snowflake.connector.SnowflakeConnection, target: str, insertion: str, expected: tuple
+):
     *_, cur = conn.execute_string(
         """
         CREATE OR REPLACE TABLE t1 (t1Key INT, val VARCHAR(5), status VARCHAR);
@@ -455,15 +466,67 @@ def test_merge_varchar_length_insert_columns(conn: snowflake.connector.Snowflake
     )
 
     cur.execute(
-        """
-        MERGE INTO t1 AS t USING t2 AS s ON t.t1Key = s.t2Key
-            WHEN NOT MATCHED THEN INSERT (t1Key, val) VALUES (s.t2Key, s.newVal)
+        f"""
+        MERGE INTO {target} USING t2 AS s ON t.t1Key = s.t2Key
+            WHEN NOT MATCHED THEN INSERT {insertion}
         """
     )
 
     assert cur.fetchall() == [(1,)]
     cur.execute("SELECT * FROM t1")
-    assert cur.fetchall() == [(1, "abc", None)]
+    assert cur.fetchall() == [expected]
+
+
+@pytest.mark.parametrize(
+    "insertion",
+    [
+        "(val, id) VALUES (t2.val, t2.id)",
+        "(extra, id, val) VALUES ('unlimited', t2.id, t2.val)",
+        "VALUES (t2.id, t2.val, 'unlimited')",
+    ],
+)
+def test_merge_varchar_length_insert_column_mapping(conn: snowflake.connector.SnowflakeConnection, insertion: str):
+    *_, cur = conn.execute_string(
+        """
+        CREATE TABLE t1 (id INT, val VARCHAR(3), extra VARCHAR);
+        CREATE TABLE t2 (id INT, val VARCHAR);
+        INSERT INTO t2 VALUES (123456, 'abcd');
+        """
+    )
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute(
+            f"""
+            MERGE INTO t1 AS t USING t2 ON t.id = t2.id
+                WHEN NOT MATCHED THEN INSERT {insertion}
+            """
+        )
+
+    assert str(excinfo.value) == (
+        "100078 (22000): DML operation to table T1 failed on column VAL with error: "
+        "String 'abcd' is too long and would be truncated"
+    )
+
+
+def test_merge_varchar_length_multiple_insert_columns(conn: snowflake.connector.SnowflakeConnection):
+    *_, cur = conn.execute_string(
+        """
+        CREATE TABLE t1 (id INT, val VARCHAR(3), extra INT);
+        CREATE TABLE t2 (id INT, val VARCHAR);
+        INSERT INTO t2 VALUES (1, 'abc'), (2, 'def');
+        """
+    )
+
+    cur.execute(
+        """
+        MERGE INTO t1 t USING t2 ON t.id = t2.id
+            WHEN NOT MATCHED AND t2.id = 1 THEN INSERT (id, val) VALUES (t2.id, t2.val)
+            WHEN NOT MATCHED THEN INSERT (val, id) VALUES (t2.val, t2.id)
+        """
+    )
+
+    cur.execute("SELECT * FROM t1 ORDER BY id")
+    assert cur.fetchall() == [(1, "abc", None), (2, "def", None)]
 
 
 def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnection):

@@ -669,6 +669,7 @@ def enforce_cast_text_length(expression: Expr, error_prefix: str = "") -> Expr:
 
 def _dml_table_name(parts: list[str]) -> str:
     # Snowflake names the table as written, quoting only parts that aren't valid unquoted identifiers.
+    # This is diagnostic text, not SQL: embedded quotes are not escaped, unlike Identifier.sql().
     return ".".join(part if re.fullmatch(r"[A-Z_][A-Z0-9_$]*", part) else f'"{part}"' for part in parts)
 
 
@@ -676,10 +677,13 @@ def _dml_error(table: str, column: str) -> str:
     return f"DML operation to table {table} failed on column {column} with error: "
 
 
+# Keep the context and value separate so the cursor never truncates an identifier containing "String '".
+TEXT_LENGTH_ERROR_PREFIX = "fakesnow: text length exceeded: "
+
 # Reuse the syntax tree, copying it for each value instead of parsing SQL on every write.
 _TEXT_LENGTH_CHECK = sqlglot.parse_one(
-    """list_transform([CAST(_fs_value AS VARCHAR)], lambda s: case when length(s) > _fs_size
-    then error('String ''' || s || ''' is too long and would be truncated') else s end)[1]""",
+    f"""list_transform([CAST(_fs_value AS VARCHAR)], lambda s: case when length(s) > _fs_size
+    then error('{TEXT_LENGTH_ERROR_PREFIX}' || to_json([_fs_error_prefix, s])) else s end)[1]""",
     read="duckdb",
 )
 
@@ -691,11 +695,13 @@ def _check_text_length(value: Expr, size: int, error_prefix: str = "", safe: boo
     assert error
     if safe:
         error.replace(exp.Null())
-    elif error_prefix:
-        message = next(lit for lit in error.find_all(exp.Literal) if lit.this == "String '")
-        message.replace(exp.Literal.string(error_prefix + message.this))
+    replacements = {
+        "_fs_value": value,
+        "_fs_size": exp.Literal.number(size),
+        "_fs_error_prefix": exp.Literal.string(error_prefix),
+    }
     for column in check.find_all(exp.Column):
-        column.replace(value if column.name == "_fs_value" else exp.Literal.number(size))
+        column.replace(replacements[column.name])
     return check
 
 

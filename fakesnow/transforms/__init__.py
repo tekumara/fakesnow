@@ -31,6 +31,7 @@ from fakesnow.transforms.stage import (
 from fakesnow.transforms.transforms import (
     SERVER_VERSION as SERVER_VERSION,
     SUCCESS_NOP as SUCCESS_NOP,
+    TEXT_LENGTH_ERROR_PREFIX as TEXT_LENGTH_ERROR_PREFIX,
     alias_in_join as alias_in_join,
     alias_in_where as alias_in_where,
     alter_session as alter_session,
