@@ -79,6 +79,7 @@ from fakesnow.transforms.transforms import (
     sha256 as sha256,
     split as split,
     tag as tag,
+    temporary_table as temporary_table,
     timestamp_ntz as timestamp_ntz,
     timestamp_offsets as timestamp_offsets,
     to_date as to_date,
