@@ -221,3 +221,121 @@ def test_conn_context_exit_with_exception_rolls_back(_fakesnow: None):
 
     with snowflake.connector.connect(database="db1", schema="schema1") as conn:
         assert conn.cursor().execute("SELECT count(*) FROM context_exit").fetchone() == (0,)
+
+
+@pytest.mark.parametrize("failing_sql", ["DESC TABLE missing_table", "SELECT * FROM missing_table"])
+def test_autocommit_false_failed_statement_keeps_transaction(
+    conn: snowflake.connector.SnowflakeConnection, failing_sql: str
+):
+    # a failed statement rolls back only its own changes, the transaction stays active and can be committed
+    # see https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("CREATE OR REPLACE TABLE failed_statement (id int)")
+        cur.execute("INSERT INTO failed_statement VALUES (1)")
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute(failing_sql)
+
+        assert cur.execute("SELECT count(*) FROM failed_statement").fetchone() == (1,)
+        conn.commit()
+        conn.rollback()
+        assert cur.execute("SELECT count(*) FROM failed_statement").fetchone() == (1,)
+
+
+def test_autocommit_false_runtime_failure_commit_raises(conn: snowflake.connector.SnowflakeConnection):
+    # Deviates from Snowflake, which rolls back only the failed statement and commits the earlier insert, see
+    # https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
+    # DuckDB has no savepoints, so a statement that fails at runtime aborts the whole transaction. Rather than
+    # commit silently dropping the earlier insert, fakesnow raises and requires an explicit rollback.
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("CREATE OR REPLACE TABLE runtime_failure (id int)")
+        cur.execute("INSERT INTO runtime_failure VALUES (1)")
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("INSERT INTO runtime_failure VALUES ('x')")
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError, match="transaction was aborted"):
+            conn.commit()
+        conn.rollback()
+        assert cur.execute("SELECT count(*) FROM runtime_failure").fetchone() == (0,)
+
+
+@pytest.mark.parametrize(
+    "commit_sql",
+    [
+        "COMMIT",
+        "CREATE TABLE next_table (id int)",
+        "ALTER SESSION SET AUTOCOMMIT = TRUE",
+        "ALTER SESSION SET AUTOCOMMIT = FALSE",
+    ],
+)
+def test_runtime_failure_sql_commit_raises(conn: snowflake.connector.SnowflakeConnection, commit_sql: str):
+    # Deviates from Snowflake: DuckDB cannot preserve earlier writes after a runtime failure.
+    # Every explicit or implicit commit must report that loss instead of claiming success.
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("CREATE TABLE runtime_sql_commit (id int)")
+        cur.execute("INSERT INTO runtime_sql_commit VALUES (1)")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("INSERT INTO runtime_sql_commit VALUES ('x')")
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError, match="transaction was aborted") as excinfo:
+            cur.execute(commit_sql)
+        assert (excinfo.value.errno, excinfo.value.sqlstate) == (9999, "99999")
+        conn.rollback()
+        assert cur.execute("SELECT count(*) FROM runtime_sql_commit").fetchone() == (0,)
+
+
+@pytest.mark.parametrize("mode", [False, True])
+def test_runtime_failure_autocommit_raises(conn: snowflake.connector.SnowflakeConnection, mode: bool):
+    # Deviates from Snowflake: changing AUTOCOMMIT cannot preserve writes after a DuckDB runtime failure.
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("CREATE TABLE runtime_autocommit (id int)")
+        cur.execute("INSERT INTO runtime_autocommit VALUES (1)")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("INSERT INTO runtime_autocommit VALUES ('x')")
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError, match="transaction was aborted"):
+            conn.autocommit(mode)
+        conn.rollback()
+        assert cur.execute("SELECT count(*) FROM runtime_autocommit").fetchone() == (0,)
+
+
+def test_runtime_failure_rollback(conn: snowflake.connector.SnowflakeConnection):
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("CREATE TABLE runtime_rollback (id int)")
+        cur.execute("INSERT INTO runtime_rollback VALUES (1)")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("INSERT INTO runtime_rollback VALUES ('x')")
+
+        conn.rollback()
+        cur.execute("INSERT INTO runtime_rollback VALUES (2)")
+        conn.commit()
+        assert cur.execute("SELECT * FROM runtime_rollback").fetchall() == [(2,)]
+
+
+def test_context_exit_failed_commit_closes_connection(_fakesnow: None):
+    # Deviates from Snowflake: the commit fails after a runtime error, but context exit must still close.
+    conn = snowflake.connector.connect(database="db1", schema="schema1", autocommit=False)
+    with (
+        pytest.raises(snowflake.connector.errors.ProgrammingError, match="transaction was aborted"),
+        conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("CREATE TABLE runtime_context_exit (id int)")
+        cur.execute("INSERT INTO runtime_context_exit VALUES (1)")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("INSERT INTO runtime_context_exit VALUES ('x')")
+
+    assert conn.is_closed()
+
+
+def test_commit_closed_connection(conn: snowflake.connector.SnowflakeConnection):
+    conn.close()
+    with pytest.raises(snowflake.connector.errors.DatabaseError) as excinfo:
+        conn.commit()
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (250002, "08003")

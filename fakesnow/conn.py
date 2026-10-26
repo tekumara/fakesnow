@@ -6,6 +6,7 @@ from pathlib import Path
 from types import TracebackType
 from typing import Any, Self
 
+import duckdb
 import snowflake.connector
 from duckdb import DuckDBPyConnection
 from snowflake.connector.cursor import DictCursor, SnowflakeCursor
@@ -124,17 +125,19 @@ class FakeSnowflakeConnection:
         exc_value: BaseException | None,
         exc_tb: TracebackType | None,
     ) -> None:
-        if not self._autocommit:
-            if exc_tb is None:
-                self.commit()
-            else:
-                self.rollback()
-
-        self.close()
+        try:
+            if not self._autocommit:
+                if exc_tb is None:
+                    self.commit()
+                else:
+                    self.rollback()
+        finally:
+            self.close()
 
     def autocommit(self, mode: bool) -> None:
         # see https://docs.snowflake.com/en/sql-reference/transactions#autocommit
         if not self._autocommit:
+            self._raise_if_transaction_aborted()
             self._duck_conn.commit()
             self._in_transaction = False
 
@@ -171,6 +174,30 @@ class FakeSnowflakeConnection:
 
     def rollback(self) -> None:
         self.cursor().execute("ROLLBACK")
+
+    def _raise_if_transaction_aborted(self) -> None:
+        """Reject a commit if a failed statement aborted the transaction.
+
+        Snowflake rolls back only the failed statement, see
+        https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
+        but DuckDB has no savepoints, so a statement that fails at runtime (eg: a conversion or constraint
+        error) aborts the whole transaction, and committing it would silently discard the earlier writes.
+        """
+        try:
+            # DuckDB's Python API exposes no transaction-validity flag. This query raises in
+            # an aborted transaction and does not leave a transaction open outside BEGIN.
+            self._duck_conn.execute("SELECT 1")
+        except duckdb.TransactionException as e:
+            if "Current transaction is aborted" not in str(e):
+                raise
+            # Keep it aborted until an explicit rollback (or close). In particular, the real
+            # connector's autocommit() suppresses errors from ALTER SESSION; a later commit
+            # must still report the lost writes instead of silently succeeding.
+            msg = (
+                "The transaction was aborted by a failed statement. Roll back before starting a new transaction. "
+                "Snowflake rolls back only the failed statement, but fakesnow can't."
+            )
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=9999, sqlstate="99999") from e
 
     @property
     def schema(self) -> str | None:

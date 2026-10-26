@@ -156,6 +156,25 @@ def test_server_connect_autocommit_false(server: dict) -> None:
         assert row and row[0] == 1
 
 
+def test_server_autocommit_false_failed_statement_keeps_transaction(server: dict) -> None:
+    # a failed statement rolls back only its own changes, the transaction stays active and can be committed
+    # see https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
+    with (
+        snowflake.connector.connect(**server | {"autocommit": False}, database="db1", schema="schema1") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create or replace table failed_statement (i int)")
+        cur.execute("insert into failed_statement values (1)")
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("select * from missing_table")
+
+        conn.commit()
+        conn.rollback()
+        cur.execute("select count(*) from failed_statement")
+        assert cur.fetchone() == (1,)
+
+
 def test_server_client_session_keep_alive(server: dict) -> None:
     with snowflake.connector.connect(**server | {"client_session_keep_alive": True}):
         # shouldn't error
@@ -828,3 +847,48 @@ def test_server_fetch_multiple_arrow_batches(scur: snowflake.connector.cursor.Sn
 
     timestamp = datetime.datetime(2024, 1, 2, 3, 4, 5, 123456)
     assert scur.fetchall() == [(i, None if i % 2 == 0 else "héllo", Decimal("12.34"), timestamp) for i in range(5000)]
+
+
+@pytest.mark.parametrize("commit_via", ["connection", "sql", "autocommit"])
+def test_server_runtime_failure_commit_raises(server: dict, commit_via: str) -> None:
+    # Deviates from Snowflake: a runtime failure aborts DuckDB's transaction. The server must
+    # report the failed commit through the connector instead of returning success or HTTP 500.
+    with (
+        snowflake.connector.connect(**server | {"autocommit": False}, database="db1", schema="schema1") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("CREATE TABLE runtime_commit (id int)")
+        cur.execute("INSERT INTO runtime_commit VALUES (1)")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("INSERT INTO runtime_commit VALUES ('x')")
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError, match="transaction was aborted") as excinfo:
+            if commit_via == "connection":
+                conn.commit()
+            elif commit_via == "sql":
+                cur.execute("COMMIT")
+            else:
+                cur.execute("ALTER SESSION SET AUTOCOMMIT = TRUE")
+        assert (excinfo.value.errno, excinfo.value.sqlstate) == (9999, "99999")
+        conn.rollback()
+        cur.execute("SELECT count(*) FROM runtime_commit")
+        assert cur.fetchone() == (0,)
+
+
+def test_server_runtime_failure_autocommit_keeps_commit_error(server: dict) -> None:
+    # The real connector suppresses ALTER SESSION errors in autocommit(). Keep the aborted
+    # transaction pending so that a subsequent commit still reports the lost writes.
+    # Deviates from Snowflake, which preserves earlier writes after the failed statement.
+    with (
+        snowflake.connector.connect(**server | {"autocommit": False}, database="db1", schema="schema1") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("CREATE TABLE runtime_autocommit (id int)")
+        cur.execute("INSERT INTO runtime_autocommit VALUES (1)")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("INSERT INTO runtime_autocommit VALUES ('x')")
+
+        conn.autocommit(True)
+        with pytest.raises(snowflake.connector.errors.ProgrammingError, match="transaction was aborted"):
+            conn.commit()
+        conn.rollback()
