@@ -13,6 +13,7 @@ from fakesnow.transforms import (
     array_size,
     create_clone,
     create_database,
+    date_trunc_date,
     dateadd_date_cast,
     dateadd_string_literal_timestamp_cast,
     datediff_string_literal_timestamp_cast,
@@ -234,6 +235,24 @@ def test_describe_table() -> None:
 def test_drop_schema_cascade() -> None:
     assert (
         sqlglot.parse_one("drop schema schema1").transform(drop_schema_cascade).sql() == "DROP SCHEMA schema1 CASCADE"
+    )
+
+
+def test_date_trunc_date() -> None:
+    assert (
+        sqlglot.parse_one("SELECT DATE_TRUNC('month', d) FROM t", read="snowflake")
+        .transform(date_trunc_date)
+        .sql(dialect="duckdb")
+        == "SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC(d, DATE_TRUNC('MONTH', d)) FROM t"
+    )
+
+
+def test_date_trunc_date_timestamp_noop() -> None:
+    assert (
+        sqlglot.parse_one("SELECT DATE_TRUNC('month', ts::timestamp_ntz) FROM t", read="snowflake")
+        .transform(date_trunc_date)
+        .sql(dialect="duckdb")
+        == "SELECT CAST(DATE_TRUNC('MONTH', CAST(ts AS TIMESTAMP)) AS TIMESTAMP) FROM t"
     )
 
 
