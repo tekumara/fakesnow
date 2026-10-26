@@ -281,6 +281,26 @@ def test_datediff_string_literal_timestamp_cast(cur: snowflake.connector.cursor.
     assert cur.fetchall() == [(datetime.datetime(2023, 4, 2, 0, 0), datetime.datetime(2023, 3, 2, 0, 0), -44640)]
 
 
+def test_date_trunc_date(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/functions/date_trunc#examples
+    cur.execute("create table test_date_trunc (mydate date)")
+    cur.execute("insert into test_date_trunc values ('2024-05-09')")
+    cur.execute(
+        """select date_trunc('year', mydate), date_trunc('month', mydate), date_trunc('week', mydate),
+        date_trunc('day', mydate) from test_date_trunc"""
+    )
+    assert cur.fetchall() == [
+        (datetime.date(2024, 1, 1), datetime.date(2024, 5, 1), datetime.date(2024, 5, 6), datetime.date(2024, 5, 9))
+    ]
+
+
+def test_date_trunc_timestamp(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table test_date_trunc (mytimestamp timestamp_ntz)")
+    cur.execute("insert into test_date_trunc values ('2024-05-09 08:50:57.891')")
+    cur.execute("select date_trunc('month', mytimestamp), date_trunc('hour', mytimestamp) from test_date_trunc")
+    assert cur.fetchall() == [(datetime.datetime(2024, 5, 1, 0, 0), datetime.datetime(2024, 5, 9, 8, 0))]
+
+
 def test_equal_null(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select equal_null(NULL, NULL), equal_null(1, 1), equal_null(1, 2), equal_null(1, NULL)")
     assert cur.fetchall() == [(True, True, False, False)]
@@ -569,6 +589,14 @@ def test_to_decimal(cur: snowflake.connector.cursor.SnowflakeCursor):
         ("12.3456", 12, Decimal("12.3"), Decimal("12.34560000")),
         ("98.76546", 99, Decimal("98.8"), Decimal("98.76546000")),
     ]
+
+
+def test_trunc_date(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # see https://docs.snowflake.com/en/sql-reference/functions/trunc2#examples
+    cur.execute("create table test_trunc (mydate date)")
+    cur.execute("insert into test_trunc values ('2024-05-09')")
+    cur.execute("select trunc(mydate, 'year'), trunc(mydate, 'month'), trunc(mydate, 'day') from test_trunc")
+    assert cur.fetchall() == [(datetime.date(2024, 1, 1), datetime.date(2024, 5, 1), datetime.date(2024, 5, 9))]
 
 
 def test_truncate(dcur: snowflake.connector.cursor.DictCursor):
