@@ -20,6 +20,7 @@ from fakesnow.transforms import (
     drop_schema_cascade,
     extract_comment_on_columns,
     extract_comment_on_table,
+    extract_semi_structured_types,
     extract_text_length,
     float_to_double,
     identifier,
@@ -454,6 +455,17 @@ def test_extract_comment_on_table() -> None:
     )
     assert e.sql() == "SELECT 'Statement executed successfully.' AS status"
     assert e.args["table_comment"] == (table1, "comment1")
+
+
+def test_extract_semi_structured_types() -> None:
+    sql = "CREATE TABLE table1 (a ARRAY, a2 ARRAY(INT), o OBJECT, v VARIANT, i1 BIGINT)"
+    e = sqlglot.parse_one(sql, read="snowflake").transform(extract_semi_structured_types)
+    assert e.args["semi_structured_types"] == [("a", "ARRAY"), ("a2", "ARRAY"), ("o", "OBJECT"), ("v", "VARIANT")]
+
+    # test ctas column name is correct with alias
+    sql = "CREATE TABLE table1 AS SELECT PARSE_JSON(C1)::ARRAY AS A, C1 FROM (VALUES ('[]')) AS T(C1)"
+    e = sqlglot.parse_one(sql, read="snowflake").transform(extract_semi_structured_types)
+    assert e.args["semi_structured_types"] == [("A", "ARRAY")]
 
 
 def test_extract_text_length() -> None:
