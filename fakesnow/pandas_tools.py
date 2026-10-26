@@ -92,11 +92,14 @@ def write_pandas(
     **kwargs: Any,
 ) -> WritePandasResult:
     if not quote_identifiers:
+        # the connector's _sql_column_identifier check, raised before any SQL is sent
         for col in df.columns:
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", str(col)):
                 raise ProgrammingError(
-                    f"Invalid unquoted identifier {col!r}. Column names used with "
-                    "quote_identifiers=False must be valid Snowflake unquoted identifiers."
+                    f"Invalid unquoted identifier {str(col)!r}. Column names used with "
+                    "quote_identifiers=False must be valid Snowflake unquoted identifiers "
+                    "(letter or underscore, then letters, digits, underscores, or dollar "
+                    "signs). Set quote_identifiers=True to use arbitrary column names."
                 )
 
     # quote names like the connector's build_location_helper and column lists
