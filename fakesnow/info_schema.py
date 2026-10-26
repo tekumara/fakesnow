@@ -3,6 +3,11 @@
 from __future__ import annotations
 
 from string import Template
+from typing import cast
+
+import duckdb
+from sqlglot import exp
+from sqlglot.expressions import Expr
 
 SQL_CREATE_GLOBAL_FS_INFORMATION_SCHEMA = """
 create schema if not exists _fs_global._fs_information_schema
@@ -29,6 +34,7 @@ create table if not exists _fs_global._fs_information_schema._fs_columns_ext (
     ext_column_name varchar,
     ext_character_maximum_length integer,
     ext_character_octet_length integer,
+    ext_data_type varchar,
     PRIMARY KEY(ext_table_catalog, ext_table_schema, ext_table_name, ext_column_name)
 )
 """
@@ -97,7 +103,7 @@ case when starts_with(columns.data_type, 'DECIMAL') or columns.data_type='BIGINT
      when columns.data_type='BLOB' then 'BINARY'
      when columns.data_type='TIMESTAMP' then 'TIMESTAMP_NTZ'
      when columns.data_type='TIMESTAMP WITH TIME ZONE' then 'TIMESTAMP_TZ'
-     when columns.data_type='JSON' then 'VARIANT'
+     when columns.data_type='JSON' then coalesce(ext_data_type, 'VARIANT')
      else columns.data_type end as DATA_TYPE,
 ext_character_maximum_length as CHARACTER_MAXIMUM_LENGTH, ext_character_octet_length as CHARACTER_OCTET_LENGTH,
 case when columns.data_type='BIGINT' then 38
@@ -333,16 +339,94 @@ def insert_table_comment_sql(catalog: str, schema: str, table: str, comment: str
     """
 
 
-def insert_text_lengths_sql(catalog: str, schema: str, table: str, text_lengths: list[tuple[str, int]]) -> str:
-    values = ", ".join(
-        f"('{catalog}', '{schema}', '{table}', '{col_name}', {size}, {min(size * 4, 16777216)})"
-        for (col_name, size) in text_lengths
-    )
+def column_metadata_updates(
+    conn: duckdb.DuckDBPyConnection, expression: Expr, catalog: str | None, schema: str | None
+) -> list[tuple[str, list[str | int | None]]]:
+    """Prepare column metadata changes to apply only after successful DDL.
 
-    return f"""
-        INSERT INTO _fs_global._fs_information_schema._fs_columns_ext
-        values {values}
-        ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name, ext_column_name)
-        DO UPDATE SET ext_character_maximum_length = excluded.ext_character_maximum_length,
-            ext_character_octet_length = excluded.ext_character_octet_length
+    Inspect IF NOT EXISTS before executing it so a no-op preserves the existing metadata.
+    Names are bound parameters, including quoted identifiers containing apostrophes.
     """
+    if not isinstance(expression, (exp.Create, exp.Alter, exp.Drop)):
+        return []
+    kind = expression.args.get("kind")
+    if kind not in ("TABLE", "VIEW"):
+        return []
+    target = expression.this
+    if isinstance(target, exp.Schema):
+        target = target.this
+    # Recent sqlglot versions represent DROP targets in `tables`.
+    if isinstance(expression, exp.Drop):
+        target = target or next(iter(expression.args.get("tables") or []), None)
+    if not isinstance(target, exp.Table):
+        return []
+    catalog = target.catalog or catalog
+    schema = target.db or schema
+    assert catalog and schema
+    key: list[str | int | None] = [catalog, schema, target.name]
+    table = "_fs_global._fs_information_schema._fs_columns_ext"
+    predicate = "ext_table_catalog = ? AND ext_table_schema = ? AND ext_table_name = ?"
+    updates: list[tuple[str, list[str | int | None]]] = []
+
+    if isinstance(expression, exp.Create):
+        if (
+            expression.args.get("exists")
+            and conn.execute(
+                "SELECT 1 FROM information_schema.tables "
+                "WHERE table_catalog = ? AND table_schema = ? AND table_name = ?",
+                key,
+            ).fetchone()
+        ):
+            return []
+        updates.append((f"DELETE FROM {table} WHERE {predicate}", key))
+    elif isinstance(expression, exp.Drop):
+        return [(f"DELETE FROM {table} WHERE {predicate}", key)]
+
+    skipped = set()
+    for action in expression.args.get("actions") or []:
+        if isinstance(action, exp.ColumnDef) and action.args.get("exists"):
+            if conn.execute(
+                "SELECT 1 FROM information_schema.columns "
+                "WHERE table_catalog = ? AND table_schema = ? AND table_name = ? AND column_name = ?",
+                [*key, action.name],
+            ).fetchone():
+                skipped.add(action.name)
+        elif isinstance(action, exp.Drop) and action.args.get("kind") == "COLUMN":
+            updates.extend(
+                (f"DELETE FROM {table} WHERE {predicate} AND ext_column_name = ?", [*key, column.name])
+                for column in action.args.get("tables") or [action.this]
+            )
+        elif isinstance(action, exp.RenameColumn):
+            updates.append(
+                (
+                    f"UPDATE {table} SET ext_column_name = ? WHERE {predicate} AND ext_column_name = ?",
+                    [action.args["to"].name, *key, action.this.name],
+                )
+            )
+        elif isinstance(action, exp.AlterRename):
+            dest = action.this
+            dest_key: list[str | int | None] = [dest.catalog or catalog, dest.db or schema, dest.name]
+            updates.append((f"DELETE FROM {table} WHERE {predicate}", dest_key))
+            updates.append(
+                (
+                    f"UPDATE {table} SET ext_table_catalog = ?, ext_table_schema = ?, ext_table_name = ? "
+                    f"WHERE {predicate}",
+                    [*dest_key, *key],
+                )
+            )
+
+    for name, size, data_type in cast(
+        list[tuple[str, int | None, str | None]], expression.args.get("column_metadata", [])
+    ):
+        if name not in skipped:
+            updates.append(
+                (
+                    f"""INSERT INTO {table} VALUES (?, ?, ?, ?, ?, ?, ?)
+                    ON CONFLICT (ext_table_catalog, ext_table_schema, ext_table_name, ext_column_name)
+                    DO UPDATE SET ext_character_maximum_length = excluded.ext_character_maximum_length,
+                        ext_character_octet_length = excluded.ext_character_octet_length,
+                        ext_data_type = excluded.ext_data_type""",
+                    [*key, name, size, min(size * 4, 16777216) if size is not None else None, data_type],
+                )
+            )
+    return updates
