@@ -503,89 +503,46 @@ def extract_comment_on_table(expression: Expr) -> Expr:
     return expression
 
 
-def extract_text_length(expression: Expr) -> Expr:
-    """Extract length of text columns.
+def extract_column_metadata(expression: Expr) -> Expr:
+    """Capture text lengths and declared JSON-backed types before DuckDB discards them."""
+    if not isinstance(expression, (exp.Create, exp.Alter)) or expression.args.get("kind") not in ("TABLE", "VIEW"):
+        return expression
 
-    duckdb doesn't have fixed-sized text types. So we capture the size of text types and store that in the
-    character_maximum_length arg.
+    columns = []
+    target = expression.this
+    query = expression.args.get("expression")
+    select = query.find(exp.Select) if isinstance(query, exp.Query) else None
+    if isinstance(target, exp.Schema):
+        expressions = target.expressions
+    elif select:
+        expressions = select.expressions
+    else:
+        expressions = expression.args.get("actions") or []
 
-    Args:
-        expression (Expr): the expression that will be transformed.
+    for e in expressions:
+        name = e.alias if isinstance(e, exp.Alias) else e.name
+        size = None
+        data_type = None
+        if dts := [
+            dt for dt in e.find_all(exp.DataType) if dt.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT)
+        ]:
+            size = int(dt_size.this.this) if len(dts) == 1 and (dt_size := dts[0].find(exp.DataTypeParam)) else 16777216
 
-    Returns:
-        Expr: The original expression, with any text lengths stored in the new 'text_lengths' arg.
-    """
+        col = e.unalias()
+        dt = col.args.get("kind") if isinstance(col, exp.ColumnDef) else col.to if isinstance(col, exp.Cast) else None
+        if isinstance(dt, exp.DataType) and dt.this in (
+            exp.DataType.Type.ARRAY,
+            exp.DataType.Type.OBJECT,
+            exp.DataType.Type.VARIANT,
+        ):
+            data_type = dt.this.value
+            size = None
 
-    if isinstance(expression, (exp.Create, exp.Alter)):
-        text_lengths = []
+        if size is not None or data_type:
+            columns.append((name, size, data_type))
 
-        # exp.Select is for a ctas, exp.Schema is a plain definition
-        if cols := expression.find(exp.Select, exp.Schema):
-            expressions = cols.expressions
-        else:
-            # alter table
-            expressions = expression.args.get("actions") or []
-        for e in expressions:
-            if dts := [
-                dt for dt in e.find_all(exp.DataType) if dt.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT)
-            ]:
-                col_name = e.alias if isinstance(e, exp.Alias) else e.name
-                if len(dts) == 1 and (dt_size := dts[0].find(exp.DataTypeParam)):
-                    size = (
-                        isinstance(dt_size.this, exp.Literal)
-                        and isinstance(dt_size.this.this, str)
-                        and int(dt_size.this.this)
-                    )
-                else:
-                    size = 16777216
-                text_lengths.append((col_name, size))
-
-        if text_lengths:
-            expression.args["text_lengths"] = text_lengths
-
-    return expression
-
-
-def extract_semi_structured_types(expression: Expr) -> Expr:
-    """Extract the declared type of semi-structured columns.
-
-    semi_structured_types turns ARRAY, OBJECT and VARIANT into duckdb's JSON. So we capture the declared type
-    and store that in the semi_structured_types arg. This must run before semi_structured_types.
-
-    Args:
-        expression (Expr): the expression that will be transformed.
-
-    Returns:
-        Expr: The original expression, with any declared types stored in the new 'semi_structured_types' arg.
-    """
-
-    if isinstance(expression, (exp.Create, exp.Alter)):
-        semi_structured = []
-
-        # exp.Select is for a ctas, exp.Schema is a plain definition
-        if cols := expression.find(exp.Select, exp.Schema):
-            expressions = cols.expressions
-        else:
-            # alter table
-            expressions = expression.args.get("actions") or []
-        for e in expressions:
-            if isinstance(e, exp.ColumnDef):
-                dt = e.args.get("kind")
-            elif isinstance(col := e.unalias(), exp.Cast):
-                dt = col.to
-            else:
-                continue
-            if isinstance(dt, exp.DataType) and dt.this in (
-                exp.DataType.Type.ARRAY,
-                exp.DataType.Type.OBJECT,
-                exp.DataType.Type.VARIANT,
-            ):
-                col_name = e.alias if isinstance(e, exp.Alias) else e.name
-                semi_structured.append((col_name, dt.this.value))
-
-        if semi_structured:
-            expression.args["semi_structured_types"] = semi_structured
-
+    if columns:
+        expression.args["column_metadata"] = columns
     return expression
 
 
