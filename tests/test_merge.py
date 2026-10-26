@@ -443,6 +443,27 @@ def test_merge_varchar_length(conn: snowflake.connector.SnowflakeConnection):
     assert "String 'abcdef' is too long and would be truncated" in str(excinfo.value)
 
 
+def test_merge_varchar_length_insert_columns(conn: snowflake.connector.SnowflakeConnection):
+    *_, cur = conn.execute_string(
+        """
+        CREATE OR REPLACE TABLE t1 (t1Key INT, val VARCHAR(5), status VARCHAR);
+        CREATE OR REPLACE TABLE t2 (t2Key INT, newVal VARCHAR);
+        INSERT INTO t2 VALUES (1, 'abc');
+        """
+    )
+
+    cur.execute(
+        """
+        MERGE INTO t1 AS t USING t2 AS s ON t.t1Key = s.t2Key
+            WHEN NOT MATCHED THEN INSERT (t1Key, val) VALUES (s.t2Key, s.newVal)
+        """
+    )
+
+    assert cur.fetchall() == [(1,)]
+    cur.execute("SELECT * FROM t1")
+    assert cur.fetchall() == [(1, "abc", None)]
+
+
 def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnection):
     *_, dcur = conn.execute_string(
         """
