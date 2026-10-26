@@ -1,5 +1,6 @@
 from pathlib import Path
 
+import duckdb
 import pytest
 import sqlglot
 from sqlglot import Expr, exp
@@ -40,6 +41,7 @@ from fakesnow.transforms import (
     set_schema,
     sha256,
     show_schemas,
+    show_stages,
     show_tables_etc,
     split,
     tag,
@@ -845,6 +847,42 @@ def test_show_schemas() -> None:
         sqlglot.parse_one("show terse schemas in database db1", read="snowflake").transform(_show_schemas).sql()
         == "SELECT * FROM _fs_global._fs_information_schema._fs_show_schemas WHERE database_name = 'db1'"
     )
+
+
+@pytest.mark.parametrize(
+    ("statement", "expected_names"),
+    [
+        (
+            """SHOW STAGES IN DATABASE "o'brien" """,
+            [("match",), ("other_schema",)],
+        ),
+        (
+            """SHOW STAGES IN SCHEMA "o'brien"."o'brien" """,
+            [("match",)],
+        ),
+    ],
+    ids=["database", "schema"],
+)
+def test_show_stages_quoted_scope(statement: str, expected_names: list[tuple[str]]) -> None:
+    # Test the transform directly: CREATE DATABASE/SCHEMA currently fail for apostrophes in names.
+    expression = sqlglot.parse_one(statement, read="snowflake")
+    with duckdb.connect() as conn:
+        conn.execute("ATTACH ':memory:' AS _fs_global")
+        conn.execute("CREATE SCHEMA _fs_global._fs_information_schema")
+        conn.execute(
+            "CREATE TABLE _fs_global._fs_information_schema._fs_stages "
+            "(name VARCHAR, database_name VARCHAR, schema_name VARCHAR)"
+        )
+        conn.executemany(
+            "INSERT INTO _fs_global._fs_information_schema._fs_stages VALUES (?, ?, ?)",
+            [
+                ("match", "o'brien", "o'brien"),
+                ("other_database", "other", "o'brien"),
+                ("other_schema", "o'brien", "other"),
+            ],
+        )
+        rows = conn.execute(show_stages(expression, None, None).sql(dialect="duckdb")).fetchall()
+        assert sorted((row[0],) for row in rows) == expected_names
 
 
 def test_split() -> None:
