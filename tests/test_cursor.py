@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import cast
 
+import duckdb
 import pandas as pd
 import pytest
 import snowflake.connector
@@ -11,6 +12,15 @@ from pandas.testing import assert_frame_equal
 
 import fakesnow
 from fakesnow.cursor import FakeSnowflakeCursor
+
+
+def test_unrelated_invalid_input_error(_fakesnow: None):
+    # DuckDB-only diagnostic: unrelated errors must not be mistaken for our length checks.
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1") as conn,
+        pytest.raises(duckdb.InvalidInputException, match="is too long and would be truncated"),
+    ):
+        conn.cursor().execute("select error('is too long and would be truncated')")
 
 
 def test_binding_pyformat(conn: snowflake.connector.SnowflakeConnection):

@@ -90,7 +90,7 @@ def test_describe_table(dcur: snowflake.connector.cursor.DictCursor):
             XINT INT, XINTEGER INTEGER, XBIGINT BIGINT, XSMALLINT SMALLINT, XTINYINT TINYINT, XBYTEINT BYTEINT,
             XVARCHAR20 VARCHAR(20), XVARCHAR VARCHAR, XTEXT TEXT,
             XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ TIMESTAMP_NTZ, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XTIMESTAMP_TZ TIMESTAMP_TZ, XDATE DATE, XTIME TIME,
-            XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT */ XVARIANT VARIANT
+            XBINARY BINARY, XARRAY ARRAY, XOBJECT OBJECT, XVARIANT VARIANT
         )
         """
     )
@@ -133,6 +133,8 @@ def test_describe_table(dcur: snowflake.connector.cursor.DictCursor):
         {"name": "XDATE", "type": "DATE", **common},
         {"name": "XTIME", "type": "TIME(9)", **common},
         {"name": "XBINARY", "type": "BINARY(8388608)", **common},
+        {"name": "XARRAY", "type": "ARRAY", **common},
+        {"name": "XOBJECT", "type": "OBJECT", **common},
         {"name": "XVARIANT", "type": "VARIANT", **common},
     ]
 

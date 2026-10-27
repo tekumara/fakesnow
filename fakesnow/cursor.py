@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import re
 import sys
@@ -312,6 +313,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.information_schema_databases, current_schema=self._conn.schema, copy=False)
             .transform(transforms.drop_schema_cascade, copy=False)
             .transform(transforms.tag, copy=False)
+            .transform(transforms.extract_column_metadata, copy=False)
             .transform(transforms.semi_structured_types, copy=False)
             .transform(transforms.try_parse_json, copy=False)
             .transform(transforms.split, copy=False)
@@ -338,7 +340,6 @@ class FakeSnowflakeCursor:
             .transform(transforms.timestamp_ntz, copy=False)
             .transform(transforms.float_to_double, copy=False)
             .transform(transforms.integer_precision, copy=False)
-            .transform(transforms.extract_text_length, copy=False)
             .transform(transforms.sample, copy=False)
             .transform(transforms.array_size, copy=False)
             .transform(transforms.random, copy=False)
@@ -386,6 +387,15 @@ class FakeSnowflakeCursor:
                 copy=False,
             )
             .transform(lambda e: transforms.create_table_as(e, self._duck_conn), copy=False)
+            .transform(
+                lambda e: transforms.enforce_text_length(e, self._duck_conn, self._conn.database, self._conn.schema),
+                copy=False,
+            )
+            .transform(
+                lambda e: transforms.enforce_ctas_text_length(e, self._conn.database, self._conn.schema),
+                copy=False,
+            )
+            .transform(transforms.enforce_cast_text_length, copy=False)
         )
 
     def _transform_explode(self, expression: Expr) -> list[Expr]:
@@ -484,6 +494,9 @@ class FakeSnowflakeCursor:
             elif isinstance(transformed, (exp.Commit, exp.Rollback)):
                 self._conn._in_transaction = False
 
+        column_updates = info_schema.column_metadata_updates(
+            self._duck_conn, transformed, self._conn.database, self._conn.schema
+        )
         affected_count = None
         try:
             if isinstance(transformed, exp.Copy):
@@ -528,6 +541,17 @@ class FakeSnowflakeCursor:
             raise snowflake.connector.errors.DatabaseError(msg=e.args[0], errno=250002, sqlstate="08003") from e
         except duckdb.ParserException as e:
             raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=1003, sqlstate="42000") from e
+        except duckdb.InvalidInputException as e:
+            msg = cast(str, e.args[0]).removeprefix("Invalid Input Error: ")
+            if not msg.startswith(transforms.TEXT_LENGTH_ERROR_PREFIX):
+                raise e
+            # a string longer than its text column, see transforms.enforce_text_length
+            prefix, value = json.loads(msg.removeprefix(transforms.TEXT_LENGTH_ERROR_PREFIX))
+            if len(shown := value.encode()) > 200:
+                # snowflake shows the first 200 bytes of the string, without splitting a character
+                value = shown[:200].decode(errors="ignore") + "..."
+            msg = f"{prefix}String '{value}' is too long and would be truncated"
+            raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100078, sqlstate="22000") from e
         except duckdb.ConversionException as e:
             # a value that can't be cast, eg: a time zone name snowflake wouldn't accept either.
             # snowflake reports this as an error rather than failing, message content may differ.
@@ -673,14 +697,8 @@ class FakeSnowflakeCursor:
             assert catalog and schema
             self._duck_conn.execute(info_schema.insert_table_comment_sql(catalog, schema, table.name, comment))
 
-        if (text_lengths := cast(list[tuple[str, int]], transformed.args.get("text_lengths"))) and (
-            table := transformed.find(exp.Table)
-        ):
-            # record text lengths
-            catalog = table.catalog or self._conn.database
-            schema = table.db or self._conn.schema
-            assert catalog and schema
-            self._duck_conn.execute(info_schema.insert_text_lengths_sql(catalog, schema, table.name, text_lengths))
+        for metadata_sql, metadata_params in column_updates:
+            self._duck_conn.execute(metadata_sql, metadata_params)
 
         if result_sql:
             logger.log_sql(result_sql)
