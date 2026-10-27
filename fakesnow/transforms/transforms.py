@@ -1444,7 +1444,7 @@ def create_table_as(expression: Expr, duck_conn: DuckDBPyConnection) -> Expr:
             duck_conn.execute(f"DESCRIBE {select_query.sql(dialect=FakesnowDuckDB)}")
             select_query.set(
                 "expressions",
-                [exp.Column(this=exp.Identifier(this=col[0], quoted=False)) for col in duck_conn.fetchall()],
+                [exp.Column(this=exp.Identifier(this=col[0], quoted=True)) for col in duck_conn.fetchall()],
             )
 
         if len(select_query.expressions) != len(create_col_defs):

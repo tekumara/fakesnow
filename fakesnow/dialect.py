@@ -8,6 +8,8 @@ from sqlglot.dialects.duckdb import DuckDB
 from sqlglot.errors import ParseError
 
 # Keywords Snowflake reserves in every context, see https://docs.snowflake.com/en/sql-reference/reserved-keywords
+# Maintain this list manually: sqlglot's Snowflake reserved-keyword set is empty. Include only the
+# "Reserved by ANSI", "Reserved by Snowflake", and "Reserved by Snowflake and others" categories.
 SNOWFLAKE_RESERVED_KEYWORDS = {
     "all",
     "alter",
