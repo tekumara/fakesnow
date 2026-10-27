@@ -95,6 +95,18 @@ CREATE OR REPLACE MACRO ${catalog}._fs_haversine(lat1, lon1, lat2, lon2) AS (
 """
 )
 
+# cast date_trunc's result back to DATE when its input is a DATE, because Snowflake returns the input's type but
+# DuckDB returns a TIMESTAMP. the input's type selects the overload when the query is bound, so this works for
+# columns too. Each overload references the input only once, so volatile expressions are evaluated once.
+FS_DATE_TRUNC = """
+CREATE OR REPLACE MACRO _fs_global.main._fs_date_trunc(part, input DATE) AS CAST(date_trunc(part, input) AS DATE),
+    (part, input) AS date_trunc(part, input);
+"""
+
+
+def fs_global_creation_sql() -> str:
+    return FS_DATE_TRUNC
+
 
 def creation_sql(catalog: str) -> str:
     return f"""
