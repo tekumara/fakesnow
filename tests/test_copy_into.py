@@ -131,7 +131,7 @@ cases = [
             FILE_FORMAT = (TYPE = 'PARQUET')
             """,
             expected_inserts=[
-                "INSERT INTO TABLE1 SELECT CAST((B) AS BIGINT), CAST((A) AS BIGINT) FROM READ_PARQUET('s3://{bucket}/foo.parquet')"
+                'INSERT INTO TABLE1 SELECT CAST(("B") AS BIGINT), CAST(("A") AS BIGINT) FROM READ_PARQUET(\'s3://{bucket}/foo.parquet\')'
             ],
             data=pd.DataFrame({"A": [1, 2], "B": [11, 12]}).to_parquet(),
             expected_rows_loaded=2,
@@ -910,6 +910,21 @@ def test_errors_parquet(dcur: snowflake.connector.cursor.DictCursor, s3_client: 
     )
 
 
+@pytest.mark.parametrize("name", ["null", "qualify"])
+def test_copy_parquet_reserved_field_name(
+    cur: snowflake.connector.cursor.SnowflakeCursor, s3_client: S3Client, name: str
+) -> None:
+    bucket = upload_file(s3_client, pd.DataFrame({name: [7]}).to_parquet(), key="reserved.parquet")
+    cur.execute("CREATE TABLE target (x INT)")
+    cur.execute(f"CREATE STAGE source_stage URL='s3://{bucket}/'")
+    cur.execute(
+        f"""COPY INTO target FROM (SELECT $1:"{name}"::INT FROM @source_stage)
+        FILES=('reserved.parquet') FILE_FORMAT=(TYPE=PARQUET)"""
+    )
+    cur.execute("SELECT x FROM target")
+    assert cur.fetchall() == [(7,)]
+
+
 def test_copy_parquet_match_by_column_name(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
     """Test COPY INTO with MATCH_BY_COLUMN_NAME for parquet files.
 
@@ -1435,8 +1450,7 @@ def test__strip_json_extract():
         )
         .transform(_strip_json_extract)
         .sql()
-        # TODO: quoted????
-        == "SELECT CAST(A AS INT), CAST(B AS INT) FROM @stage1"
+        == 'SELECT CAST("A" AS INT), CAST("B" AS INT) FROM @stage1'
     )
 
     # after all our transforms sql becomes
@@ -1449,7 +1463,7 @@ def test__strip_json_extract():
         )
         .transform(_strip_json_extract)
         .sql()
-        == "SELECT CAST((A) AS BIGINT), CAST((B) AS BIGINT) FROM @stage1"
+        == 'SELECT CAST(("A") AS BIGINT), CAST(("B") AS BIGINT) FROM @stage1'
     )
 
 

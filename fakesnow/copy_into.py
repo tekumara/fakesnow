@@ -555,7 +555,7 @@ def _strip_json_extract(expr: exp.Select) -> exp.Select:
     for p in expr.find_all(exp.Parameter):
         if p == dollar1 and p.parent and (key := p.parent.expression.find(exp.JSONPathKey)):
             assert p.parent.parent, expr
-            p.parent.parent.args["this"] = exp.Identifier(this=key.this)
+            p.parent.parent.args["this"] = exp.Identifier(this=key.this, quoted=True)
 
     return expr
 

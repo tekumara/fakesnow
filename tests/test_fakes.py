@@ -805,6 +805,15 @@ def test_create_table_as_star_from_name_reserved_by_duckdb(cur: snowflake.connec
     assert cur.fetchall() == [(1,)]
 
 
+@pytest.mark.parametrize("name", ["NULL", "QUALIFY"])
+def test_create_table_as_star_from_quoted_reserved_column(cur: snowflake.connector.cursor.SnowflakeCursor, name: str):
+    cur.execute(f'create table source ("{name}" int)')
+    cur.execute("insert into source values (7)")
+    cur.execute("create table copied (x int) as select * from source")
+    cur.execute("select x from copied")
+    assert cur.fetchall() == [(7,)]
+
+
 def test_cte_and_aliases_reserved_by_duckdb(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("with pivot as (select 1 as semi) select lambda.semi as anti from pivot as lambda")
     assert dcur.fetchall() == [{"ANTI": 1}]
