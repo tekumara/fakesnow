@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import json
+import re
 import struct
 from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any, Literal
 
 from duckdb import DuckDBPyConnection
+from snowflake.connector.errors import ProgrammingError
 
 from fakesnow.conn import FakeSnowflakeConnection
 
@@ -89,14 +91,26 @@ def write_pandas(
     use_logical_type: bool | None = None,
     **kwargs: Any,
 ) -> WritePandasResult:
-    name = table_name
-    if schema:
-        name = f"{schema}.{name}"
-    if database:
-        name = f"{database}.{name}"
+    if not quote_identifiers:
+        # Follow connector 4.8.1 even with older installed connectors. Its private
+        # _sql_column_identifier helper isn't available before 4.8.1.
+        for col in df.columns:
+            if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", str(col)):
+                raise ProgrammingError(
+                    f"Invalid unquoted identifier {str(col)!r}. Column names used with "
+                    "quote_identifiers=False must be valid Snowflake unquoted identifiers "
+                    "(letter or underscore, then letters, digits, underscores, or dollar "
+                    "signs). Set quote_identifiers=True to use arbitrary column names."
+                )
+
+    # quote names like the connector's build_location_helper and column lists
+    name = ".".join(_location_part(p, quote_identifiers) for p in (database, schema, table_name) if p)
 
     if auto_create_table:
-        cols = [f"{c} {sql_type(t, use_logical_type=bool(use_logical_type))}" for c, t in df.dtypes.to_dict().items()]
+        cols = [
+            f"{_quote(c) if quote_identifiers else c} {sql_type(t, use_logical_type=bool(use_logical_type))}"
+            for c, t in df.dtypes.to_dict().items()
+        ]
 
         if overwrite:
             # overwrite drops and recreates the table, so its schema matches the dataframe
@@ -107,7 +121,7 @@ def write_pandas(
         # overwrite truncates the existing table before loading
         conn.cursor().execute(f"TRUNCATE TABLE {name}")
 
-    count = _insert_df(conn._duck_conn, df, name)  # noqa: SLF001
+    count = _insert_df(conn._duck_conn, df, name, quote_identifiers=quote_identifiers)  # noqa: SLF001
 
     # mocks https://docs.snowflake.com/en/sql-reference/sql/copy-into-table.html#output
     mock_copy_results = [("fakesnow/file0.txt", "LOADED", count, count, 1, 0, None, None, None, None)]
@@ -116,8 +130,31 @@ def write_pandas(
     return (True, len(mock_copy_results), count, mock_copy_results)
 
 
-def _insert_df(duck_conn: DuckDBPyConnection, df: pd.DataFrame, table_name: str) -> int:
+def _location_part(part: str, quote_identifiers: bool) -> str:
+    # the connector quotes a part containing a single quote even when quote_identifiers is False,
+    # and completes rather than escapes quotes the caller has already added
+    if quote_identifiers or "'" in part:
+        if not part.startswith('"'):
+            part = '"' + part
+        if not part.endswith('"'):
+            part = part + '"'
+    return part
+
+
+def _quote(name: object) -> str:
+    return '"' + str(name).replace('"', '""') + '"'
+
+
+def _insert_df(duck_conn: DuckDBPyConnection, df: pd.DataFrame, table_name: str, *, quote_identifiers: bool) -> int:
     import pandas as pd
+
+    # The connector's COPY has an explicit target column list, not MATCH_BY_COLUMN_NAME.
+    # DuckDB ignores identifier case even with quotes, so check the target's exact names first.
+    target_columns = {row[0] for row in duck_conn.execute(f"DESCRIBE {table_name}").fetchall()}
+    columns = [str(col) if quote_identifiers else str(col).upper() for col in df.columns]
+    for col in columns:
+        if col not in target_columns:
+            raise ProgrammingError(msg=f"invalid identifier '{_quote(col)}'", errno=904, sqlstate="42000")
 
     # Objects in dataframes are written as parquet structs, and snowflake loads parquet structs as json strings.
     # Whereas duckdb analyses a dataframe see https://duckdb.org/docs/api/python/data_ingestion.html#pandas-dataframes--object-columns
@@ -143,7 +180,7 @@ def _insert_df(duck_conn: DuckDBPyConnection, df: pd.DataFrame, table_name: str)
         # don't jsonify string
         df[col] = df[col].apply(lambda x: json.dumps(x) if isinstance(x, (dict, list)) else x)
 
-    escaped_cols = ",".join(f'"{col}"' for col in df.columns.to_list())
+    escaped_cols = ",".join(_quote(col) if quote_identifiers else col for col in columns)
     duck_conn.execute(f"INSERT INTO {table_name}({escaped_cols}) SELECT * FROM df")
 
     return duck_conn.fetchall()[0][0]
