@@ -737,6 +737,61 @@ def test_temporary_table_drop_schema_foreign_key(cur: snowflake.connector.cursor
     assert cur.execute("select * from db1.schema2.temp2").fetchall() == [(2,)]
 
 
+def test_temporary_table_drop_schema_foreign_key_other_schema(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    # a temporary table referenced from another schema is dropped with its schema, and the referencing table keeps
+    # its rows
+    cur.execute("create schema db1.schema2")
+    cur.execute("create temporary table db1.schema2.temp1 (x int primary key)")
+    cur.execute("create temporary table db1.schema1.temp2 (x int references db1.schema2.temp1 (x))")
+    cur.execute("insert into db1.schema2.temp1 values (1)")
+    cur.execute("insert into db1.schema1.temp2 values (1)")
+    cur.execute("drop schema db1.schema2 cascade")
+    for table in ["temp1", "db1.schema2.temp1"]:
+        with pytest.raises(ProgrammingError, match="does not exist") as excinfo:
+            cur.execute(f"select * from {table}")
+        assert excinfo.value.errno == 2003
+    assert cur.execute("select * from db1.schema1.temp2").fetchall() == [(1,)]
+    cur.execute("create schema db1.schema2")
+    cur.execute("create temporary table db1.schema2.temp1 (x int)")
+    assert cur.execute("select * from db1.schema2.temp1").fetchall() == []
+
+
+temporary_foreign_keys = pytest.mark.parametrize(
+    "constraint",
+    [
+        "x int references temp1 (x)",
+        "x int constraint fk references temp1 (x) not null",
+        "x int foreign key references temp1 (x)",
+        "x int, foreign key (x) references temp1 (x)",
+        "x int, constraint fk foreign key (x) references temp1 (x)",
+    ],
+    ids=["column", "column_named", "column_foreign_key", "table", "table_named"],
+)
+
+
+@temporary_foreign_keys
+def test_temporary_table_foreign_key_not_enforced(
+    cur: snowflake.connector.cursor.SnowflakeCursor, constraint: str
+) -> None:
+    # Snowflake accepts foreign keys but doesn't enforce them
+    cur.execute("create temporary table temp1 (x int primary key)")
+    cur.execute(f"create temporary table temp2 ({constraint})")
+    cur.execute("insert into temp2 values (2)")
+    assert cur.execute("select * from temp2").fetchall() == [(2,)]
+
+
+@temporary_foreign_keys
+def test_temporary_table_foreign_key_drop_referenced(
+    cur: snowflake.connector.cursor.SnowflakeCursor, constraint: str
+) -> None:
+    cur.execute("create temporary table temp1 (x int primary key)")
+    cur.execute(f"create temporary table temp2 ({constraint})")
+    cur.execute("drop table temp1")
+    with pytest.raises(ProgrammingError, match="does not exist"):
+        cur.execute("select * from temp1")
+    assert cur.execute("select * from temp2").fetchall() == []
+
+
 @pytest.mark.parametrize(
     "statements",
     [
@@ -809,6 +864,79 @@ def test_temporary_table_drop_schema_other_session_rollback(cur: snowflake.conne
     cur.execute("rollback")
     cur.execute("create temporary table db1.schema2.temp1 as select 3 as x")
     assert cur.execute("select * from db1.schema2.temp1").fetchall() == [(3,)]
+
+
+def _outcome(cur: snowflake.connector.cursor.SnowflakeCursor, statement: str) -> object:
+    try:
+        return cur.execute(statement).fetchall()
+    except Exception as e:
+        return type(e), str(e)
+
+
+def _after_failed_statement(autocommit: bool, setup: list[str], statement: str) -> list[object]:
+    with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:
+        conn.autocommit(autocommit)
+        cur.execute("create or replace table perm1 (id int)")
+        cur.execute("drop table if exists recovery")
+        for setup_statement in setup:
+            cur.execute(setup_statement)
+        cur.execute("begin")
+        cur.execute("insert into perm1 values (1)")
+        with pytest.raises(ProgrammingError):
+            cur.execute("insert into perm1 values ('bad')")
+        outcomes = [_outcome(cur, statement), _outcome(cur, "select * from perm1")]
+        cur.execute("rollback")
+        return outcomes
+
+
+@pytest.mark.usefixtures("_fakesnow")
+@pytest.mark.parametrize("autocommit", [True, False], ids=["autocommit", "no_autocommit"])
+@pytest.mark.parametrize(
+    "statement",
+    ["rollback", "commit", "create table recovery (id int)", "create table db1.schema1.recovery (id int)"],
+    ids=["rollback", "commit", "create", "create_qualified"],
+)
+def test_temporary_table_after_failed_statement(autocommit: bool, statement: str) -> None:
+    # Checking for orphaned temporary tables before each statement doesn't change what follows a failed statement.
+    # Snowflake keeps the earlier insert unless rolled back, whereas fakesnow aborts the transaction, see #470.
+    temporary = ["create temporary table temp1 (id int)"]
+    assert _after_failed_statement(autocommit, temporary, statement) == _after_failed_statement(
+        autocommit, [], statement
+    )
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "create temporary table temp2 (id int)",
+        "create temporary table db1.schema1.temp2 (id int)",
+        "create table recovery as select * from db1.schema1.temp1",
+    ],
+    ids=["create_temporary", "create_temporary_qualified", "create_as_select"],
+)
+def test_temporary_table_aborted_transaction(conn: snowflake.connector.SnowflakeConnection, statement: str) -> None:
+    # Snowflake keeps the transaction after a failed statement, whereas fakesnow aborts it, see #470. A statement that
+    # reads the catalog for temporary tables then fails like any other, and leaves the transaction for ROLLBACK.
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("create table perm1 (id int)")
+        cur.execute("create temporary table temp1 (id int)")
+        cur.execute("insert into perm1 values (1)")
+        with pytest.raises(ProgrammingError):
+            cur.execute("insert into perm1 values ('bad')")
+        assert _outcome(cur, statement) == _outcome(cur, "select * from perm1")
+        cur.execute("rollback")
+
+
+def test_temporary_table_qualified_after_rollback(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create temporary table temp1 (id int)")
+    cur.execute("begin")
+    cur.execute("insert into db1.schema1.temp1 values (1)")
+    with pytest.raises(ProgrammingError):
+        cur.execute("insert into db1.schema1.temp1 values ('bad')")
+    cur.execute("rollback")
+    cur.execute("insert into db1.schema1.temp1 values (2)")
+    assert cur.execute("select * from db1.schema1.temp1").fetchall() == [(2,)]
 
 
 def test_to_date(cur: snowflake.connector.cursor.SnowflakeCursor):

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import duckdb
 import snowflake.connector.errors
 from duckdb import DuckDBPyConnection
 from sqlglot import Expr, exp
@@ -24,12 +25,7 @@ class TemporaryTables:
         Snowflake temporary tables belong to a database and schema, whereas DuckDB keeps them all in temp.main.
         See https://docs.snowflake.com/en/user-guide/tables-temp-transient
         """
-        if (
-            expression.parent is None
-            and self._temporary
-            # An aborted transaction rejects every query until ROLLBACK.
-            and not isinstance(expression, (exp.Transaction, exp.Commit, exp.Rollback))
-        ):
+        if expression.parent is None and self._temporary:
             self._drop_orphans()
         if (
             isinstance(expression, exp.Create)
@@ -49,6 +45,13 @@ class TemporaryTables:
             expression.set("temporary_table_owner", (catalog, schema, schema_oid[0]))
             table.set("catalog", None)
             table.set("db", None)
+            # Snowflake doesn't enforce foreign keys, and DuckDB won't drop a table that one references, which would
+            # stop a temporary table being dropped with its schema.
+            for node in list(expression.find_all(exp.ForeignKey, exp.Reference)):
+                if isinstance(node.parent, (exp.ColumnConstraint, exp.Constraint)):
+                    node.parent.pop()
+                elif isinstance(node, exp.ForeignKey):
+                    node.pop()
         elif isinstance(expression, (exp.Table, exp.Column)) and expression.db:
             parent = expression.parent
             # A permanent CREATE target can share a temporary table's name.
@@ -89,31 +92,20 @@ class TemporaryTables:
         In Snowflake dropping a schema drops its temporary tables, which DuckDB keeps in temp.main instead. Checking
         the schema's OID before each statement covers other sessions and ROLLBACK, which restores the original OID.
         """
-        live = self._duck_conn.execute("SELECT table_oid, table_name FROM duckdb_tables() WHERE temporary").fetchall()
-        if not (owned := [(oid, name, self._temporary[oid]) for oid, name in live if oid in self._temporary]):
+        sql = "SELECT table_oid, table_name FROM duckdb_tables() WHERE temporary"
+        try:
+            live = self._duck_conn.execute(sql).fetchall()
+        except duckdb.TransactionException:
+            # An aborted transaction rejects every query until it ends, so leave them to the next statement.
+            return
+        if not (owned := [(name, self._temporary[oid]) for oid, name in live if oid in self._temporary]):
             return
         sql = "SELECT database_name, schema_name, oid FROM duckdb_schemas()"
         schemas = {(catalog, schema): oid for catalog, schema, oid in self._duck_conn.execute(sql).fetchall()}
-        orphans = {
-            oid: name
-            for oid, name, (catalog, schema, schema_oid) in owned
-            if schemas.get((catalog, schema)) != schema_oid
-        }
-        if not orphans:
-            return
-        # DuckDB enforces foreign keys, so drop referencing tables first. An orphan still referenced by a kept table
-        # stays until that table is dropped; oid() no longer resolves it meanwhile.
-        sql = """
-            SELECT c.table_oid, t.table_oid FROM duckdb_constraints() c
-            JOIN duckdb_tables() t ON t.temporary AND lower(t.table_name) = lower(c.referenced_table)
-            WHERE c.database_name = 'temp' AND c.constraint_type = 'FOREIGN KEY' AND c.table_oid != t.table_oid
-        """
-        references = set(self._duck_conn.execute(sql).fetchall())
-        while droppable := {oid for oid in orphans if all(referenced != oid for _, referenced in references)}:
-            for oid in droppable:
-                table = exp.table_(orphans.pop(oid), db="main", catalog="temp", quoted=True)
+        for name, (catalog, schema, schema_oid) in owned:
+            if schemas.get((catalog, schema)) != schema_oid:
+                table = exp.table_(name, db="main", catalog="temp", quoted=True)
                 self._duck_conn.execute(f"DROP TABLE {table.sql(dialect='duckdb')}")
-            references = {reference for reference in references if reference[0] not in droppable}
 
     def oid(self, catalog: str | None, schema: str, name: str) -> int | None:
         if not self._temporary:
