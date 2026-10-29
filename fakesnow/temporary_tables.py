@@ -65,6 +65,9 @@ class TemporaryTables:
             # COPY resolves its target by its Snowflake name for table stages and load history.
             if isinstance(parent, exp.Copy):
                 return expression
+            # Foreign keys left in a CREATE are a permanent table's, which reference permanent tables.
+            if expression.find_ancestor(exp.Reference):
+                return expression
             name = expression.table if isinstance(expression, exp.Column) else expression.name
             if self.oid(expression.catalog or current_database, expression.db, name) is not None:
                 expression.set("catalog", exp.to_identifier("temp"))
