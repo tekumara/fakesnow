@@ -301,6 +301,12 @@ class FakeSnowflakeCursor:
         return (
             expression.transform(lambda e: transforms.identifier(e, params), copy=False)
             .transform(transforms.upper_case_unquoted_identifiers, copy=False)
+            .transform(
+                lambda e: transforms.temporary_tables(
+                    e, self._duck_conn, self._conn.database, self._conn.schema, self._conn.table_stages
+                ),
+                copy=False,
+            )
             .transform(transforms.alter_session, copy=False)
             .transform(transforms.update_variables, variables=self._conn.variables, copy=False)
             .transform(transforms.current_version, copy=False)
@@ -630,8 +636,9 @@ class FakeSnowflakeCursor:
 
                 # a newly created table object has no load history
                 if table := transformed.find(exp.Table):
-                    catalog = table.catalog or self._conn.database
-                    schema = table.db or self._conn.schema
+                    catalog, schema = self._conn.table_stages.logical_schema(
+                        table, self._conn.database, self._conn.schema
+                    )
                     assert catalog and schema
                     self._duck_conn.execute(
                         f"DELETE FROM {catalog}._fs_information_schema._fs_load_history "

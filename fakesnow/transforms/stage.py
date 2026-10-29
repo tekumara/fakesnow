@@ -70,10 +70,29 @@ class TableStages:
         # Forget dropped tables here rather than tracking DROP, so the registry is bounded by live tables.
         live_oids = set(live.values())
         self._temporary = {oid: owner for oid, owner in self._temporary.items() if oid in live_oids}
-        # CREATE TEMP TABLE IF NOT EXISTS succeeds without creating anything when the name is already taken, even
-        # from another schema, so the OID may already be registered. Keep the schema it was created in; overwriting
-        # it would move the existing table's stage to the current schema.
-        self._temporary.setdefault(live[table.name], (table.catalog or catalog, table.db or schema))
+        # CREATE TEMP TABLE IF NOT EXISTS succeeds without creating anything when the name is already taken, so
+        # the OID may already be registered. Keep the schema it was created in; overwriting it would move the
+        # existing table's stage to the current schema.
+        if not (owner := expression.args.get("temporary_owner")):
+            # Created directly in DuckDB's temp catalog, so it has no Snowflake schema to remember.
+            return
+        self._temporary.setdefault(live[table.name], owner)
+
+    def temporary_owners(self) -> dict[str, tuple[str | None, str | None]]:
+        """The (catalog, schema) each live temporary table was created in, by table name."""
+        if not self._temporary:
+            return {}
+        sql = "SELECT table_name, table_oid FROM duckdb_tables() WHERE temporary"
+        live = self._duck_conn.execute(sql).fetchall()
+        return {name: owner for name, oid in live if (owner := self._temporary.get(oid))}
+
+    def logical_schema(
+        self, table: exp.Table, catalog: str | None, schema: str | None
+    ) -> tuple[str | None, str | None]:
+        """The Snowflake (catalog, schema) of a table, including one rewritten to DuckDB's temp catalog."""
+        if table.catalog == "temp":
+            return self.temporary_owners().get(table.name) or (catalog, schema)
+        return table.catalog or catalog, table.db or schema
 
     def resolve_for_copy(
         self, catalog: str, schema: str, stage_name: str, target: tuple[str | None, str | None, str]

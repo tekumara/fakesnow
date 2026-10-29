@@ -4,6 +4,7 @@ from __future__ import annotations
 import datetime
 
 import snowflake.connector
+import snowflake.connector.cursor
 import sqlglot
 
 from fakesnow import transforms
@@ -26,7 +27,7 @@ def test_transform_merge() -> None:
         )
     ] == [
         strip("""
-            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            CREATE OR REPLACE TEMPORARY TABLE "temp"."main".merge_candidates AS
             SELECT t2.newStatus, t2.newVal, t2.t2Key,
                 CASE
                     WHEN t1.t1Key = t2.t2Key AND t2.marked = 1 THEN 0
@@ -40,32 +41,32 @@ def test_transform_merge() -> None:
             WHERE NOT MERGE_OP IS NULL"""),
         strip("""
             DELETE FROM t1
-            USING merge_candidates AS t2
+            USING "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 0"""),
         strip("""
             UPDATE t1
             SET val = t2.newVal, status = 'new'
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 1"""),
         strip("""
             UPDATE t1
             SET val = t2.newVal
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 2"""),
         strip("""
             INSERT INTO t1 (t1Key, val, status)
             SELECT t2.t2Key, 'newVal', t2.newStatus
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t2.merge_op = 3"""),
         strip("""
             SELECT
               COALESCE(COUNT_IF(merge_op IN (3)), 0) AS "number of rows inserted",
               COALESCE(COUNT_IF(merge_op IN (1, 2)), 0) AS "number of rows updated",
               COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows deleted"
-            FROM merge_candidates"""),
+            FROM "temp"."main".merge_candidates"""),
     ]
 
 
@@ -85,7 +86,7 @@ def test_transform_merge_table_alias_target() -> None:
         )
     ] == [
         strip("""
-            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            CREATE OR REPLACE TEMPORARY TABLE "temp"."main".merge_candidates AS
             SELECT t2.newStatus, t2.newVal, t2.t2Key,
                 CASE
                     WHEN t1.t1Key = t2.t2Key AND t2.marked = 1 THEN 0
@@ -99,32 +100,32 @@ def test_transform_merge_table_alias_target() -> None:
             WHERE NOT MERGE_OP IS NULL"""),
         strip("""
             DELETE FROM table1 AS t1
-            USING merge_candidates AS t2
+            USING "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 0"""),
         strip("""
             UPDATE table1 AS t1
             SET val = t2.newVal, status = 'new'
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 1"""),
         strip("""
             UPDATE table1 AS t1
             SET val = t2.newVal
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 2"""),
         strip("""
             INSERT INTO table1 AS t1(t1Key, val, status)
             SELECT t2.t2Key, 'newVal', t2.newStatus
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t2.merge_op = 3"""),
         strip("""
             SELECT
               COALESCE(COUNT_IF(merge_op IN (3)), 0) AS "number of rows inserted",
               COALESCE(COUNT_IF(merge_op IN (1, 2)), 0) AS "number of rows updated",
               COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows deleted"
-            FROM merge_candidates"""),
+            FROM "temp"."main".merge_candidates"""),
     ]
 
 
@@ -144,7 +145,7 @@ def test_transform_merge_table_alias_source() -> None:
         )
     ] == [
         strip("""
-            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            CREATE OR REPLACE TEMPORARY TABLE "temp"."main".merge_candidates AS
             SELECT t2.newStatus, t2.newVal, t2.t2Key,
                 CASE
                     WHEN t1.t1Key = t2.t2Key AND t2.marked = 1 THEN 0
@@ -158,32 +159,32 @@ def test_transform_merge_table_alias_source() -> None:
             WHERE NOT MERGE_OP IS NULL"""),
         strip("""
             DELETE FROM t1
-            USING merge_candidates AS t2
+            USING "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 0"""),
         strip("""
             UPDATE t1
             SET val = t2.newVal, status = 'new'
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 1"""),
         strip("""
             UPDATE t1
             SET val = t2.newVal
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 2"""),
         strip("""
             INSERT INTO t1 (t1Key, val, status)
             SELECT t2.t2Key, 'newVal', t2.newStatus
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t2.merge_op = 3"""),
         strip("""
             SELECT
               COALESCE(COUNT_IF(merge_op IN (3)), 0) AS "number of rows inserted",
               COALESCE(COUNT_IF(merge_op IN (1, 2)), 0) AS "number of rows updated",
               COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows deleted"
-            FROM merge_candidates"""),
+            FROM "temp"."main".merge_candidates"""),
     ]
 
 
@@ -200,7 +201,7 @@ def test_transform_merge_not_matched_condition() -> None:
         )
     ] == [
         strip("""
-            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            CREATE OR REPLACE TEMPORARY TABLE "temp"."main".merge_candidates AS
             SELECT t2.newStatus, t2.newVal, t2.t2Key,
                 CASE
                     WHEN t1.rowid IS NULL AND t2.insertable = 1 THEN 0
@@ -212,12 +213,12 @@ def test_transform_merge_not_matched_condition() -> None:
         strip("""
             INSERT INTO t1 (t1Key, val, status)
             SELECT t2.t2Key, t2.newVal, t2.newStatus
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t2.merge_op = 0"""),
         strip("""
             SELECT
               COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows inserted"
-            FROM merge_candidates"""),
+            FROM "temp"."main".merge_candidates"""),
     ]
 
 
@@ -238,7 +239,7 @@ def test_transform_merge_complex_join_keys() -> None:
         )
     ] == [
         strip("""
-            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            CREATE OR REPLACE TEMPORARY TABLE "temp"."main".merge_candidates AS
             SELECT t2.id, t2.name,
                 CASE
                     WHEN t1.id = t2.id AND t1.name = t2.name AND t1.status = 'old' THEN 0
@@ -251,19 +252,19 @@ def test_transform_merge_complex_join_keys() -> None:
                """),
         strip("""
             DELETE FROM t1
-            USING merge_candidates AS t2
+            USING "temp"."main".merge_candidates AS t2
             WHERE t1.id = t2.id AND t1.name = t2.name
             AND t2.merge_op = 0"""),
         strip("""
             INSERT INTO t1
             SELECT t2.id, t2.name, 'new'
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t2.merge_op = 1"""),
         strip("""
             SELECT
               COALESCE(COUNT_IF(merge_op IN (1)), 0) AS "number of rows inserted",
               COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows deleted"
-            FROM merge_candidates"""),
+            FROM "temp"."main".merge_candidates"""),
     ]
 
 
@@ -286,7 +287,7 @@ def test_transform_merge_source_subquery() -> None:
         )
     ] == [
         strip("""
-            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            CREATE OR REPLACE TEMPORARY TABLE "temp"."main".merge_candidates AS
             SELECT src.ACTIVE_STATUS, src.BATCH_NUMBER, src.ID,
                 CASE
                     WHEN tgt.BATCH_NUMBER = src.BATCH_NUMBER AND tgt.ID = src.ID THEN 0
@@ -300,13 +301,13 @@ def test_transform_merge_source_subquery() -> None:
         strip("""
             UPDATE LINE AS tgt
             SET ACTIVE_STATUS = src.ACTIVE_STATUS, END_DATE = NULL
-            FROM merge_candidates AS src
+            FROM "temp"."main".merge_candidates AS src
             WHERE tgt.BATCH_NUMBER = src.BATCH_NUMBER AND tgt.ID = src.ID
             AND src.merge_op = 0"""),
         strip("""
             SELECT
               COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows updated"
-            FROM merge_candidates"""),
+            FROM "temp"."main".merge_candidates"""),
     ]
 
 
@@ -326,7 +327,7 @@ def test_transform_merge_join_function() -> None:
         )
     ] == [
         strip("""
-            CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+            CREATE OR REPLACE TEMPORARY TABLE "temp"."main".merge_candidates AS
             SELECT t2.newStatus, t2.newVal, t2.t2Key,
                 CASE
                     WHEN t1.t1Key IS NOT DISTINCT FROM t2.t2Key AND t2.marked = 1 THEN 0
@@ -340,32 +341,32 @@ def test_transform_merge_join_function() -> None:
             WHERE NOT MERGE_OP IS NULL"""),
         strip("""
             DELETE FROM t1
-            USING merge_candidates AS t2
+            USING "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key IS NOT DISTINCT FROM t2.t2Key
             AND t2.merge_op = 0"""),
         strip("""
             UPDATE t1
             SET val = t2.newVal, status = 'new'
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key IS NOT DISTINCT FROM t2.t2Key
             AND t2.merge_op = 1"""),
         strip("""
             UPDATE t1
             SET val = t2.newVal
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t1.t1Key IS NOT DISTINCT FROM t2.t2Key
             AND t2.merge_op = 2"""),
         strip("""
             INSERT INTO t1 (t1Key, val, status)
             SELECT t2.t2Key, 'newVal', t2.newStatus
-            FROM merge_candidates AS t2
+            FROM "temp"."main".merge_candidates AS t2
             WHERE t2.merge_op = 3"""),
         strip("""
             SELECT
               COALESCE(COUNT_IF(merge_op IN (3)), 0) AS "number of rows inserted",
               COALESCE(COUNT_IF(merge_op IN (1, 2)), 0) AS "number of rows updated",
               COALESCE(COUNT_IF(merge_op IN (0)), 0) AS "number of rows deleted"
-            FROM merge_candidates"""),
+            FROM "temp"."main".merge_candidates"""),
     ]
 
 
@@ -702,3 +703,17 @@ def test_merge_no_rows_affected_returns_integer_counts(dcur: snowflake.connector
     dcur.execute(merge)
     assert dcur.fetchall() == [{"number of rows inserted": 0, "number of rows updated": 0}]
     assert dcur.rowcount == 0
+
+
+def test_merge_after_switching_schema(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    # merge uses a scratch temporary table, which must not tie later merges to the first schema
+    cur.execute("create table db1.schema1.t1 (id int)")
+    cur.execute("create schema db1.other")
+    cur.execute("create table db1.other.t1 (id int)")
+
+    for schema in ("schema1", "other"):
+        cur.execute(f"use schema db1.{schema}")
+        cur.execute(
+            "merge into t1 using (select 1 as id) s on t1.id = s.id when not matched then insert (id) values (s.id)"
+        )
+        assert cur.fetchall() == [(1,)]

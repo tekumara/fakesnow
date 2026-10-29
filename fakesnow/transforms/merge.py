@@ -89,7 +89,7 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> Expr:
             )
 
     sql = f"""
-    CREATE OR REPLACE TEMPORARY TABLE merge_candidates AS
+    CREATE OR REPLACE TEMPORARY TABLE "temp"."main".merge_candidates AS
     SELECT
         {", ".join(sorted(values))},
         CASE
@@ -128,7 +128,7 @@ def _mutations(merge_expr: exp.Merge) -> list[Expr]:
             if isinstance(then, exp.Var) and then.name.upper() == "DELETE":
                 delete_sql = f"""
                     DELETE FROM {target_tbl}
-                    USING merge_candidates AS {source_tbl}
+                    USING "temp"."main".merge_candidates AS {source_tbl}
                     WHERE {join_expr}
                     AND {source_tbl}.merge_op = {w_idx}
                 """
@@ -142,7 +142,7 @@ def _mutations(merge_expr: exp.Merge) -> list[Expr]:
                 update_sql = f"""
                     UPDATE {target_tbl}
                     SET {set_clauses}
-                    FROM merge_candidates AS {source_tbl}
+                    FROM "temp"."main".merge_candidates AS {source_tbl}
                     WHERE {join_expr}
                     AND {source_tbl}.merge_op = {w_idx}
                 """
@@ -157,7 +157,7 @@ def _mutations(merge_expr: exp.Merge) -> list[Expr]:
             insert_sql = f"""
                 INSERT INTO {target_tbl} {columns}
                 SELECT {values}
-                FROM merge_candidates AS {source_tbl}
+                FROM "temp"."main".merge_candidates AS {source_tbl}
                 WHERE {source_tbl}.merge_op = {w_idx}
             """
             statements.append(sqlglot.parse_one(insert_sql))
@@ -219,7 +219,7 @@ def _counts(merge_expr: exp.Merge) -> Expr:
     ]
     sql = f"""
     SELECT {", ".join(count_statements)}
-    FROM merge_candidates
+    FROM "temp"."main".merge_candidates
     """
 
     counts = sqlglot.parse_one(sql)
