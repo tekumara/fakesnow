@@ -202,6 +202,10 @@ def test_create_clone() -> None:
         sqlglot.parse_one("create table customers2 clone db1.schema1.customer").transform(create_clone).sql()
         == "CREATE TABLE customers2 AS SELECT * FROM db1.schema1.customer"
     )
+    assert (
+        sqlglot.parse_one("create temporary table customers2 clone customer").transform(create_clone).sql()
+        == "CREATE TEMPORARY TABLE customers2 AS SELECT * FROM customer"
+    )
 
 
 def test_create_database() -> None:
