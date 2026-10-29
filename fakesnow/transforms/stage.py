@@ -55,6 +55,8 @@ class TableStages:
         self._session = uuid.uuid4().hex
         # Temporary table OID -> (catalog, schema) it was created in, which DuckDB does not record.
         self._temporary: dict[int, tuple[str | None, str | None]] = {}
+        # OIDs of this session's temporary tables whose metadata is recorded, see metadata_owner.
+        self._metadata_oids: set[int] = set()
 
     def record_temporary_table(self, expression: Expr, catalog: str | None, schema: str | None) -> None:
         if not (
@@ -70,10 +72,50 @@ class TableStages:
         # Forget dropped tables here rather than tracking DROP, so the registry is bounded by live tables.
         live_oids = set(live.values())
         self._temporary = {oid: owner for oid, owner in self._temporary.items() if oid in live_oids}
-        # CREATE TEMP TABLE IF NOT EXISTS succeeds without creating anything when the name is already taken, even
-        # from another schema, so the OID may already be registered. Keep the schema it was created in; overwriting
-        # it would move the existing table's stage to the current schema.
-        self._temporary.setdefault(live[table.name], (table.catalog or catalog, table.db or schema))
+        if dropped := self._metadata_oids - live_oids:
+            # Metadata is keyed by OID, so a dropped or replaced table's rows would otherwise never be removed.
+            oids = [str(oid) for oid in dropped]
+            for ext in ("_fs_columns_ext", "_fs_tables_ext"):
+                self._duck_conn.execute(
+                    f"DELETE FROM _fs_global._fs_information_schema.{ext} "
+                    "WHERE ext_table_catalog = 'temp' AND list_contains(?, ext_table_schema)",
+                    [oids],
+                )
+            self._metadata_oids &= live_oids
+        # CREATE TEMP TABLE IF NOT EXISTS succeeds without creating anything when the name is already taken, so
+        # the OID may already be registered. Keep the schema it was created in; overwriting it would move the
+        # existing table's stage to the current schema.
+        if not (owner := expression.args.get("temporary_owner")):
+            # Created directly in DuckDB's temp catalog, so it has no Snowflake schema to remember.
+            return
+        self._temporary.setdefault(live[table.name], owner)
+
+    def temporary_owners(self) -> dict[str, tuple[str | None, str | None]]:
+        """The (catalog, schema) each live temporary table was created in, by table name."""
+        if not self._temporary:
+            return {}
+        sql = "SELECT table_name, table_oid FROM duckdb_tables() WHERE temporary"
+        live = self._duck_conn.execute(sql).fetchall()
+        return {name: owner for name, oid in live if (owner := self._temporary.get(oid))}
+
+    def logical_schema(
+        self, table: exp.Table, catalog: str | None, schema: str | None
+    ) -> tuple[str | None, str | None]:
+        """The Snowflake (catalog, schema) of a table, including one rewritten to DuckDB's temp catalog."""
+        if table.catalog == "temp":
+            return self.temporary_owners().get(table.name) or (catalog, schema)
+        return table.catalog or catalog, table.db or schema
+
+    def metadata_owner(
+        self, table: exp.Table, catalog: str | None, schema: str | None
+    ) -> tuple[str | None, str | None]:
+        """The (catalog, schema) a table's Snowflake-only metadata is keyed by; temporary tables use their OID."""
+        if table.catalog == "temp":
+            sql = "SELECT table_oid FROM duckdb_tables() WHERE temporary AND table_name = ?"
+            if live := self._duck_conn.execute(sql, [table.name]).fetchone():
+                self._metadata_oids.add(live[0])
+                return "temp", str(live[0])
+        return table.catalog or catalog, table.db or schema
 
     def resolve_for_copy(
         self, catalog: str, schema: str, stage_name: str, target: tuple[str | None, str | None, str]

@@ -66,7 +66,7 @@ def copy_into(
         duck_conn.execute(sql)
         return sql
 
-    schema = table.db or current_schema
+    _, schema = table_stages.logical_schema(table, current_database, current_schema)
     assert schema
 
     parquet_info = None
@@ -343,7 +343,7 @@ def stage_url_from_var(
     fqname = f"{database_name}.{schema_name}.{name}"
 
     if stage.is_table_stage(name):
-        target = (target_table.catalog or current_database, target_table.db or current_schema, target_table.name)
+        target = (*table_stages.logical_schema(target_table, current_database, current_schema), target_table.name)
         url = stage.internal_dir(table_stages.resolve_for_copy(database_name, schema_name, name, target))
     else:
         duck_conn.execute(
