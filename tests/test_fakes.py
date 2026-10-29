@@ -723,9 +723,9 @@ def test_quoted_lookup_of_unquoted_names_reserved_by_duckdb(cur: snowflake.conne
 
 
 def test_quoted_names_reserved_by_duckdb_keep_their_case(dcur: snowflake.connector.cursor.DictCursor):
-    dcur.execute('create table "pIvOt" ("sEmI" int)')
-    dcur.execute('insert into "pIvOt" values (1)')
-    dcur.execute('select "sEmI" from "pIvOt"')
+    dcur.execute('create table "PiVoT" ("sEmI" int)')
+    dcur.execute('insert into "PiVoT" values (1)')
+    dcur.execute('select "sEmI" from "PiVoT"')
     assert dcur.fetchall() == [{"sEmI": 1}]
 
 
