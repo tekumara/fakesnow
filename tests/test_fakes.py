@@ -963,18 +963,10 @@ def test_temporary_table_after_failed_statement(autocommit: bool, statement: str
     )
 
 
-@pytest.mark.parametrize(
-    "statement",
-    [
-        "create temporary table temp2 (id int)",
-        "create temporary table db1.schema1.temp2 (id int)",
-        "create table recovery as select * from db1.schema1.temp1",
-    ],
-    ids=["create_temporary", "create_temporary_qualified", "create_as_select"],
-)
-def test_temporary_table_aborted_transaction(conn: snowflake.connector.SnowflakeConnection, statement: str) -> None:
+def test_temporary_table_aborted_transaction(conn: snowflake.connector.SnowflakeConnection) -> None:
     # Snowflake keeps the transaction after a failed statement, whereas fakesnow aborts it, see #470. A statement that
-    # reads the catalog for temporary tables then fails like any other, and leaves the transaction for ROLLBACK.
+    # reads the catalog for qualified temporary table references then fails like any other, and leaves the transaction
+    # for ROLLBACK.
     conn.autocommit(False)
     with conn.cursor() as cur:
         cur.execute("create table perm1 (id int)")
@@ -982,8 +974,91 @@ def test_temporary_table_aborted_transaction(conn: snowflake.connector.Snowflake
         cur.execute("insert into perm1 values (1)")
         with pytest.raises(ProgrammingError):
             cur.execute("insert into perm1 values ('bad')")
+        statement = "create table recovery as select * from db1.schema1.temp1"
         assert _outcome(cur, statement) == _outcome(cur, "select * from perm1")
         cur.execute("rollback")
+
+
+@pytest.mark.parametrize("table", ["temp1", "db1.schema2.temp1"], ids=["unqualified", "qualified"])
+def test_temporary_table_create_after_failed_statement(
+    conn: snowflake.connector.SnowflakeConnection, table: str
+) -> None:
+    # Outside autocommit, DDL ends the aborted transaction (see #470), so the temporary table is created, in its schema.
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("create schema db1.schema2")
+        cur.execute("use schema db1.schema2")
+        cur.execute("create table perm1 (id int)")
+        cur.execute("insert into perm1 values (1)")
+        with pytest.raises(ProgrammingError):
+            cur.execute("insert into perm1 values ('bad')")
+        cur.execute(f"create temporary table {table} (id int)")
+        cur.execute("insert into db1.schema2.temp1 values (1)")
+        assert cur.execute("select * from db1.schema2.temp1").fetchall() == [(1,)]
+        cur.execute("drop schema db1.schema2")
+        for name in ["temp1", "db1.schema2.temp1"]:
+            with pytest.raises(ProgrammingError, match="does not exist"):
+                cur.execute(f"select * from {name}")
+
+
+def test_temporary_table_create_after_failed_statement_missing_schema(
+    conn: snowflake.connector.SnowflakeConnection,
+) -> None:
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("create schema db1.schema2")
+        cur.execute("use schema db1.schema2")
+        cur.execute("drop schema db1.schema2")
+        cur.execute("create table db1.schema1.perm1 (id int)")
+        cur.execute("insert into db1.schema1.perm1 values (1)")
+        with pytest.raises(ProgrammingError):
+            cur.execute("insert into db1.schema1.perm1 values ('bad')")
+        with pytest.raises(ProgrammingError, match="does not exist") as excinfo:
+            cur.execute("create temporary table temp1 (id int)")
+        assert excinfo.value.errno == 2003
+        with pytest.raises(ProgrammingError, match="does not exist"):
+            cur.execute("select * from temp1")
+
+
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "create or replace temporary table db1.missing.temp1 (id int)",
+        "create temporary table if not exists db1.missing.temp1 (id int)",
+    ],
+    ids=["replace", "if_not_exists"],
+)
+def test_temporary_table_replace_after_failed_statement_missing_schema(
+    conn: snowflake.connector.SnowflakeConnection, statement: str
+) -> None:
+    # Outside autocommit, DDL ends the aborted transaction (see #470), and only then can the schema be checked, which
+    # must happen before the existing table is replaced.
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("create table perm1 (id int)")
+        cur.execute("create temporary table temp1 as select 42 as id")
+        cur.execute("insert into perm1 values (1)")
+        with pytest.raises(ProgrammingError):
+            cur.execute("insert into perm1 values ('bad')")
+        with pytest.raises(ProgrammingError, match="does not exist") as excinfo:
+            cur.execute(statement)
+        assert excinfo.value.errno == 2003
+        assert cur.execute("select * from temp1").fetchall() == [(42,)]
+
+
+def test_temporary_table_merge_after_failed_statement(conn: snowflake.connector.SnowflakeConnection) -> None:
+    # MERGE first replaces a temporary table of candidates, which outside autocommit ends the aborted transaction
+    # (see #470), as other DDL does.
+    conn.autocommit(False)
+    with conn.cursor() as cur:
+        cur.execute("create table perm1 (id int)")
+        cur.execute("insert into perm1 values (1)")
+        with pytest.raises(ProgrammingError):
+            cur.execute("insert into perm1 values ('bad')")
+        cur.execute(
+            "merge into perm1 using (select 2 as id) s on perm1.id = s.id when not matched then insert values (s.id)"
+        )
+        assert cur.execute("select * from perm1").fetchall() == [(2,)]
 
 
 def test_temporary_table_qualified_after_rollback(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:

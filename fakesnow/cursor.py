@@ -490,6 +490,8 @@ class FakeSnowflakeCursor:
             elif isinstance(transformed, (exp.Commit, exp.Rollback)):
                 self._conn._in_transaction = False
 
+        self._conn.temporary_tables.validate(transformed)
+
         affected_count = None
         try:
             if isinstance(transformed, exp.Copy):

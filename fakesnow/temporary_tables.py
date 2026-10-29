@@ -35,14 +35,13 @@ class TemporaryTables:
         ):
             catalog, schema = table.catalog or current_database, table.db or current_schema
             # Removing the qualifiers bypasses DuckDB's schema validation, so check the original owner first.
-            sql = "SELECT oid FROM duckdb_schemas() WHERE database_name = ? AND schema_name = ?"
-            if not (schema_oid := self._duck_conn.execute(sql, [catalog, schema]).fetchone()):
-                raise snowflake.connector.errors.ProgrammingError(
-                    msg=f"SQL compilation error:\nSchema '{catalog}.{schema}' does not exist or not authorized.",
-                    errno=2003,
-                    sqlstate="42S02",
-                )
-            expression.set("temporary_table_owner", (catalog, schema, schema_oid[0]))
+            try:
+                schema_oid = self._schema_oid(catalog, schema)
+            except duckdb.TransactionException:
+                # An aborted transaction rejects the lookup. Outside autocommit, DDL ends the transaction before it
+                # runs, so validate() checks the schema then, before the table is created or replaced.
+                schema_oid = None
+            expression.set("temporary_table_owner", (catalog, schema, schema_oid))
             table.set("catalog", None)
             table.set("db", None)
             # Snowflake doesn't enforce foreign keys, and DuckDB won't drop a table that one references, which would
@@ -74,6 +73,18 @@ class TemporaryTables:
                 expression.set("db", exp.to_identifier("main"))
         return expression
 
+    def validate(self, expression: Expr) -> None:
+        """Check the schema of a temporary table that transform() couldn't, just before it's created.
+
+        Called once DDL has ended the aborted transaction, so nothing is created or replaced in a missing schema. In
+        autocommit mode the transaction is still aborted, and the lookup fails as the CREATE itself would.
+        """
+        if (owner := expression.args.get("temporary_table_owner")) and owner[2] is None:
+            # transform() couldn't drop orphans either, and one could take the new table's name.
+            self._drop_orphans()
+            catalog, schema, _ = owner
+            expression.set("temporary_table_owner", (catalog, schema, self._schema_oid(catalog, schema)))
+
     def record(self, expression: Expr) -> None:
         if not (
             isinstance(expression, exp.Create)
@@ -83,11 +94,11 @@ class TemporaryTables:
             return
         # Temporary table names are unique within the session, so the name identifies the new table's OID.
         sql = "SELECT table_name, table_oid FROM duckdb_tables() WHERE temporary"
-        live = dict(self._duck_conn.execute(sql).fetchall())
+        oid = dict(self._duck_conn.execute(sql).fetchall())[table.name]
         # CREATE TEMP TABLE IF NOT EXISTS succeeds without creating anything when the name is already taken, even
         # from another schema, so the OID may already be registered. Keep the schema it was created in; overwriting
         # it would move the existing table's stage to the current schema.
-        self._temporary.setdefault(live[table.name], owner)
+        self._temporary.setdefault(oid, owner)
 
     def _drop_orphans(self) -> None:
         """Drop temporary tables whose schema has been dropped or replaced since they were created, by any session.
@@ -109,6 +120,16 @@ class TemporaryTables:
             if schemas.get((catalog, schema)) != schema_oid:
                 table = exp.table_(name, db="main", catalog="temp", quoted=True)
                 self._duck_conn.execute(f"DROP TABLE {table.sql(dialect='duckdb')}")
+
+    def _schema_oid(self, catalog: str | None, schema: str | None) -> int:
+        sql = "SELECT oid FROM duckdb_schemas() WHERE database_name = ? AND schema_name = ?"
+        if not (row := self._duck_conn.execute(sql, [catalog, schema]).fetchone()):
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"SQL compilation error:\nSchema '{catalog}.{schema}' does not exist or not authorized.",
+                errno=2003,
+                sqlstate="42S02",
+            )
+        return row[0]
 
     def oid(self, catalog: str | None, schema: str, name: str) -> int | None:
         if not self._temporary:
