@@ -19,7 +19,8 @@ def temporary_tables(
 
     A Snowflake temporary table belongs to the schema it was created in. DuckDB keeps every temporary table in
     temp.main and only accepts that catalog when creating one, so temporary tables are rewritten to temp.main
-    where they're created or referenced in their own schema.
+    where they're created or referenced in their own schema, and unqualified references from another schema are
+    qualified so they don't reach the temporary table.
     """
     if expression.parent is not None:
         return expression
@@ -57,11 +58,14 @@ def temporary_tables(
         return expression
 
     for table in _referenced_tables(expression, target):
-        if (owner := owners.get(table.name)) and (
-            table.catalog or current_database,
-            table.db or current_schema,
-        ) == owner:
+        if not (owner := owners.get(table.name)):
+            continue
+        if (table.catalog or current_database, table.db or current_schema) == owner:
             _to_temp(table)
+        elif not table.db and current_database and current_schema:
+            # DuckDB finds a temporary table by its unqualified name from any schema, Snowflake only from its own
+            table.set("catalog", exp.to_identifier(current_database))
+            table.set("db", exp.to_identifier(current_schema))
 
     return expression
 

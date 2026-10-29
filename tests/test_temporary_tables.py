@@ -117,6 +117,17 @@ def test_temporary_table_text_length_does_not_change_permanent_table(
     assert [(name, type_) for name, type_, *_ in cur.fetchall()] == [("S", "VARCHAR(20)")]
 
 
+def test_unqualified_name_from_another_schema_does_not_find_temporary_table(
+    cur: snowflake.connector.cursor.SnowflakeCursor,
+) -> None:
+    cur.execute("create temp table t as select 1 as x")
+    cur.execute("create schema db1.other")
+    cur.execute("use schema db1.other")
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError, match="does not exist"):
+        cur.execute("select * from t")
+
+
 def test_qualified_name_from_another_schema_finds_temporary_table(
     cur: snowflake.connector.cursor.SnowflakeCursor,
 ) -> None:
