@@ -86,7 +86,7 @@ def _referenced_tables(expression: Expr, create_target: exp.Table | None) -> lis
 
     # DESCRIBE's kind is lower case, DROP keeps its tables in a list
     is_table_statement = str(expression.args.get("kind")).upper() == "TABLE"
-    if isinstance(expression, (exp.Insert, exp.Update, exp.Delete)) or (
+    if isinstance(expression, (exp.Insert, exp.Copy, exp.Update, exp.Delete)) or (
         isinstance(expression, exp.Describe) and is_table_statement
     ):
         this = expression.this
