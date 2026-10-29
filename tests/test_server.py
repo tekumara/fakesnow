@@ -223,6 +223,22 @@ def test_server_executemany_qmark(server: dict) -> None:
         ]
 
 
+def test_server_begin_then_autocommit_false(server: dict) -> None:
+    # as test_begin_then_autocommit_false, with the insert sent as an array binding
+    with (
+        snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create or replace table example (id int)")
+        cur.execute("begin transaction")
+        conn.autocommit(False)
+        cur.executemany("insert into example values (?)", [(1,), (2,)])
+        cur.execute("rollback")
+
+        cur.execute("select count(*) from example")
+        assert cur.fetchone() == (0,)
+
+
 def test_server_array_binding_returns_one_count_row(server_query: ServerQuery) -> None:
     assert server_query("create table example (id int)")["success"]
     result = server_query("insert into example values (?)", {"1": {"type": "FIXED", "value": ["1", "2", "3"]}})
