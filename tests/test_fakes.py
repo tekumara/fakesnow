@@ -680,6 +680,137 @@ def test_temporary_table_does_not_capture_sequence(cur: snowflake.connector.curs
         cur.execute("select temp1.nextval")
 
 
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "drop schema db1.schema2",
+        "drop schema schema2",
+        "drop schema if exists db1.schema2",
+        "drop schema db1.schema2 cascade",
+        "create or replace schema db1.schema2",
+    ],
+    ids=["qualified", "current", "if_exists", "cascade", "replace"],
+)
+def test_temporary_table_drop_schema(cur: snowflake.connector.cursor.SnowflakeCursor, statement: str) -> None:
+    # a schema's temporary tables are dropped with it
+    cur.execute("create schema db1.schema2")
+    cur.execute("create temporary table temp1 as select 1 as x")
+    cur.execute(statement)
+    with pytest.raises(ProgrammingError, match="does not exist") as excinfo:
+        cur.execute("select * from db1.schema2.temp1")
+    assert excinfo.value.errno == 2003
+
+
+def test_temporary_table_drop_schema_recreate(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create schema db1.schema2")
+    cur.execute("create temporary table db1.schema2.temp1 as select 1 as x")
+    cur.execute("drop schema db1.schema2")
+    cur.execute("create schema db1.schema2")
+    cur.execute("create temporary table db1.schema2.temp1 as select 2 as x")
+    assert cur.execute("select * from db1.schema2.temp1").fetchall() == [(2,)]
+
+
+def test_temporary_table_drop_other_schema(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create temporary table db1.schema1.temp1 as select 1 as x")
+    cur.execute("create schema db1.schema2")
+    cur.execute("drop schema db1.schema2")
+    assert cur.execute("select * from db1.schema1.temp1").fetchall() == [(1,)]
+
+
+def test_temporary_table_drop_schema_other_database(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create database db2")
+    cur.execute("create schema db2.schema1")
+    cur.execute("create temporary table db2.schema1.temp1 as select 1 as x")
+    cur.execute("drop schema db1.schema1")
+    assert cur.execute("select * from db2.schema1.temp1").fetchall() == [(1,)]
+
+
+def test_temporary_table_drop_schema_foreign_key(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create schema db1.schema2")
+    cur.execute("create temporary table db1.schema2.temp1 (x int primary key)")
+    cur.execute("create temporary table db1.schema2.temp2 (x int references db1.schema2.temp1 (x))")
+    cur.execute("drop schema db1.schema2 cascade")
+    cur.execute("create schema db1.schema2")
+    cur.execute("create temporary table db1.schema2.temp1 as select 1 as x")
+    cur.execute("create temporary table db1.schema2.temp2 as select 2 as x")
+    assert cur.execute("select * from db1.schema2.temp1").fetchall() == [(1,)]
+    assert cur.execute("select * from db1.schema2.temp2").fetchall() == [(2,)]
+
+
+@pytest.mark.parametrize(
+    "statements",
+    [
+        ["drop schema db1.schema2"],
+        ["drop schema db1.schema2", "create schema db1.schema2"],
+        ["create or replace schema db1.schema2"],
+    ],
+    ids=["drop", "recreate", "replace"],
+)
+def test_temporary_table_drop_schema_other_session(
+    cur: snowflake.connector.cursor.SnowflakeCursor, statements: list[str]
+) -> None:
+    # dropping a schema drops its temporary tables in every session
+    cur.execute("create schema db1.schema2")
+    cur.execute("create temporary table db1.schema2.temp1 as select 1 as x")
+    with snowflake.connector.connect(database="db1", schema="schema1") as conn2, conn2.cursor() as cur2:
+        for statement in statements:
+            cur2.execute(statement)
+    with pytest.raises(ProgrammingError, match="does not exist") as excinfo:
+        cur.execute("select * from db1.schema2.temp1")
+    assert excinfo.value.errno == 2003
+
+
+@pytest.mark.parametrize(
+    "statements",
+    [["drop schema db1.schema2", "create schema db1.schema2"], ["create or replace schema db1.schema2"]],
+    ids=["recreate", "replace"],
+)
+def test_temporary_table_recreate_schema_other_session(
+    cur: snowflake.connector.cursor.SnowflakeCursor, statements: list[str]
+) -> None:
+    cur.execute("create schema db1.schema2")
+    cur.execute("create temporary table db1.schema2.temp1 as select 1 as x")
+    with snowflake.connector.connect(database="db1", schema="schema1") as conn2, conn2.cursor() as cur2:
+        for statement in statements:
+            cur2.execute(statement)
+    cur.execute("create temporary table db1.schema2.temp1 as select 2 as x")
+    assert cur.execute("select * from db1.schema2.temp1").fetchall() == [(2,)]
+
+
+@pytest.mark.parametrize("statements", [[], ["select 1"]], ids=["rollback", "statement_then_rollback"])
+def test_temporary_table_drop_schema_rollback(
+    cur: snowflake.connector.cursor.SnowflakeCursor, statements: list[str]
+) -> None:
+    # Deviates from Snowflake, which commits DDL so ROLLBACK doesn't restore the schema or its temporary table.
+    # DuckDB restores both (see https://github.com/tekumara/fakesnow/issues/491), and the temporary table must
+    # still shadow the permanent one, until it's dropped.
+    cur.execute("create schema db1.schema2")
+    cur.execute("create table db1.schema2.temp1 as select 10 as x")
+    cur.execute("create temporary table db1.schema2.temp1 as select 1 as x")
+    cur.execute("begin")
+    cur.execute("drop schema db1.schema2")
+    for statement in statements:
+        cur.execute(statement)
+    cur.execute("rollback")
+    assert cur.execute("select * from db1.schema2.temp1").fetchall() == [(1,)]
+    cur.execute("drop table db1.schema2.temp1")
+    assert cur.execute("select * from db1.schema2.temp1").fetchall() == [(10,)]
+
+
+def test_temporary_table_drop_schema_other_session_rollback(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create schema db1.schema2")
+    cur.execute("create temporary table db1.schema2.temp1 as select 1 as x")
+    with snowflake.connector.connect(database="db1", schema="schema1") as conn2, conn2.cursor() as cur2:
+        cur2.execute("create or replace schema db1.schema2")
+    # The temporary table is dropped when this session next runs a statement, which ROLLBACK undoes in DuckDB. It
+    # must be dropped again.
+    cur.execute("begin")
+    cur.execute("select 1")
+    cur.execute("rollback")
+    cur.execute("create temporary table db1.schema2.temp1 as select 3 as x")
+    assert cur.execute("select * from db1.schema2.temp1").fetchall() == [(3,)]
+
+
 def test_to_date(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute(
         "SELECT to_date(to_timestamp(0)), to_date(cast(to_timestamp(0) as timestamp(9))), to_date('2024-01-26')"
