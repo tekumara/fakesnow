@@ -8,6 +8,7 @@ import re
 import tempfile
 from decimal import Decimal
 
+import duckdb
 import pytest
 import pytz
 import snowflake.connector
@@ -944,6 +945,11 @@ def _after_failed_statement(autocommit: bool, setup: list[str], statement: str) 
 @pytest.mark.usefixtures("_fakesnow")
 @pytest.mark.parametrize("autocommit", [True, False], ids=["autocommit", "no_autocommit"])
 @pytest.mark.parametrize(
+    "temporary",
+    [["create temporary table temp1 (id int)"], ["create temporary table temp1 (id int)", "drop table temp1"]],
+    ids=["temporary", "dropped"],
+)
+@pytest.mark.parametrize(
     "statement",
     [
         "rollback",
@@ -951,22 +957,36 @@ def _after_failed_statement(autocommit: bool, setup: list[str], statement: str) 
         "create table recovery (id int)",
         "create table db1.schema1.recovery (id int)",
         "create table recovery (id int references db1.schema1.perm1 (id))",
+        "create table recovery as select * from db1.schema1.perm1",
+        "create temporary table recovery as select * from db1.schema1.perm1",
+        "create table recovery clone db1.schema1.perm1",
+        "alter table db1.schema1.perm1 add column x int",
     ],
-    ids=["rollback", "commit", "create", "create_qualified", "create_foreign_key"],
+    ids=[
+        "rollback",
+        "commit",
+        "create",
+        "create_qualified",
+        "create_foreign_key",
+        "ctas",
+        "ctas_temporary",
+        "clone",
+        "alter",
+    ],
 )
-def test_temporary_table_after_failed_statement(autocommit: bool, statement: str) -> None:
-    # Checking for orphaned temporary tables before each statement doesn't change what follows a failed statement.
+def test_temporary_table_after_failed_statement(autocommit: bool, temporary: list[str], statement: str) -> None:
+    # An unrelated temporary table doesn't change what follows a failed statement: neither checking for orphaned
+    # temporary tables before each statement, nor resolving qualified references to other tables.
     # Snowflake keeps the earlier insert unless rolled back, whereas fakesnow aborts the transaction, see #470.
-    temporary = ["create temporary table temp1 (id int)"]
     assert _after_failed_statement(autocommit, temporary, statement) == _after_failed_statement(
         autocommit, [], statement
     )
 
 
 def test_temporary_table_aborted_transaction(conn: snowflake.connector.SnowflakeConnection) -> None:
-    # Snowflake keeps the transaction after a failed statement, whereas fakesnow aborts it, see #470. A statement that
-    # reads the catalog for qualified temporary table references then fails like any other, and leaves the transaction
-    # for ROLLBACK.
+    # Snowflake keeps the transaction after a failed statement, whereas fakesnow aborts it, see #470. A statement with
+    # a qualified reference that a session temporary table's name matches reads the catalog to resolve it, so it then
+    # fails like any other, even DDL outside autocommit, and leaves the transaction for ROLLBACK.
     conn.autocommit(False)
     with conn.cursor() as cur:
         cur.execute("create table perm1 (id int)")
@@ -1059,6 +1079,44 @@ def test_temporary_table_merge_after_failed_statement(conn: snowflake.connector.
             "merge into perm1 using (select 2 as id) s on perm1.id = s.id when not matched then insert values (s.id)"
         )
         assert cur.execute("select * from perm1").fetchall() == [(2,)]
+
+
+@pytest.mark.parametrize("statement", ["drop table t", "alter table t rename to renamed"], ids=["drop", "rename"])
+def test_temporary_table_aborted_transaction_restores(
+    conn: snowflake.connector.SnowflakeConnection, statement: str
+) -> None:
+    # fakesnow rolls back DDL run inside an explicit BEGIN with autocommit on, whereas Snowflake commits it, ending the
+    # transaction, so there the DROP or RENAME would stand and ROLLBACK would restore nothing.
+    # Separately, Snowflake keeps the transaction after a failed statement, whereas fakesnow aborts it, see #470.
+    # Ending that aborted transaction restores the temporary table dropped or renamed in it, which shadows the
+    # permanent table, so DDL outside autocommit can't skip resolving the name and drop the permanent table instead.
+    with conn.cursor() as cur:
+        cur.execute("create table t as select 111 as id")
+        cur.execute("create temporary table t as select 222 as id")
+        cur.execute("begin")
+        cur.execute(statement)
+        conn.autocommit(False)
+        with pytest.raises(ProgrammingError):
+            cur.execute("select cast('bad' as int)")
+        with pytest.raises(duckdb.TransactionException, match="aborted"):
+            cur.execute("drop table db1.schema1.t")
+        cur.execute("rollback")
+        assert cur.execute("select * from db1.schema1.t").fetchall() == [(222,)]
+        cur.execute("drop table t")
+        assert cur.execute("select * from db1.schema1.t").fetchall() == [(111,)]
+
+
+def test_temporary_table_qualified_after_rename(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    # fakesnow rolls back DDL run inside an explicit BEGIN with autocommit on, whereas Snowflake commits it, ending the
+    # transaction, so there the rename to temp3 would stand. Here ROLLBACK restores temp2, which a qualified reference
+    # must still resolve.
+    cur.execute("create temporary table temp1 (id int)")
+    cur.execute("alter table temp1 rename to temp2")
+    cur.execute("insert into db1.schema1.temp2 values (1)")
+    cur.execute("begin")
+    cur.execute("alter table temp2 rename to temp3")
+    cur.execute("rollback")
+    assert cur.execute("select * from db1.schema1.temp2").fetchall() == [(1,)]
 
 
 def test_temporary_table_qualified_after_rollback(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:

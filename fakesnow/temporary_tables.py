@@ -18,15 +18,21 @@ class TemporaryTables:
         self._duck_conn = duck_conn
         # Temporary table OID -> (catalog, schema, schema OID) it was created in.
         self._temporary: dict[int, tuple[str | None, str | None, int]] = {}
+        # Names of the registered temporary tables live when this statement started, plus any created since, and
+        # while a transaction is open, any live since it began, which ROLLBACK can restore. A qualified reference to
+        # any other name can't be a temporary table, so it needs no catalog read.
+        self._names: set[str] = set()
 
-    def transform(self, expression: Expr, current_database: str | None, current_schema: str | None) -> Expr:
+    def transform(
+        self, expression: Expr, current_database: str | None, current_schema: str | None, in_transaction: bool
+    ) -> Expr:
         """Create temporary tables in DuckDB's temp catalog and resolve their qualified references.
 
         Snowflake temporary tables belong to a database and schema, whereas DuckDB keeps them all in temp.main.
         See https://docs.snowflake.com/en/user-guide/tables-temp-transient
         """
         if expression.parent is None and self._temporary:
-            self._drop_orphans()
+            self._drop_orphans(in_transaction)
         if (
             isinstance(expression, exp.Create)
             and expression.kind == "TABLE"
@@ -68,12 +74,18 @@ class TemporaryTables:
             if expression.find_ancestor(exp.Reference):
                 return expression
             name = expression.table if isinstance(expression, exp.Column) else expression.name
-            if self.oid(expression.catalog or current_database, expression.db, name) is not None:
+            # Only read the catalog for a name that could be a temporary table's: in an aborted transaction the read
+            # fails, see #470. A reference that does match one still fails then, even in DDL, which outside autocommit
+            # would otherwise end the transaction and run.
+            if (
+                name in self._names
+                and self.oid(expression.catalog or current_database, expression.db, name) is not None
+            ):
                 expression.set("catalog", exp.to_identifier("temp"))
                 expression.set("db", exp.to_identifier("main"))
         return expression
 
-    def validate(self, expression: Expr) -> None:
+    def validate(self, expression: Expr, in_transaction: bool) -> None:
         """Check the schema of a temporary table that transform() couldn't, just before it's created.
 
         Called once DDL has ended the aborted transaction, so nothing is created or replaced in a missing schema. In
@@ -81,7 +93,7 @@ class TemporaryTables:
         """
         if (owner := expression.args.get("temporary_table_owner")) and owner[2] is None:
             # transform() couldn't drop orphans either, and one could take the new table's name.
-            self._drop_orphans()
+            self._drop_orphans(in_transaction)
             catalog, schema, _ = owner
             expression.set("temporary_table_owner", (catalog, schema, self._schema_oid(catalog, schema)))
 
@@ -99,8 +111,9 @@ class TemporaryTables:
         # from another schema, so the OID may already be registered. Keep the schema it was created in; overwriting
         # it would move the existing table's stage to the current schema.
         self._temporary.setdefault(oid, owner)
+        self._names.add(table.name)
 
-    def _drop_orphans(self) -> None:
+    def _drop_orphans(self, in_transaction: bool) -> None:
         """Drop temporary tables whose schema has been dropped or replaced since they were created, by any session.
 
         In Snowflake dropping a schema drops its temporary tables, which DuckDB keeps in temp.main instead. Checking
@@ -110,9 +123,15 @@ class TemporaryTables:
         try:
             live = self._duck_conn.execute(sql).fetchall()
         except duckdb.TransactionException:
-            # An aborted transaction rejects every query until it ends, so leave them to the next statement.
+            # An aborted transaction rejects every query until it ends, so leave them to the next statement. Until it
+            # ends, nothing can rename, drop or restore a temporary table, so the names still hold.
             return
-        if not (owned := [(name, self._temporary[oid]) for oid, name in live if oid in self._temporary]):
+        owned = [(name, self._temporary[oid]) for oid, name in live if oid in self._temporary]
+        # Refresh the names, which renames, drops and ROLLBACK change. Ending a transaction, even by DDL once a failed
+        # statement has aborted it, can restore the names live when it began, so until then only add to them.
+        names = {name for name, _ in owned}
+        self._names = self._names | names if in_transaction else names
+        if not owned:
             return
         sql = "SELECT database_name, schema_name, oid FROM duckdb_schemas()"
         schemas = {(catalog, schema): oid for catalog, schema, oid in self._duck_conn.execute(sql).fetchall()}
@@ -120,6 +139,8 @@ class TemporaryTables:
             if schemas.get((catalog, schema)) != schema_oid:
                 table = exp.table_(name, db="main", catalog="temp", quoted=True)
                 self._duck_conn.execute(f"DROP TABLE {table.sql(dialect='duckdb')}")
+                if not in_transaction:
+                    self._names.discard(name)
 
     def _schema_oid(self, catalog: str | None, schema: str | None) -> int:
         sql = "SELECT oid FROM duckdb_schemas() WHERE database_name = ? AND schema_name = ?"

@@ -305,6 +305,7 @@ class FakeSnowflakeCursor:
                 self._conn.temporary_tables.transform,
                 current_database=self._conn.database,
                 current_schema=self._conn.schema,
+                in_transaction=self._conn._in_transaction,
                 copy=False,
             )
             .transform(transforms.alter_session, copy=False)
@@ -491,7 +492,7 @@ class FakeSnowflakeCursor:
         elif isinstance(transformed, (exp.Commit, exp.Rollback)):
             self._conn._in_transaction = False
 
-        self._conn.temporary_tables.validate(transformed)
+        self._conn.temporary_tables.validate(transformed, self._conn._in_transaction)
 
         affected_count = None
         try:
