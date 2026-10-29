@@ -680,6 +680,41 @@ def test_temporary_table_does_not_capture_sequence(cur: snowflake.connector.curs
         cur.execute("select temp1.nextval")
 
 
+@pytest.mark.parametrize("source", ["table", "temporary table"])
+def test_temporary_table_clone_qualified(cur: snowflake.connector.cursor.SnowflakeCursor, source: str) -> None:
+    # a temporary clone belongs to the schema it was created in
+    cur.execute("create schema db1.schema2")
+    cur.execute("use schema db1.schema1")
+    cur.execute(f"create {source} table1 as select 1 as x")
+    cur.execute("create temporary table db1.schema2.clone1 clone db1.schema1.table1")
+    assert cur.execute("select * from db1.schema2.clone1").fetchall() == [(1,)]
+    with pytest.raises(ProgrammingError, match="does not exist"):
+        cur.execute("select * from db1.schema1.clone1")
+
+
+@pytest.mark.parametrize("target", ["clone1", "db1.schema2.clone1"])
+def test_temporary_table_clone_other_session(cur: snowflake.connector.cursor.SnowflakeCursor, target: str) -> None:
+    cur.execute("create schema db1.schema2")
+    cur.execute("use schema db1.schema1")
+    cur.execute("create table table1 as select 1 as x")
+    cur.execute(f"create temporary table {target} clone table1")
+    with snowflake.connector.connect(database="db1", schema="schema1") as conn2, conn2.cursor() as cur2:
+        for table in ["clone1", "db1.schema2.clone1"]:
+            with pytest.raises(ProgrammingError, match="does not exist"):
+                cur2.execute(f"select * from {table}")
+
+
+def test_temporary_table_clone_drop_schema(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create schema db1.schema2")
+    cur.execute("use schema db1.schema1")
+    cur.execute("create table table1 as select 1 as x")
+    cur.execute("create temporary table db1.schema2.clone1 clone db1.schema1.table1")
+    cur.execute("drop schema db1.schema2")
+    for table in ["clone1", "db1.schema1.clone1", "db1.schema2.clone1"]:
+        with pytest.raises(ProgrammingError, match="does not exist"):
+            cur.execute(f"select * from {table}")
+
+
 @pytest.mark.parametrize(
     "statement",
     [

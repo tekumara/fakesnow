@@ -164,7 +164,7 @@ def create_clone(expression: Expr) -> Expr:
         and str(expression.args.get("kind")).upper() == "TABLE"
         and (clone := expression.find(exp.Clone))
     ):
-        return exp.Create(
+        create = exp.Create(
             this=expression.this,
             kind="TABLE",
             expression=exp.Select(
@@ -174,6 +174,11 @@ def create_clone(expression: Expr) -> Expr:
                 from_=exp.From(this=clone.this),
             ),
         )
+        if expression.find(exp.TemporaryProperty):
+            # keep a temporary clone temporary, in the schema TemporaryTables resolved it to
+            create.set("properties", exp.Properties(expressions=[exp.TemporaryProperty()]))
+            create.set("temporary_table_owner", expression.args.get("temporary_table_owner"))
+        return create
     return expression
 
 
