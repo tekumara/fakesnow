@@ -849,3 +849,21 @@ def test_server_temporary_table_session_isolation(server: dict) -> None:
         assert cur1.fetchall() == [(1,)]
         cur2.execute(f"select * from {database}.S.T")
         assert cur2.fetchall() == [(2,)]
+
+
+@pytest.mark.parametrize("statement", ["drop schema", "create or replace schema"])
+def test_server_temporary_table_drop_schema_other_session(server: dict, statement: str) -> None:
+    # Override the isolated fixture: both sessions must share the server's DuckDB instance.
+    shared = server | {"session_parameters": {}}
+    database = f"TEMP_DROP_SCHEMA_{uuid.uuid4().hex.upper()}"
+    with (
+        snowflake.connector.connect(**shared, database=database, schema="S") as conn1,
+        snowflake.connector.connect(**shared, database=database, schema="S") as conn2,
+        conn1.cursor() as cur1,
+        conn2.cursor() as cur2,
+    ):
+        cur1.execute(f"create temporary table {database}.S.T as select 1 as x")
+        cur2.execute(f"{statement} {database}.S")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError, match="does not exist") as excinfo:
+            cur1.execute(f"select * from {database}.S.T")
+        assert excinfo.value.errno == 2003
