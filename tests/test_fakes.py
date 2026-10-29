@@ -828,6 +828,23 @@ def test_temporary_table_foreign_key_drop_referenced(
 
 
 @pytest.mark.parametrize(
+    "constraint",
+    ["x int references db1.schema1.table1 (x)", "x int, foreign key (x) references db1.schema1.table1 (x)"],
+    ids=["column", "table"],
+)
+def test_temporary_table_permanent_foreign_key(
+    cur: snowflake.connector.cursor.SnowflakeCursor, constraint: str
+) -> None:
+    # a permanent table's foreign key references the permanent table, even when a temporary table shares its name.
+    # Snowflake doesn't enforce foreign keys, so read DuckDB's constraint metadata to check it was kept, as written.
+    cur.execute("create table table1 (x int primary key)")
+    cur.execute("create temporary table table1 (x int)")
+    cur.execute(f"create table table2 ({constraint})")
+    sql = "select constraint_text from duckdb_constraints() where table_name = 'TABLE2' and constraint_type = 'FOREIGN KEY'"
+    assert cur.execute(sql).fetchall() == [("FOREIGN KEY (X) REFERENCES SCHEMA1.TABLE1(X)",)]
+
+
+@pytest.mark.parametrize(
     "statements",
     [
         ["drop schema db1.schema2"],
@@ -911,8 +928,8 @@ def _outcome(cur: snowflake.connector.cursor.SnowflakeCursor, statement: str) ->
 def _after_failed_statement(autocommit: bool, setup: list[str], statement: str) -> list[object]:
     with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:
         conn.autocommit(autocommit)
-        cur.execute("create or replace table perm1 (id int)")
         cur.execute("drop table if exists recovery")
+        cur.execute("create or replace table perm1 (id int primary key)")
         for setup_statement in setup:
             cur.execute(setup_statement)
         cur.execute("begin")
@@ -928,8 +945,14 @@ def _after_failed_statement(autocommit: bool, setup: list[str], statement: str) 
 @pytest.mark.parametrize("autocommit", [True, False], ids=["autocommit", "no_autocommit"])
 @pytest.mark.parametrize(
     "statement",
-    ["rollback", "commit", "create table recovery (id int)", "create table db1.schema1.recovery (id int)"],
-    ids=["rollback", "commit", "create", "create_qualified"],
+    [
+        "rollback",
+        "commit",
+        "create table recovery (id int)",
+        "create table db1.schema1.recovery (id int)",
+        "create table recovery (id int references db1.schema1.perm1 (id))",
+    ],
+    ids=["rollback", "commit", "create", "create_qualified", "create_foreign_key"],
 )
 def test_temporary_table_after_failed_statement(autocommit: bool, statement: str) -> None:
     # Checking for orphaned temporary tables before each statement doesn't change what follows a failed statement.
