@@ -484,11 +484,12 @@ class FakeSnowflakeCursor:
                 self._duck_conn.begin()
                 self._conn._in_transaction = True
 
-            # In transaction book keeping
-            elif isinstance(transformed, exp.Transaction):
-                self._conn._in_transaction = True
-            elif isinstance(transformed, (exp.Commit, exp.Rollback)):
-                self._conn._in_transaction = False
+        # In transaction book keeping, including BEGIN in autocommit mode, whose transaction stays open if autocommit
+        # is then turned off.
+        if isinstance(transformed, exp.Transaction):
+            self._conn._in_transaction = True
+        elif isinstance(transformed, (exp.Commit, exp.Rollback)):
+            self._conn._in_transaction = False
 
         self._conn.temporary_tables.validate(transformed)
 

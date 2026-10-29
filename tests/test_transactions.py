@@ -101,6 +101,20 @@ def test_autocommit_false_mix_transaction_start(conn: snowflake.connector.Snowfl
         assert cur.execute("select count(*) from mix_transaction_start").fetchone() == (3,)
 
 
+def test_begin_then_autocommit_false(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create or replace table begin_then_autocommit_false (id int)")
+
+        # a transaction begun in autocommit mode stays open once autocommit is turned off, so DML joins it rather
+        # than starting another
+        cur.execute("begin transaction")
+        conn.autocommit(False)
+        cur.execute("insert into begin_then_autocommit_false values (1)")
+        cur.execute("rollback")
+
+        assert cur.execute("select count(*) from begin_then_autocommit_false").fetchone() == (0,)
+
+
 def test_autocommit_false_implicit_transaction(conn: snowflake.connector.SnowflakeConnection):
     # An implicit BEGIN TRANSACTION is executed at:
     # The first DML statement after a transaction ends. This is true regardless of what ended the preceding transaction
