@@ -520,6 +520,8 @@ class FakeSnowflakeCursor:
             elif isinstance(transformed, (exp.Commit, exp.Rollback)):
                 self._conn._in_transaction = False
 
+        self._conn.temporary_tables.validate(transformed)
+
         affected_count = None
         result: pyarrow.Table | None = None
         columns: tuple[tuple[str, str], ...] | None = None
