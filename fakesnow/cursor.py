@@ -675,8 +675,7 @@ class FakeSnowflakeCursor:
         if table_comment := cast(tuple[exp.Table, str], transformed.args.get("table_comment")):
             # record table comment
             table, comment = table_comment
-            catalog = table.catalog or self._conn.database
-            schema = table.db or self._conn.schema
+            catalog, schema = self._conn.table_stages.metadata_owner(table, self._conn.database, self._conn.schema)
             assert catalog and schema
             self._duck_conn.execute(info_schema.insert_table_comment_sql(catalog, schema, table.name, comment))
 
@@ -684,8 +683,7 @@ class FakeSnowflakeCursor:
             table := transformed.find(exp.Table)
         ):
             # record text lengths
-            catalog = table.catalog or self._conn.database
-            schema = table.db or self._conn.schema
+            catalog, schema = self._conn.table_stages.metadata_owner(table, self._conn.database, self._conn.schema)
             assert catalog and schema
             self._duck_conn.execute(info_schema.insert_text_lengths_sql(catalog, schema, table.name, text_lengths))
 

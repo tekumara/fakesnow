@@ -157,6 +157,20 @@ def test_same_temporary_table_name_in_another_schema_is_rejected(
     assert cur.fetchall() == [(1,)]
 
 
+def test_temporary_table_text_length_is_per_session(_fakesnow: None) -> None:
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1") as first_conn,
+        snowflake.connector.connect(database="db1", schema="schema1") as second_conn,
+        first_conn.cursor() as first,
+        second_conn.cursor() as second,
+    ):
+        first.execute("create temp table t (s varchar(10))")
+        second.execute("create temp table t (s varchar(20))")
+
+        first.execute("describe table t")
+        assert [(name, type_) for name, type_, *_ in first.fetchall()] == [("S", "VARCHAR(10)")]
+
+
 def test_clone_into_qualified_temporary_table(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     cur.execute("create table source as select 1 as x")
 
@@ -239,4 +253,13 @@ def test_temporary_table_name_in_another_case_is_rejected(cur: snowflake.connect
         cur.execute("create or replace temp table db1.other.T as select 2 as x")
 
     cur.execute('select * from db1.schema1."t"')
+    assert cur.fetchall() == [(1,)]
+
+
+def test_replacing_temporary_table_removes_its_old_metadata(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    # fakesnow internals: temporary tables' metadata is keyed by table OID, so replaced tables must clean up
+    for _ in range(3):
+        cur.execute("create or replace temp table t (s varchar(10))")
+
+    cur.execute("select count(*) from _fs_global._fs_information_schema._fs_columns_ext where ext_table_name = 'T'")
     assert cur.fetchall() == [(1,)]
