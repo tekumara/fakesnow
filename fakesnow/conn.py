@@ -15,6 +15,7 @@ import fakesnow.info_schema as info_schema
 import fakesnow.macros as macros
 from fakesnow.cursor import FakeSnowflakeCursor
 from fakesnow.dialect import parse
+from fakesnow.temporary_tables import TemporaryTables
 from fakesnow.transforms.stage import TableStages
 from fakesnow.variables import Variables
 
@@ -52,7 +53,8 @@ class FakeSnowflakeConnection:
         self.nop_regexes = nop_regexes
         self._paramstyle = kwargs.get("paramstyle", snowflake.connector.paramstyle)
         self.variables = Variables()
-        self.table_stages = TableStages(duck_conn)
+        self.temporary_tables = TemporaryTables(duck_conn)
+        self.table_stages = TableStages(duck_conn, self.temporary_tables)
         self.results_cache = results_cache
         self._autocommit = kwargs.get("autocommit", True)
         self._in_transaction = False
