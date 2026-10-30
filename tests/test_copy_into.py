@@ -131,7 +131,7 @@ cases = [
             FILE_FORMAT = (TYPE = 'PARQUET')
             """,
             expected_inserts=[
-                "INSERT INTO TABLE1 SELECT CAST((B) AS BIGINT), CAST((A) AS BIGINT) FROM READ_PARQUET('s3://{bucket}/foo.parquet')"
+                'INSERT INTO TABLE1 SELECT CAST(("B") AS BIGINT), CAST(("A") AS BIGINT) FROM READ_PARQUET(\'s3://{bucket}/foo.parquet\')'
             ],
             data=pd.DataFrame({"A": [1, 2], "B": [11, 12]}).to_parquet(),
             expected_rows_loaded=2,
@@ -265,6 +265,21 @@ def test_copy_uses_named_csv_with_inline_override(dcur: snowflake.connector.curs
 
         dcur.execute("SELECT * FROM table1")
         assert dcur.fetchall() == [{"A": 1, "B": 2}, {"A": 3, "B": 4}]
+
+
+def test_copy_into_table_name_reserved_by_duckdb(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    # DuckDB reserves PIVOT, Snowflake doesn't
+    dcur.execute("CREATE TABLE pivot (a INT, b INT)")
+    with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:
+        temp_file.write("1,2\n")
+        temp_file.flush()
+
+        dcur.execute("CREATE STAGE reserved_word_stage")
+        dcur.execute(f"PUT 'file://{temp_file.name}' @reserved_word_stage")
+        dcur.execute("COPY INTO pivot FROM @reserved_word_stage")
+
+        dcur.execute("SELECT * FROM pivot")
+        assert dcur.fetchall() == [{"A": 1, "B": 2}]
 
 
 def test_copy_internal_stage_path(dcur: snowflake.connector.cursor.DictCursor) -> None:
@@ -895,6 +910,21 @@ def test_errors_parquet(dcur: snowflake.connector.cursor.DictCursor, s3_client: 
     )
 
 
+@pytest.mark.parametrize("name", ["null", "qualify"])
+def test_copy_parquet_reserved_field_name(
+    cur: snowflake.connector.cursor.SnowflakeCursor, s3_client: S3Client, name: str
+) -> None:
+    bucket = upload_file(s3_client, pd.DataFrame({name: [7]}).to_parquet(), key="reserved.parquet")
+    cur.execute("CREATE TABLE target (x INT)")
+    cur.execute(f"CREATE STAGE source_stage URL='s3://{bucket}/'")
+    cur.execute(
+        f"""COPY INTO target FROM (SELECT $1:"{name}"::INT FROM @source_stage)
+        FILES=('reserved.parquet') FILE_FORMAT=(TYPE=PARQUET)"""
+    )
+    cur.execute("SELECT x FROM target")
+    assert cur.fetchall() == [(7,)]
+
+
 def test_copy_parquet_match_by_column_name(dcur: snowflake.connector.cursor.DictCursor, s3_client: S3Client) -> None:
     """Test COPY INTO with MATCH_BY_COLUMN_NAME for parquet files.
 
@@ -1420,8 +1450,7 @@ def test__strip_json_extract():
         )
         .transform(_strip_json_extract)
         .sql()
-        # TODO: quoted????
-        == "SELECT CAST(A AS INT), CAST(B AS INT) FROM @stage1"
+        == 'SELECT CAST("A" AS INT), CAST("B" AS INT) FROM @stage1'
     )
 
     # after all our transforms sql becomes
@@ -1434,7 +1463,7 @@ def test__strip_json_extract():
         )
         .transform(_strip_json_extract)
         .sql()
-        == "SELECT CAST((A) AS BIGINT), CAST((B) AS BIGINT) FROM @stage1"
+        == 'SELECT CAST(("A") AS BIGINT), CAST(("B") AS BIGINT) FROM @stage1'
     )
 
 
