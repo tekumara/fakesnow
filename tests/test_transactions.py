@@ -115,6 +115,41 @@ def test_begin_then_autocommit_false(conn: snowflake.connector.SnowflakeConnecti
         assert cur.execute("select count(*) from begin_then_autocommit_false").fetchone() == (0,)
 
 
+def test_failed_begin_then_autocommit_false(conn: snowflake.connector.SnowflakeConnection):
+    with conn.cursor() as cur:
+        cur.execute("create temporary table failed_begin_then_autocommit_false (i int)")
+
+        # a BEGIN that fails opens no transaction, so DML once autocommit is off starts its own, which ROLLBACK undoes
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("begin name probe")
+        conn.autocommit(False)
+        cur.execute("insert into failed_begin_then_autocommit_false values (222)")
+        cur.execute("rollback")
+
+        assert cur.execute("select * from failed_begin_then_autocommit_false").fetchall() == []
+
+
+@pytest.mark.parametrize("autocommit_off", ["at connect", "by alter session"])
+def test_failed_begin_autocommit_false(_fakesnow: None, autocommit_off: str):
+    with (
+        snowflake.connector.connect(
+            database="db1", schema="schema1", autocommit=autocommit_off != "at connect"
+        ) as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create or replace table failed_begin_autocommit_false (id int)")
+
+        # as test_failed_begin_then_autocommit_false, with autocommit off before the BEGIN or turned off by SQL
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("begin name probe")
+        if autocommit_off == "by alter session":
+            cur.execute("alter session set autocommit = false")
+        cur.execute("insert into failed_begin_autocommit_false values (1)")
+        cur.execute("rollback")
+
+        assert cur.execute("select count(*) from failed_begin_autocommit_false").fetchone() == (0,)
+
+
 def test_autocommit_false_implicit_transaction(conn: snowflake.connector.SnowflakeConnection):
     # An implicit BEGIN TRANSACTION is executed at:
     # The first DML statement after a transaction ends. This is true regardless of what ended the preceding transaction

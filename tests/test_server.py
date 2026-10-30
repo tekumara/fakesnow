@@ -226,6 +226,23 @@ def test_server_begin_then_autocommit_false(server: dict) -> None:
         assert cur.fetchone() == (0,)
 
 
+def test_server_failed_begin_then_autocommit_false(server: dict) -> None:
+    # as test_failed_begin_then_autocommit_false, with the insert sent as an array binding
+    with (
+        snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("create temporary table example (id int)")
+        with pytest.raises(snowflake.connector.errors.ProgrammingError):
+            cur.execute("begin name probe")
+        conn.autocommit(False)
+        cur.executemany("insert into example values (?)", [(1,), (2,)])
+        cur.execute("rollback")
+
+        cur.execute("select count(*) from example")
+        assert cur.fetchone() == (0,)
+
+
 def test_server_merge_response_total(sconn: snowflake.connector.SnowflakeConnection) -> None:
     conn = sconn
     with conn.cursor() as cur:
