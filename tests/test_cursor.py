@@ -14,13 +14,18 @@ import fakesnow
 from fakesnow.cursor import FakeSnowflakeCursor
 
 
-def test_unrelated_invalid_input_error(_fakesnow: None):
-    # DuckDB-only diagnostic: unrelated errors must not be mistaken for our length checks.
-    with (
-        snowflake.connector.connect(database="db1", schema="schema1") as conn,
-        pytest.raises(duckdb.InvalidInputException, match="is too long and would be truncated"),
-    ):
-        conn.cursor().execute("select error('is too long and would be truncated')")
+@pytest.mark.xfail(
+    raises=duckdb.InvalidInputException,
+    reason="parse_json of malformed JSON raises duckdb's Malformed JSON error, not Snowflake's",
+    strict=True,
+)
+def test_unrelated_invalid_input_error(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # duckdb raises InvalidInputException for this too, it mustn't be reported as a text length error
+    with pytest.raises(
+        snowflake.connector.errors.ProgrammingError, match='Error parsing JSON: unknown keyword "is"'
+    ) as excinfo:
+        cur.execute("select parse_json('is too long and would be truncated')")
+    assert excinfo.value.errno == 100069
 
 
 def test_binding_pyformat(conn: snowflake.connector.SnowflakeConnection):
