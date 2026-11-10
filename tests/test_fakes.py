@@ -641,6 +641,16 @@ def test_unquoted_name_does_not_match_quoted_lower_case_table(cur: snowflake.con
     )
 
 
+def test_connection_runs_statements_after_a_table_case_error(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table "customers" (id int)')
+
+    with pytest.raises(ProgrammingError):
+        cur.execute("select * from customers")
+
+    cur.execute("select 1")
+    assert cur.fetchall() == [(1,)]
+
+
 def test_quoted_lower_case_name_does_not_match_unquoted_table(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table customers (id int)")
 
@@ -649,6 +659,20 @@ def test_quoted_lower_case_name_does_not_match_unquoted_table(cur: snowflake.con
 
     assert "002003 (42S02): SQL compilation error:\nObject '\"customers\"' does not exist or not authorized." in str(
         excinfo.value
+    )
+
+
+def test_schema_qualified_table_name_is_reported_with_current_database(
+    cur: snowflake.connector.cursor.SnowflakeCursor,
+):
+    cur.execute('create table "customers" (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from schema1.customers")
+
+    assert (
+        "002003 (42S02): SQL compilation error:\nObject 'DB1.SCHEMA1.CUSTOMERS' does not exist or not authorized."
+        in str(excinfo.value)
     )
 
 
@@ -667,9 +691,35 @@ def test_unquoted_schema_does_not_match_quoted_lower_case_schema(cur: snowflake.
     with pytest.raises(ProgrammingError) as excinfo:
         cur.execute("select * from db1.jaffles.customers")
 
-    assert (
-        "002003 (42S02): SQL compilation error:\nObject 'DB1.JAFFLES.CUSTOMERS' does not exist or not authorized."
-        in str(excinfo.value)
+    assert "002003 (02000): SQL compilation error:\nSchema 'DB1.JAFFLES' does not exist or not authorized." in str(
+        excinfo.value
+    )
+
+
+def test_unquoted_schema_in_current_database_does_not_match_quoted_lower_case_schema(
+    cur: snowflake.connector.cursor.SnowflakeCursor,
+):
+    cur.execute('create schema db1."jaffles"')
+    cur.execute('create table db1."jaffles".customers (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from jaffles.customers")
+
+    assert "002003 (02000): SQL compilation error:\nSchema 'DB1.JAFFLES' does not exist or not authorized." in str(
+        excinfo.value
+    )
+
+
+def test_unquoted_database_does_not_match_quoted_lower_case_database(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create database "db_lc"')
+    cur.execute('create schema "db_lc".jaffles')
+    cur.execute('create table "db_lc".jaffles.customers (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from db_lc.jaffles.customers")
+
+    assert "002003 (02000): SQL compilation error:\nDatabase 'DB_LC' does not exist or not authorized." in str(
+        excinfo.value
     )
 
 
@@ -689,7 +739,9 @@ def test_insert_target_name_is_case_sensitive(cur: snowflake.connector.cursor.Sn
     with pytest.raises(ProgrammingError) as excinfo:
         cur.execute("insert into customers values (1)")
 
-    assert "Object 'CUSTOMERS' does not exist or not authorized." in str(excinfo.value)
+    assert "002003 (42S02): SQL compilation error:\nTable 'CUSTOMERS' does not exist or not authorized." in str(
+        excinfo.value
+    )
 
 
 def test_use_schema_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
