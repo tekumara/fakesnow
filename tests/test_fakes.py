@@ -709,7 +709,8 @@ def test_unquoted_column_does_not_match_quoted_lower_case_column(cur: snowflake.
     with pytest.raises(ProgrammingError) as excinfo:
         cur.execute("select id from customers")
 
-    assert "000904 (42000): SQL compilation error:\ninvalid identifier 'ID'" in str(excinfo.value)
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (904, "42000")
+    assert "invalid identifier 'ID'" in str(excinfo.value)
 
 
 def test_quoted_lower_case_column_does_not_match_unquoted_column(cur: snowflake.connector.cursor.SnowflakeCursor):
@@ -718,7 +719,8 @@ def test_quoted_lower_case_column_does_not_match_unquoted_column(cur: snowflake.
     with pytest.raises(ProgrammingError) as excinfo:
         cur.execute('select "id" from customers')
 
-    assert "000904 (42000): SQL compilation error:\ninvalid identifier '\"id\"'" in str(excinfo.value)
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (904, "42000")
+    assert "invalid identifier '\"id\"'" in str(excinfo.value)
 
 
 def test_qualified_column_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
