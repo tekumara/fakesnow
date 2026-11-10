@@ -333,6 +333,16 @@ class FakeSnowflakeCursor:
                 )
             return
 
+        def name_sql(part: Expr | None, name: str) -> str:
+            # a name written in the statement keeps its quoting, a current one is quoted unless upper case
+            if not isinstance(part, exp.Identifier):
+                part = exp.Identifier(this=name, quoted=not re.fullmatch(r"[A-Z_][A-Z0-9_$]*", name))
+            return part.sql(dialect="snowflake")
+
+        insert_target = expression.this if isinstance(expression, exp.Insert) else None
+        if isinstance(insert_target, exp.Schema):
+            insert_target = insert_target.this
+
         for table in checks.referenced_tables(expression):
             database = table.catalog or self._conn.database
             schema = table.db or self._conn._schema
@@ -352,13 +362,29 @@ class FakeSnowflakeCursor:
                 and lower(view_name) = lower($3)""",
                 [database, schema, table.name],
             ).fetchall()
-            if found and (database, schema, table.name) not in found:
-                name = ".".join(part.sql(dialect="snowflake") for part in table.parts)
-                raise snowflake.connector.errors.ProgrammingError(
-                    msg=f"SQL compilation error:\nObject '{name}' does not exist or not authorized.",
-                    errno=2003,
-                    sqlstate="42S02",
-                )
+            if not found or (database, schema, table.name) in found:
+                continue
+            # like Snowflake, name the first part of the path that doesn't exist under its exact name
+            database_sql = name_sql(table.args.get("catalog"), database)
+            if not self._duck_conn.execute(
+                "select 1 from duckdb_databases() where database_name = ?", [database]
+            ).fetchone():
+                kind, name, sqlstate = "Database", database_sql, "02000"
+            elif not self._duck_conn.execute(
+                "select 1 from duckdb_schemas() where database_name = ? and schema_name = ?", [database, schema]
+            ).fetchone():
+                kind, name, sqlstate = "Schema", f"{database_sql}.{name_sql(table.args.get('db'), schema)}", "02000"
+            else:
+                kind = "Table" if table is insert_target else "Object"
+                name, sqlstate = ".".join(part.sql(dialect="snowflake") for part in table.parts), "42S02"
+                if table.db and not table.catalog:
+                    # Snowflake fills in the current database of a schema qualified name
+                    name = f"{database_sql}.{name}"
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"SQL compilation error:\n{kind} '{name}' does not exist or not authorized.",
+                errno=2003,
+                sqlstate=sqlstate,
+            )
 
     def _transform(self, expression: Expr, params: MutableParams | None) -> Expr:
         expression = expression.transform(lambda e: transforms.identifier(e, params), copy=False).transform(
