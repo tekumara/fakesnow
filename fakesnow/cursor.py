@@ -558,10 +558,12 @@ class FakeSnowflakeCursor:
 
         elif stage_name := transformed.args.get("create_stage_name"):
             (affected_count,) = self._duck_conn.fetchall()[0]
+            # a quoted stage name can contain single quotes
+            escaped_name = stage_name.replace("'", "''")
             if affected_count > 0:
-                result_sql = SQL_CREATED_STAGE.substitute(name=stage_name)
+                result_sql = SQL_CREATED_STAGE.substitute(name=escaped_name)
             elif transformed.args.get("create_stage_if_not_exists"):
-                result_sql = SQL_OBJECT_EXISTS.substitute(name=stage_name)
+                result_sql = SQL_OBJECT_EXISTS.substitute(name=escaped_name)
             else:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"SQL compilation error:\nObject '{stage_name}' already exists.",
