@@ -163,6 +163,20 @@ def test_connect_then_unset_schema(_fakesnow: None):
         )
 
 
+def test_connect_then_drop_schema(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # Dropping the current schema unsets it, unless there's a PUBLIC schema to fall back to.
+    cur.execute("drop schema if exists db1.public")
+    cur.execute("drop schema db1.schema1")
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute("create table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+
+    assert (
+        "090106 (22000): Cannot perform CREATE TABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
+        in str(excinfo.value)
+    )
+
+
 def test_connect_without_database(_fakesnow_no_auto_create: None):
     with snowflake.connector.connect() as conn, conn.cursor() as cur:
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
@@ -206,6 +220,14 @@ def test_connect_without_database(_fakesnow_no_auto_create: None):
 
         assert (
             "090105 (22000): Cannot perform CREATE TABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
+            in str(excinfo.value)
+        )
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+            cur.execute("create temporary table customers (ID int, FIRST_NAME varchar, LAST_NAME varchar)")
+
+        assert (
+            "090105 (22000): Cannot perform CREATE TEMPTABLE. This session does not have a current database. Call 'USE DATABASE', or use a qualified name."
             in str(excinfo.value)
         )
 

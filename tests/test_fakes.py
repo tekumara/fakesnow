@@ -673,6 +673,50 @@ def test_temporary_table_missing_schema(cur: snowflake.connector.cursor.Snowflak
     assert excinfo.value.errno == 2003
 
 
+@pytest.mark.parametrize(
+    "statement",
+    [
+        "create temporary table temp1 (id int)",
+        "create or replace temporary table temp1 (id int)",
+        "create temporary table if not exists temp1 (id int)",
+        "create temporary table temp1 as select 1 as id",
+    ],
+    ids=["plain", "replace", "if_not_exists", "ctas"],
+)
+def test_temporary_table_without_current_schema(
+    cur: snowflake.connector.cursor.SnowflakeCursor, statement: str
+) -> None:
+    # Dropping the current schema leaves the session without one, unless there's a PUBLIC schema to fall back to.
+    cur.execute("drop schema if exists db1.public")
+    cur.execute("create schema db1.schema2")
+    cur.execute("use schema db1.schema2")
+    cur.execute("drop schema db1.schema2")
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(statement)
+    assert (
+        "090106 (22000): Cannot perform CREATE TEMPTABLE. This session does not have a current schema. Call 'USE SCHEMA', or use a qualified name."
+        in str(excinfo.value)
+    )
+    with pytest.raises(ProgrammingError, match="does not exist"):
+        cur.execute("select * from temp1")
+
+
+@pytest.mark.xfail(
+    reason="fakesnow doesn't fall back to the PUBLIC schema when the current schema is dropped",
+    raises=ProgrammingError,
+)
+def test_temporary_table_without_current_schema_falls_back_to_public(
+    cur: snowflake.connector.cursor.SnowflakeCursor,
+) -> None:
+    cur.execute("create schema if not exists db1.public")
+    cur.execute("create schema db1.schema2")
+    cur.execute("use schema db1.schema2")
+    cur.execute("drop schema db1.schema2")
+    cur.execute("create temporary table temp1 (id int)")
+    cur.execute("insert into db1.public.temp1 values (1)")
+    assert cur.execute("select * from temp1").fetchall() == [(1,)]
+
+
 def test_temporary_table_does_not_capture_sequence(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     cur.execute("create temporary table temp1 (x int)")
     cur.execute("create sequence db1.schema1.temp1")
@@ -1033,8 +1077,10 @@ def test_temporary_table_create_after_failed_statement(
 def test_temporary_table_create_after_failed_statement_missing_schema(
     conn: snowflake.connector.SnowflakeConnection,
 ) -> None:
+    # Without a current schema the CREATE fails before it can end the transaction, so ROLLBACK discards the insert.
     conn.autocommit(False)
     with conn.cursor() as cur:
+        cur.execute("drop schema if exists db1.public")
         cur.execute("create schema db1.schema2")
         cur.execute("use schema db1.schema2")
         cur.execute("drop schema db1.schema2")
@@ -1042,9 +1088,11 @@ def test_temporary_table_create_after_failed_statement_missing_schema(
         cur.execute("insert into db1.schema1.perm1 values (1)")
         with pytest.raises(ProgrammingError):
             cur.execute("insert into db1.schema1.perm1 values ('bad')")
-        with pytest.raises(ProgrammingError, match="does not exist") as excinfo:
+        with pytest.raises(ProgrammingError, match="does not have a current schema") as excinfo:
             cur.execute("create temporary table temp1 (id int)")
-        assert excinfo.value.errno == 2003
+        assert excinfo.value.errno == 90106
+        cur.execute("rollback")
+        assert cur.execute("select * from db1.schema1.perm1").fetchall() == []
         with pytest.raises(ProgrammingError, match="does not exist"):
             cur.execute("select * from temp1")
 
