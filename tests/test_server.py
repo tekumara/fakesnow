@@ -247,7 +247,7 @@ def test_server_failed_begin_then_autocommit_false(server: dict) -> None:
     ):
         cur.execute("create temporary table example (id int)")
         with pytest.raises(snowflake.connector.errors.ProgrammingError):
-            cur.execute("begin name probe")
+            cur.execute("begin name")
         conn.autocommit(False)
         cur.executemany("insert into example values (?)", [(1,), (2,)])
         cur.execute("rollback")

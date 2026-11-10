@@ -127,9 +127,10 @@ def test_failed_begin_then_autocommit_false(conn: snowflake.connector.SnowflakeC
     with conn.cursor() as cur:
         cur.execute("create temporary table failed_begin_then_autocommit_false (i int)")
 
-        # a BEGIN that fails opens no transaction, so DML once autocommit is off starts its own, which ROLLBACK undoes
+        # a BEGIN that fails, here a syntax error as NAME has no name, opens no transaction, so DML once autocommit is
+        # off starts its own, which ROLLBACK undoes
         with pytest.raises(snowflake.connector.errors.ProgrammingError):
-            cur.execute("begin name probe")
+            cur.execute("begin name")
         conn.autocommit(False)
         cur.execute("insert into failed_begin_then_autocommit_false values (222)")
         cur.execute("rollback")
@@ -149,7 +150,7 @@ def test_failed_begin_autocommit_false(_fakesnow: None, autocommit_off: str):
 
         # as test_failed_begin_then_autocommit_false, with autocommit off before the BEGIN or turned off by SQL
         with pytest.raises(snowflake.connector.errors.ProgrammingError):
-            cur.execute("begin name probe")
+            cur.execute("begin name")
         if autocommit_off == "by alter session":
             cur.execute("alter session set autocommit = false")
         cur.execute("insert into failed_begin_autocommit_false values (1)")
