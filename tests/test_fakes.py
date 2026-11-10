@@ -875,7 +875,7 @@ def test_varchar_length_after_alter_set_data_type(cur: snowflake.connector.curso
 def test_varchar_length_of_dropped_table(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table example (name varchar(5))")
     cur.execute("drop table example")
-    cur.execute("create table example as select 'abc' as name")
+    cur.execute("create table example as select 'abc'::varchar as name")
 
     cur.execute("insert into example values ('abcdef')")
 
