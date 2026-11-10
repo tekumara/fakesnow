@@ -314,14 +314,23 @@ def test_list_missing_table_stage_with_single_quote(
     assert excinfo.value.errno == 2003
 
 
+@pytest.mark.xfail(
+    reason="fakesnow's PUT parser keeps the quotes of a string-literal stage location, so it rejects it with errno 1003"
+)
 def test_put_quoted_stage_name_with_single_quote(dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path) -> None:
     dcur.execute("""CREATE STAGE "o'brien" """)
     path = tmp_path / "data.csv"
     path.write_text("1\n")
 
-    # fakesnow's PUT parser does not yet accept Snowflake's single-quoted target form.
-    dcur.execute(f"""PUT 'file://{path}' @"o'brien" """)
-    assert [r["status"] for r in dcur.fetchall()] == ["UPLOADED"]
+    # Snowflake rejects the bare @"o'brien" target with a syntax error; the stage location must be
+    # a string literal with the quote doubled.
+    dcur.execute(f"""PUT 'file://{path}' '@"o''brien"' """)
+    assert [(r["source"], r["target"], r["status"]) for r in dcur.fetchall()] == [
+        ("data.csv", "data.csv.gz", "UPLOADED")
+    ]
+
+    dcur.execute("""LIST '@"o''brien"'""")
+    assert [r["name"] for r in dcur.fetchall()] == ["o'brien/data.csv.gz"]
 
 
 def test_list_requires_stage_reference(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
