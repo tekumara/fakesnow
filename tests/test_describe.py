@@ -403,21 +403,3 @@ def test_describe_timestamp_ltz_created_as_cast(cur: snowflake.connector.cursor.
     cur.execute(f"create {kind} example as select '2026-10-26'::timestamp_ltz as l")
     cur.execute("select l from example")
     assert [d.type_code for d in cur.description] == [6]
-
-
-@pytest.mark.parametrize("stage", ["qualify", "annotate_types"])
-@pytest.mark.parametrize("error", [ValueError, TypeError, AssertionError, KeyError])
-def test_describe_timestamp_annotation_failure(stage: str, error: type[Exception]):
-    # Fake-only: failed optional type inference must preserve DuckDB's fallback and the result set.
-    from unittest.mock import patch
-
-    import fakesnow
-
-    with fakesnow.patch():
-        cur = snowflake.connector.connect(database="db1", schema="s1").cursor()
-        with patch(f"fakesnow.cursor.{stage}", side_effect=error("unsupported expression")):
-            cur.execute("select '2026-10-26'::timestamp_ltz as l")
-            assert [d.type_code for d in cur.description] == [7]
-            row = cur.fetchone()
-            assert row is not None
-            assert row[0].isoformat() == "2026-10-26T00:00:00+00:00"

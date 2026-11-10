@@ -362,6 +362,7 @@ def test_read_base64_from_actual_snowflake_result() -> None:
 @pytest.mark.parametrize("scale", range(10))
 def test_ltz_struct_connector_decode(scale: int) -> None:
     # Exercise the connector's two-field LTZ wire format at every supported scale.
+    # Kept: the decoded values are what a Snowflake user sees, so this guards fakesnow's wire format.
     from snowflake.connector.arrow_context import ArrowConverterContext
     from snowflake.connector.nanoarrow_arrow_iterator import PyArrowRowIterator
 
