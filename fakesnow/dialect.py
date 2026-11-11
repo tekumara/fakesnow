@@ -75,6 +75,22 @@ SNOWFLAKE_RESERVED_KEYWORDS = {
     "with",
 }
 
+# Snowflake rejects these as unquoted table and column names, and so does DuckDB unless they're quoted. sqlglot
+# quotes them for DuckDB from 30.26, which would accept them, so never quote them.
+SNOWFLAKE_REJECTED_UNQUOTED_NAMES = {
+    "by",
+    "check",
+    "create",
+    "group",
+    "ilike",
+    "in",
+    "is",
+    "like",
+    "null",
+    "qualify",
+    "tablesample",
+}
+
 
 def _duckdb_reserved_keywords() -> set[str]:
     """Keywords DuckDB can't take as an unquoted table, column or alias name."""
@@ -91,11 +107,12 @@ class FakesnowDuckDB(DuckDB):
     Snowflake allows names such as SEMI or PIVOT unquoted but DuckDB doesn't, and sqlglot's list of DuckDB
     reserved keywords misses some, so take them from DuckDB itself. Quoting doesn't change how a name
     resolves, because DuckDB matches quoted identifiers case-insensitively too. Words Snowflake reserves
-    too, such as QUALIFY, stay unquoted so DuckDB rejects them as Snowflake does.
+    too, such as QUALIFY, stay unquoted so DuckDB rejects them as Snowflake does, even where sqlglot's own
+    list would quote them.
     """
 
     class Generator(DuckDB.Generator):
-        RESERVED_KEYWORDS = DuckDB.Generator.RESERVED_KEYWORDS | (
+        RESERVED_KEYWORDS = (DuckDB.Generator.RESERVED_KEYWORDS - SNOWFLAKE_REJECTED_UNQUOTED_NAMES) | (
             _duckdb_reserved_keywords() - SNOWFLAKE_RESERVED_KEYWORDS
         )
 
