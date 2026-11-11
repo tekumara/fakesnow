@@ -335,6 +335,37 @@ def test_date_trunc_untyped_null(cur: snowflake.connector.cursor.SnowflakeCursor
 
 
 @pytest.mark.parametrize(
+    ("sql", "prefix"),
+    [
+        ("date_trunc('month', d::date)", "DATE_TRUNC('MONTH', "),
+        ("date_trunc('month', to_date('2024-05-09'))", "DATE_TRUNC('MONTH', "),
+        ("trunc(d::date, 'month')", "TRUNC("),
+    ],
+)
+def test_date_trunc_typed_date_column_name(cur: snowflake.connector.cursor.SnowflakeCursor, sql: str, prefix: str):
+    # Snowflake names the result as written, eg: DATE_TRUNC('MONTH', D::DATE). fakesnow spells the arguments the way
+    # sqlglot does, eg: CAST(D AS DATE), but keeps the function as written.
+    cur.execute(f"select {sql} from (select '2024-05-09'::date as d)")
+    assert cur.description[0].name.startswith(prefix)
+
+
+@pytest.mark.parametrize("star", ["*", "example.*"])
+def test_date_trunc_star_replace(cur: snowflake.connector.cursor.SnowflakeCursor, star: str):
+    cur.execute("create table example (d date, n int)")
+    cur.execute("insert into example values ('2024-05-09', 42)")
+    cur.execute(f"select {star} replace (date_trunc('month', d) as d) from example")
+    assert cur.fetchall() == [(datetime.date(2024, 5, 1), 42)]
+    assert [d.name for d in cur.description] == ["D", "N"]
+
+
+@pytest.mark.parametrize("sql", ["date_trunc('month', d)", "trunc(d, 'month')", "date_trunc('month', ts)"])
+def test_date_trunc_column_name(cur: snowflake.connector.cursor.SnowflakeCursor, sql: str):
+    cur.execute("create table example (d date, ts timestamp)")
+    cur.execute(f"select {sql} from example")
+    assert cur.description[0].name == sql.upper()
+
+
+@pytest.mark.parametrize(
     "sql",
     ["date_trunc('month', NULL)", "trunc(NULL, 'month')", "date_trunc('month', NULL) = d"],
 )

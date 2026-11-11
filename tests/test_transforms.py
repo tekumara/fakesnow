@@ -243,7 +243,7 @@ def test_date_trunc_date() -> None:
         sqlglot.parse_one("SELECT DATE_TRUNC('month', d) FROM t", read="snowflake")
         .transform(date_trunc_date)
         .sql(dialect="duckdb")
-        == "SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC('MONTH', d) FROM t"
+        == """SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC('MONTH', d) AS "DATE_TRUNC('MONTH', D)" FROM t"""
     )
 
 

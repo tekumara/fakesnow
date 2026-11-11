@@ -378,35 +378,61 @@ def date_trunc_date(expression: Expr) -> Expr:
         >>> sqlglot.parse_one("SELECT DATE_TRUNC('month', d) FROM t", read="snowflake").transform(
         ...     date_trunc_date
         ... ).sql(dialect="duckdb")
-        "SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC('MONTH', d) FROM t"
+        'SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC(\'MONTH\', d) AS "DATE_TRUNC(\'MONTH\', D)" FROM t'
     """
     if isinstance(expression, exp.Select):
         for projection in expression.expressions:
-            if not isinstance(projection, exp.Alias) and any(
-                isinstance(trunc.this, exp.Null) for trunc in projection.find_all(exp.DateTrunc, exp.TimestampTrunc)
+            if (
+                not isinstance(projection, exp.Alias)
+                # a star, eg: * REPLACE (DATE_TRUNC(...) AS d), names each of its columns itself
+                and not projection.is_star
+                and any(
+                    _date_trunc_is_rewritten(trunc) for trunc in projection.find_all(exp.DateTrunc, exp.TimestampTrunc)
+                )
             ):
-                # Preserve projection names before replacing calls with NULL, including in larger expressions.
-                # Otherwise distinct calls all become "NULL", and dict-based row fetching loses columns.
-                name = projection.transform(
-                    lambda e: exp.Trunc(this=e.this, decimals=e.args["unit"]) if isinstance(e, exp.DateTrunc) else e
-                ).sql(dialect="snowflake")
+                # Name the projection as Snowflake does, the upper-cased expression, before the call is replaced.
+                # Otherwise the name would be the macro call, or "NULL" for each untyped NULL, and dict-based row
+                # fetching would lose columns.
+                name = projection.transform(_trunc_as_written).sql(dialect="snowflake")
                 projection.replace(exp.alias_(projection, name.upper(), quoted=True))
         return expression
 
-    if not isinstance(expression, (exp.DateTrunc, exp.TimestampTrunc)):
+    if not isinstance(expression, (exp.DateTrunc, exp.TimestampTrunc)) or not _date_trunc_is_rewritten(expression):
         return expression
 
     input_ = expression.this
     if isinstance(input_, exp.Null):
         # Snowflake returns an untyped NULL unchanged, with TEXT metadata
         return input_
-    if input_.type and not input_.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.DATE):
-        return expression
 
     # the replacement's children aren't visited, so transform any DATE_TRUNC nested in the input
     return exp.Anonymous(
         this="_fs_global.main._fs_date_trunc",
         expressions=[exp.Literal.string(expression.text("unit")), input_.transform(date_trunc_date, copy=False)],
+    )
+
+
+def _trunc_as_written(expression: Expr) -> Expr:
+    """Spell a DateTrunc as written, TRUNC(input, unit) or DATE_TRUNC(unit, input), for naming its result.
+
+    sqlglot parses both TRUNC(d, 'month') and DATE_TRUNC('month', <a DATE>) into a DateTrunc. The parser records the
+    position of the function name, so its length tells the two apart.
+    """
+    if not isinstance(expression, exp.DateTrunc):
+        return expression
+    meta = expression.meta
+    if "start" in meta and "end" in meta and meta["end"] - meta["start"] + 1 == len("DATE_TRUNC"):
+        return exp.TimestampTrunc(this=expression.this, unit=exp.var(expression.text("unit").upper()))
+    return exp.Trunc(this=expression.this, decimals=expression.args["unit"])
+
+
+def _date_trunc_is_rewritten(trunc: exp.DateTrunc | exp.TimestampTrunc) -> bool:
+    """Whether date_trunc_date replaces this call: its input is NULL, a DATE, or of a type not known until binding."""
+    input_ = trunc.this
+    return (
+        isinstance(input_, exp.Null)
+        or not input_.type
+        or input_.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.DATE)
     )
 
 
