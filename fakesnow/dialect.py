@@ -75,8 +75,9 @@ SNOWFLAKE_RESERVED_KEYWORDS = {
     "with",
 }
 
-# Snowflake rejects these as unquoted table and column names, and so does DuckDB unless they're quoted. sqlglot
-# quotes them for DuckDB from 30.26, which would accept them, so never quote them.
+# Snowflake rejects these as unquoted identifiers (table, column and alias names), and so does DuckDB unless
+# they're quoted. sqlglot quotes them for DuckDB, the first group from 30.26, which would accept them, so never
+# quote them. WINDOW isn't here: Snowflake accepts it as a name although its documentation lists it as reserved.
 SNOWFLAKE_REJECTED_UNQUOTED_NAMES = {
     "by",
     "check",
@@ -89,6 +90,15 @@ SNOWFLAKE_REJECTED_UNQUOTED_NAMES = {
     "null",
     "qualify",
     "tablesample",
+    # quoted by sqlglot since before 30.22
+    "all",
+    "any",
+    "column",
+    "order",
+    "some",
+    "table",
+    "to",
+    "unique",
 }
 
 

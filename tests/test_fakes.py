@@ -692,6 +692,14 @@ SNOWFLAKE_RESERVED_NAMES = [
     "null",
     "qualify",
     "tablesample",
+    "all",
+    "any",
+    "column",
+    "order",
+    "some",
+    "table",
+    "to",
+    "unique",
 ]
 
 
@@ -707,6 +715,41 @@ def test_unquoted_column_name_reserved_by_snowflake(cur: snowflake.connector.cur
     with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
         cur.execute(f"create table example ({name} int)")
     assert "001003 (42000)" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("name", ["order", "table"])
+def test_unquoted_table_alias_reserved_by_snowflake(cur: snowflake.connector.cursor.SnowflakeCursor, name: str):
+    cur.execute("create table example (x int)")
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute(f"select {name}.x from example as {name}")
+    assert "001003 (42000)" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("name", ["order", "table"])
+def test_unquoted_cte_name_reserved_by_snowflake(cur: snowflake.connector.cursor.SnowflakeCursor, name: str):
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute(f"with {name} as (select 1 as x) select x from {name}")
+    assert "001003 (42000)" in str(excinfo.value)
+
+
+def test_unquoted_table_name_window(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # Snowflake's documentation lists WINDOW as reserved, but Snowflake accepts it as a name
+    cur.execute("create table window (x int)")
+    cur.execute("insert into window values (1)")
+    cur.execute("select x from window")
+    assert cur.fetchall() == [(1,)]
+
+
+def test_unquoted_column_name_window(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (window int)")
+    cur.execute("insert into example (window) values (1)")
+    cur.execute("select window from example")
+    assert cur.fetchall() == [(1,)]
+
+
+def test_json_path_key_reserved_by_snowflake(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("""select parse_json('{"order": 1}'):order""")
+    assert cur.fetchall() == [("1",)]
 
 
 def test_unquoted_names_reserved_by_duckdb_are_upper_cased(cur: snowflake.connector.cursor.SnowflakeCursor):
