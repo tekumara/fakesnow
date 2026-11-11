@@ -297,11 +297,102 @@ class FakeSnowflakeCursor:
                 sqlstate="22000",
             )
 
+    def check_identifier_case(self, expression: Expr) -> None:
+        """Refuse a name that only matches an existing object under a different case.
+
+        Snowflake looks up an unquoted identifier as upper case and a quoted one exactly, so `foo` and
+        `"foo"` name different objects. DuckDB matches names regardless of case, so without this a
+        statement could reach an object that Snowflake wouldn't find. Call it once every identifier
+        holds the name Snowflake looks up, ie: after upper_case_unquoted_identifiers.
+        """
+        if (
+            isinstance(expression, exp.Use)
+            and isinstance(kind := expression.args.get("kind"), exp.Var)
+            and kind.name.upper() in ("DATABASE", "SCHEMA")
+            and isinstance(target := expression.this, exp.Table)
+        ):
+            if kind.name.upper() == "DATABASE":
+                found = self._duck_conn.execute(
+                    "select database_name from duckdb_databases() where lower(database_name) = lower(?)",
+                    [target.name],
+                ).fetchall()
+                wanted: tuple = (target.name,)
+            else:
+                database = target.catalog or target.db or self._conn.database
+                found = self._duck_conn.execute(
+                    """select database_name, schema_name from duckdb_schemas()
+                    where lower(database_name) = lower(?) and lower(schema_name) = lower(?)""",
+                    [database, target.name],
+                ).fetchall()
+                wanted = (database, target.name)
+            if found and wanted not in found:
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg="SQL compilation error:\nObject does not exist, or operation cannot be performed.",
+                    errno=2043,
+                    sqlstate="02000",
+                )
+            return
+
+        def name_sql(part: Expr | None, name: str) -> str:
+            # a name written in the statement keeps its quoting, a current one is quoted unless upper case
+            if not isinstance(part, exp.Identifier):
+                part = exp.Identifier(this=name, quoted=not re.fullmatch(r"[A-Z_][A-Z0-9_$]*", name))
+            return part.sql(dialect="snowflake")
+
+        insert_target = expression.this if isinstance(expression, exp.Insert) else None
+        if isinstance(insert_target, exp.Schema):
+            insert_target = insert_target.this
+
+        for table in checks.referenced_tables(expression):
+            database = table.catalog or self._conn.database
+            schema = table.db or self._conn._schema
+            if not (database and schema):
+                # check_db_and_schema has already refused what needs a current database or schema
+                continue
+            if schema.upper() == "_FS_INFORMATION_SCHEMA":
+                # fakesnow's own views, named in lower case, stand in for Snowflake's upper case ones
+                continue
+            found = self._duck_conn.execute(
+                """select database_name, schema_name, table_name from duckdb_tables()
+                where lower(database_name) = lower($1) and lower(schema_name) = lower($2)
+                and lower(table_name) = lower($3)
+                union all
+                select database_name, schema_name, view_name from duckdb_views()
+                where lower(database_name) = lower($1) and lower(schema_name) = lower($2)
+                and lower(view_name) = lower($3)""",
+                [database, schema, table.name],
+            ).fetchall()
+            if not found or (database, schema, table.name) in found:
+                continue
+            # like Snowflake, name the first part of the path that doesn't exist under its exact name
+            database_sql = name_sql(table.args.get("catalog"), database)
+            if not self._duck_conn.execute(
+                "select 1 from duckdb_databases() where database_name = ?", [database]
+            ).fetchone():
+                kind, name, sqlstate = "Database", database_sql, "02000"
+            elif not self._duck_conn.execute(
+                "select 1 from duckdb_schemas() where database_name = ? and schema_name = ?", [database, schema]
+            ).fetchone():
+                kind, name, sqlstate = "Schema", f"{database_sql}.{name_sql(table.args.get('db'), schema)}", "02000"
+            else:
+                kind = "Table" if table is insert_target else "Object"
+                name, sqlstate = ".".join(part.sql(dialect="snowflake") for part in table.parts), "42S02"
+                if table.db and not table.catalog:
+                    # Snowflake fills in the current database of a schema qualified name
+                    name = f"{database_sql}.{name}"
+            raise snowflake.connector.errors.ProgrammingError(
+                msg=f"SQL compilation error:\n{kind} '{name}' does not exist or not authorized.",
+                errno=2003,
+                sqlstate=sqlstate,
+            )
+
     def _transform(self, expression: Expr, params: MutableParams | None) -> Expr:
+        expression = expression.transform(lambda e: transforms.identifier(e, params), copy=False).transform(
+            transforms.upper_case_unquoted_identifiers, copy=False
+        )
+        self.check_identifier_case(expression)
         return (
-            expression.transform(lambda e: transforms.identifier(e, params), copy=False)
-            .transform(transforms.upper_case_unquoted_identifiers, copy=False)
-            .transform(transforms.alter_session, copy=False)
+            expression.transform(transforms.alter_session, copy=False)
             .transform(transforms.update_variables, variables=self._conn.variables, copy=False)
             .transform(transforms.current_version, copy=False)
             .transform(transforms.set_schema, current_database=self._conn.database, copy=False)
