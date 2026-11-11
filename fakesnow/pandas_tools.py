@@ -154,7 +154,8 @@ def _insert_df(duck_conn: DuckDBPyConnection, df: pd.DataFrame, table_name: str,
     columns = [str(col) if quote_identifiers else str(col).upper() for col in df.columns]
     for col in columns:
         if col not in target_columns:
-            raise ProgrammingError(msg=f"invalid identifier '{_quote(col)}'", errno=904, sqlstate="42000")
+            identifier = _quote(col) if quote_identifiers else col
+            raise ProgrammingError(msg=f"invalid identifier '{identifier}'", errno=904, sqlstate="42000")
 
     # Objects in dataframes are written as parquet structs, and snowflake loads parquet structs as json strings.
     # Whereas duckdb analyses a dataframe see https://duckdb.org/docs/api/python/data_ingestion.html#pandas-dataframes--object-columns

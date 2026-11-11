@@ -461,18 +461,24 @@ def test_write_pandas_unquoted_column_name_lands_in_upper_case_column(conn: snow
 
 
 @pytest.mark.parametrize(
-    ("target_column", "dataframe_column", "quote_identifiers"),
-    [("ID", "id", True), ("id", "ID", True), ("id", "id", False)],
+    ("target_column", "dataframe_column", "quote_identifiers", "identifier"),
+    [("ID", "id", True, '"id"'), ("id", "ID", True, '"ID"'), ("id", "id", False, "ID")],
 )
 def test_write_pandas_column_case_mismatch(
-    conn: snowflake.connector.SnowflakeConnection, target_column: str, dataframe_column: str, quote_identifiers: bool
+    conn: snowflake.connector.SnowflakeConnection,
+    target_column: str,
+    dataframe_column: str,
+    quote_identifiers: bool,
+    identifier: str,
 ):
     with conn.cursor() as cur:
         cur.execute(f'create table example ("{target_column}" int)')
         df = pd.DataFrame({dataframe_column: [1]})
 
-        with pytest.raises(snowflake.connector.errors.ProgrammingError, match="invalid identifier"):
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             snowflake.connector.pandas_tools.write_pandas(conn, df, "EXAMPLE", quote_identifiers=quote_identifiers)
+
+        assert f"invalid identifier '{identifier}'" in str(excinfo.value)
 
 
 def test_write_pandas_unquoted_column_requires_valid_identifier(conn: snowflake.connector.SnowflakeConnection):
