@@ -813,6 +813,33 @@ def test_column_names_match_their_own_case_and_aliases(cur: snowflake.connector.
     assert cur.fetchall() == [(1,)]
 
 
+@pytest.mark.parametrize(
+    "sql",
+    [
+        'with c(id) as (select 1 as "id") select id from c',
+        'select id from (select 1 as "id") c(id)',
+        'with c("id") as (select 1 as id) select "id" from c',
+    ],
+)
+def test_column_list_names_the_columns(cur: snowflake.connector.cursor.SnowflakeCursor, sql: str):
+    cur.execute(sql)
+    assert cur.fetchall() == [(1,)]
+
+
+@pytest.mark.parametrize(
+    ("sql", "identifier"),
+    [
+        ('with c(id) as (select 1 as "id") select "id" from c', '"id"'),
+        ('with c("id") as (select 1 as id) select id from c', "ID"),
+    ],
+)
+def test_column_list_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor, sql: str, identifier: str):
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(sql)
+
+    assert f"invalid identifier '{identifier}'" in str(excinfo.value)
+
+
 def test_timestamp_ltz_with_precision(cur: snowflake.connector.cursor.SnowflakeCursor):
     # snowflake accepts a precision on TIMESTAMP_LTZ, duckdb's TIMESTAMPTZ does not
     cur.execute("CREATE TABLE example (ts TIMESTAMP_LTZ(9))")
