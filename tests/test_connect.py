@@ -143,6 +143,12 @@ def test_connect_information_schema():
             cur.execute("SELECT * FROM databases")
 
 
+def test_connect_with_quoted_schema_keeps_its_case(_fakesnow: None):
+    with snowflake.connector.connect(database="db1", schema='"jaffles"') as conn, conn.cursor() as cur:
+        assert conn.schema == "jaffles"
+        assert cur.execute("select current_schema()").fetchall() == [("jaffles",)]
+
+
 def test_connect_current_version(cur: snowflake.connector.cursor.SnowflakeCursor):
     version = cur.execute("SELECT CURRENT_VERSION()").fetchone()
 
