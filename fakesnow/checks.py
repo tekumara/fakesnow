@@ -208,9 +208,15 @@ def _source_columns(
     if isinstance(source, exp.Table):
         known = columns_of(source)
         return set(known) if known is not None else None
-    names = set(source.expression.named_selects) if isinstance(source.expression, exp.Query) else set()
+    selects = list(source.expression.named_selects) if isinstance(source.expression, exp.Query) else []
     # a star, or a source sqlglot can't name the columns of (eg: TABLE(FLATTEN(...)))
-    return names if names and "*" not in names else None
+    if not selects or "*" in selects:
+        return None
+    parent = source.expression.parent
+    alias = parent.args.get("alias") if isinstance(parent, (exp.CTE, exp.Subquery)) else None
+    # a column list, eg: WITH c(id) AS (...), renames the source's leading columns
+    listed = [column.name for column in alias.columns] if isinstance(alias, exp.TableAlias) else []
+    return set(listed + selects[len(listed) :])
 
 
 def _miscased(
