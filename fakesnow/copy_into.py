@@ -62,9 +62,7 @@ def copy_into(
     )
     urls = _source_urls(source, cparams.files) if cparams.files else _source_glob(source, duck_conn)
     if not urls:
-        sql = "SELECT 'Copy executed with 0 files processed.' AS status"
-        duck_conn.execute(sql)
-        return sql
+        return "SELECT 'Copy executed with 0 files processed.' AS status"
 
     schema = table.db or current_schema
     assert schema
@@ -102,8 +100,7 @@ def copy_into(
 
         for i, url in zip(inserts, urls, strict=False):
             # Check if file has been loaded into this table before
-            duck_conn.execute(check_sql, [url, table.name, schema])
-            if duck_conn.fetchone() and not cparams.force:
+            if duck_conn.execute(check_sql, [url, table.name, schema]).fetchall() and not cparams.force:
                 affected_count = 0
                 status = "LOAD_SKIPPED"
                 error_limit = None
@@ -177,10 +174,7 @@ def copy_into(
             alias="t",
             columns=columns,
         )
-        sql = exp.select("*").from_(values).sql(dialect="duckdb")
-        duck_conn.execute(sql)
-
-        return sql
+        return exp.select("*").from_(values).sql(dialect="duckdb")
     except duckdb.HTTPException as e:
         raise snowflake.connector.errors.ProgrammingError(msg=e.args[0], errno=91016, sqlstate="22000") from None
     except duckdb.ConversionException as e:
@@ -346,17 +340,17 @@ def stage_url_from_var(
         target = (target_table.catalog or current_database, target_table.db or current_schema, target_table.name)
         url = stage.internal_dir(table_stages.resolve_for_copy(database_name, schema_name, name, target))
     else:
-        duck_conn.execute(
+        rows = duck_conn.execute(
             """
             SELECT url FROM _fs_global._fs_information_schema._fs_stages
             WHERE database_name = ? and schema_name  = ? and name = ?
             """,
             (database_name, schema_name, name),
-        )
-        if not (result := duck_conn.fetchone()):
+        ).fetchall()
+        if not rows:
             raise stage.not_found_error(fqname)
         # if no URL is found, it is an internal stage ie: local directory
-        url = result[0] or stage.internal_dir(fqname)
+        url = rows[0][0] or stage.internal_dir(fqname)
 
     return f"{url.rstrip('/')}/{path}" if path else url
 
