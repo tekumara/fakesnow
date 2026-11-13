@@ -364,6 +364,78 @@ def dateadd_date_cast(expression: Expr) -> Expr:
     )
 
 
+def date_trunc_date(expression: Expr) -> Expr:
+    """Return a DATE from DATE_TRUNC and TRUNC when the input is a DATE.
+
+    Snowflake returns the input's type, see https://docs.snowflake.com/en/sql-reference/functions/date_trunc
+    and https://docs.snowflake.com/en/sql-reference/functions/trunc2. DuckDB returns a TIMESTAMP for a DATE.
+
+    When the input's type isn't known until the query is bound, eg: a column, the _fs_date_trunc macro
+    casts the result to DATE if the input is one.
+
+    Example:
+        >>> import sqlglot
+        >>> sqlglot.parse_one("SELECT DATE_TRUNC('month', d) FROM t", read="snowflake").transform(
+        ...     date_trunc_date
+        ... ).sql(dialect="duckdb")
+        'SELECT _FS_GLOBAL.MAIN._FS_DATE_TRUNC(\'MONTH\', d) AS "DATE_TRUNC(\'MONTH\', D)" FROM t'
+    """
+    if isinstance(expression, exp.Select):
+        for projection in expression.expressions:
+            if (
+                not isinstance(projection, exp.Alias)
+                # a star, eg: * REPLACE (DATE_TRUNC(...) AS d), names each of its columns itself
+                and not projection.is_star
+                and any(
+                    _date_trunc_is_rewritten(trunc) for trunc in projection.find_all(exp.DateTrunc, exp.TimestampTrunc)
+                )
+            ):
+                # Name the projection as Snowflake does, the upper-cased expression, before the call is replaced.
+                # Otherwise the name would be the macro call, or "NULL" for each untyped NULL, and dict-based row
+                # fetching would lose columns.
+                name = projection.transform(_trunc_as_written).sql(dialect="snowflake")
+                projection.replace(exp.alias_(projection, name.upper(), quoted=True))
+        return expression
+
+    if not isinstance(expression, (exp.DateTrunc, exp.TimestampTrunc)) or not _date_trunc_is_rewritten(expression):
+        return expression
+
+    input_ = expression.this
+    if isinstance(input_, exp.Null):
+        # Snowflake returns an untyped NULL unchanged, with TEXT metadata
+        return input_
+
+    # the replacement's children aren't visited, so transform any DATE_TRUNC nested in the input
+    return exp.Anonymous(
+        this="_fs_global.main._fs_date_trunc",
+        expressions=[exp.Literal.string(expression.text("unit")), input_.transform(date_trunc_date, copy=False)],
+    )
+
+
+def _trunc_as_written(expression: Expr) -> Expr:
+    """Spell a DateTrunc as written, TRUNC(input, unit) or DATE_TRUNC(unit, input), for naming its result.
+
+    sqlglot parses both TRUNC(d, 'month') and DATE_TRUNC('month', <a DATE>) into a DateTrunc. The parser records the
+    position of the function name, so its length tells the two apart.
+    """
+    if not isinstance(expression, exp.DateTrunc):
+        return expression
+    meta = expression.meta
+    if "start" in meta and "end" in meta and meta["end"] - meta["start"] + 1 == len("DATE_TRUNC"):
+        return exp.TimestampTrunc(this=expression.this, unit=exp.var(expression.text("unit").upper()))
+    return exp.Trunc(this=expression.this, decimals=expression.args["unit"])
+
+
+def _date_trunc_is_rewritten(trunc: exp.DateTrunc | exp.TimestampTrunc) -> bool:
+    """Whether date_trunc_date replaces this call: its input is NULL, a DATE, or of a type not known until binding."""
+    input_ = trunc.this
+    return (
+        isinstance(input_, exp.Null)
+        or not input_.type
+        or input_.is_type(exp.DataType.Type.UNKNOWN, exp.DataType.Type.DATE)
+    )
+
+
 def dateadd_string_literal_timestamp_cast(expression: Expr) -> Expr:
     """Snowflake's DATEADD function implicitly casts string literals to
     timestamps regardless of unit.
