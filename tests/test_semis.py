@@ -34,6 +34,41 @@ def test_array_construct_compact(cur: snowflake.connector.cursor.SnowflakeCursor
     assert indent(cur.fetchall()) == [("[\n  1,\n  2,\n  3,\n  4\n]",)]
 
 
+def test_array_construct_compact_array_to_string(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select array_to_string(array_construct_compact('a', null, 'b'), ', ')")
+    assert cur.fetchall() == [("a, b",)]
+
+
+def test_array_construct_compact_array_contains(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select array_contains(2::variant, array_construct_compact(1, null, 2))")
+    assert cur.fetchall() == [(True,)]
+
+
+def test_array_construct_compact_array_position(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select array_position(2::variant, array_construct_compact(1, null, 2))")
+    assert cur.fetchall() == [(1,)]
+
+
+def test_array_construct_compact_parenthesized(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select array_to_string((array_construct_compact('a', null, 'b')), ', ')")
+    assert cur.fetchall() == [("a, b",)]
+
+
+def test_array_construct_compact_array_slice(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select to_json(array_slice(array_construct_compact(1, null, 2, 3), 1, 3))")
+    assert indent(cur.fetchall()) == [("[\n  2,\n  3\n]",)]
+
+
+def test_array_construct_compact_array_distinct(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select to_json(array_distinct(array_construct_compact(1, null, 1)))")
+    assert indent(cur.fetchall()) == [("[\n  1\n]",)]
+
+
+def test_array_construct_compact_nested_value(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select to_json(array_construct(array_construct_compact(1, null), 2))")
+    assert indent(cur.fetchall()) == [("[\n  [\n    1\n  ],\n  2\n]",)]
+
+
 def test_get_path_as_varchar(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("""select parse_json('{"fruit":"banana"}'):fruit""")
     assert cur.fetchall() == [('"banana"',)]
