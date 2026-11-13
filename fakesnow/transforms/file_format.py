@@ -99,15 +99,15 @@ def lookup_file_format(
     """
     database_name, schema_name, format_name = parts_from_var(name, current_database, current_schema)
 
-    duck_conn.execute(
+    rows = duck_conn.execute(
         """
         SELECT options FROM _fs_global._fs_information_schema._fs_file_formats
         WHERE database_name = ? AND schema_name = ? AND name = ?
         """,
         (database_name, schema_name, format_name),
-    )
-    if result := duck_conn.fetchone():
-        return cast(dict[str, Any], json.loads(result[0]))
+    ).fetchall()
+    if rows:
+        return cast(dict[str, Any], json.loads(rows[0][0]))
 
     raise snowflake.connector.errors.ProgrammingError(
         msg=f"SQL compilation error:\nFile format '{format_name}' does not exist or not authorized.",

@@ -79,8 +79,8 @@ class TableStages:
         self, catalog: str, schema: str, stage_name: str, target: tuple[str | None, str | None, str]
     ) -> str:
         """Resolve a table stage for loading, which is allowed only into its owning table."""
-        result = self._duck_conn.execute(self.lookup_sql(catalog, schema, stage_name)).fetchone()
-        if not result:
+        rows = self._duck_conn.execute(self.lookup_sql(catalog, schema, stage_name)).fetchall()
+        if not rows:
             raise not_found_error(f"{catalog}.{schema}.{stage_name}")
         owner = (catalog, schema, stage_name[1:])
         if owner != target:
@@ -92,7 +92,7 @@ class TableStages:
                 errno=1023,
                 sqlstate="42601",
             )
-        return result[0]
+        return rows[0][0]
 
     def lookup_sql(self, catalog: str, schema: str, stage_name: str) -> str:
         """SQL returning the storage name of the table stage, or no rows if the table does not exist.
@@ -102,8 +102,8 @@ class TableStages:
         # At most one temporary table has this name in the session. Embed its OID only if it was created in the
         # requested schema; otherwise match nothing (NULL), leaving any permanent table to resolve.
         sql = "SELECT table_oid FROM duckdb_tables() WHERE temporary AND table_name = ?"
-        live = self._duck_conn.execute(sql, [stage_name[1:]]).fetchone()
-        oid = live[0] if live and self._temporary.get(live[0]) == (catalog, schema) else "NULL"
+        live = self._duck_conn.execute(sql, [stage_name[1:]]).fetchall()
+        oid = live[0][0] if live and self._temporary.get(live[0][0]) == (catalog, schema) else "NULL"
         # Temporary storage is keyed by session and OID, so it is isolated between sessions and follows renames.
         logical_name = exp.Literal.string(f"{catalog}.{schema}.{stage_name}").sql(dialect="duckdb")
         return f"""
