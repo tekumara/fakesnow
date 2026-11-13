@@ -71,6 +71,11 @@ async def login_request(request: Request) -> JSONResponse:
         {
             "data": {
                 "token": token,
+                # connector 5.x refuses a login response without a master token
+                "masterToken": token,
+                "validityInSeconds": 3600,
+                "masterValidityInSeconds": 14400,
+                "sessionId": len(sessions),
                 # clients serve this as the jdbc database product version, and some refuse to run
                 # against a version they consider too old
                 "serverVersion": SERVER_VERSION,
