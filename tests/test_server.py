@@ -828,3 +828,10 @@ def test_server_fetch_multiple_arrow_batches(scur: snowflake.connector.cursor.Sn
 
     timestamp = datetime.datetime(2024, 1, 2, 3, 4, 5, 123456)
     assert scur.fetchall() == [(i, None if i % 2 == 0 else "héllo", Decimal("12.34"), timestamp) for i in range(5000)]
+
+
+def test_varchar_length_server(scur: snowflake.connector.cursor.SnowflakeCursor):
+    scur.execute("create table example (name varchar(5))")
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        scur.execute("insert into example values ('abcdef')")
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (100078, "22000")
