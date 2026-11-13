@@ -630,6 +630,195 @@ def test_unquoted_identifiers_are_upper_cased(dcur: snowflake.connector.cursor.S
     ]
 
 
+# DuckDB reserves these words, Snowflake doesn't
+@pytest.mark.parametrize(
+    "name",
+    [
+        "anti",
+        "freeze",
+        "lambda",
+        "overlaps",
+        "pivot",
+        "positional",
+        "semi",
+        "similar",
+        "summarize",
+        "unpivot",
+        "verbose",
+    ],
+)
+def test_unquoted_table_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor, name: str):
+    cur.execute(f"create table {name} (x int)")
+    cur.execute(f"insert into {name} values (1)")
+    cur.execute(f"select x from {name}")
+    assert cur.fetchall() == [(1,)]
+
+
+@pytest.mark.parametrize(
+    "name",
+    [
+        "anti",
+        "asof",
+        "concurrently",
+        "freeze",
+        "lambda",
+        "overlaps",
+        "pivot",
+        "positional",
+        "semi",
+        "similar",
+        "summarize",
+        "unpivot",
+        "verbose",
+    ],
+)
+def test_unquoted_column_name_reserved_by_duckdb(dcur: snowflake.connector.cursor.DictCursor, name: str):
+    dcur.execute(f"create table example ({name} int)")
+    dcur.execute(f"insert into example ({name}) values (1)")
+    dcur.execute(f"select {name} from example")
+    assert dcur.fetchall() == [{name.upper(): 1}]
+
+
+# DuckDB and Snowflake both reserve these words
+SNOWFLAKE_RESERVED_NAMES = [
+    "by",
+    "check",
+    "create",
+    "group",
+    "ilike",
+    "in",
+    "is",
+    "like",
+    "null",
+    "qualify",
+    "tablesample",
+]
+
+
+@pytest.mark.parametrize("name", SNOWFLAKE_RESERVED_NAMES)
+def test_unquoted_table_name_reserved_by_snowflake(cur: snowflake.connector.cursor.SnowflakeCursor, name: str):
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute(f"create table {name} (x int)")
+    assert "001003 (42000)" in str(excinfo.value)
+
+
+@pytest.mark.parametrize("name", SNOWFLAKE_RESERVED_NAMES)
+def test_unquoted_column_name_reserved_by_snowflake(cur: snowflake.connector.cursor.SnowflakeCursor, name: str):
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute(f"create table example ({name} int)")
+    assert "001003 (42000)" in str(excinfo.value)
+
+
+def test_unquoted_names_reserved_by_duckdb_are_upper_cased(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int)")
+    cur.execute("select table_name, column_name from information_schema.columns where table_name = 'PIVOT'")
+    assert cur.fetchall() == [("PIVOT", "SEMI")]
+
+
+def test_quoted_lookup_of_unquoted_names_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int)")
+    cur.execute('insert into "PIVOT" ("SEMI") values (1)')
+    cur.execute('select "SEMI" from "PIVOT"')
+    assert cur.fetchall() == [(1,)]
+
+
+def test_quoted_names_reserved_by_duckdb_keep_their_case(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute('create table "PiVoT" ("sEmI" int)')
+    dcur.execute('insert into "PiVoT" values (1)')
+    dcur.execute('select "sEmI" from "PiVoT"')
+    assert dcur.fetchall() == [{"sEmI": 1}]
+
+
+def test_add_column_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (x int)")
+    cur.execute("alter table pivot add column semi int")
+    cur.execute("insert into pivot (x, semi) values (1, 2)")
+    cur.execute("select semi from pivot")
+    assert cur.fetchall() == [(2,)]
+
+
+def test_rename_table_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (x int)")
+    cur.execute("insert into pivot values (1)")
+    cur.execute("alter table pivot rename to unpivot")
+    cur.execute("select x from unpivot")
+    assert cur.fetchall() == [(1,)]
+
+
+def test_rename_column_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int)")
+    cur.execute("insert into pivot values (1)")
+    cur.execute("alter table pivot rename column semi to anti")
+    cur.execute("select anti from pivot")
+    assert cur.fetchall() == [(1,)]
+
+
+def test_drop_column_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (x int, semi int)")
+    cur.execute("insert into pivot values (1, 2)")
+    cur.execute("alter table pivot drop column semi")
+    cur.execute("select * from pivot")
+    assert cur.fetchall() == [(1,)]
+    assert [c.name for c in cur.description] == ["X"]
+
+
+def test_drop_table_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (x int)")
+    cur.execute("drop table pivot")
+    assert cur.fetchall() == [("PIVOT successfully dropped.",)]
+
+
+def test_update_names_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int, anti int)")
+    cur.execute("insert into pivot values (1, 10)")
+    cur.execute("update pivot set anti = 11 where semi = 1")
+    cur.execute("select anti from pivot")
+    assert cur.fetchall() == [(11,)]
+
+
+def test_delete_names_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int, anti int)")
+    cur.execute("insert into pivot values (1, 10), (2, 20)")
+    cur.execute("delete from pivot where semi = 2")
+    cur.execute("select semi, anti from pivot")
+    assert cur.fetchall() == [(1, 10)]
+
+
+def test_merge_names_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int, anti int)")
+    cur.execute("insert into pivot values (1, 10)")
+    cur.execute(
+        """
+        merge into pivot using (select 1 as semi, 12 as anti) as lambda on pivot.semi = lambda.semi
+        when matched then update set anti = lambda.anti
+        """
+    )
+    cur.execute("select semi, anti from pivot")
+    assert cur.fetchall() == [(1, 12)]
+
+
+def test_create_table_as_star_from_name_reserved_by_duckdb(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table pivot (semi int)")
+    cur.execute("insert into pivot values (1)")
+    cur.execute("create table copied (anti int) as select * from pivot")
+    cur.execute("select anti from copied")
+    assert cur.fetchall() == [(1,)]
+
+
+@pytest.mark.parametrize("name", ["NULL", "QUALIFY"])
+def test_create_table_as_star_from_quoted_reserved_column(cur: snowflake.connector.cursor.SnowflakeCursor, name: str):
+    cur.execute(f'create table source ("{name}" int)')
+    cur.execute("insert into source values (7)")
+    cur.execute("create table copied (x int) as select * from source")
+    cur.execute("select x from copied")
+    assert cur.fetchall() == [(7,)]
+
+
+def test_cte_and_aliases_reserved_by_duckdb(dcur: snowflake.connector.cursor.DictCursor):
+    dcur.execute("with pivot as (select 1 as semi) select lambda.semi as anti from pivot as lambda")
+    assert dcur.fetchall() == [{"ANTI": 1}]
+
+
 def test_timestamp_ltz_with_precision(cur: snowflake.connector.cursor.SnowflakeCursor):
     # snowflake accepts a precision on TIMESTAMP_LTZ, duckdb's TIMESTAMPTZ does not
     cur.execute("CREATE TABLE example (ts TIMESTAMP_LTZ(9))")
