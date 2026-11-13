@@ -28,7 +28,16 @@ class FakeSnow:
         self.results_cache: dict[str, tuple] = {}
         # SQLGlot's DuckDB transpilation still emits legacy arrow lambdas; keep the
         # DuckDB 2.0 compatibility setting enabled.
-        self.duck_conn = duckdb.connect(database=":memory:", config={"lambda_syntax": "ENABLE_SINGLE_ARROW"})
+        # Snowflake keeps a transaction active when a statement in it fails, see
+        # https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
+        # so like DuckDB 1.x don't abort the transaction on parser, binder or catalog errors.
+        self.duck_conn = duckdb.connect(
+            database=":memory:",
+            config={
+                "lambda_syntax": "ENABLE_SINGLE_ARROW",
+                "default_transaction_invalidation_policy": "SYNTACTIC_ERRORS_DO_NOT_INVALIDATE",
+            },
+        )
 
         # create a "global" database for storing objects which span databases.
         self.duck_conn.execute(f"ATTACH IF NOT EXISTS ':memory:' AS {GLOBAL_DATABASE_NAME}")
