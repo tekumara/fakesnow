@@ -229,6 +229,7 @@ SELECT
          WHEN data_type = 'TEXT' THEN 'VARCHAR(' || coalesce(character_maximum_length,16777216)  || ')'
          WHEN data_type = 'TIMESTAMP_NTZ' THEN 'TIMESTAMP_NTZ(9)'
          WHEN data_type = 'TIMESTAMP_TZ' THEN 'TIMESTAMP_TZ(9)'
+         WHEN data_type = 'TIMESTAMP_LTZ' THEN 'TIMESTAMP_LTZ(9)'
          WHEN data_type = 'TIME' THEN 'TIME(9)'
          WHEN data_type = 'BINARY' THEN 'BINARY(8388608)'
         ELSE data_type END AS "type",
@@ -503,46 +504,51 @@ def extract_comment_on_table(expression: Expr) -> Expr:
     return expression
 
 
-def extract_text_length(expression: Expr) -> Expr:
-    """Extract length of text columns.
+def extract_column_metadata(expression: Expr) -> Expr:
+    """Capture text lengths and declared JSON-backed and timestamp types before DuckDB discards them."""
+    if not isinstance(expression, (exp.Create, exp.Alter)) or expression.args.get("kind") not in ("TABLE", "VIEW"):
+        return expression
 
-    duckdb doesn't have fixed-sized text types. So we capture the size of text types and store that in the
-    character_maximum_length arg.
+    columns = []
+    target = expression.this
+    query = expression.args.get("expression")
+    select = query.find(exp.Select) if isinstance(query, exp.Query) else None
+    if isinstance(target, exp.Schema):
+        expressions = target.expressions
+    elif select:
+        expressions = select.expressions
+    else:
+        expressions = expression.args.get("actions") or []
 
-    Args:
-        expression (Expr): the expression that will be transformed.
+    for e in expressions:
+        name = e.alias if isinstance(e, exp.Alias) else e.name
+        size = None
+        data_type = None
+        if dts := [
+            dt for dt in e.find_all(exp.DataType) if dt.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT)
+        ]:
+            size = int(dt_size.this.this) if len(dts) == 1 and (dt_size := dts[0].find(exp.DataTypeParam)) else 16777216
 
-    Returns:
-        Expr: The original expression, with any text lengths stored in the new 'text_lengths' arg.
-    """
+        col = e.unalias()
+        dt = col.args.get("kind") if isinstance(col, exp.ColumnDef) else col.to if isinstance(col, exp.Cast) else None
+        if isinstance(dt, exp.DataType) and dt.this in (
+            exp.DataType.Type.ARRAY,
+            exp.DataType.Type.OBJECT,
+            exp.DataType.Type.VARIANT,
+            exp.DataType.Type.TIMESTAMPLTZ,
+            exp.DataType.Type.TIMESTAMPTZ,
+        ):
+            data_type = {
+                exp.DataType.Type.TIMESTAMPLTZ: "TIMESTAMP_LTZ",
+                exp.DataType.Type.TIMESTAMPTZ: "TIMESTAMP_TZ",
+            }.get(dt.this, dt.this.value)
+            size = None
 
-    if isinstance(expression, (exp.Create, exp.Alter)):
-        text_lengths = []
+        if size is not None or data_type:
+            columns.append((name, size, data_type))
 
-        # exp.Select is for a ctas, exp.Schema is a plain definition
-        if cols := expression.find(exp.Select, exp.Schema):
-            expressions = cols.expressions
-        else:
-            # alter table
-            expressions = expression.args.get("actions") or []
-        for e in expressions:
-            if dts := [
-                dt for dt in e.find_all(exp.DataType) if dt.this in (exp.DataType.Type.VARCHAR, exp.DataType.Type.TEXT)
-            ]:
-                col_name = e.alias if isinstance(e, exp.Alias) else e.name
-                if len(dts) == 1 and (dt_size := dts[0].find(exp.DataTypeParam)):
-                    size = (
-                        isinstance(dt_size.this, exp.Literal)
-                        and isinstance(dt_size.this.this, str)
-                        and int(dt_size.this.this)
-                    )
-                else:
-                    size = 16777216
-                text_lengths.append((col_name, size))
-
-        if text_lengths:
-            expression.args["text_lengths"] = text_lengths
-
+    if columns:
+        expression.args["column_metadata"] = columns
     return expression
 
 

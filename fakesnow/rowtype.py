@@ -31,6 +31,8 @@ duckdb_to_sf_type = {
     "JSON": "variant",
     "TIME": "time",
     "TIMESTAMP WITH TIME ZONE": "timestamp_tz",
+    # not a duckdb type, the cursor describes TIMESTAMPTZ columns snowflake types as TIMESTAMP_LTZ with it
+    "TIMESTAMP_LTZ": "timestamp_ltz",
     "TIMESTAMP_NS": "timestamp_ntz",
     "TIMESTAMP": "timestamp_ntz",
     "UBIGINT": "fixed",

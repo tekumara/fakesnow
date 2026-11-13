@@ -124,7 +124,6 @@ def test_write_pandas_auto_create_timestamp_tz(conn: snowflake.connector.Snowfla
         assert cur.fetchall() == [(datetime.datetime(2025, 1, 1, 12, 0, tzinfo=pytz.utc),)]
 
 
-@pytest.mark.xfail(reason="a timestamp_ltz column is described as timestamp_tz")
 def test_write_pandas_auto_create_timestamp_tz_described_as_ltz(conn: snowflake.connector.SnowflakeConnection):
     with conn.cursor() as cur:
         df = pd.DataFrame({"TZ": pd.Series([pd.Timestamp("2025-01-01 12:00", tz="UTC")])})
