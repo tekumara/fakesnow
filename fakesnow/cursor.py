@@ -274,8 +274,7 @@ class FakeSnowflakeCursor:
     def _put_files(self, put_stage_data: stage.UploadCommandDict) -> None:
         results = stage.upload_files(put_stage_data)
         _df = pyarrow.Table.from_pylist(results)
-        self._duck_conn.execute("select * from _df")
-        self._arrow_table = self._duck_conn.to_arrow_table()
+        self._arrow_table = self._duck_conn.sql("select * from _df").to_arrow_table()
         assert self._arrow_table is not None
         self._rowcount = self._arrow_table.num_rows
 
@@ -485,6 +484,7 @@ class FakeSnowflakeCursor:
                 self._conn._in_transaction = False
 
         affected_count = None
+        result: pyarrow.Table | None = None
         try:
             if isinstance(transformed, exp.Copy):
                 sql = copy_into(
@@ -495,6 +495,7 @@ class FakeSnowflakeCursor:
                     self._conn.table_stages,
                     params,
                 )
+                result = self._duck_conn.sql(sql).to_arrow_table()
             elif transformed.args.get("create_file_format_name"):
                 # File formats persist without committing the caller's DML. A separate DuckDB
                 # cursor uses an independent transaction, avoiding cross-database writes too.
@@ -503,7 +504,9 @@ class FakeSnowflakeCursor:
                     (affected_count,) = metadata_conn.execute(sql, params).fetchall()[0]
             else:
                 logger.log_sql(sql, params)
-                self._duck_conn.execute(sql, params)
+                # a relation returns arrow without the extra copy made by the DB-API result
+                relation = self._duck_conn.sql(sql, params=params)
+                result = relation.to_arrow_table() if relation is not None else None
         except duckdb.BinderException as e:
             msg = e.args[0]
             duplicate_key = "Duplicate struct entry name" in msg or "Duplicate named argument" in msg
@@ -557,7 +560,7 @@ class FakeSnowflakeCursor:
             result_sql = SQL_CREATED_DATABASE.substitute(name=create_db_name)
 
         elif stage_name := transformed.args.get("create_stage_name"):
-            (affected_count,) = self._duck_conn.fetchall()[0]
+            affected_count = _affected_count(result)
             if affected_count > 0:
                 result_sql = SQL_CREATED_STAGE.substitute(name=stage_name)
             elif transformed.args.get("create_stage_if_not_exists"):
@@ -583,18 +586,18 @@ class FakeSnowflakeCursor:
                 )
 
         elif transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
-            result_sql = stage.complete_stage_lookup(transformed, self._duck_conn.fetchone())
+            result_sql = stage.complete_stage_lookup(transformed, _first_row(result))
 
         elif cmd == "INSERT":
-            (affected_count,) = self._duck_conn.fetchall()[0]
+            affected_count = _affected_count(result)
             result_sql = SQL_INSERTED_ROWS.substitute(count=affected_count)
 
         elif cmd == "UPDATE":
-            (affected_count,) = self._duck_conn.fetchall()[0]
+            affected_count = _affected_count(result)
             result_sql = SQL_UPDATED_ROWS.substitute(count=affected_count)
 
         elif cmd == "DELETE":
-            (affected_count,) = self._duck_conn.fetchall()[0]
+            affected_count = _affected_count(result)
             result_sql = SQL_DELETED_ROWS.substitute(count=affected_count)
 
         elif cmd in {"TRUNCATETABLE", "COMMIT", "ROLLBACK", "TRANSACTION"}:
@@ -684,10 +687,10 @@ class FakeSnowflakeCursor:
 
         if result_sql:
             logger.log_sql(result_sql)
-            self._duck_conn.execute(result_sql)
+            result = self._duck_conn.sql(result_sql).to_arrow_table()
 
-        self._arrow_table = self._duck_conn.to_arrow_table()
-        assert self._arrow_table is not None
+        assert result is not None
+        self._arrow_table = result
         if transformed.args.get("merge_counts"):
             # a merge returns a count per operation, but snowflake reports their total as the
             # rows affected, not the single row those counts are in
@@ -830,3 +833,14 @@ class FakeResultBatch(ResultBatch):
 
     def populate_data(self, connection: SnowflakeConnection | None = None, **kwargs: Any) -> Self:
         raise NotImplementedError()
+
+
+def _affected_count(table: pyarrow.Table | None) -> int:
+    assert table is not None
+    return table.column(0)[0].as_py()
+
+
+def _first_row(table: pyarrow.Table | None) -> tuple | None:
+    if table is None or table.num_rows == 0:
+        return None
+    return tuple(column[0].as_py() for column in table.columns)

@@ -80,6 +80,8 @@ testpaths = ["tests"]
 filterwarnings = [
     "error::pytest.PytestUnhandledThreadExceptionWarning",
     "ignore::pytest.PytestUnknownMarkWarning",
+    # fail on warnings caused by fakesnow, eg: duckdb's extra copy warning, so users don't see them
+    "error::UserWarning:fakesnow.*",
 ]
 
 [tool.ruff]
