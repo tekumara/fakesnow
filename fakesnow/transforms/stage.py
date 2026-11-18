@@ -27,6 +27,8 @@ LOCAL_BUCKET_PATH = tempfile.mkdtemp(prefix="fakesnow_bucket_")
 
 
 class PutStage(TypedDict):
+    stage_name: str
+    stage_path: str
     source: str
     directory: str
     auto_compress: bool
@@ -269,10 +271,9 @@ def put_stage(
         )
 
     transformed = sqlglot.parse_one(stage_lookup_sql(catalog, schema, stage_name, table_stages), read="duckdb")
-    fqname = f"{catalog}.{schema}.{stage_name}"
-    transformed.args["put_stage_name"] = fqname
-    transformed.args["put_stage_path"] = path
     transformed.args["put_stage_data"] = {
+        "stage_name": f"{catalog}.{schema}.{stage_name}",
+        "stage_path": path,
         "source": src_path,
         # Filled after the lookup resolves the table instance (including temporary shadowing).
         "directory": "",
@@ -313,13 +314,17 @@ def stage_lookup_sql(catalog: str, schema: str, stage_name: str, table_stages: T
 
 def complete_stage_lookup(expression: Expr, result: tuple | None) -> str:
     """Complete PUT/LIST using resolved storage without leaking lookup details to the cursor."""
-    stage_name = expression.args.get("list_stage_name") or expression.args["put_stage_name"]
+    list_stage_name = expression.args.get("list_stage_name")
+    put: PutStage | None = expression.args.get("put_stage_data")
+    stage_name = list_stage_name or (put["stage_name"] if put else None)
+    assert stage_name
     if result is None:
         raise not_found_error(stage_name)
     storage_name = result[0]
-    if expression.args.get("list_stage_name"):
+    if list_stage_name:
         return list_stage_files_sql(storage_name)
-    expression.args["put_stage_data"]["directory"] = internal_dir(storage_name, expression.args["put_stage_path"])
+    assert put
+    put["directory"] = internal_dir(storage_name, put["stage_path"])
     return "SELECT 'Statement executed successfully.' AS status"
 
 
@@ -410,15 +415,10 @@ def list_stage_files_sql(stage_name: str) -> str:
     """
 
 
-def upload_target_name(put: PutStage) -> str:
-    basename = os.path.basename(put["source"])
-    return f"{basename}.gz" if put["auto_compress"] and not basename.endswith(".gz") else basename
-
-
-def upload_files(put: PutStage) -> list[dict[str, Any]]:
+def upload_file(put: PutStage) -> dict[str, Any]:
     source = put["source"]
     basename = os.path.basename(source)
-    target_name = upload_target_name(put)
+    target_name = f"{basename}.gz" if put["auto_compress"] and not basename.endswith(".gz") else basename
     target = os.path.join(put["directory"], target_name)
     os.makedirs(put["directory"], exist_ok=True)
 
@@ -428,15 +428,13 @@ def upload_files(put: PutStage) -> list[dict[str, Any]]:
     else:
         shutil.copyfile(source, target)
 
-    return [
-        {
-            "source": basename,
-            "target": target_name,
-            "source_size": os.path.getsize(source),
-            "target_size": os.path.getsize(target),
-            "source_compression": "GZIP" if basename.endswith(".gz") else "NONE",
-            "target_compression": "GZIP" if target_name.endswith(".gz") else "NONE",
-            "status": "UPLOADED",
-            "message": "",
-        }
-    ]
+    return {
+        "source": basename,
+        "target": target_name,
+        "source_size": os.path.getsize(source),
+        "target_size": os.path.getsize(target),
+        "source_compression": "GZIP" if basename.endswith(".gz") else "NONE",
+        "target_compression": "GZIP" if target_name.endswith(".gz") else "NONE",
+        "status": "UPLOADED",
+        "message": "",
+    }

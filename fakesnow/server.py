@@ -169,7 +169,7 @@ async def query_request(request: Request) -> JSONResponse:
             transformed = cur._last_transformed  # noqa: SLF001
             assert transformed
             if put_stage_data := transformed.args.get("put_stage_data"):
-                return upload_response(request, transformed.args["put_stage_name"], put_stage_data)
+                return upload_response(request, put_stage_data)
 
             rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
@@ -258,22 +258,37 @@ def query_result(request: Request) -> JSONResponse:
         return e.response()
 
 
-def upload_response(request: Request, stage_name: str, put: stage.PutStage) -> JSONResponse:
+def upload_response(request: Request, put: stage.PutStage) -> JSONResponse:
     """Send uploads over HTTP, even if the client and server don't share a filesystem."""
-    target = os.path.join(put["directory"], stage.upload_target_name(put))
-    path = quote(os.path.relpath(target, stage.LOCAL_BUCKET_PATH))
-    # The GCS client checks that the upload headers are listed in the presigned URL.
-    signed_headers = quote("host;x-goog-if-generation-match;x-goog-meta-sfc-digest")
+    client, _, version = request.headers.get("User-Agent", "").partition("/")
+    major = version.partition(".")[0]
+    if client == "PythonConnector" and major.isdecimal() and int(major) >= 5:
+        # The connector expands globs and detects compression on the client. A GCS-style
+        # endpoint lets it append each actual target filename instead of guessing it here.
+        directory = os.path.relpath(put["directory"], stage.LOCAL_BUCKET_PATH).replace(os.sep, "/")
+        stage_info = {
+            "locationType": "GCS",
+            "location": f"fs_bucket/{directory}/",
+            "region": "us-east1",
+            "endPoint": str(request.base_url).rstrip("/"),
+            "creds": {"GCS_ACCESS_TOKEN": "fakesnow"},
+        }
+    else:
+        # Legacy clients use presigned URLs and re-request them with the final target name.
+        target = os.path.join(put["directory"], os.path.basename(put["source"]))
+        path = quote(os.path.relpath(target, stage.LOCAL_BUCKET_PATH).replace(os.sep, "/"))
+        signed_headers = quote("host;x-goog-if-generation-match;x-goog-meta-sfc-digest")
+        stage_info = {
+            "locationType": "GCS",
+            "location": f"{put['stage_name']}/",
+            "region": "us-east1",
+            "creds": {},
+            "presignedUrl": f"{request.base_url}fs_bucket/{path}?X-Goog-SignedHeaders={signed_headers}",
+        }
     return JSONResponse(
         {
             "data": {
-                "stageInfo": {
-                    "locationType": "GCS",
-                    "location": f"{stage_name}/",
-                    "region": "us-east1",
-                    "creds": {},
-                    "presignedUrl": f"{request.base_url}fs_bucket/{path}?X-Goog-SignedHeaders={signed_headers}",
-                },
+                "stageInfo": stage_info,
                 "src_locations": [put["source"]],
                 "parallel": 4,
                 "autoCompress": put["auto_compress"],

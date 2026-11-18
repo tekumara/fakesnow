@@ -255,7 +255,7 @@ class FakeSnowflakeCursor:
                 self._execute(transformed, params if transformed.find(exp.Placeholder) else None)
 
             if not kwargs.get("server") and (put_stage_data := transformed.args.get("put_stage_data")):  # pyright: ignore[reportPossiblyUnboundVariable]
-                self._put_files(put_stage_data)
+                self._put_file(put_stage_data)
 
             return self
         except snowflake.connector.errors.ProgrammingError as e:
@@ -301,9 +301,8 @@ class FakeSnowflakeCursor:
         self._arrow_table_fetch_index = None
         return True
 
-    def _put_files(self, put_stage_data: stage.PutStage) -> None:
-        results = stage.upload_files(put_stage_data)
-        _df = pyarrow.Table.from_pylist(results)
+    def _put_file(self, put_stage_data: stage.PutStage) -> None:
+        _df = pyarrow.Table.from_pylist([stage.upload_file(put_stage_data)])
         self._arrow_table = self._duck_conn.sql("select * from _df").to_arrow_table()
         assert self._arrow_table is not None
         self._rowcount = self._arrow_table.num_rows
@@ -610,7 +609,7 @@ class FakeSnowflakeCursor:
                     sqlstate="42710",
                 )
 
-        elif transformed.args.get("list_stage_name") or transformed.args.get("put_stage_name"):
+        elif transformed.args.get("list_stage_name") or transformed.args.get("put_stage_data"):
             result_sql = stage.complete_stage_lookup(transformed, _first_row(result))
 
         elif cmd == "INSERT":

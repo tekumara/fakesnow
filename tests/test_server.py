@@ -1,14 +1,19 @@
 # ruff: noqa: E501
 
+import bz2
 import datetime
+import gzip
 import os
 import tempfile
+from base64 import b64decode
 from collections.abc import Iterator
 from decimal import Decimal
+from pathlib import Path
 from typing import Protocol
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
 import pytest
 import pytz
 import requests
@@ -451,6 +456,60 @@ def test_server_put_list(sdcur: snowflake.connector.cursor.DictCursor) -> None:
         # fully qualified stage name quoted
         dcur.execute('CREATE STAGE db1.schema1."stage2"')
         dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage2\"")
+
+
+@pytest.mark.parametrize("auto_compress", [True, False])
+def test_server_put_wildcard_uploads_each_file(
+    sdcur: snowflake.connector.cursor.DictCursor, tmp_path: Path, auto_compress: bool
+) -> None:
+    (tmp_path / "one.csv").write_text("1,2\n")
+    (tmp_path / "two.csv").write_text("3,4\n")
+    (tmp_path / "ignored.txt").write_text("ignored\n")
+    sdcur.execute("CREATE OR REPLACE STAGE wildcard_stage")
+
+    sdcur.execute(f"PUT 'file://{tmp_path}/*.csv' @wildcard_stage/nested AUTO_COMPRESS={str(auto_compress).upper()}")
+    suffix = ".gz" if auto_compress else ""
+    assert sorted((row["source"], row["target"], row["status"]) for row in sdcur.fetchall()) == [
+        ("one.csv", f"one.csv{suffix}", "UPLOADED"),
+        ("two.csv", f"two.csv{suffix}", "UPLOADED"),
+    ]
+
+    sdcur.execute("LIST @wildcard_stage")
+    assert sorted(row["name"] for row in sdcur.fetchall()) == [
+        f"wildcard_stage/nested/one.csv{suffix}",
+        f"wildcard_stage/nested/two.csv{suffix}",
+    ]
+
+
+@pytest.mark.parametrize("filename", ["data.csv.bz2", "data.csv"], ids=["extension", "magic-bytes"])
+def test_server_put_preserves_bzip2_filename(
+    sdcur: snowflake.connector.cursor.DictCursor, tmp_path: Path, filename: str
+) -> None:
+    source = tmp_path / filename
+    source.write_bytes(bz2.compress(b"1,2\n"))
+    sdcur.execute("CREATE OR REPLACE STAGE compressed_stage")
+
+    sdcur.execute(f"PUT 'file://{source}' @compressed_stage")
+    result = sdcur.fetchall()
+    assert [(row["source"], row["target"], row["source_compression"], row["target_compression"]) for row in result] == [
+        (filename, filename, "BZIP2", "BZIP2")
+    ]
+
+    sdcur.execute("LIST @compressed_stage")
+    assert [row["name"] for row in sdcur.fetchall()] == [f"compressed_stage/{filename}"]
+
+
+def test_server_put_presigned_url_for_legacy_clients(server_query: ServerQuery) -> None:
+    # Older clients request another URL using the final upload filename.
+    assert server_query("CREATE OR REPLACE STAGE legacy_stage")["success"]
+    response = server_query("PUT 'file://data.csv.gz' @legacy_stage")
+    url = response["data"]["stageInfo"]["presignedUrl"]
+    uploaded = requests.put(url, data=gzip.compress(b"1,2\n"), timeout=5)
+    assert uploaded.status_code == 200
+
+    listed = server_query("LIST @legacy_stage")
+    table = pa.ipc.open_stream(b64decode(listed["data"]["rowsetBase64"])).read_all()
+    assert [row["name"] for row in table.to_pylist()] == ["legacy_stage/data.csv.gz"]
 
 
 def test_server_put_relative_source(sdcur: snowflake.connector.cursor.DictCursor) -> None:
