@@ -89,6 +89,33 @@ def array_size(expression: Expr) -> Expr:
     return expression
 
 
+def array_flatten(expression: Expr) -> Expr:
+    """Convert ARRAY_FLATTEN(<array of arrays>) to DuckDB, returning JSON like other array functions.
+
+    DuckDB's FLATTEN only accepts a LIST of LISTs, but arrays are JSON in fakesnow, eg: from ARRAY_AGG or
+    a top-level array literal. So cast the input to JSON, flatten its elements as LISTs of JSON, and cast
+    the result back to JSON.
+
+    See https://docs.snowflake.com/en/sql-reference/functions/array_flatten
+    """
+    if isinstance(expression, exp.Flatten):
+        json_type = exp.DataType.build("JSON", dialect="duckdb")
+        json_list_type = exp.DataType.build("JSON[]", dialect="duckdb")
+        element = exp.to_identifier("e")
+
+        # the elements of the outer array, as JSON
+        outer = exp.Cast(this=exp.Cast(this=expression.this, to=json_type), to=json_list_type)
+        # each element is itself an array, as a LIST of JSON
+        to_list = exp.Lambda(
+            this=exp.Cast(this=exp.column(element.copy()), to=json_list_type.copy()), expressions=[element]
+        )
+        inner = exp.Anonymous(this="LIST_TRANSFORM", expressions=[outer, to_list])
+
+        return exp.Cast(this=exp.Anonymous(this="FLATTEN", expressions=[inner]), to=json_type.copy())
+
+    return expression
+
+
 def array_agg(expression: Expr) -> Expr:
     if isinstance(expression, exp.ArrayAgg) and not isinstance(expression.parent, exp.Window):
         return exp.Anonymous(this="TO_JSON", expressions=[expression])
