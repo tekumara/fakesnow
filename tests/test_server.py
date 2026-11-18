@@ -7,8 +7,10 @@ import os
 import tempfile
 from base64 import b64decode
 from collections.abc import Iterator
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
 from pathlib import Path
+from threading import Barrier
 from typing import Protocol
 
 import numpy as np
@@ -99,7 +101,7 @@ def test_server_binding_timestamp_ltz(server: dict) -> None:
 
 
 class ServerQuery(Protocol):
-    def __call__(self, sql: str, bindings: dict | None = None) -> dict: ...
+    def __call__(self, sql: str, bindings: dict | None = None, *, user_agent: str | None = None) -> dict: ...
 
 
 @pytest.fixture
@@ -115,10 +117,10 @@ def server_query(server: dict) -> Iterator[ServerQuery]:
     login.raise_for_status()
     headers = {"Authorization": 'Snowflake Token="' + login.json()["data"]["token"] + '"'}
 
-    def query(sql: str, bindings: dict | None = None) -> dict:
+    def query(sql: str, bindings: dict | None = None, *, user_agent: str | None = None) -> dict:
         response = requests.post(
             f"{base_url}/queries/v1/query-request",
-            headers=headers,
+            headers=headers | ({"User-Agent": user_agent} if user_agent else {}),
             json={"sqlText": sql, "bindings": bindings},
             timeout=5,
         )
@@ -459,15 +461,18 @@ def test_server_put_list(sdcur: snowflake.connector.cursor.DictCursor) -> None:
 
 
 @pytest.mark.parametrize("auto_compress", [True, False])
+@pytest.mark.parametrize("pattern", ["*.csv", "???.csv"], ids=["star", "question"])
 def test_server_put_wildcard_uploads_each_file(
-    sdcur: snowflake.connector.cursor.DictCursor, tmp_path: Path, auto_compress: bool
+    sdcur: snowflake.connector.cursor.DictCursor, tmp_path: Path, auto_compress: bool, pattern: str
 ) -> None:
     (tmp_path / "one.csv").write_text("1,2\n")
     (tmp_path / "two.csv").write_text("3,4\n")
     (tmp_path / "ignored.txt").write_text("ignored\n")
     sdcur.execute("CREATE OR REPLACE STAGE wildcard_stage")
 
-    sdcur.execute(f"PUT 'file://{tmp_path}/*.csv' @wildcard_stage/nested AUTO_COMPRESS={str(auto_compress).upper()}")
+    sdcur.execute(
+        f"PUT 'file://{tmp_path}/{pattern}' @wildcard_stage/nested AUTO_COMPRESS={str(auto_compress).upper()}"
+    )
     suffix = ".gz" if auto_compress else ""
     assert sorted((row["source"], row["target"], row["status"]) for row in sdcur.fetchall()) == [
         ("one.csv", f"one.csv{suffix}", "UPLOADED"),
@@ -499,17 +504,74 @@ def test_server_put_preserves_bzip2_filename(
     assert [row["name"] for row in sdcur.fetchall()] == [f"compressed_stage/{filename}"]
 
 
-def test_server_put_presigned_url_for_legacy_clients(server_query: ServerQuery) -> None:
+@pytest.mark.parametrize("filename", ["data.csv.gz", "data[final].csv.gz"], ids=["plain", "brackets"])
+def test_server_put_presigned_url_for_legacy_clients(server_query: ServerQuery, filename: str) -> None:
     # Older clients request another URL using the final upload filename.
     assert server_query("CREATE OR REPLACE STAGE legacy_stage")["success"]
-    response = server_query("PUT 'file://data.csv.gz' @legacy_stage")
+    response = server_query(f"PUT 'file://{filename}' @legacy_stage")
     url = response["data"]["stageInfo"]["presignedUrl"]
     uploaded = requests.put(url, data=gzip.compress(b"1,2\n"), timeout=5)
     assert uploaded.status_code == 200
 
     listed = server_query("LIST @legacy_stage")
     table = pa.ipc.open_stream(b64decode(listed["data"]["rowsetBase64"])).read_all()
-    assert [row["name"] for row in table.to_pylist()] == ["legacy_stage/data.csv.gz"]
+    assert [row["name"] for row in table.to_pylist()] == [f"legacy_stage/{filename}"]
+
+
+@pytest.mark.parametrize(
+    ("source", "filename"),
+    [
+        ("multi*multi-a.csv.gz", "multi-a.csv.gz"),
+        ("multi-?multi-a.csv.gz", "multi-a.csv.gz"),
+        ("multi-[ab]multi-a.csv.gz", "multi-a.csv.gz"),
+        ("multi*multi-[draft].csv.gz", "multi-[draft].csv.gz"),
+        ("m*ulti*multi-a.csv.gz", "multi-a.csv.gz"),
+    ],
+    ids=["star", "question", "character-class", "brackets-in-filename", "multiple-stars"],
+)
+def test_server_put_go_wildcard_presigned_refresh(server_query: ServerQuery, source: str, filename: str) -> None:
+    # Go re-requests the URL using the wildcard prefix followed by the resolved filename.
+    assert server_query("CREATE OR REPLACE STAGE go_legacy_stage")["success"]
+    result = server_query(f"PUT 'file:///tmp/{source}' @go_legacy_stage", user_agent="Go/1.19.1")
+    url = result["data"]["stageInfo"]["presignedUrl"]
+    assert requests.put(url, data=gzip.compress(b"1,2\n"), timeout=5).status_code == 200
+
+    listed = server_query("LIST @go_legacy_stage")
+    table = pa.ipc.open_stream(b64decode(listed["data"]["rowsetBase64"])).read_all()
+    assert [row["name"] for row in table.to_pylist()] == [f"go_legacy_stage/{filename}"]
+
+
+def test_server_put_jdbc_stage_info_has_endpoint(server_query: ServerQuery) -> None:
+    assert server_query("CREATE OR REPLACE STAGE jdbc_stage")["success"]
+    result = server_query("PUT 'file:///tmp/data.csv' @jdbc_stage", user_agent="JDBC/4.4.1")
+    assert result["data"]["stageInfo"]["endPoint"] is None
+
+
+def test_server_concurrent_presigned_requests_share_session(server_query: ServerQuery) -> None:
+    # JDBC requests URLs for multiple files concurrently on the same connection.
+    assert server_query("CREATE OR REPLACE STAGE concurrent_stage")["success"]
+    barrier = Barrier(12)
+
+    def request_url(index: int) -> dict:
+        barrier.wait(timeout=10)
+        return server_query(f"PUT 'file://file{index}.csv.gz' @concurrent_stage", user_agent="JDBC/4.4.1")
+
+    with ThreadPoolExecutor(max_workers=12) as executor:
+        results = list(executor.map(request_url, range(12)))
+
+    assert all(result["success"] for result in results)
+    assert len({result["data"]["stageInfo"]["presignedUrl"] for result in results}) == 12
+
+
+def test_server_put_source_with_hash(sdcur: snowflake.connector.cursor.DictCursor, tmp_path: Path) -> None:
+    source = tmp_path / "input#tag.csv"
+    source.write_text("1,2\n")
+    sdcur.execute("CREATE OR REPLACE STAGE hash_source_stage")
+    sdcur.execute(f"PUT 'file://{source}' @hash_source_stage AUTO_COMPRESS=FALSE")
+    assert [row["status"] for row in sdcur.fetchall()] == ["UPLOADED"]
+
+    sdcur.execute("LIST @hash_source_stage")
+    assert [row["name"] for row in sdcur.fetchall()] == ["hash_source_stage/input#tag.csv"]
 
 
 def test_server_put_relative_source(sdcur: snowflake.connector.cursor.DictCursor) -> None:

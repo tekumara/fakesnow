@@ -1,12 +1,14 @@
 from __future__ import annotations
 
+import asyncio
 import gzip
 import json
 import logging
 import os
+import re
 import secrets
 from base64 import b64encode
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
 
@@ -37,8 +39,16 @@ logger.handlers = logging.getLogger("uvicorn").handlers
 logger.setLevel(logging.INFO)
 
 
+@dataclass
+class ServerSession:
+    conn: FakeSnowflakeConnection
+    # JDBC can request upload URLs concurrently on one connection. DuckDB cannot
+    # execute multiple statements concurrently on that connection.
+    query_lock: asyncio.Lock = field(default_factory=asyncio.Lock)
+
+
 shared_fs = FakeSnow()
-sessions: dict[str, FakeSnowflakeConnection] = {}
+sessions: dict[str, ServerSession] = {}
 
 
 @dataclass
@@ -79,7 +89,7 @@ async def login_request(request: Request) -> JSONResponse:
         fs = shared_fs
     token = secrets.token_urlsafe(32)
     logger.info(f"Session login {database=} {schema=} {nop_regexes=}")
-    sessions[token] = fs.connect(database, schema, nop_regexes=nop_regexes, autocommit=autocommit)
+    sessions[token] = ServerSession(fs.connect(database, schema, nop_regexes=nop_regexes, autocommit=autocommit))
     return JSONResponse(
         {
             "data": {
@@ -111,8 +121,15 @@ async def login_request(request: Request) -> JSONResponse:
 
 async def query_request(request: Request) -> JSONResponse:
     try:
-        conn = to_conn(to_token(request))
+        session = to_session(to_token(request))
+        async with session.query_lock:
+            return await _query_request(request, session.conn)
+    except ServerError as e:
+        return e.response()
 
+
+async def _query_request(request: Request, conn: FakeSnowflakeConnection) -> JSONResponse:
+    try:
         body = await request.body()
         if request.headers.get("Content-Encoding") == "gzip":
             body = gzip.decompress(body)
@@ -263,8 +280,8 @@ def upload_response(request: Request, put: stage.PutStage) -> JSONResponse:
     client, _, version = request.headers.get("User-Agent", "").partition("/")
     major = version.partition(".")[0]
     if client == "PythonConnector" and major.isdecimal() and int(major) >= 5:
-        # The connector expands globs and detects compression on the client. A GCS-style
-        # endpoint lets it append each actual target filename instead of guessing it here.
+        # Connector 5 normally reuses one presigned URL for all files, so it would misroute
+        # wildcard uploads. A GCS-style endpoint lets it append each actual target filename.
         directory = os.path.relpath(put["directory"], stage.LOCAL_BUCKET_PATH).replace(os.sep, "/")
         stage_info = {
             "locationType": "GCS",
@@ -274,14 +291,23 @@ def upload_response(request: Request, put: stage.PutStage) -> JSONResponse:
             "creds": {"GCS_ACCESS_TOKEN": "fakesnow"},
         }
     else:
-        # Legacy clients use presigned URLs and re-request them with the final target name.
-        target = os.path.join(put["directory"], os.path.basename(put["source"]))
+        # Python connector 4.x, Go and JDBC request presigned URLs per file. Their GCS
+        # custom endpoints force HTTPS, by giving them a presigned URL we can make them
+        # upload to our HTTP server.
+        filename = os.path.basename(put["source"])
+        if client == "Go":
+            # Go's wildcard refresh prefixes the resolved filename with the original glob.
+            # Prefer * and ? so bracket characters in the resolved filename are retained.
+            parts = re.split(r"[*?]", filename)
+            filename = parts[-1] if len(parts) > 1 else re.split(r"\[[^]]+\]", filename)[-1]
+        target = os.path.join(put["directory"], filename)
         path = quote(os.path.relpath(target, stage.LOCAL_BUCKET_PATH).replace(os.sep, "/"))
         signed_headers = quote("host;x-goog-if-generation-match;x-goog-meta-sfc-digest")
         stage_info = {
             "locationType": "GCS",
             "location": f"{put['stage_name']}/",
             "region": "us-east1",
+            "endPoint": None,
             "creds": {},
             "presignedUrl": f"{request.base_url}fs_bucket/{path}?X-Goog-SignedHeaders={signed_headers}",
         }
@@ -369,11 +395,15 @@ def to_token(request: Request) -> str:
     return auth[17:-1]
 
 
-def to_conn(token: str) -> FakeSnowflakeConnection:
-    if (conn := sessions.get(token)) is None:
+def to_session(token: str) -> ServerSession:
+    if (session := sessions.get(token)) is None:
         raise ServerError(status_code=401, code="390104", message="User must login again to access the service.")
 
-    return conn
+    return session
+
+
+def to_conn(token: str) -> FakeSnowflakeConnection:
+    return to_session(token).conn
 
 
 async def session(request: Request) -> JSONResponse:

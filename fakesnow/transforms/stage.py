@@ -236,12 +236,15 @@ def put_stage(
         return expression
 
     assert isinstance(expression.this, exp.Literal), "PUT command requires a file path as a literal"
-    src_url = urlparse(expression.this.this)
-    # The connector re-requests presigned URLs with file://data.csv.gz (no path).
-    # Other non-localhost authorities can be relative directories or Windows drive letters.
-    src_path = url2pathname(src_url.path)
-    if src_url.netloc and src_url.netloc.lower() != "localhost":
-        src_path = src_url.netloc + src_path
+    source = expression.this.this
+    # PUT sources are filesystem paths, including client refreshes like file://data[1].csv.gz.
+    # Preserve glob characters, # and relative paths rather than parsing them as URL components.
+    if source[:7].lower() == "file://":
+        source = source[7:]
+    authority, separator, rest = source.partition("/")
+    if authority.lower() == "localhost":
+        source = separator + rest
+    src_path = url2pathname(source)
     target = expression.args["target"]
 
     assert isinstance(target, exp.Var), f"{target} is not a exp.Var"
