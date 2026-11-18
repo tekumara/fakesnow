@@ -164,16 +164,8 @@ def create_clone(expression: Expr) -> Expr:
         and str(expression.args.get("kind")).upper() == "TABLE"
         and (clone := expression.find(exp.Clone))
     ):
-        return exp.Create(
-            this=expression.this,
-            kind="TABLE",
-            expression=exp.Select(
-                expressions=[
-                    exp.Star(),
-                ],
-                from_=exp.From(this=clone.this),
-            ),
-        )
+        expression.set("clone", None)
+        expression.set("expression", exp.Select(expressions=[exp.Star()], from_=exp.From(this=clone.this)))
     return expression
 
 
@@ -242,7 +234,7 @@ SELECT
     NULL::VARCHAR AS "comment",
     NULL::VARCHAR AS "policy name",
     NULL::JSON AS "privacy domain",
-FROM _fs_information_schema._fs_columns
+FROM _fs_global._fs_information_schema._fs_columns
 WHERE table_catalog = '${catalog}' AND table_schema = '${schema}' AND table_name = '${table}'
 ORDER BY ordinal_position
 """

@@ -114,16 +114,18 @@ COLLATION_NAME, IS_IDENTITY, IDENTITY_GENERATION, IDENTITY_CYCLE,
     null::VARCHAR as IDENTITY_ORDERED,
     null::VARCHAR as DATA_TYPE_ALIAS
 from system.information_schema.columns columns
-left join _fs_global._fs_information_schema._fs_columns_ext ext
-  on ext_table_catalog = columns.table_catalog
- AND ext_table_schema = columns.table_schema
- AND ext_table_name = columns.table_name
- AND ext_column_name = columns.column_name
 LEFT JOIN duckdb_columns ddb_columns
   ON ddb_columns.database_name = columns.table_catalog
  AND ddb_columns.schema_name = columns.table_schema
  AND ddb_columns.table_name = columns.table_name
  AND ddb_columns.column_name = columns.column_name
+-- every session's temporary tables share temp.main, so their metadata is keyed by OID, which is unique across sessions
+LEFT JOIN _fs_global._fs_information_schema._fs_columns_ext ext
+  ON ext_table_catalog = columns.table_catalog
+ AND ext_table_schema = CASE WHEN columns.table_catalog = 'temp' THEN ddb_columns.table_oid::VARCHAR
+                             ELSE columns.table_schema END
+ AND ext_table_name = columns.table_name
+ AND ext_column_name = columns.column_name
 where schema_name != '_fs_information_schema'
 """
 

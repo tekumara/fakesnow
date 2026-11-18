@@ -28,6 +28,7 @@ from fakesnow.transforms.stage import (
     list_stage as list_stage,
     put_stage as put_stage,
 )
+from fakesnow.transforms.temporary import temporary_tables as temporary_tables
 from fakesnow.transforms.transforms import (
     SERVER_VERSION as SERVER_VERSION,
     SUCCESS_NOP as SUCCESS_NOP,

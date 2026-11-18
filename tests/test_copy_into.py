@@ -568,6 +568,35 @@ def test_copy_temp_table_stage_after_schema_switch(dcur: snowflake.connector.cur
     assert dcur.fetchall() == [{"status": "Copy executed with 0 files processed."}]
 
 
+def test_copy_into_qualified_temporary_table_from_its_stage(
+    dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path
+) -> None:
+    dcur.execute("CREATE TEMP TABLE db1.schema1.temporary_stage_table (a INT, b INT)")
+    path = tmp_path / "data.csv"
+    path.write_text("1,2\n")
+    dcur.execute(f"PUT 'file://{path}' @%temporary_stage_table AUTO_COMPRESS=FALSE")
+
+    dcur.execute("COPY INTO db1.schema1.temporary_stage_table FROM @%temporary_stage_table")
+
+    dcur.execute("SELECT * FROM temporary_stage_table")
+    assert dcur.fetchall() == [{"A": 1, "B": 2}]
+
+
+def test_copy_same_file_into_replaced_temporary_table(
+    dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path
+) -> None:
+    # a replaced table is a new table, so it has no load history
+    path = tmp_path / "data.csv"
+    path.write_text("1,2\n")
+    dcur.execute("CREATE STAGE reload_stage")
+    dcur.execute(f"PUT 'file://{path}' @reload_stage AUTO_COMPRESS=FALSE")
+
+    for _ in range(2):
+        dcur.execute("CREATE OR REPLACE TEMP TABLE db1.schema1.reloaded_table (a INT, b INT)")
+        dcur.execute("COPY INTO db1.schema1.reloaded_table FROM @reload_stage")
+        assert [r["status"] for r in dcur.fetchall()] == ["LOADED"]
+
+
 @pytest.fixture
 def temporary_table_stage_sessions(
     _fakesnow: None, tmp_path: Path
