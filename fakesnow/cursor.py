@@ -7,6 +7,7 @@ import re
 import sys
 import uuid
 from collections.abc import Callable, Iterator, Sequence
+from dataclasses import dataclass
 from string import Template
 from types import TracebackType
 from typing import TYPE_CHECKING, Any, Self, cast
@@ -35,7 +36,7 @@ from fakesnow import logger
 from fakesnow.copy_into import copy_into
 from fakesnow.dialect import parse_one, syntax_error
 from fakesnow.params import MutableParams
-from fakesnow.rowtype import describe_as_result_metadata
+from fakesnow.rowtype import ColumnInfo, describe_as_result_metadata
 from fakesnow.transforms import stage
 from fakesnow.transforms.merge import operations as merge_operations
 
@@ -82,6 +83,24 @@ DESCRIBE_RESULT_SQL: dict[type[Expr], str] = {
     exp.Update: SQL_UPDATED_ROWS.substitute(count=0),
     exp.Delete: SQL_DELETED_ROWS.substitute(count=0),
 }
+
+
+@dataclass
+class QueryResultMetadata:
+    rowtype: list[ColumnInfo]
+    type_id: int
+    batch_rowcount: int | None = None
+
+
+@dataclass
+class CachedQueryResult:
+    table: pyarrow.Table
+    rowcount: int
+    sql: str
+    params: MutableParams | None
+    transformed: Expr
+    # Wire metadata is only populated for queries submitted to the HTTP server.
+    metadata: QueryResultMetadata | None = None
 
 
 class FakeSnowflakeCursor:
@@ -261,21 +280,28 @@ class FakeSnowflakeCursor:
 
     def get_results_from_sfqid(self, sfqid: str) -> None:
         def prefetch() -> None:
-            value = self._conn.results_cache.get(sfqid)
-            if value is None:
+            if not self._restore_result(sfqid):
                 raise snowflake.connector.errors.DatabaseError(
                     "Cannot retrieve data on the status of this query. "
                     "No information returned from server for query '{}'"
                 )
-            # Restore the cached result data
-            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed = value
-            self._sfqid = sfqid
-            self._arrow_table_fetch_index = None
             self._prefetch_hook = None
 
         self._prefetch_hook = prefetch
 
-    def _put_files(self, put_stage_data: stage.UploadCommandDict) -> None:
+    def _restore_result(self, sfqid: str) -> bool:
+        if (result := self._conn.results_cache.get(sfqid)) is None:
+            return False
+        self._arrow_table = result.table
+        self._rowcount = result.rowcount
+        self._last_sql = result.sql
+        self._last_params = result.params
+        self._last_transformed = result.transformed
+        self._sfqid = sfqid
+        self._arrow_table_fetch_index = None
+        return True
+
+    def _put_files(self, put_stage_data: stage.PutStage) -> None:
         results = stage.upload_files(put_stage_data)
         _df = pyarrow.Table.from_pylist(results)
         self._arrow_table = self._duck_conn.sql("select * from _df").to_arrow_table()
@@ -441,15 +467,10 @@ class FakeSnowflakeCursor:
             )
 
         if sfqid := transformed.args.get("result_scan_sfqid"):
-            value = self._conn.results_cache.get(sfqid)
-            if value is None:
+            if not self._restore_result(sfqid):
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"Statement {sfqid} not found", errno=709, sqlstate="02000"
                 )
-            # Restore the cached result data
-            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed = value
-            self._sfqid = sfqid
-            self._arrow_table_fetch_index = None
             return
 
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
@@ -706,12 +727,8 @@ class FakeSnowflakeCursor:
         self._last_params = None if result_sql else params
         self._last_transformed = transformed
 
-        self._conn.results_cache[self._sfqid] = (
-            self._arrow_table,
-            self._rowcount,
-            self._last_sql,
-            self._last_params,
-            self._last_transformed,
+        self._conn.results_cache[self._sfqid] = CachedQueryResult(
+            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed
         )
 
     def executemany(

@@ -80,7 +80,7 @@ def test_flatten_alias_rename(cur: snowflake.connector.cursor.SnowflakeCursor) -
         read="snowflake",
     ).transform(flatten).sql(dialect="duckdb") == strip("SELECT * FROM _FS_FLATTEN([1, 2]) AS rename(a, b, c)")
     cur.execute(sql)
-    assert [d.name for d in cur.description] == ["A", "B", "C", "INDEX", "VALUE", "THIS"]
+    assert [d.name for d in (cur.description or ())] == ["A", "B", "C", "INDEX", "VALUE", "THIS"]
 
 
 def test_flatten_json(cur: snowflake.connector.cursor.SnowflakeCursor):

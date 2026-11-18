@@ -54,11 +54,11 @@ def test_connect_different_sessions_use_database(_fakesnow_no_auto_create: None)
         # use database and schema
         cur.execute("use database marts")
         assert cur.fetchall() == [("Statement executed successfully.",)]
-        assert cur.description[0].name == "status"
+        assert (description := cur.description) is not None and description[0].name == "status"
 
         cur.execute("use schema jaffles")
         assert cur.fetchall() == [("Statement executed successfully.",)]
-        assert cur.description[0].name == "status"
+        assert (description := cur.description) is not None and description[0].name == "status"
 
         cur.execute("insert into customers values (2, 'Jasper', 'M')")
 

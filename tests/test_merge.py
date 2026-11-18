@@ -406,7 +406,7 @@ def test_merge(conn: snowflake.connector.SnowflakeConnection):
             WHEN MATCHED THEN UPDATE SET val = t2.newVal
             WHEN NOT MATCHED THEN INSERT (t1Key, val, status) VALUES (t2.t2Key, t2.newVal, t2.newStatus);
         """,
-        cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
+        cursor_class=snowflake.connector.cursor.DictCursor,
     )
 
     assert dcur.fetchall() == [{"number of rows inserted": 1, "number of rows updated": 2, "number of rows deleted": 1}]
@@ -448,7 +448,7 @@ def test_merge_not_matched_condition(conn: snowflake.connector.SnowflakeConnecti
         MERGE INTO t1 USING t2 ON t1.t1Key = t2.t2Key
             WHEN NOT MATCHED AND t2.insertable = 1 THEN INSERT (t1Key, val, status) VALUES (t2.t2Key, t2.newVal, t2.newStatus);
         """,
-        cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
+        cursor_class=snowflake.connector.cursor.DictCursor,
     )
 
     # TODO: Check what the python connector actually returns, does include the updates and deletes?
@@ -490,7 +490,7 @@ def test_merge_join_complex(conn: snowflake.connector.SnowflakeConnection):
             WHEN MATCHED AND t1.status = 'old' THEN DELETE
             WHEN NOT MATCHED THEN INSERT VALUES (t2.id, t2.name, 'new');
         """,
-        cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
+        cursor_class=snowflake.connector.cursor.DictCursor,
     )
 
     assert dcur.fetchall() == [{"number of rows inserted": 1, "number of rows deleted": 1}]
@@ -527,7 +527,7 @@ def test_merge_join_function(conn: snowflake.connector.SnowflakeConnection):
             WHEN MATCHED AND t1.status = 'old' THEN DELETE
             WHEN NOT MATCHED THEN INSERT VALUES (t2.id, t2.name, 'new');
         """,
-        cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
+        cursor_class=snowflake.connector.cursor.DictCursor,
     )
 
     assert dcur.fetchall() == [{"number of rows inserted": 1, "number of rows deleted": 1}]
@@ -569,7 +569,7 @@ def test_merge_with_source_subquery(conn: snowflake.connector.SnowflakeConnectio
         WHEN MATCHED THEN UPDATE
             SET tgt.ACTIVE_STATUS = src.ACTIVE_STATUS, tgt.END_DATE = NULL;
         """,
-        cursor_class=snowflake.connector.cursor.DictCursor,  # type: ignore see https://github.com/snowflakedb/snowflake-connector-python/issues/1984
+        cursor_class=snowflake.connector.cursor.DictCursor,
     )
 
     # TODO: Check what the python connector actually returns, does include the updates and deletes?

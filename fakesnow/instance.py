@@ -7,6 +7,7 @@ import duckdb
 
 import fakesnow.fakes as fakes
 from fakesnow import info_schema
+from fakesnow.cursor import CachedQueryResult
 from fakesnow.transforms import show
 
 GLOBAL_DATABASE_NAME = "_fs_global"
@@ -25,7 +26,7 @@ class FakeSnow:
         self.db_path = db_path
         self.nop_regexes = nop_regexes
 
-        self.results_cache: dict[str, tuple] = {}
+        self.results_cache: dict[str, CachedQueryResult] = {}
         # SQLGlot's DuckDB transpilation still emits legacy arrow lambdas; keep the
         # DuckDB 2.0 compatibility setting enabled.
         self.duck_conn = duckdb.connect(

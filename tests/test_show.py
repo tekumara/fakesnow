@@ -87,7 +87,7 @@ def test_show_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("SHOW COLUMNS IN ACCOUNT")
     assert dcur.fetchall() == example1_cols + view1_cols + table3_cols
 
-    assert [r.name for r in dcur.description] == [
+    assert [r.name for r in (dcur.description or ())] == [
         "table_name",
         "schema_name",
         "column_name",
@@ -123,7 +123,7 @@ def test_show_databases(dcur: snowflake.connector.cursor.SnowflakeCursor):
         }
     ]
     # test describe
-    assert [r.name for r in dcur.description] == [
+    assert [r.name for r in (dcur.description or ())] == [
         "created_on",
         "name",
         "is_default",
@@ -338,10 +338,10 @@ def test_show_objects(dcur: snowflake.connector.cursor.SnowflakeCursor):
     rows: list[dict] = cast(list[dict], dcur.fetchall())
     assert [r for r in rows if r["schema_name"] != "information_schema"] == objects
 
-    assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
+    assert [r.name for r in (dcur.description or ())] == ["created_on", "name", "kind", "database_name", "schema_name"]
 
     dcur.execute("show objects").fetchall()
-    assert [r.name for r in dcur.description] == [
+    assert [r.name for r in (dcur.description or ())] == [
         "created_on",
         "name",
         "database_name",
@@ -380,7 +380,7 @@ def test_show_schemas(dcur: snowflake.connector.cursor.SnowflakeCursor):
             "schema_name": None,
         },
     ]
-    assert [r.name for r in dcur.description] == ["created_on", "name", "kind", "database_name", "schema_name"]
+    assert [r.name for r in (dcur.description or ())] == ["created_on", "name", "kind", "database_name", "schema_name"]
 
 
 def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -454,7 +454,7 @@ def test_show_tables(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
     # non-terse has all the columns
     dcur.execute("show tables in db1.schema1")
-    assert [r.name for r in dcur.description] == [
+    assert [r.name for r in (dcur.description or ())] == [
         "created_on",
         "name",
         "kind",
@@ -509,11 +509,11 @@ def test_show_functions(dcur: snowflake.connector.cursor.SnowflakeCursor):
 
     dcur.execute("show functions")
     dcur.fetchall()
-    assert [r.name for r in dcur.description] == expected_columns
+    assert [r.name for r in (dcur.description or ())] == expected_columns
 
     dcur.execute("show user functions")
     assert dcur.fetchall() == []
-    assert [r.name for r in dcur.description] == expected_columns
+    assert [r.name for r in (dcur.description or ())] == expected_columns
 
 
 def test_show_sequences(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -538,7 +538,7 @@ def test_show_sequences(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("SHOW SEQUENCES")
     # CREATE SCHEMA makes schema2 the current schema.
     assert dcur.fetchall() == [seq2]
-    assert [r.name for r in dcur.description] == list(seq1.keys())
+    assert [r.name for r in (dcur.description or ())] == list(seq1.keys())
 
     dcur.execute("SHOW SEQUENCES IN SCHEMA schema2")
     assert dcur.fetchall() == [seq2]
@@ -577,7 +577,7 @@ def test_show_parameters_comments(dcur: snowflake.connector.cursor.SnowflakeCurs
 def test_show_parameters_columns(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.execute("SHOW PARAMETERS LIKE 'QUOTED_IDENTIFIERS_IGNORE_CASE'")
     dcur.fetchall()
-    assert [r.name for r in dcur.description] == ["key", "value", "default", "level", "description", "type"]
+    assert [r.name for r in (dcur.description or ())] == ["key", "value", "default", "level", "description", "type"]
 
 
 def test_show_parameters_like_is_case_insensitive(dcur: snowflake.connector.cursor.SnowflakeCursor):
@@ -604,7 +604,7 @@ def test_show_procedures(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.fetchall()
 
     # Check for expected column names in description
-    assert [r.name for r in dcur.description] == [
+    assert [r.name for r in (dcur.description or ())] == [
         "created_on",
         "name",
         "schema_name",
@@ -641,7 +641,7 @@ def test_show_views(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.fetchall() == []
     dcur.execute("show terse views in db1.schema1")
     assert dcur.fetchall() == objects
-    assert [r.name for r in dcur.description] == [
+    assert [r.name for r in (dcur.description or ())] == [
         "created_on",
         "name",
         "kind",
@@ -656,7 +656,7 @@ def test_show_views(dcur: snowflake.connector.cursor.SnowflakeCursor):
     assert dcur.fetchall() == []
 
     dcur.execute("show views in db1.schema1")
-    assert [r.name for r in dcur.description] == [
+    assert [r.name for r in (dcur.description or ())] == [
         "created_on",
         "name",
         "reserved",
@@ -677,7 +677,7 @@ def test_show_warehouses(dcur: snowflake.connector.cursor.SnowflakeCursor):
     dcur.fetchall()
 
     # Check for expected column names in description
-    assert [r.name for r in dcur.description] == [
+    assert [r.name for r in (dcur.description or ())] == [
         "name",
         "state",
         "type",

@@ -13,7 +13,7 @@ from sqlglot import exp
 
 import fakesnow.info_schema as info_schema
 import fakesnow.macros as macros
-from fakesnow.cursor import FakeSnowflakeCursor
+from fakesnow.cursor import CachedQueryResult, FakeSnowflakeCursor
 from fakesnow.dialect import parse
 from fakesnow.transforms.stage import TableStages
 from fakesnow.variables import Variables
@@ -23,7 +23,7 @@ class FakeSnowflakeConnection:
     def __init__(
         self,
         duck_conn: DuckDBPyConnection,
-        results_cache: dict[str, tuple],
+        results_cache: dict[str, CachedQueryResult],
         database: str | None = None,
         schema: str | None = None,
         create_database: bool = True,

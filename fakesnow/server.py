@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any
 from urllib.parse import quote
 
+import pyarrow as pa
 import snowflake.connector.errors
 from sqlglot import Expr, exp
 from starlette.applications import Starlette
@@ -21,7 +22,7 @@ from starlette.routing import Route
 from fakesnow import statement_type
 from fakesnow.arrow import to_ipc, to_sf
 from fakesnow.converter import from_binding
-from fakesnow.cursor import FakeSnowflakeCursor
+from fakesnow.cursor import FakeSnowflakeCursor, QueryResultMetadata
 from fakesnow.dialect import parse_one
 from fakesnow.expr import normalise_ident
 from fakesnow.fakes import FakeSnowflakeConnection
@@ -35,6 +36,7 @@ logger = logging.getLogger("fakesnow.server")
 logger.handlers = logging.getLogger("uvicorn").handlers
 logger.setLevel(logging.INFO)
 
+
 shared_fs = FakeSnow()
 sessions: dict[str, FakeSnowflakeConnection] = {}
 
@@ -45,6 +47,12 @@ class ServerError(Exception):
     code: str
     message: str
 
+    def response(self) -> JSONResponse:
+        return JSONResponse(
+            {"data": None, "code": self.code, "message": self.message, "success": False, "headers": None},
+            status_code=self.status_code,
+        )
+
 
 async def login_request(request: Request) -> JSONResponse:
     database = (d := request.query_params.get("databaseName")) and normalise_ident(d)
@@ -53,9 +61,14 @@ async def login_request(request: Request) -> JSONResponse:
     if request.headers.get("Content-Encoding") == "gzip":
         body = gzip.decompress(body)
     body_json = json.loads(body)
-    session_params: dict[str, Any] = body_json["data"]["SESSION_PARAMETERS"]
-    nop_regexes = session_params.get("nop_regexes")
+    session_params = {name.upper(): value for name, value in body_json["data"]["SESSION_PARAMETERS"].items()}
+    # Connector 5 sends session parameter values as strings.
+    nop_regexes = session_params.get("NOP_REGEXES")
+    if isinstance(nop_regexes, str):
+        nop_regexes = json.loads(nop_regexes)
     autocommit = session_params.get("AUTOCOMMIT", True)
+    if isinstance(autocommit, str):
+        autocommit = autocommit.lower() == "true"
 
     if db_path := session_params.get("FAKESNOW_DB_PATH"):
         # isolated creates a new in-memory database, rather than using the shared in-memory database
@@ -153,27 +166,12 @@ async def query_request(request: Request) -> JSONResponse:
                 for row in batch:
                     await run_in_threadpool(cur.execute, sql_text, binding_params=row, server=True)
                     batch_rowcount += cur.rowcount or 0
-            rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
+            transformed = cur._last_transformed  # noqa: SLF001
+            assert transformed
+            if put_stage_data := transformed.args.get("put_stage_data"):
+                return upload_response(request, transformed.args["put_stage_name"], put_stage_data)
 
-            expr = cur._last_transformed  # noqa: SLF001
-            assert expr
-            if put_stage_data := expr.args.get("put_stage_data"):
-                if not params:
-                    # rewrite the stage info so the client uploads the file over http to this
-                    # server, rather than writing to a local path, which fails when the client
-                    # doesn't share the server's filesystem (eg: the server runs in a container).
-                    # GCS is the only location type the connector uploads to via a plain http
-                    # presigned url, so mimic it. a PUT with a ? placeholder target keeps
-                    # LOCAL_FS because the connector re-requests the presigned url by executing
-                    # the command without bindings (see SnowflakeGCSRestClient).
-                    put_stage_data["stageInfo"] = gcs_stage_info(request, expr, put_stage_data)
-                # this is a PUT command, so return the stage data
-                return JSONResponse(
-                    {
-                        "data": put_stage_data,
-                        "success": True,
-                    }
-                )
+            rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
         except (snowflake.connector.errors.ProgrammingError, snowflake.connector.errors.OperationalError) as e:
             logger.info(f"{sql_text=} {type(e).__name__} {e}")
@@ -197,87 +195,118 @@ async def query_request(request: Request) -> JSONResponse:
             # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318
             raise ServerError(status_code=500, code="261000", message=msg) from None
 
-        arrow_table = cur._arrow_table  # noqa: SLF001
-
-        if batch is not None and arrow_table and type_id in DML_TYPE_IDS:
-            # the batch ran as multiple statements, but the client sent one, so report the total
-            result: dict[str, Any] = {"queryResultFormat": "json", "rowset": [[str(batch_rowcount)]]}
-        elif arrow_table and type_id in DML_TYPE_IDS:
-            # DML results are returned as json, because clients read the affected row counts
-            # from rowset, eg: SnowflakeCursor._init_result_and_meta
-            result = {
-                "queryResultFormat": "json",
-                "rowset": [
-                    [None if v is None else str(v) for v in row]
-                    for row in zip(*[c.to_pylist() for c in arrow_table.columns], strict=True)
-                ],
-            }
-        elif arrow_table:
-            batch_bytes = to_ipc(to_sf(arrow_table, rowtype))
-            result = {"queryResultFormat": "arrow", "rowsetBase64": b64encode(batch_bytes).decode("utf-8")}
-        else:
-            result = {"queryResultFormat": "arrow", "rowsetBase64": ""}
-
-        return JSONResponse(
-            {
-                "data": {
-                    "parameters": [
-                        {"name": "TIMEZONE", "value": "Etc/UTC"},
-                    ],
-                    "rowtype": rowtype,
-                    "total": 1 if batch is not None else arrow_table.num_rows if arrow_table else 0,
-                    "queryId": cur.sfqid,
-                    "statementTypeId": type_id,
-                    "finalDatabaseName": conn.database,
-                    "finalSchemaName": conn.schema,
-                    **result,
-                },
-                "success": True,
-            }
-        )
+        sfqid = cur.sfqid
+        assert sfqid
+        cached = conn.results_cache[sfqid]
+        metadata = QueryResultMetadata(rowtype, type_id, batch_rowcount if batch is not None else None)
+        if cached.metadata is None:
+            cached.metadata = metadata
+        return query_result_response(conn, sfqid, cached.table, metadata)
 
     except ServerError as e:
-        return JSONResponse(
-            {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
-            status_code=e.status_code,
-        )
+        return e.response()
 
 
-def gcs_stage_info(request: Request, expr: Expr, put_stage_data: stage.UploadCommandDict) -> dict[str, Any]:
-    """Stage info that uploads to this server over http via a GCS-style presigned url.
+def query_result_response(
+    conn: FakeSnowflakeConnection, sfqid: str, arrow_table: pa.Table, metadata: QueryResultMetadata
+) -> JSONResponse:
+    batch_rowcount = metadata.batch_rowcount
+    if batch_rowcount is not None and arrow_table and metadata.type_id in DML_TYPE_IDS:
+        # the batch ran as multiple statements, but the client sent one, so report the total
+        result: dict[str, Any] = {"queryResultFormat": "json", "rowset": [[str(batch_rowcount)]]}
+    elif arrow_table and metadata.type_id in DML_TYPE_IDS:
+        # DML results are returned as json, because clients read the affected row counts from rowset.
+        result = {
+            "queryResultFormat": "json",
+            "rowset": [
+                [None if v is None else str(v) for v in row]
+                for row in zip(*[c.to_pylist() for c in arrow_table.columns], strict=True)
+            ],
+        }
+    elif arrow_table:
+        batch_bytes = to_ipc(to_sf(arrow_table, metadata.rowtype))
+        result = {"queryResultFormat": "arrow", "rowsetBase64": b64encode(batch_bytes).decode("utf-8")}
+    else:
+        result = {"queryResultFormat": "arrow", "rowsetBase64": ""}
 
-    The connector re-requests the presigned url with the destination file name as the source,
-    so the url targets the file as actually uploaded, even when auto compression renames it.
-    """
-    stage_dir = put_stage_data["stageInfo"]["location"]
-    dst = os.path.basename(put_stage_data["src_locations"][0])
-    path = quote(os.path.relpath(os.path.join(stage_dir, dst), stage.LOCAL_BUCKET_PATH))
-    return {
-        "locationType": "GCS",
-        "location": f"{expr.args['put_stage_name']}/",
-        "creds": {},
-        "presignedUrl": f"{request.url.scheme}://{request.url.netloc}/fs_bucket/{path}",
-    }
+    return JSONResponse(
+        {
+            "data": {
+                "parameters": [{"name": "TIMEZONE", "value": "Etc/UTC"}],
+                "rowtype": metadata.rowtype,
+                "total": 1 if batch_rowcount is not None else arrow_table.num_rows if arrow_table else 0,
+                "queryId": sfqid,
+                "statementTypeId": metadata.type_id,
+                "finalDatabaseName": conn.database,
+                "finalSchemaName": conn.schema,
+                **result,
+            },
+            "success": True,
+        }
+    )
 
 
-def _write_bucket_file(path: str, body: bytes) -> str | None:
-    """Write body to path within the local bucket, returning the target path, or None if invalid."""
-    target = os.path.normpath(os.path.join(stage.LOCAL_BUCKET_PATH, path))
-    if not target.startswith(stage.LOCAL_BUCKET_PATH + os.sep):
-        return None
+def query_result(request: Request) -> JSONResponse:
+    try:
+        conn = to_conn(to_token(request))
+        sfqid = request.path_params["sfqid"]
+        cached = conn.results_cache.get(sfqid)
+        if cached is None or cached.metadata is None:
+            raise ServerError(status_code=404, code="000709", message=f"Statement {sfqid} not found")
+        return query_result_response(conn, sfqid, cached.table, cached.metadata)
+    except ServerError as e:
+        return e.response()
 
+
+def upload_response(request: Request, stage_name: str, put: stage.PutStage) -> JSONResponse:
+    """Send uploads over HTTP, even if the client and server don't share a filesystem."""
+    target = os.path.join(put["directory"], stage.upload_target_name(put))
+    path = quote(os.path.relpath(target, stage.LOCAL_BUCKET_PATH))
+    # The GCS client checks that the upload headers are listed in the presigned URL.
+    signed_headers = quote("host;x-goog-if-generation-match;x-goog-meta-sfc-digest")
+    return JSONResponse(
+        {
+            "data": {
+                "stageInfo": {
+                    "locationType": "GCS",
+                    "location": f"{stage_name}/",
+                    "region": "us-east1",
+                    "creds": {},
+                    "presignedUrl": f"{request.base_url}fs_bucket/{path}?X-Goog-SignedHeaders={signed_headers}",
+                },
+                "src_locations": [put["source"]],
+                "parallel": 4,
+                "autoCompress": put["auto_compress"],
+                "sourceCompression": "auto_detect",
+                "overwrite": False,
+                "command": "UPLOAD",
+            },
+            "success": True,
+        }
+    )
+
+
+def _write_bucket_file(target: str, body: bytes, overwrite: bool) -> None:
     os.makedirs(os.path.dirname(target), exist_ok=True)
-    with open(target, "wb") as f:
+    with open(target, "wb" if overwrite else "xb") as f:
         f.write(body)
-    return target
 
 
 async def bucket_upload(request: Request) -> Response:
-    """Store an uploaded file in the local bucket, ie: the backing storage for internal stages."""
-    body = await request.body()
-    target = await run_in_threadpool(_write_bucket_file, request.path_params["path"], body)
-    if not target:
+    """Store or check an internal-stage file in the local bucket."""
+    # normpath is lexical and does not access the filesystem.
+    target = os.path.normpath(os.path.join(stage.LOCAL_BUCKET_PATH, request.path_params["path"]))  # noqa: ASYNC240
+    if not target.startswith(stage.LOCAL_BUCKET_PATH + os.sep):
         return Response(status_code=400)
+    if request.method == "HEAD":
+        return Response(status_code=200 if await run_in_threadpool(os.path.isfile, target) else 404)
+
+    body = await request.body()
+    overwrite = request.headers.get("x-goog-if-generation-match") != "0"
+    try:
+        await run_in_threadpool(_write_bucket_file, target, body, overwrite)
+    except FileExistsError:
+        return Response(status_code=412)
     logger.info(f"Uploaded {len(body)} bytes to {target}")
     return Response()
 
@@ -326,7 +355,7 @@ def to_token(request: Request) -> str:
 
 
 def to_conn(token: str) -> FakeSnowflakeConnection:
-    if not (conn := sessions.get(token)):
+    if (conn := sessions.get(token)) is None:
         raise ServerError(status_code=401, code="390104", message="User must login again to access the service.")
 
     return conn
@@ -335,7 +364,7 @@ def to_conn(token: str) -> FakeSnowflakeConnection:
 async def session(request: Request) -> JSONResponse:
     try:
         token = to_token(request)
-        _ = to_conn(token)
+        to_conn(token)
 
         if bool(request.query_params.get("delete")):
             del sessions[token]
@@ -345,18 +374,17 @@ async def session(request: Request) -> JSONResponse:
         )
 
     except ServerError as e:
-        return JSONResponse(
-            {"data": None, "code": e.code, "message": e.message, "success": False, "headers": None},
-            status_code=e.status_code,
-        )
+        return e.response()
 
 
 def monitoring_query(request: Request) -> JSONResponse:
-    token = to_token(request)
-    conn = to_conn(token)
+    try:
+        conn = to_conn(to_token(request))
+    except ServerError as e:
+        return e.response()
 
     sfqid = request.path_params["sfqid"]
-    if not conn.results_cache.get(sfqid):
+    if sfqid not in conn.results_cache:
         return JSONResponse({"data": {"queries": []}, "success": True})
 
     return JSONResponse({"data": {"queries": [{"status": "SUCCESS"}]}, "success": True})
@@ -376,8 +404,11 @@ routes = [
         methods=["POST"],
     ),
     Route("/queries/v1/abort-request", lambda _: JSONResponse({"success": True}), methods=["POST"]),
-    Route("/fs_bucket/{path:path}", bucket_upload, methods=["PUT"]),
+    Route("/fs_bucket/{path:path}", bucket_upload, methods=["HEAD", "PUT"]),
     Route("/monitoring/queries/{sfqid}", monitoring_query, methods=["GET"]),
+    # Connector 5's status request includes a second slash.
+    Route("/monitoring/queries//{sfqid}", monitoring_query, methods=["GET"]),
+    Route("/queries/{sfqid}/result", query_result, methods=["GET"]),
 ]
 
 app = Starlette(debug=True, routes=routes)

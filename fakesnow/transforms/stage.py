@@ -26,20 +26,10 @@ from fakesnow.transforms.options import parse_options
 LOCAL_BUCKET_PATH = tempfile.mkdtemp(prefix="fakesnow_bucket_")
 
 
-class StageInfoDict(TypedDict):
-    locationType: str
-    location: str
-    creds: dict[str, Any]
-
-
-class UploadCommandDict(TypedDict):
-    stageInfo: StageInfoDict
-    src_locations: list[str]
-    parallel: int
-    autoCompress: bool
-    sourceCompression: str
-    overwrite: bool
-    command: str
+class PutStage(TypedDict):
+    source: str
+    directory: str
+    auto_compress: bool
 
 
 class TableStages:
@@ -283,20 +273,10 @@ def put_stage(
     transformed.args["put_stage_name"] = fqname
     transformed.args["put_stage_path"] = path
     transformed.args["put_stage_data"] = {
-        "stageInfo": {
-            # use LOCAL_FS otherwise we need to mock S3 with HTTPS which requires a certificate
-            "locationType": "LOCAL_FS",
-            # Filled after the lookup resolves the table instance (including temporary shadowing).
-            "location": "",
-            "creds": {},
-        },
-        "src_locations": [src_path],
-        # defaults as per https://docs.snowflake.com/en/sql-reference/sql/put TODO: support other values
-        "parallel": 4,
-        "autoCompress": auto_compress,
-        "sourceCompression": "auto_detect",
-        "overwrite": False,
-        "command": "UPLOAD",
+        "source": src_path,
+        # Filled after the lookup resolves the table instance (including temporary shadowing).
+        "directory": "",
+        "auto_compress": auto_compress,
     }
 
     return transformed
@@ -339,9 +319,7 @@ def complete_stage_lookup(expression: Expr, result: tuple | None) -> str:
     storage_name = result[0]
     if expression.args.get("list_stage_name"):
         return list_stage_files_sql(storage_name)
-    expression.args["put_stage_data"]["stageInfo"]["location"] = internal_dir(
-        storage_name, expression.args["put_stage_path"]
-    )
+    expression.args["put_stage_data"]["directory"] = internal_dir(storage_name, expression.args["put_stage_path"])
     return "SELECT 'Statement executed successfully.' AS status"
 
 
@@ -432,41 +410,33 @@ def list_stage_files_sql(stage_name: str) -> str:
     """
 
 
-def upload_files(put_stage_data: UploadCommandDict) -> list[dict[str, Any]]:
-    auto_compress = put_stage_data["autoCompress"]
-    results = []
-    for src in put_stage_data["src_locations"]:
-        basename = os.path.basename(src)
-        stage_dir = put_stage_data["stageInfo"]["location"]
+def upload_target_name(put: PutStage) -> str:
+    basename = os.path.basename(put["source"])
+    return f"{basename}.gz" if put["auto_compress"] and not basename.endswith(".gz") else basename
 
-        os.makedirs(stage_dir, exist_ok=True)
-        source_is_gzipped = basename.endswith(".gz")
 
-        if auto_compress and not source_is_gzipped:
-            target_basename = basename + ".gz"
-            target = os.path.join(stage_dir, target_basename)
-            with open(src, "rb") as fr, gzip.GzipFile(target, "wb", mtime=0) as fw:
-                shutil.copyfileobj(fr, fw)
-            target_compression = "GZIP"
-        else:
-            target_basename = basename
-            target = os.path.join(stage_dir, target_basename)
-            shutil.copyfile(src, target)
-            target_compression = "GZIP" if source_is_gzipped else "NONE"
+def upload_files(put: PutStage) -> list[dict[str, Any]]:
+    source = put["source"]
+    basename = os.path.basename(source)
+    target_name = upload_target_name(put)
+    target = os.path.join(put["directory"], target_name)
+    os.makedirs(put["directory"], exist_ok=True)
 
-        target_size = os.path.getsize(target)
-        source_size = os.path.getsize(src)
+    if target_name != basename:
+        with open(source, "rb") as fr, gzip.GzipFile(target, "wb", mtime=0) as fw:
+            shutil.copyfileobj(fr, fw)
+    else:
+        shutil.copyfile(source, target)
 
-        results.append(
-            {
-                "source": basename,
-                "target": target_basename,
-                "source_size": source_size,
-                "target_size": target_size,
-                "source_compression": "GZIP" if source_is_gzipped else "NONE",
-                "target_compression": target_compression,
-                "status": "UPLOADED",
-                "message": "",
-            }
-        )
-    return results
+    return [
+        {
+            "source": basename,
+            "target": target_name,
+            "source_size": os.path.getsize(source),
+            "target_size": os.path.getsize(target),
+            "source_compression": "GZIP" if basename.endswith(".gz") else "NONE",
+            "target_compression": "GZIP" if target_name.endswith(".gz") else "NONE",
+            "status": "UPLOADED",
+            "message": "",
+        }
+    ]

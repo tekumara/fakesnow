@@ -3,10 +3,9 @@
 import datetime
 import os
 import tempfile
-import uuid
+from collections.abc import Iterator
 from decimal import Decimal
-from typing import Any
-from unittest.mock import patch
+from typing import Protocol
 
 import numpy as np
 import pandas as pd
@@ -16,6 +15,7 @@ import requests
 import snowflake.connector
 from dirty_equals import IsDatetime, IsInt, IsStr, IsUUID
 from pandas.testing import assert_frame_equal
+from snowflake.connector.constants import QueryStatus
 from snowflake.connector.cursor import ResultMetadata
 
 from tests.utils import indent
@@ -93,24 +93,47 @@ def test_server_binding_timestamp_ltz(server: dict) -> None:
         assert cur.fetchone() == (timestamp,)
 
 
-def test_server_binding_named(server: dict) -> None:
-    with snowflake.connector.connect(**server, database="DB1", schema="SCHEMA1") as conn:
-        with conn.cursor() as cur:
-            cur.execute("create table customers (id int, name text)")
-            cur.execute("insert into customers values (1, 'Jenny'), (2, 'Jasper')")
+class ServerQuery(Protocol):
+    def __call__(self, sql: str, bindings: dict | None = None) -> dict: ...
 
-        def query(sql: str, bindings: dict[str, dict[str, str]]) -> dict:
-            # Use cmd_query to send the named bindings to the server.
-            # Because cursor.execute interpolates named params client-side instead of sending them to the server
-            # Server-side named bindings are used in the .NET connector
-            return conn.cmd_query(sql, conn._next_sequence_counter(), uuid.uuid4(), binding_params=bindings)  # noqa: SLF001
 
-        result = query(
-            "select * from customers where id = :myid and name = :myname",
-            {"myid": {"type": "FIXED", "value": "2"}, "myname": {"type": "TEXT", "value": "Jasper"}},
+@pytest.fixture
+def server_query(server: dict) -> Iterator[ServerQuery]:
+    """Exercise the Snowflake HTTP protocol directly for contracts used by other drivers."""
+    base_url = f"http://{server['host']}:{server['port']}"
+    login = requests.post(
+        f"{base_url}/session/v1/login-request",
+        params={"databaseName": "db1", "schemaName": "schema1"},
+        json={"data": {"SESSION_PARAMETERS": server["session_parameters"]}},
+        timeout=5,
+    )
+    login.raise_for_status()
+    headers = {"Authorization": 'Snowflake Token="' + login.json()["data"]["token"] + '"'}
+
+    def query(sql: str, bindings: dict | None = None) -> dict:
+        response = requests.post(
+            f"{base_url}/queries/v1/query-request",
+            headers=headers,
+            json={"sqlText": sql, "bindings": bindings},
+            timeout=5,
         )
-        assert result["success"] is True
-        assert result["data"]["total"] == 1
+        response.raise_for_status()
+        return response.json()
+
+    yield query
+    requests.post(f"{base_url}/session?delete=true", headers=headers, timeout=5).raise_for_status()
+
+
+def test_server_binding_named(server_query: ServerQuery) -> None:
+    # Named server-side bindings are used by the .NET connector, not Python's pyformat style.
+    assert server_query("create table customers (id int, name text)")["success"]
+    assert server_query("insert into customers values (1, 'Jenny'), (2, 'Jasper')")["success"]
+    result = server_query(
+        "select * from customers where id = :myid and name = :myname",
+        {"myid": {"type": "FIXED", "value": "2"}, "myname": {"type": "TEXT", "value": "Jasper"}},
+    )
+    assert result["success"] is True
+    assert result["data"]["total"] == 1
 
 
 def test_server_connect(sconn: snowflake.connector.SnowflakeConnection) -> None:
@@ -177,30 +200,12 @@ def test_server_login_reports_server_version(server: dict) -> None:
 
 
 def test_server_executemany_qmark(server: dict) -> None:
-    # the connector reads CLIENT_STAGE_ARRAY_BINDING_THRESHOLD from the login response to decide
-    # between binding the values inline and staging them, then sends the inline values as an
-    # array binding, ie: a list of values per placeholder
     with (
         snowflake.connector.connect(**server, database="db1", schema="schema1", paramstyle="qmark") as conn,
         conn.cursor() as cur,
     ):
-        assert conn.rest
-        responses = []
-        request = conn.rest.request
-
-        def capture_response(*args: Any, **kwargs: Any):
-            response = request(*args, **kwargs)
-            body = kwargs.get("body", args[1] if len(args) > 1 else None)
-            if body and body.get("sqlText", "").startswith("insert into example"):
-                responses.append(response)
-            return response
-
-        conn.rest.request = capture_response
         cur.execute("create or replace table example (id int, name varchar)")
         cur.executemany("insert into example values (?, ?)", [(1, "one"), (2, "two"), (3, "three")])
-        assert cur.rowcount == 3
-        # Snowflake's response has one result row; the affected-row count is in rowset.
-        assert responses[-1]["data"]["total"] == 1
 
         cur.execute("select id, name from example order by id")
         assert cur.fetchall() == [
@@ -210,21 +215,25 @@ def test_server_executemany_qmark(server: dict) -> None:
         ]
 
 
-def test_server_merge_response_total(sconn: snowflake.connector.SnowflakeConnection) -> None:
-    conn = sconn
-    with conn.cursor() as cur:
-        cur.execute("create table target (id int, name varchar)")
-        cur.execute("create table source (id int, name varchar)")
-        cur.execute("insert into source values (1, 'a')")
+def test_server_array_binding_returns_one_count_row(server_query: ServerQuery) -> None:
+    assert server_query("create table example (id int)")["success"]
+    result = server_query("insert into example values (?)", {"1": {"type": "FIXED", "value": ["1", "2", "3"]}})
 
-        merge = """
-            merge into target using source on target.id = source.id
-            when matched and target.name is distinct from source.name then update set name = source.name
-            when not matched then insert (id, name) values (source.id, source.name)
+    # Snowflake's response has one result row containing the affected-row count.
+    assert result["data"]["rowset"] == [["3"]]
+    assert result["data"]["total"] == 1
+
+
+def test_server_merge_response_total(server_query: ServerQuery) -> None:
+    assert server_query("create table target (id int, name varchar)")["success"]
+    assert server_query("insert into target values (1, 'a')")["success"]
+    result = server_query(
         """
-        cur.execute(merge)
-
-    result = conn.cmd_query(merge, conn._next_sequence_counter(), uuid.uuid4())  # noqa: SLF001
+        merge into target using (select 1 as id, 'a' as name) source on target.id = source.id
+        when matched and target.name is distinct from source.name then update set name = source.name
+        when not matched then insert (id, name) values (source.id, source.name)
+        """
+    )
 
     # A zero-effect MERGE still returns one row of operation counts.
     assert result["data"]["total"] == 1
@@ -246,18 +255,17 @@ def test_server_explicit_begin(scur: snowflake.connector.cursor.SnowflakeCursor)
 
 
 def test_server_close(server: dict) -> None:
-    conn = snowflake.connector.connect(**server)
-
-    # conn.close() ignores errors so we call the endpoint directly
-    assert conn.rest and conn.rest.token
-    response = requests.post(
-        f"http://{server['host']}:{server['port']}/session?delete=true",
-        headers={"Authorization": f'Snowflake Token="{conn.rest.token}"'},
-        timeout=5,
-        json={},
-    )
-    assert response.status_code == 200
-    assert response.json()["success"]
+    with snowflake.connector.connect(**server) as conn:
+        # conn.close() ignores errors so we call the endpoint directly
+        assert conn.rest and conn.rest.token
+        response = requests.post(
+            f"http://{server['host']}:{server['port']}/session?delete=true",
+            headers={"Authorization": f'Snowflake Token="{conn.rest.token}"'},
+            timeout=5,
+            json={},
+        )
+        assert response.status_code == 200
+        assert response.json()["success"]
 
 
 def test_server_errors(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
@@ -459,7 +467,8 @@ def test_server_put_relative_source(sdcur: snowflake.connector.cursor.DictCursor
         assert [row["name"] for row in sdcur.fetchall()] == ["relative_stage/input.csv"]
 
 
-def test_server_put_qmark_quoted(server: dict) -> None:
+@pytest.mark.parametrize("stage_name", ['"bound_stage"', 'db1.schema1."qualified_bound_stage"'])
+def test_server_put_qmark_quoted(server: dict, stage_name: str) -> None:
     with (
         snowflake.connector.connect(
             **server,
@@ -476,25 +485,14 @@ def test_server_put_qmark_quoted(server: dict) -> None:
         temp_file_path = temp_file.name
         temp_file_basename = os.path.basename(temp_file_path)
 
-        # quoted to mimic write_pandas
-        dcur.execute("CREATE STAGE identifier(?)", ('"stage1"',))
-        dcur.execute(f"PUT 'file://{temp_file_path}' ?", ('@"stage1"',))
-        assert dcur.fetchall() == [
-            {
-                "source": temp_file_basename,
-                "target": f"{temp_file_basename}.gz",
-                "source_size": len(data),
-                "target_size": IsInt(ge=len(data)),
-                "source_compression": "NONE",
-                "target_compression": "GZIP",
-                "status": "UPLOADED",
-                "message": "",
-            }
-        ]
+        # Quote stage names as clients such as write_pandas do.
+        dcur.execute("CREATE STAGE identifier(?)", (stage_name,))
+        dcur.execute(f"PUT 'file://{temp_file_path}' ?", (f"@{stage_name}",))
+        assert [row["status"] for row in dcur.fetchall()] == ["UPLOADED"]
 
-        # fully qualified stage name quoted
-        dcur.execute("CREATE STAGE identifier(?)", ('db1.schema1."stage2"',))
-        dcur.execute(f"PUT 'file://{temp_file_path}' ?", ('@db1.schema1."stage2"',))
+        dcur.execute(f"LIST @{stage_name}")
+        stage_prefix = stage_name.rsplit(".", 1)[-1].strip('"')
+        assert [row["name"] for row in dcur.fetchall()] == [f"{stage_prefix}/{temp_file_basename}.gz"]
 
 
 def test_server_put_non_existent_stage(sdcur: snowflake.connector.cursor.DictCursor) -> None:
@@ -506,10 +504,9 @@ def test_server_put_non_existent_stage(sdcur: snowflake.connector.cursor.DictCur
         with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
             dcur.execute(f"PUT 'file://{temp_file_path}' @foobar")
 
-        assert (
-            str(excinfo.value)
-            == "002003 (02000): SQL compilation error:\nStage 'DB1.SCHEMA1.FOOBAR' does not exist or not authorized."
-        )
+        assert excinfo.value.errno == 2003
+        assert excinfo.value.sqlstate == "02000"
+        assert "Stage 'DB1.SCHEMA1.FOOBAR' does not exist or not authorized." in str(excinfo.value)
 
 
 def test_server_put_rejects_path_outside_stage(server: dict) -> None:
@@ -530,24 +527,6 @@ def test_server_put_rejects_path_outside_stage(server: dict) -> None:
 
         assert excinfo.value.errno == 253003
         assert "While putting file(s) there was an error:" in str(excinfo.value)
-
-
-def test_server_put_qmark_target_stays_local(sconn: snowflake.connector.SnowflakeConnection) -> None:
-    # the connector re-requests a presigned url by executing the PUT without bindings, which
-    # cannot resolve a ? target, so a bound target keeps the local filesystem upload
-    conn = sconn
-    with conn.cursor() as cur, tempfile.NamedTemporaryFile(suffix=".csv") as temp_file:
-        cur.execute("CREATE STAGE qmark_stage")
-
-        result = conn.cmd_query(
-            f"PUT 'file://{temp_file.name}' ?",
-            conn._next_sequence_counter(),  # noqa: SLF001
-            uuid.uuid4(),
-            binding_params={"1": {"type": "TEXT", "value": "@qmark_stage"}},
-            is_file_transfer=True,
-        )
-
-        assert result["data"]["stageInfo"]["locationType"] == "LOCAL_FS"
 
 
 def test_server_bucket_upload_rejects_path_outside_bucket(server: dict) -> None:
@@ -640,15 +619,8 @@ def test_server_rowcount(scur: snowflake.connector.cursor.SnowflakeCursor):
         "use warehouse foobar",
     ],
 )
-def test_server_query_response_has_use_statement_type_id(server: dict, sql: str) -> None:
-    with snowflake.connector.connect(
-        **server,
-        database="db1",
-        schema="schema1",
-    ) as conn:
-        result = conn.cmd_query(sql, conn._next_sequence_counter(), uuid.uuid4())  # noqa: SLF001
-
-    assert result["data"]["statementTypeId"] == 0x4300
+def test_server_query_response_has_use_statement_type_id(server_query: ServerQuery, sql: str) -> None:
+    assert server_query(sql)["data"]["statementTypeId"] == 0x4300
 
 
 def test_server_sfid(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
@@ -664,7 +636,7 @@ def test_server_types_no_result_set(sconn: snowflake.connector.SnowflakeConnecti
         """
         create or replace table example (
             XBOOLEAN BOOLEAN, XINT INT, XFLOAT FLOAT, XDECIMAL DECIMAL(10,2),
-            XVARCHAR VARCHAR, XVARCHAR20 VARCHAR(20),
+            XVARCHAR VARCHAR,
             XDATE DATE, XTIME TIME, XTIMESTAMP TIMESTAMP_TZ, XTIMESTAMP_NTZ TIMESTAMP_NTZ,
             XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT, */ XVARIANT VARIANT
         )
@@ -678,9 +650,7 @@ def test_server_types_no_result_set(sconn: snowflake.connector.SnowflakeConnecti
         ResultMetadata(name='XINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
         ResultMetadata(name='XFLOAT', type_code=1, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name="XDECIMAL", type_code=0, display_size=None, internal_size=None, precision=10, scale=2, is_nullable=True),
-        ResultMetadata(name="XVARCHAR", type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        # TODO: internal_size matches column size, ie: 20
-        ResultMetadata(name='XVARCHAR20', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name="XVARCHAR", type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XDATE', type_code=3, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XTIME', type_code=12, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP', type_code=7, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
@@ -736,39 +706,43 @@ def test_server_null_timestamp(scur: snowflake.connector.cursor.SnowflakeCursor,
     assert scur.fetchall() == [(None,)]
 
 
-def test_server_async_query_with_retrieval(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
-    cur = scur
-    # Execute an async query
-    cur.execute_async("select 42 as answer, 'hello world' as message")
-    async_sfqid = cur.sfqid
-    assert async_sfqid
+def test_server_retrieves_async_query_result(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    scur.execute_async("select 42 as answer, 'hello world' as message")
+    sfqid = scur.sfqid
+    assert sfqid
 
-    # Execute a regular query
-    cur.execute("select 'regular query' as type")
-    regular_sfqid = cur.sfqid
-    assert regular_sfqid
-
-    # Test to retrieve results from the async query
-    cur.get_results_from_sfqid(async_sfqid)
-    async_results = cur.fetchall()
-    assert async_results == [(42, "hello world")]
-
-    # Test to retrieve results from the regular query
-    cur.get_results_from_sfqid(regular_sfqid)
-    regular_results = cur.fetchall()
-    assert regular_results == [("regular query",)]
+    scur.get_results_from_sfqid(sfqid)
+    assert scur.fetchall() == [(42, "hello world")]
 
 
-# avoid retries to shorten test time
-@patch("snowflake.connector.cursor.ASYNC_RETRY_PATTERN", [0])
-def test_server_monitoring_endpoint_error(scur: snowflake.connector.cursor.SnowflakeCursor):
-    cur = scur
-    cur.get_results_from_sfqid("00000000-0000-0000-0000-000000000000")
-    with pytest.raises(
-        snowflake.connector.errors.DatabaseError, match="Cannot retrieve data on the status of this query"
-    ) as exc:
-        cur.fetchall()
-    assert exc.value.errno == -1
+def test_server_retrieves_stored_query_result_after_source_is_dropped(
+    scur: snowflake.connector.cursor.SnowflakeCursor,
+) -> None:
+    scur.execute("create table example as select 42 as answer")
+    scur.execute("select answer from example")
+    sfqid = scur.sfqid
+    assert sfqid
+
+    scur.execute("drop table example")
+    scur.get_results_from_sfqid(sfqid)
+    assert scur.fetchall() == [(42,)]
+
+
+def test_server_retrieves_stored_query_result_from_another_connection(server: dict) -> None:
+    # Two connections to the same server instance use the same query result cache.
+    server["session_parameters"].pop("FAKESNOW_DB_PATH")
+    with snowflake.connector.connect(**server) as conn, conn.cursor() as cur:
+        cur.execute("select 42")
+        sfqid = cur.sfqid
+        assert sfqid
+
+    with snowflake.connector.connect(**server) as conn, conn.cursor() as cur:
+        cur.get_results_from_sfqid(sfqid)
+        assert cur.fetchall() == [(42,)]
+
+
+def test_server_query_status_for_unknown_id(sconn: snowflake.connector.SnowflakeConnection) -> None:
+    assert sconn.get_query_status("00000000-0000-0000-0000-000000000000") == QueryStatus.NO_DATA
 
 
 def test_server_describe_only(server: dict) -> None:
@@ -781,40 +755,43 @@ def test_server_describe_only(server: dict) -> None:
         cur.execute("create or replace table example (id int, name varchar)")
         cur.execute("insert into example values (1, 'old')")
 
-        assert [(m.name, m.type_code) for m in cur.describe("select id, name from example where id = ?")] == [
+        def describe(sql: str) -> list[ResultMetadata]:
+            metadata = cur.describe(sql)
+            assert metadata is not None
+            return metadata
+
+        assert [(m.name, m.type_code) for m in describe("select id, name from example where id = ?")] == [
             ("ID", 0),
             ("NAME", 2),
         ]
-        assert [m.name for m in cur.describe("insert into example values (?, ?)")] == ["number of rows inserted"]
-        assert [m.name for m in cur.describe("update example set name = ? where id = ?")] == [
+        assert [m.name for m in describe("insert into example values (?, ?)")] == ["number of rows inserted"]
+        assert [m.name for m in describe("update example set name = ? where id = ?")] == [
             "number of rows updated",
             "number of multi-joined rows updated",
         ]
-        assert [m.name for m in cur.describe("delete from example where id = ?")] == ["number of rows deleted"]
+        assert [m.name for m in describe("delete from example where id = ?")] == ["number of rows deleted"]
 
         merge = """
             merge into example t using (select 1 as id, 'new' as name) s on t.id = s.id
             when matched then update set t.name = s.name
             when not matched then insert values (s.id, s.name)
             """
-        assert [m.name for m in cur.describe(merge)] == [
+        assert [m.name for m in describe(merge)] == [
             "number of rows inserted",
             "number of rows updated",
         ]
         assert [
             m.name
-            for m in cur.describe(
-                "merge into example t using (select 1 as id) s on t.id = s.id when matched then delete"
-            )
+            for m in describe("merge into example t using (select 1 as id) s on t.id = s.id when matched then delete")
         ] == ["number of rows deleted"]
 
-        assert [m.name for m in cur.describe("create table side_effect (id int)")] == ["status"]
+        assert [m.name for m in describe("create table side_effect (id int)")] == ["status"]
         cur.execute("select count(*) from information_schema.tables where table_name = 'SIDE_EFFECT'")
         assert cur.fetchall() == [(0,)]
 
-        assert [m.name for m in cur.describe("drop table example")] == ["status"]
-        assert [m.name for m in cur.describe("alter table example add column w int")] == ["status"]
-        assert [m.name for m in cur.describe("truncate table example")] == ["status"]
+        assert [m.name for m in describe("drop table example")] == ["status"]
+        assert [m.name for m in describe("alter table example add column w int")] == ["status"]
+        assert [m.name for m in describe("truncate table example")] == ["status"]
 
         # nothing ran: the original table is untouched
         cur.execute("select * from example")

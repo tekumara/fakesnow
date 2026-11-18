@@ -139,7 +139,7 @@ def test_describe_table(dcur: snowflake.connector.cursor.DictCursor):
     assert dcur.execute("describe table example").fetchall() == expected
     assert dcur.execute("describe table schema1.example").fetchall() == expected
     assert dcur.execute("describe table db1.schema1.example").fetchall() == expected
-    assert [r.name for r in dcur.description] == [
+    assert [r.name for r in (dcur.description or ())] == [
         "name",
         "type",
         "kind",
@@ -198,7 +198,7 @@ def test_describe_view(dcur: snowflake.connector.cursor.DictCursor):
 
     dcur.execute("create view v1 as select * from example")
     assert dcur.execute("describe view v1").fetchall() == expected
-    assert [r.name for r in dcur.description] == [
+    assert [r.name for r in (dcur.description or ())] == [
         "name",
         "type",
         "kind",

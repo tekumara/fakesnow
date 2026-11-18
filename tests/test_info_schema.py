@@ -61,6 +61,7 @@ def test_describe_view_columns(dcur: snowflake.connector.cursor.DictCursor):
     names = [r["name"] for r in result]
     # should contain snowflake-specific columns
     assert "COMMENT" in names
+    assert dcur.description is not None
     # fmt: off
     assert dcur.description[:-1] == [
         ResultMetadata(name='name', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
