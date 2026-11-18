@@ -86,11 +86,8 @@ def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:
     # Calculate fractional part as nanoseconds
     fraction = pc.round(pc.multiply(pc.subsecond(ts), 1_000_000_000)).cast(pa.int32())  # type: ignore
 
-    # A null timestamp is a null struct, which the connector reads as None. The struct's fields
-    # are non-nullable, so they hold 0 beneath it.
+    # Indicate which timestamps are null using the mask.
     mask = ts.is_null()
-    epoch = epoch.fill_null(0)
-    fraction = fraction.fill_null(0)
 
     if ts.type.tz:
         assert ts.type.tz == "UTC", f"Timezone {ts.type.tz} not yet supported"
