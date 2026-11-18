@@ -86,6 +86,9 @@ def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:
     # Calculate fractional part as nanoseconds
     fraction = pc.round(pc.multiply(pc.subsecond(ts), 1_000_000_000)).cast(pa.int32())  # type: ignore
 
+    # Indicate which timestamps are null using the mask.
+    mask = ts.is_null()
+
     if ts.type.tz:
         assert ts.type.tz == "UTC", f"Timezone {ts.type.tz} not yet supported"
         timezone = pa.array([1440] * len(ts), type=pa.int32())
@@ -97,6 +100,7 @@ def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:
                 pa.field("fraction", nullable=False, type=pa.int32()),
                 pa.field("timezone", nullable=False, type=pa.int32()),
             ],
+            mask=mask,
         )
     else:
         return pa.StructArray.from_arrays(
@@ -105,4 +109,5 @@ def timestamp_to_sf_struct(ts: pa.Array | pa.ChunkedArray) -> pa.Array:
                 pa.field("epoch", nullable=False, type=pa.int64()),
                 pa.field("fraction", nullable=False, type=pa.int32()),
             ],
+            mask=mask,
         )

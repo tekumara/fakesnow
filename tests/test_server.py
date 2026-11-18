@@ -730,6 +730,12 @@ def test_server_types(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     ]
 
 
+@pytest.mark.parametrize("type_", ["timestamp_ntz", "timestamp_ltz", "timestamp_tz"])
+def test_server_null_timestamp(scur: snowflake.connector.cursor.SnowflakeCursor, type_: str) -> None:
+    scur.execute(f"select null::{type_}")
+    assert scur.fetchall() == [(None,)]
+
+
 def test_server_async_query_with_retrieval(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     cur = scur
     # Execute an async query
