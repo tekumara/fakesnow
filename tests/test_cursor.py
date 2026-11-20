@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import cast
 
+import duckdb
 import pandas as pd
 import pytest
 import snowflake.connector
@@ -11,6 +12,20 @@ from pandas.testing import assert_frame_equal
 
 import fakesnow
 from fakesnow.cursor import FakeSnowflakeCursor
+
+
+@pytest.mark.xfail(
+    raises=duckdb.InvalidInputException,
+    reason="parse_json of malformed JSON raises duckdb's Malformed JSON error, not Snowflake's",
+    strict=True,
+)
+def test_unrelated_invalid_input_error(cur: snowflake.connector.cursor.SnowflakeCursor):
+    # duckdb raises InvalidInputException for this too, it mustn't be reported as a text length error
+    with pytest.raises(
+        snowflake.connector.errors.ProgrammingError, match='Error parsing JSON: unknown keyword "is"'
+    ) as excinfo:
+        cur.execute("select parse_json('is too long and would be truncated')")
+    assert excinfo.value.errno == 100069
 
 
 def test_binding_pyformat(conn: snowflake.connector.SnowflakeConnection):

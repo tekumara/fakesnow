@@ -2,6 +2,7 @@
 
 from datetime import datetime
 
+import pytest
 import pytz
 import snowflake.connector.cursor
 from dirty_equals import IsDatetime
@@ -143,7 +144,7 @@ def test_info_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCurs
         """
         create or replace table example (
             XTIMESTAMP TIMESTAMP, XTIMESTAMP_NTZ TIMESTAMP_NTZ, XTIMESTAMP_NTZ9 TIMESTAMP_NTZ(9), XTIMESTAMP_TZ TIMESTAMP_TZ, XDATE DATE, XTIME TIME,
-            XBINARY BINARY, /* XARRAY ARRAY, XOBJECT OBJECT */ XVARIANT VARIANT
+            XBINARY BINARY, XARRAY ARRAY, XOBJECT OBJECT, XVARIANT VARIANT
         )
         """
     )
@@ -163,11 +164,117 @@ def test_info_schema_columns_other(cur: snowflake.connector.cursor.SnowflakeCurs
         ("XDATE", "DATE"),
         ("XTIME", "TIME"),
         ("XBINARY", "BINARY"),
-        # TODO: support these types https://github.com/tekumara/fakesnow/issues/27
-        # ("XARRAY", "ARRAY"),
-        # ("XOBJECT", "OBJECT"),
+        ("XARRAY", "ARRAY"),
+        ("XOBJECT", "OBJECT"),
         ("XVARIANT", "VARIANT"),
     ]
+
+
+def test_info_schema_columns_semi_structured_added(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table example (id int)")
+    cur.execute("alter table example add column xarray array, xobject object")
+
+    cur.execute(
+        """
+        select column_name,data_type
+        from information_schema.columns where table_name = 'EXAMPLE' order by ordinal_position
+        """
+    )
+
+    assert cur.fetchall() == [("ID", "NUMBER"), ("XARRAY", "ARRAY"), ("XOBJECT", "OBJECT")]
+
+
+def test_info_schema_columns_semi_structured_replaced(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create or replace table example (x array)")
+    cur.execute("create or replace table example (x variant)")
+
+    cur.execute("select data_type from information_schema.columns where table_name = 'EXAMPLE'")
+
+    assert cur.fetchall() == [("VARIANT",)]
+
+
+# Each case checks that the column's declared type follows one DDL lifecycle operation.
+@pytest.mark.parametrize(
+    ("statements", "column", "data_type"),
+    [
+        (["create or replace table example as select parse_json('[]') x"], "X", "VARIANT"),
+        (["drop table example", "create table example as select parse_json('[]') x"], "X", "VARIANT"),
+        (["alter table example drop column x", "alter table example add column x variant"], "X", "VARIANT"),
+        (["alter table example rename column x to y"], "Y", "ARRAY"),
+        (["alter table example rename to renamed", "alter table renamed rename to example"], "X", "ARRAY"),
+        (["create table if not exists example (x object)"], "X", "ARRAY"),
+        (["alter table example add column if not exists x object"], "X", "ARRAY"),
+    ],
+    ids=[
+        "replace-ctas",
+        "drop-recreate",
+        "drop-add-column",
+        "rename-column",
+        "rename-table",
+        "create-noop",
+        "add-noop",
+    ],
+)
+def test_info_schema_columns_semi_structured_lifecycle(
+    cur: snowflake.connector.cursor.SnowflakeCursor, statements: list[str], column: str, data_type: str
+):
+    cur.execute("create table example (id int, x array)")
+    for statement in statements:
+        cur.execute(statement)
+    cur.execute(
+        "select data_type from information_schema.columns where table_name = 'EXAMPLE' and column_name = %s",
+        (column,),
+    )
+    assert cur.fetchall() == [(data_type,)]
+
+
+def test_info_schema_columns_semi_structured_renamed_table(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (x array)")
+    cur.execute("alter table example rename to renamed")
+    cur.execute("select data_type from information_schema.columns where table_name = 'RENAMED'")
+    assert cur.fetchall() == [("ARRAY",)]
+
+
+def test_info_schema_columns_semi_structured_rename_reuses_name(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (x array, y variant)")
+    cur.execute("alter table example drop column x")
+    cur.execute("alter table example rename column y to x")
+    cur.execute("select data_type from information_schema.columns where table_name = 'EXAMPLE'")
+    assert cur.fetchall() == [("VARIANT",)]
+
+
+def test_info_schema_columns_semi_structured_failed_replace(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table example (x array)")
+    with pytest.raises(snowflake.connector.errors.ProgrammingError):
+        cur.execute("create or replace table example as select missing_column")
+    cur.execute("select data_type from information_schema.columns where table_name = 'EXAMPLE'")
+    assert cur.fetchall() == [("ARRAY",)]
+
+
+@pytest.mark.parametrize("definition", ["as select null::array x", "(x array) as select null::array y"])
+def test_info_schema_columns_semi_structured_ctas(cur: snowflake.connector.cursor.SnowflakeCursor, definition: str):
+    cur.execute(f"create table example {definition}")
+    cur.execute("select column_name, data_type from information_schema.columns where table_name = 'EXAMPLE'")
+    assert cur.fetchall() == [("X", "ARRAY")]
+
+
+def test_info_schema_columns_semi_structured_quoted(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("""create table "example" ("x's" array)""")
+    cur.execute("select column_name, data_type from information_schema.columns where table_name = %s", ("example",))
+    assert cur.fetchall() == [("x's", "ARRAY")]
+
+
+@pytest.mark.parametrize("namespace", ["db1.schema2", "db2.schema1"])
+def test_info_schema_columns_semi_structured_namespace(cur: snowflake.connector.cursor.SnowflakeCursor, namespace: str):
+    cur.execute("create database if not exists db2")
+    cur.execute(f"create schema if not exists {namespace}")
+    cur.execute("create table db1.schema1.example (x array)")
+    cur.execute(f"create table {namespace}.example (x object)")
+    cur.execute(f"create or replace table {namespace}.example as select parse_json('[]') x")
+    cur.execute(
+        "select data_type from db1.information_schema.columns where table_schema = 'SCHEMA1' and table_name = 'EXAMPLE'"
+    )
+    assert cur.fetchall() == [("ARRAY",)]
 
 
 def test_info_schema_columns_text(cur: snowflake.connector.cursor.SnowflakeCursor):
