@@ -7,6 +7,8 @@ import snowflake.connector.cursor
 from dirty_equals import IsDatetime
 from snowflake.connector.cursor import ResultMetadata
 
+from tests.matchers import IsResultMetadata
+
 
 def test_info_schema_table_comments(cur: snowflake.connector.cursor.SnowflakeCursor):
     def read_comment() -> str:
@@ -32,7 +34,7 @@ def test_info_schema_columns_describe(cur: snowflake.connector.cursor.SnowflakeC
     cur.execute("select column_name, ordinal_position from information_schema.columns")
     # fmt: off
     expected_metadata = [
-        ResultMetadata(name='COLUMN_NAME', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        IsResultMetadata(name='COLUMN_NAME', type_code=2, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='ORDINAL_POSITION', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True)
     ]
     # fmt: on
@@ -61,22 +63,25 @@ def test_describe_view_columns(dcur: snowflake.connector.cursor.DictCursor):
     names = [r["name"] for r in result]
     # should contain snowflake-specific columns
     assert "COMMENT" in names
+
+
+def test_describe_view_column_metadata(dcur: snowflake.connector.cursor.DictCursor) -> None:
+    dcur.execute("describe view information_schema.columns")
     assert dcur.description is not None
+    # TODO: check privacy domain when its type is supported: https://github.com/tekumara/fakesnow/issues/26
     # fmt: off
-    assert dcur.description[:-1] == [
-        ResultMetadata(name='name', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='type', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='kind', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='null?', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='default', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='primary key', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='unique key', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='check', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='expression', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='comment', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='policy name', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        # TODO: return correct type_code, see https://github.com/tekumara/fakesnow/issues/26
-        # ResultMetadata(name='privacy domain', type_code=9, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)
+    assert dcur.description[:11] == [
+        ResultMetadata(name='name', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='type', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='kind', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='null?', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='default', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='primary key', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='unique key', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='check', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='expression', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='comment', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='policy name', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
     ]
     # fmt: on
 

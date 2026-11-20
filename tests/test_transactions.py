@@ -38,16 +38,22 @@ def test_transactions(conn: snowflake.connector.SnowflakeConnection):
         conn.commit()
         assert cur.fetchall() == [(2,)]
 
-    # check rollback and commit without transaction is a success (to mimic snowflake)
-    # also check description can be retrieved, needed for ipython-sql/jupysql which runs description implicitly
+
+@pytest.mark.parametrize("statement", ["COMMIT", "ROLLBACK"])
+def test_transaction_statement_without_transaction(
+    conn: snowflake.connector.SnowflakeConnection, statement: str
+) -> None:
     with conn.cursor() as cur:
-        cur.execute("COMMIT")
-        assert cur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+        cur.execute(statement)
         assert cur.fetchall() == [("Statement executed successfully.",)]
 
-        cur.execute("ROLLBACK")
-        assert cur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
-        assert cur.fetchall() == [("Statement executed successfully.",)]
+
+@pytest.mark.parametrize("statement", ["COMMIT", "ROLLBACK"])
+def test_transaction_statement_description(conn: snowflake.connector.SnowflakeConnection, statement: str) -> None:
+    # ipython-sql/jupysql retrieves a description even for transaction statements.
+    with conn.cursor() as cur:
+        cur.execute(statement)
+        assert cur.description == [ResultMetadata(name='status', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
 def test_autocommit_false(conn: snowflake.connector.SnowflakeConnection):

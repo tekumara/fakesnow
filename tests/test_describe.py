@@ -7,6 +7,8 @@ import snowflake.connector.cursor
 import snowflake.connector.pandas_tools
 from snowflake.connector.cursor import ResultMetadata
 
+from tests.matchers import IsResultMetadata
+
 
 def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute(
@@ -40,9 +42,9 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
         ResultMetadata(name='XTINYINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
         ResultMetadata(name='XBYTEINT', type_code=0, display_size=None, internal_size=None, precision=38, scale=0, is_nullable=True),
         # TODO: store actual size, ie: internal_size=20
-        ResultMetadata(name='XVARCHAR20', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='XVARCHAR', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
-        ResultMetadata(name='XTEXT', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        IsResultMetadata(name='XVARCHAR20', type_code=2, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XVARCHAR', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
+        ResultMetadata(name='XTEXT', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP_NTZ', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
         ResultMetadata(name='XTIMESTAMP_NTZ9', type_code=8, display_size=None, internal_size=None, precision=0, scale=9, is_nullable=True),
@@ -67,15 +69,16 @@ def test_describe(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select * from example where XNUMBER = %s", (1,))
     assert cur.description == expected_metadata
 
+
+def test_describe_semi_structured_access(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
     # test semi-structured ops return variant ie: type_code=5
     # fmt: off
     assert (
         cur.describe("SELECT ['A', 'B'][0] as array_index, OBJECT_CONSTRUCT('k','v1')['k'] as object_key, ARRAY_CONSTRUCT('foo')::VARIANT[0] as variant_key")
         == [
-            # NB: snowflake returns internal_size = 16777216 for all columns
             ResultMetadata(name="ARRAY_INDEX", type_code=5, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
             ResultMetadata(name="OBJECT_KEY", type_code=5, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
-            ResultMetadata(name="VARIANT_KEY", type_code=5, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True)
+            ResultMetadata(name="VARIANT_KEY", type_code=5, display_size=None, internal_size=None, precision=None, scale=None, is_nullable=True),
         ]
     )
     # fmt: on
@@ -218,42 +221,42 @@ def test_describe_view(dcur: snowflake.connector.cursor.DictCursor):
 def test_description_create_drop_database(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create database example")
     assert dcur.fetchall() == [{"status": "Database EXAMPLE successfully created."}]
-    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
     # TODO: support drop database
     # dcur.execute("drop database example")
     # assert dcur.fetchall() == [{"status": "EXAMPLE successfully dropped."}]
-    # assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]
+    # assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True)]
 
 
 def test_description_create_drop_schema(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create schema example")
     assert dcur.fetchall() == [{"status": "Schema EXAMPLE successfully created."}]
-    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
     # drop current schema
     dcur.execute("drop schema schema1")
     assert dcur.fetchall() == [{"status": "SCHEMA1 successfully dropped."}]
-    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
 def test_description_create_alter_drop_table(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create table example (x int)")
     assert dcur.fetchall() == [{"status": "Table EXAMPLE successfully created."}]
-    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
     dcur.execute("alter table example add column name varchar(20)")
     assert dcur.fetchall() == [{"status": "Statement executed successfully."}]
-    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
     dcur.execute("drop table example")
     assert dcur.fetchall() == [{"status": "EXAMPLE successfully dropped."}]
-    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
 def test_description_create_drop_view(dcur: snowflake.connector.cursor.DictCursor):
     dcur.execute("create view example(id) as select 1")
     assert dcur.fetchall() == [{"status": "View EXAMPLE successfully created."}]
-    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
     dcur.execute("drop view example")
     assert dcur.fetchall() == [{"status": "EXAMPLE successfully dropped."}]
-    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=None, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
+    assert dcur.description == [ResultMetadata(name='status', type_code=2, display_size=16777216, internal_size=16777216, precision=None, scale=None, is_nullable=True)]  # fmt: skip
 
 
 def test_description_delete(dcur: snowflake.connector.cursor.DictCursor):

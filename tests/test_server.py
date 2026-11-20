@@ -505,17 +505,17 @@ def test_server_put_preserves_bzip2_filename(
 
 
 @pytest.mark.parametrize("filename", ["data.csv.gz", "data[final].csv.gz"], ids=["plain", "brackets"])
-def test_server_put_presigned_url_for_legacy_clients(server_query: ServerQuery, filename: str) -> None:
-    # Older clients request another URL using the final upload filename.
-    assert server_query("CREATE OR REPLACE STAGE legacy_stage")["success"]
-    response = server_query(f"PUT 'file://{filename}' @legacy_stage")
+def test_server_put_jdbc_presigned_url(server_query: ServerQuery, filename: str) -> None:
+    # JDBC requests another URL using the final upload filename.
+    assert server_query("CREATE OR REPLACE STAGE jdbc_stage")["success"]
+    response = server_query(f"PUT 'file://{filename}' @jdbc_stage", user_agent="JDBC/4.4.1")
     url = response["data"]["stageInfo"]["presignedUrl"]
     uploaded = requests.put(url, data=gzip.compress(b"1,2\n"), timeout=5)
     assert uploaded.status_code == 200
 
-    listed = server_query("LIST @legacy_stage")
+    listed = server_query("LIST @jdbc_stage")
     table = pa.ipc.open_stream(b64decode(listed["data"]["rowsetBase64"])).read_all()
-    assert [row["name"] for row in table.to_pylist()] == [f"legacy_stage/{filename}"]
+    assert [row["name"] for row in table.to_pylist()] == [f"jdbc_stage/{filename}"]
 
 
 @pytest.mark.parametrize(
