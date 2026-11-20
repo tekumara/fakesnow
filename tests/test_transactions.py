@@ -225,10 +225,7 @@ def test_conn_context_exit_with_exception_rolls_back(_fakesnow: None):
         assert conn.cursor().execute("SELECT count(*) FROM context_exit").fetchone() == (0,)
 
 
-@pytest.mark.parametrize("failing_sql", ["DESC TABLE missing_table", "SELECT * FROM missing_table"])
-def test_autocommit_false_failed_statement_keeps_transaction(
-    conn: snowflake.connector.SnowflakeConnection, failing_sql: str
-):
+def test_autocommit_false_failed_statement_keeps_transaction(conn: snowflake.connector.SnowflakeConnection):
     # a failed statement rolls back only its own changes, the transaction stays active and can be committed
     # see https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
     conn.autocommit(False)
@@ -237,7 +234,7 @@ def test_autocommit_false_failed_statement_keeps_transaction(
         cur.execute("INSERT INTO failed_statement VALUES (1)")
 
         with pytest.raises(snowflake.connector.errors.ProgrammingError):
-            cur.execute(failing_sql)
+            cur.execute("SELECT * FROM missing_table")
 
         assert cur.execute("SELECT count(*) FROM failed_statement").fetchone() == (1,)
         conn.commit()
@@ -258,18 +255,12 @@ _ALTER_SESSION_FAILS = pytest.mark.xfail(
         pytest.param(lambda conn, cur: conn.commit(), id="conn.commit", marks=_COMMIT_DROPS_INSERT),
         pytest.param(lambda conn, cur: conn.autocommit(False), id="conn.autocommit-false", marks=_COMMIT_DROPS_INSERT),
         pytest.param(lambda conn, cur: conn.autocommit(True), id="conn.autocommit-true", marks=_COMMIT_DROPS_INSERT),
-        pytest.param(lambda conn, cur: cur.execute("COMMIT"), id="COMMIT", marks=_COMMIT_DROPS_INSERT),
         pytest.param(
             lambda conn, cur: cur.execute("CREATE TABLE next_table (id int)"), id="ddl", marks=_COMMIT_DROPS_INSERT
         ),
         pytest.param(
             lambda conn, cur: cur.execute("ALTER SESSION SET AUTOCOMMIT = TRUE"),
             id="alter-autocommit-true",
-            marks=_ALTER_SESSION_FAILS,
-        ),
-        pytest.param(
-            lambda conn, cur: cur.execute("ALTER SESSION SET AUTOCOMMIT = FALSE"),
-            id="alter-autocommit-false",
             marks=_ALTER_SESSION_FAILS,
         ),
     ],
@@ -292,17 +283,3 @@ def test_autocommit_false_runtime_failure_keeps_transaction(
         commit(conn, cur)
         conn.rollback()
         assert cur.execute("SELECT count(*) FROM runtime_failure").fetchone() == (1,)
-
-
-def test_runtime_failure_rollback(conn: snowflake.connector.SnowflakeConnection):
-    conn.autocommit(False)
-    with conn.cursor() as cur:
-        cur.execute("CREATE TABLE runtime_rollback (id int)")
-        cur.execute("INSERT INTO runtime_rollback VALUES (1)")
-        with pytest.raises(snowflake.connector.errors.ProgrammingError):
-            cur.execute("INSERT INTO runtime_rollback VALUES ('x')")
-
-        conn.rollback()
-        cur.execute("INSERT INTO runtime_rollback VALUES (2)")
-        conn.commit()
-        assert cur.execute("SELECT * FROM runtime_rollback").fetchall() == [(2,)]

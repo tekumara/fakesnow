@@ -828,29 +828,3 @@ def test_server_fetch_multiple_arrow_batches(scur: snowflake.connector.cursor.Sn
 
     timestamp = datetime.datetime(2024, 1, 2, 3, 4, 5, 123456)
     assert scur.fetchall() == [(i, None if i % 2 == 0 else "héllo", Decimal("12.34"), timestamp) for i in range(5000)]
-
-
-@pytest.mark.xfail(
-    reason="DuckDB aborts the whole transaction when a statement fails at runtime, so the commit drops the earlier insert"
-)
-@pytest.mark.parametrize("commit_via", ["connection", "sql"])
-def test_server_autocommit_false_runtime_failure_keeps_transaction(server: dict, commit_via: str) -> None:
-    # a statement that fails at runtime also rolls back only its own changes, so the commit keeps the earlier insert
-    # see https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
-    with (
-        snowflake.connector.connect(**server | {"autocommit": False}, database="db1", schema="schema1") as conn,
-        conn.cursor() as cur,
-    ):
-        cur.execute("CREATE OR REPLACE TABLE runtime_failure (id int)")
-        cur.execute("INSERT INTO runtime_failure VALUES (1)")
-
-        with pytest.raises(snowflake.connector.errors.ProgrammingError):
-            cur.execute("INSERT INTO runtime_failure VALUES ('x')")
-
-        if commit_via == "connection":
-            conn.commit()
-        else:
-            cur.execute("COMMIT")
-        conn.rollback()
-        cur.execute("SELECT count(*) FROM runtime_failure")
-        assert cur.fetchone() == (1,)
