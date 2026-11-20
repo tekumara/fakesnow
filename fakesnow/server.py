@@ -129,99 +129,95 @@ async def query_request(request: Request) -> JSONResponse:
 
 
 async def _query_request(request: Request, conn: FakeSnowflakeConnection) -> JSONResponse:
+    body = await request.body()
+    if request.headers.get("Content-Encoding") == "gzip":
+        body = gzip.decompress(body)
+
+    body_json = json.loads(body)
+
+    sql_text = body_json["sqlText"]
+
+    params: Any = None
+    # rows of params, when the client sends an array binding
+    batch: list[tuple[Any, ...]] | None = None
+
+    if bindings := body_json.get("bindings"):
+        if not all(k.isdigit() for k in bindings):
+            # named bindings: {'myid': {'type': 'FIXED', 'value': '10'}, ...} -> dict {'myid': 10, ...}
+            params = {name: from_binding(b) for name, b in bindings.items()}
+        elif any(isinstance(b["value"], list) for b in bindings.values()):
+            # array bindings hold a list of values per placeholder, one per row, and are sent
+            # when executing a batch, eg: cursor.executemany. transpose them into rows, ie:
+            # {'1': {'type': 'FIXED', 'value': ['1', '2']}, ...} -> [(1, ...), (2, ...)]
+            columns = [
+                [from_binding({**b, "value": v}) for v in b["value"]]
+                for b in (bindings[str(pos)] for pos in range(1, len(bindings) + 1))
+            ]
+            batch = list(zip(*columns, strict=True))
+        else:
+            # positional bindings: {'1': {'type': 'FIXED', 'value': '10'}, ...} -> tuple (10, ...)
+            params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
+        logger.debug(f"Bindings: {batch if batch is not None else params}")
+
+    batch_rowcount = 0
+
     try:
-        body = await request.body()
-        if request.headers.get("Content-Encoding") == "gzip":
-            body = gzip.decompress(body)
+        expr = parse_one(sql_text)
+        type_id = statement_type_id(expr)
+        cur = conn.cursor()
 
-        body_json = json.loads(body)
+        if (
+            body_json.get("describeOnly")
+            and (described := await run_in_threadpool(cur._describe_only, sql_text)) is not None  # noqa: SLF001
+        ):
+            return describe_only_response(conn, cur, describe_as_rowtype(described), expr, type_id)
+        # Statements without a describe-only shortcut are described by executing them.
 
-        sql_text = body_json["sqlText"]
+        # only a single sql statement is sent at a time by the python snowflake connector
+        if batch is None:
+            await run_in_threadpool(cur.execute, sql_text, binding_params=params, server=True)
+        else:
+            # snowflake runs an array binding as one statement and reports the rows affected
+            # across the whole batch, so accumulate them as we execute row by row
+            for row in batch:
+                await run_in_threadpool(cur.execute, sql_text, binding_params=row, server=True)
+                batch_rowcount += cur.rowcount or 0
+        transformed = cur._last_transformed  # noqa: SLF001
+        assert transformed
+        if put_stage_data := transformed.args.get("put_stage_data"):
+            return upload_response(request, put_stage_data)
 
-        params: Any = None
-        # rows of params, when the client sends an array binding
-        batch: list[tuple[Any, ...]] | None = None
+        rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
 
-        if bindings := body_json.get("bindings"):
-            if not all(k.isdigit() for k in bindings):
-                # named bindings: {'myid': {'type': 'FIXED', 'value': '10'}, ...} -> dict {'myid': 10, ...}
-                params = {name: from_binding(b) for name, b in bindings.items()}
-            elif any(isinstance(b["value"], list) for b in bindings.values()):
-                # array bindings hold a list of values per placeholder, one per row, and are sent
-                # when executing a batch, eg: cursor.executemany. transpose them into rows, ie:
-                # {'1': {'type': 'FIXED', 'value': ['1', '2']}, ...} -> [(1, ...), (2, ...)]
-                columns = [
-                    [from_binding({**b, "value": v}) for v in b["value"]]
-                    for b in (bindings[str(pos)] for pos in range(1, len(bindings) + 1))
-                ]
-                batch = list(zip(*columns, strict=True))
-            else:
-                # positional bindings: {'1': {'type': 'FIXED', 'value': '10'}, ...} -> tuple (10, ...)
-                params = tuple(from_binding(bindings[str(pos)]) for pos in range(1, len(bindings) + 1))
-            logger.debug(f"Bindings: {batch if batch is not None else params}")
+    except (snowflake.connector.errors.ProgrammingError, snowflake.connector.errors.OperationalError) as e:
+        logger.info(f"{sql_text=} {type(e).__name__} {e}")
+        code = f"{e.errno:06d}"
+        return JSONResponse(
+            {
+                "data": {
+                    "errorCode": code,
+                    "sqlState": e.sqlstate,
+                },
+                "code": code,
+                "message": e.msg,
+                "success": False,
+            }
+        )
+    except Exception as e:
+        # we have a bug or use of an unsupported feature
+        msg = f"{sql_text=} {params=} Unhandled exception"
+        logger.error(msg, exc_info=e)
+        # my guess at mimicking a 500 error as per https://docs.snowflake.com/en/developer-guide/sql-api/reference
+        # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318
+        raise ServerError(status_code=500, code="261000", message=msg) from None
 
-        batch_rowcount = 0
-
-        try:
-            expr = parse_one(sql_text)
-            type_id = statement_type_id(expr)
-            cur = conn.cursor()
-
-            if (
-                body_json.get("describeOnly")
-                and (described := await run_in_threadpool(cur._describe_only, sql_text)) is not None  # noqa: SLF001
-            ):
-                return describe_only_response(conn, cur, describe_as_rowtype(described), expr, type_id)
-            # Statements without a describe-only shortcut are described by executing them.
-
-            # only a single sql statement is sent at a time by the python snowflake connector
-            if batch is None:
-                await run_in_threadpool(cur.execute, sql_text, binding_params=params, server=True)
-            else:
-                # snowflake runs an array binding as one statement and reports the rows affected
-                # across the whole batch, so accumulate them as we execute row by row
-                for row in batch:
-                    await run_in_threadpool(cur.execute, sql_text, binding_params=row, server=True)
-                    batch_rowcount += cur.rowcount or 0
-            transformed = cur._last_transformed  # noqa: SLF001
-            assert transformed
-            if put_stage_data := transformed.args.get("put_stage_data"):
-                return upload_response(request, put_stage_data)
-
-            rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
-
-        except (snowflake.connector.errors.ProgrammingError, snowflake.connector.errors.OperationalError) as e:
-            logger.info(f"{sql_text=} {type(e).__name__} {e}")
-            code = f"{e.errno:06d}"
-            return JSONResponse(
-                {
-                    "data": {
-                        "errorCode": code,
-                        "sqlState": e.sqlstate,
-                    },
-                    "code": code,
-                    "message": e.msg,
-                    "success": False,
-                }
-            )
-        except Exception as e:
-            # we have a bug or use of an unsupported feature
-            msg = f"{sql_text=} {params=} Unhandled exception"
-            logger.error(msg, exc_info=e)
-            # my guess at mimicking a 500 error as per https://docs.snowflake.com/en/developer-guide/sql-api/reference
-            # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318
-            raise ServerError(status_code=500, code="261000", message=msg) from None
-
-        sfqid = cur.sfqid
-        assert sfqid
-        cached = conn.results_cache[sfqid]
-        metadata = QueryResultMetadata(rowtype, type_id, batch_rowcount if batch is not None else None)
-        if cached.metadata is None:
-            cached.metadata = metadata
-        return query_result_response(conn, sfqid, cached.table, metadata)
-
-    except ServerError as e:
-        return e.response()
+    sfqid = cur.sfqid
+    assert sfqid
+    cached = conn.results_cache[sfqid]
+    metadata = QueryResultMetadata(rowtype, type_id, batch_rowcount if batch is not None else None)
+    if cached.metadata is None:
+        cached.metadata = metadata
+    return query_result_response(conn, sfqid, cached.table, metadata)
 
 
 def query_result_response(

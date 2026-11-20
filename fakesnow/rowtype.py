@@ -1,16 +1,11 @@
-import importlib
 import re
 from typing import TypedDict
 
+# Connector 5 re-exports this for backwards compatibility, but does not mark it public for type checkers.
+from snowflake.connector.constants import FIELD_ID_TO_NAME  # pyright: ignore[reportPrivateImportUsage]
 from snowflake.connector.cursor import ResultMetadata
 
-try:  # connector 5.x
-    _type_code = importlib.import_module("snowflake.connector._internal.type_codes").get_type_code
-except ModuleNotFoundError:  # connector 4.x
-    _field_name_to_id = importlib.import_module("snowflake.connector.constants").FIELD_NAME_TO_ID
-
-    def _type_code(snowflake_type: str) -> int:
-        return _field_name_to_id[snowflake_type.upper()]
+_TYPE_CODE_BY_NAME = {name.lower(): code for code, name in FIELD_ID_TO_NAME.items()}
 
 
 class ColumnInfo(TypedDict):
@@ -101,7 +96,7 @@ def describe_as_result_metadata(describe_results: list) -> list[ResultMetadata]:
     return [
         ResultMetadata(
             c["name"],
-            _type_code(c.get("extTypeName") or c["type"]),
+            _TYPE_CODE_BY_NAME[c["type"]],
             None,
             c["length"],
             c["precision"],
