@@ -24,6 +24,21 @@ def test_array_cat(cur: snowflake.connector.cursor.SnowflakeCursor):
     # assert cur.fetchall() == [(None,)]
 
 
+def test_array_flatten(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("select array_flatten([[1, 2], [3]])")
+    assert indent(cur.fetchall()) == [("[\n  1,\n  2,\n  3\n]",)]
+
+
+def test_array_flatten_array_agg(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute(
+        """
+        select array_flatten(array_agg(x) within group (order by id))
+        from (select 1 as id, [1, 2] as x union all select 2, [3])
+        """
+    )
+    assert indent(cur.fetchall()) == [("[\n  1,\n  2,\n  3\n]",)]
+
+
 def test_array_construct(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("select array_construct(PARSE_JSON('null'), 'hello', 3.01, 4, 5);")
     assert indent(cur.fetchall()) == [('[\n  null,\n  "hello",\n  3.01,\n  4,\n  5\n]',)]

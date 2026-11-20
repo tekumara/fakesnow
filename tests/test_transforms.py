@@ -10,6 +10,7 @@ from fakesnow.transforms import (
     alias_in_join,
     array_agg,
     array_agg_within_group,
+    array_flatten,
     array_size,
     create_clone,
     create_database,
@@ -146,6 +147,19 @@ def test_array_agg() -> None:
         .sql(dialect="duckdb")
         == "SELECT DISTINCT ID, ANOTHER, TO_JSON(ARRAY_AGG(DISTINCT COL) OVER (PARTITION BY ID)) AS COLS FROM TEST"
     )
+
+
+def test_array_flatten() -> None:
+    expression = sqlglot.parse_one("SELECT ARRAY_FLATTEN(ARRAY_AGG(x)) FROM t", read="snowflake")
+
+    transformed = expression.transform(array_flatten, copy=False)
+
+    assert (
+        transformed.sql(dialect="duckdb")
+        == "SELECT CAST(FLATTEN(LIST_TRANSFORM(CAST(CAST(ARRAY_AGG(x) FILTER(WHERE x IS NOT NULL) AS JSON) AS JSON[]), "
+        "e -> CAST(e AS JSON[]))) AS JSON) FROM t"
+    )
+    assert_unique_nodes_with_correct_parents(transformed)
 
 
 def test_array_agg_within_group() -> None:
