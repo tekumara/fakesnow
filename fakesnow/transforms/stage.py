@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import datetime
+import gzip
 import os
 import shutil
 import tempfile
@@ -15,7 +16,6 @@ from urllib.request import url2pathname
 import snowflake.connector.errors
 import sqlglot
 from duckdb import DuckDBPyConnection
-from snowflake.connector.file_util import SnowflakeFileUtil
 from sqlglot import Expr, exp
 
 from fakesnow.expr import normalise_ident
@@ -443,12 +443,10 @@ def upload_files(put_stage_data: UploadCommandDict) -> list[dict[str, Any]]:
         source_is_gzipped = basename.endswith(".gz")
 
         if auto_compress and not source_is_gzipped:
-            gzip_file_name, _ = SnowflakeFileUtil.compress_file_with_gzip(src, stage_dir)
-
-            # Rename to match expected .gz extension on upload
             target_basename = basename + ".gz"
             target = os.path.join(stage_dir, target_basename)
-            os.replace(gzip_file_name, target)
+            with open(src, "rb") as fr, gzip.GzipFile(target, "wb", mtime=0) as fw:
+                shutil.copyfileobj(fr, fw)
             target_compression = "GZIP"
         else:
             target_basename = basename
