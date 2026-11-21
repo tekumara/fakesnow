@@ -319,6 +319,10 @@ For more detail see the [test suite](tests/).
 
 - Row ordering is non-deterministic and may differ from Snowflake unless you fully specify the ORDER BY clause.
 - fakesnow supports a more liberal SQL dialect than actual Snowflake. This means some queries that work with fakesnow might not work with a real Snowflake instance.
+- The Go driver cannot safely upload wildcard paths to the HTTP server: its presigned URL
+  requests can identify different files as the same file. fakesnow rejects Go `PUT` source
+  paths containing `*`, `?` or `[` to prevent misrouting or overwriting files. Upload one
+  file at a time using paths without these characters. Other clients are unaffected.
 
 ## COPY INTO
 

@@ -519,26 +519,40 @@ def test_server_put_jdbc_presigned_url(server_query: ServerQuery, filename: str)
 
 
 @pytest.mark.parametrize(
-    ("source", "filename"),
+    "source",
     [
-        ("multi*multi-a.csv.gz", "multi-a.csv.gz"),
-        ("multi-?multi-a.csv.gz", "multi-a.csv.gz"),
-        ("multi-[ab]multi-a.csv.gz", "multi-a.csv.gz"),
-        ("multi*multi-[draft].csv.gz", "multi-[draft].csv.gz"),
-        ("m*ulti*multi-a.csv.gz", "multi-a.csv.gz"),
+        "/tmp/*[ab].csv",
+        "/tmp/multi-*[ab].csv",
+        "/tmp/*.csv",
+        "/tmp/???.csv",
+        "/tmp/[ab].csv",
+        "/tmp/dir*/input.csv",
     ],
-    ids=["star", "question", "character-class", "brackets-in-filename", "multiple-stars"],
+    ids=["collision", "mixed", "star", "question", "character-class", "directory-glob"],
 )
-def test_server_put_go_wildcard_presigned_refresh(server_query: ServerQuery, source: str, filename: str) -> None:
-    # Go re-requests the URL using the wildcard prefix followed by the resolved filename.
-    assert server_query("CREATE OR REPLACE STAGE go_legacy_stage")["success"]
-    result = server_query(f"PUT 'file:///tmp/{source}' @go_legacy_stage", user_agent="Go/1.19.1")
-    url = result["data"]["stageInfo"]["presignedUrl"]
-    assert requests.put(url, data=gzip.compress(b"1,2\n"), timeout=5).status_code == 200
+def test_server_put_go_wildcard_rejected_before_upload(server_query: ServerQuery, source: str) -> None:
+    # Go can issue indistinguishable presigned URL requests for different local files.
+    assert server_query("CREATE OR REPLACE STAGE go_stage")["success"]
+    result = server_query(f"PUT 'file://{source}' @go_stage", user_agent="Go/1.19.1")
+    assert result["success"] is False
+    assert "wildcard" in result["message"].lower()
 
-    listed = server_query("LIST @go_legacy_stage")
+    listed = server_query("LIST @go_stage")
+    assert listed["success"]
+    assert listed["data"]["total"] == 0
+
+
+def test_server_put_go_single_file(server_query: ServerQuery) -> None:
+    assert server_query("CREATE OR REPLACE STAGE go_single_stage")["success"]
+    # Go refreshes the presigned URL after deciding on the compressed target name.
+    assert server_query("PUT 'file:///tmp/input.csv' @go_single_stage", user_agent="Go/1.19.1")["success"]
+    response = server_query("PUT 'file:///tmp/input.csv.gz' @go_single_stage", user_agent="Go/1.19.1")
+    assert response["success"]
+    assert requests.put(response["data"]["stageInfo"]["presignedUrl"], data=gzip.compress(b"1,2\n"), timeout=5).ok
+
+    listed = server_query("LIST @go_single_stage")
     table = pa.ipc.open_stream(b64decode(listed["data"]["rowsetBase64"])).read_all()
-    assert [row["name"] for row in table.to_pylist()] == [f"go_legacy_stage/{filename}"]
+    assert [row["name"] for row in table.to_pylist()] == ["go_single_stage/input.csv.gz"]
 
 
 def test_server_put_jdbc_stage_info_has_endpoint(server_query: ServerQuery) -> None:

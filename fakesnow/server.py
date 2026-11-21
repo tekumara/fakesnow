@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import asyncio
+import glob
 import gzip
 import json
 import logging
 import os
-import re
 import secrets
 from base64 import b64encode
 from dataclasses import dataclass, field
@@ -275,6 +275,14 @@ def upload_response(request: Request, put: stage.PutStage) -> JSONResponse:
     """Send uploads over HTTP, even if the client and server don't share a filesystem."""
     client, _, version = request.headers.get("User-Agent", "").partition("/")
     major = version.partition(".")[0]
+    if client == "Go" and glob.has_magic(put["source"]):
+        # Go's presigned URL refresh can send identical requests for different files.
+        # The upload itself does not contain the filename, so guessing risks data loss.
+        raise snowflake.connector.errors.ProgrammingError(
+            msg="Go wildcard PUT is not supported over HTTP; upload files using paths without *, ? or [.",
+            errno=1003,
+            sqlstate="0A000",
+        )
     if client == "PythonConnector" and major.isdecimal() and int(major) >= 5:
         # Connector 5 normally reuses one presigned URL for all files, so it would misroute
         # wildcard uploads. A GCS-style endpoint lets it append each actual target filename.
@@ -291,11 +299,6 @@ def upload_response(request: Request, put: stage.PutStage) -> JSONResponse:
         # custom endpoints force HTTPS, by giving them a presigned URL we can make them
         # upload to our HTTP server.
         filename = os.path.basename(put["source"])
-        if client == "Go":
-            # Go's wildcard refresh prefixes the resolved filename with the original glob.
-            # Prefer * and ? so bracket characters in the resolved filename are retained.
-            parts = re.split(r"[*?]", filename)
-            filename = parts[-1] if len(parts) > 1 else re.split(r"\[[^]]+\]", filename)[-1]
         target = os.path.join(put["directory"], filename)
         path = quote(os.path.relpath(target, stage.LOCAL_BUCKET_PATH).replace(os.sep, "/"))
         signed_headers = quote("host;x-goog-if-generation-match;x-goog-meta-sfc-digest")
