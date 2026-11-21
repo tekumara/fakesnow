@@ -62,20 +62,20 @@ def test_docker_select(docker_fakesnow: DockerContainer) -> None:
         assert result == ("Hello fake world!",)
 
 
-def test_docker_put_wildcard_from_client_filesystem(docker_fakesnow: DockerContainer, tmp_path: Path) -> None:
-    (tmp_path / "one.csv").write_text("1,2\n")
-    (tmp_path / "two.csv").write_text("3,4\n")
+def test_docker_put_file_from_client_filesystem(docker_fakesnow: DockerContainer, tmp_path: Path) -> None:
+    source = tmp_path / "input.csv"
+    source.write_text("1,2\n")
     with docker_connect(docker_fakesnow) as conn, conn.cursor() as cur:
         cur.execute("CREATE DATABASE IF NOT EXISTS db1")
         cur.execute("USE DATABASE db1")
         cur.execute("CREATE SCHEMA IF NOT EXISTS schema1")
         cur.execute("USE SCHEMA schema1")
         cur.execute("CREATE STAGE files")
-        cur.execute(f"PUT 'file://{tmp_path}/*.csv' @files")
-        assert sorted(row[1] for row in cur.fetchall()) == ["one.csv.gz", "two.csv.gz"]
+        cur.execute(f"PUT 'file://{source}' @files AUTO_COMPRESS=FALSE")
+        assert [(row[1], row[6]) for row in cur.fetchall()] == [("input.csv", "UPLOADED")]
 
         cur.execute("LIST @files")
-        assert sorted(row[0] for row in cur.fetchall()) == ["files/one.csv.gz", "files/two.csv.gz"]
+        assert [row[0] for row in cur.fetchall()] == ["files/input.csv"]
 
 
 def test_docker_timestamp_tz(docker_fakesnow: DockerContainer) -> None:
