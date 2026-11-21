@@ -309,15 +309,15 @@ def test_server_no_gzip(server: dict) -> None:
         "Accept": "application/snowflake",
         "Content-Type": "application/json",
         "Accept-Encoding": "gzip",
-        "User-Agent": "Go/1.13.0 (darwin-arm64) gc/go1.23.6",
+        "User-Agent": "Go/2.4.0 (darwin-arm64) gc/go1.27.4",
         "Client_App_Id": "Go",
-        "Client_App_Version": "1.13.0",
+        "Client_App_Version": "2.4.0",
     }
 
     login_payload = {
         "data": {
             "CLIENT_APP_ID": "Go",
-            "CLIENT_APP_VERSION": "1.13.0",
+            "CLIENT_APP_VERSION": "2.4.0",
             "SVN_REVISION": "",
             "ACCOUNT_NAME": "fakesnow",
             "LOGIN_NAME": "fake",
@@ -328,7 +328,7 @@ def test_server_no_gzip(server: dict) -> None:
                 "OS": "darwin",
                 "OS_VERSION": "gc-arm64",
                 "OCSP_MODE": "FAIL_OPEN",
-                "GO_VERSION": "go1.23.6",
+                "GO_VERSION": "go1.27.4",
             },
         }
     }
@@ -504,18 +504,28 @@ def test_server_put_preserves_bzip2_filename(
     assert [row["name"] for row in sdcur.fetchall()] == [f"compressed_stage/{filename}"]
 
 
-@pytest.mark.parametrize("filename", ["data.csv.gz", "data[final].csv.gz"], ids=["plain", "brackets"])
-def test_server_put_jdbc_presigned_url(server_query: ServerQuery, filename: str) -> None:
-    # JDBC requests another URL using the final upload filename.
-    assert server_query("CREATE OR REPLACE STAGE jdbc_stage")["success"]
-    response = server_query(f"PUT 'file://{filename}' @jdbc_stage", user_agent="JDBC/4.4.1")
+@pytest.mark.parametrize(
+    ("user_agent", "filename"),
+    [
+        ("JDBC/4.4.1", "data.csv.gz"),
+        ("JDBC/4.4.1", "data[final].csv.gz"),
+        ("Go/2.4.0", "data.csv"),
+        ("Go/2.4.0", "data.csv.gz"),
+    ],
+    ids=["jdbc-plain", "jdbc-brackets", "go-uncompressed", "go-compressed"],
+)
+def test_server_put_presigned_url(server_query: ServerQuery, user_agent: str, filename: str) -> None:
+    # JDBC and Go request another URL using the final upload filename.
+    assert server_query("CREATE OR REPLACE STAGE presigned_stage")["success"]
+    response = server_query(f"PUT 'file://{filename}' @presigned_stage", user_agent=user_agent)
     url = response["data"]["stageInfo"]["presignedUrl"]
-    uploaded = requests.put(url, data=gzip.compress(b"1,2\n"), timeout=5)
+    data = gzip.compress(b"1,2\n") if filename.endswith(".gz") else b"1,2\n"
+    uploaded = requests.put(url, data=data, timeout=5)
     assert uploaded.status_code == 200
 
-    listed = server_query("LIST @jdbc_stage")
+    listed = server_query("LIST @presigned_stage")
     table = pa.ipc.open_stream(b64decode(listed["data"]["rowsetBase64"])).read_all()
-    assert [row["name"] for row in table.to_pylist()] == [f"jdbc_stage/{filename}"]
+    assert [row["name"] for row in table.to_pylist()] == [f"presigned_stage/{filename}"]
 
 
 @pytest.mark.parametrize(
@@ -533,26 +543,13 @@ def test_server_put_jdbc_presigned_url(server_query: ServerQuery, filename: str)
 def test_server_put_go_wildcard_rejected_before_upload(server_query: ServerQuery, source: str) -> None:
     # Go can issue indistinguishable presigned URL requests for different local files.
     assert server_query("CREATE OR REPLACE STAGE go_stage")["success"]
-    result = server_query(f"PUT 'file://{source}' @go_stage", user_agent="Go/1.19.1")
+    result = server_query(f"PUT 'file://{source}' @go_stage", user_agent="Go/2.4.0")
     assert result["success"] is False
     assert "wildcard" in result["message"].lower()
 
     listed = server_query("LIST @go_stage")
     assert listed["success"]
     assert listed["data"]["total"] == 0
-
-
-def test_server_put_go_single_file(server_query: ServerQuery) -> None:
-    assert server_query("CREATE OR REPLACE STAGE go_single_stage")["success"]
-    # Go refreshes the presigned URL after deciding on the compressed target name.
-    assert server_query("PUT 'file:///tmp/input.csv' @go_single_stage", user_agent="Go/1.19.1")["success"]
-    response = server_query("PUT 'file:///tmp/input.csv.gz' @go_single_stage", user_agent="Go/1.19.1")
-    assert response["success"]
-    assert requests.put(response["data"]["stageInfo"]["presignedUrl"], data=gzip.compress(b"1,2\n"), timeout=5).ok
-
-    listed = server_query("LIST @go_single_stage")
-    table = pa.ipc.open_stream(b64decode(listed["data"]["rowsetBase64"])).read_all()
-    assert [row["name"] for row in table.to_pylist()] == ["go_single_stage/input.csv.gz"]
 
 
 def test_server_put_jdbc_stage_info_has_endpoint(server_query: ServerQuery) -> None:
