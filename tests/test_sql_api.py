@@ -292,16 +292,18 @@ def test_sql_api_rejects_out_of_range_partition(api: tuple[str, dict[str, str], 
     assert response.status_code in (400, 404, 422)
 
 
-def test_sql_api_retry_after_failed_statement_can_succeed(api: tuple[str, dict[str, str], str]) -> None:
+def test_sql_api_retry_after_failed_statement_returns_original_error(api: tuple[str, dict[str, str], str]) -> None:
     url, headers, database = api
     request_id = str(uuid.uuid4())
     body = {"statement": "select count(*) as n from retry_after_error", "database": database, "schema": "PUBLIC"}
     first = requests.post(f"{url}?requestId={request_id}", headers=headers, json=body, timeout=30)
     assert first.status_code == 422
+    assert first.json()["code"] == "002003"
+    assert first.json()["sqlState"] == "42S02"
     assert submit(api, "create table retry_after_error (id integer)").status_code == 200
     second = requests.post(f"{url}?requestId={request_id}&retry=true", headers=headers, json=body, timeout=30)
     assert second.status_code == 200, second.text
-    assert second.json()["data"] == [["0"]]
+    assert second.json() == first.json()
 
 
 def test_sql_api_retry_does_not_repeat_successful_statement(api: tuple[str, dict[str, str], str]) -> None:

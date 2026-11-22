@@ -126,8 +126,16 @@ class SqlApi:
         request_id = request.query_params.get("requestId")
         retry = request.query_params.get("retry", "false").lower() == "true"
         statement = self.requests.get(request_id) if request_id and retry else None
+        if (
+            statement is not None
+            and statement.response is not None
+            and statement.status_code == 422
+            and not statement.cancelled
+        ):
+            # Snowflake returns the original SQL error with HTTP 200 on retry.
+            return JSONResponse(statement.response)
         if statement is not None and statement.response is not None and statement.status_code != 200:
-            # Only a successfully executed (or still running) request is deduplicated.
+            # Allow retries for interrupted statements and internal errors.
             statement = None
         if statement is None:
             statement = Statement(request_id=request_id or str(uuid.uuid4()))
