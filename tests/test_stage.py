@@ -187,6 +187,56 @@ def test_put_list(dcur: snowflake.connector.cursor.DictCursor) -> None:
         dcur.execute(f"PUT 'file://{temp_file_path}' @db1.schema1.\"stage5\"")
 
 
+def test_put_result_description(cur: snowflake.connector.cursor.SnowflakeCursor, tmp_path: Path) -> None:
+    source = tmp_path / "source.csv"
+    source.write_text("1,2\n")
+    cur.execute("create temporary stage put_description")
+    cur.execute(f"put 'file://{source}' @put_description auto_compress=false")
+
+    assert cur.description
+    assert [column.name for column in cur.description] == [
+        "source",
+        "target",
+        "source_size",
+        "target_size",
+        "source_compression",
+        "target_compression",
+        "status",
+        "message",
+    ]
+
+
+def test_result_scan_of_put_is_unavailable(_fakesnow: None, tmp_path: Path) -> None:
+    source = tmp_path / "source.csv"
+    source.write_text("1,2\n")
+    with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:
+        cur.execute("create temporary stage put_scan")
+        cur.execute(f"put 'file://{source}' @put_scan auto_compress=false")
+        sfqid = cur.sfqid
+        assert sfqid
+
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as exc:
+            cur.execute(f"select * from table(result_scan('{sfqid}'))")
+        assert exc.value.errno == 710
+        assert exc.value.sqlstate == "02000"
+
+
+def test_get_results_of_put_is_unavailable(_fakesnow: None, tmp_path: Path) -> None:
+    source = tmp_path / "source.csv"
+    source.write_text("1,2\n")
+    with snowflake.connector.connect(database="db1", schema="schema1") as conn, conn.cursor() as cur:
+        cur.execute("create temporary stage put_results")
+        cur.execute(f"put 'file://{source}' @put_results auto_compress=false")
+        sfqid = cur.sfqid
+        assert sfqid
+
+        cur.get_results_from_sfqid(sfqid)
+        with pytest.raises(snowflake.connector.errors.ProgrammingError) as exc:
+            cur.fetchall()
+        assert exc.value.errno == 612
+        assert exc.value.sqlstate == "02000"
+
+
 def test_put_list_subdirectory(dcur: snowflake.connector.cursor.DictCursor) -> None:
     dcur.execute("CREATE STAGE nested_stage")
     with tempfile.NamedTemporaryFile(mode="w+", suffix=".csv") as temp_file:

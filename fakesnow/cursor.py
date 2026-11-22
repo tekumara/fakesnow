@@ -14,8 +14,7 @@ from typing import TYPE_CHECKING, Any, Self, cast
 import duckdb
 import pyarrow  # needed by to_arrow_table()
 import snowflake.connector.errors
-import sqlglot
-from duckdb import DuckDBPyConnection
+from duckdb import DuckDBPyConnection, DuckDBPyRelation
 from snowflake.connector._internal.binding_converters import ClientSideBindingConverter
 from snowflake.connector.cursor import ResultMetadata
 from snowflake.connector.result_batch import ResultBatch
@@ -31,7 +30,7 @@ from fakesnow import logger
 from fakesnow.copy_into import copy_into
 from fakesnow.dialect import parse_one, syntax_error
 from fakesnow.params import MutableParams
-from fakesnow.rowtype import ColumnInfo, describe_as_result_metadata
+from fakesnow.rowtype import ColumnInfo, columns_as_rowtype, describe_as_result_metadata, rowtype_as_result_metadata
 from fakesnow.transforms import stage
 from fakesnow.transforms.merge import operations as merge_operations
 
@@ -82,7 +81,6 @@ DESCRIBE_RESULT_SQL: dict[type[Expr], str] = {
 
 @dataclass
 class QueryResultMetadata:
-    rowtype: list[ColumnInfo]
     type_id: int
     batch_rowcount: int | None = None
 
@@ -91,11 +89,13 @@ class QueryResultMetadata:
 class CachedQueryResult:
     table: pyarrow.Table
     rowcount: int
-    sql: str
-    params: MutableParams | None
+    columns: tuple[tuple[str, str], ...]
     transformed: Expr
-    # Wire metadata is only populated for queries submitted to the HTTP server.
+    # Statement metadata is only populated for queries submitted to the HTTP server.
     metadata: QueryResultMetadata | None = None
+
+    def rowtype(self) -> list[ColumnInfo]:
+        return columns_as_rowtype(self.columns)
 
 
 class FakeSnowflakeCursor:
@@ -116,8 +116,7 @@ class FakeSnowflakeCursor:
         self._conn = conn
         self._duck_conn = duck_conn
         self._use_dict_result = use_dict_result
-        self._last_sql = None
-        self._last_params = None
+        self._current_result: CachedQueryResult | None = None
         self._last_transformed = None
         self._sqlstate = None
         self._arraysize = 1
@@ -148,8 +147,7 @@ class FakeSnowflakeCursor:
         self._arraysize = value
 
     def close(self) -> bool:
-        self._last_sql = None
-        self._last_params = None
+        self._current_result = None
         self._last_transformed = None
         return True
 
@@ -168,7 +166,8 @@ class FakeSnowflakeCursor:
 
     @property
     def description(self) -> list[ResultMetadata]:
-        return describe_as_result_metadata(self._describe_last_sql())
+        assert self._current_result is not None
+        return rowtype_as_result_metadata(self._current_result.rowtype())
 
     def _describe_only(self, command: str) -> list | None:
         """Describe the result columns of command without executing it.
@@ -201,14 +200,6 @@ class FakeSnowflakeCursor:
 
         self.execute(f"DESCRIBE {describe}")
         return self.fetchall()
-
-    def _describe_last_sql(self) -> list:
-        # use a separate cursor to avoid consuming the result set on this cursor
-        with self._conn.cursor() as cur:
-            # TODO: can we replace with self._duck_conn.description?
-            expression = sqlglot.parse_one(f"DESCRIBE {self._last_sql}", read="duckdb")
-            cur._execute(expression, self._last_params)
-            return cur.fetchall()
 
     def execute(
         self,
@@ -287,20 +278,31 @@ class FakeSnowflakeCursor:
     def _restore_result(self, sfqid: str) -> bool:
         if (result := self._conn.results_cache.get(sfqid)) is None:
             return False
+        if result.transformed.args.get("put_stage_data"):
+            raise snowflake.connector.errors.ProgrammingError(msg="Result not found", errno=612, sqlstate="02000")
+        self._use_result(sfqid, result)
+        return True
+
+    def _use_result(self, sfqid: str, result: CachedQueryResult) -> None:
+        self._current_result = result
         self._arrow_table = result.table
         self._rowcount = result.rowcount
-        self._last_sql = result.sql
-        self._last_params = result.params
         self._last_transformed = result.transformed
         self._sfqid = sfqid
         self._arrow_table_fetch_index = None
-        return True
+
+    def _store_result(self, result: CachedQueryResult, sfqid: str | None = None) -> None:
+        sfqid = sfqid or str(uuid.uuid4())
+        self._conn.results_cache[sfqid] = result
+        self._use_result(sfqid, result)
 
     def _put_file(self, put_stage_data: stage.PutStage) -> None:
         _df = pyarrow.Table.from_pylist([stage.upload_file(put_stage_data)])
-        self._arrow_table = self._duck_conn.sql("select * from _df").to_arrow_table()
-        assert self._arrow_table is not None
-        self._rowcount = self._arrow_table.num_rows
+        relation = self._duck_conn.sql("select * from _df")
+        assert relation is not None
+        table, columns = _materialize_relation(relation)
+        assert self._sfqid and self._last_transformed is not None
+        self._store_result(CachedQueryResult(table, table.num_rows, columns, self._last_transformed), self._sfqid)
 
     def check_db_and_schema(self, expression: Expr) -> None:
         no_database, no_schema = checks.is_unqualified_table_expression(expression)
@@ -435,6 +437,7 @@ class FakeSnowflakeCursor:
         return [expression]
 
     def _execute(self, transformed: Expr, params: MutableParams | None = None) -> None:
+        self._current_result = None
         self._arrow_table = None
         self._arrow_table_fetch_index = None
         self._rowcount = None
@@ -461,10 +464,17 @@ class FakeSnowflakeCursor:
             )
 
         if sfqid := transformed.args.get("result_scan_sfqid"):
-            if not self._restore_result(sfqid):
+            if (source := self._conn.results_cache.get(sfqid)) is None:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"Statement {sfqid} not found", errno=709, sqlstate="02000"
                 )
+            if source.transformed.args.get("put_stage_data"):
+                # PUT's result is produced by the client, not stored as a SQL result.
+                raise snowflake.connector.errors.ProgrammingError(
+                    msg=f"Result for query {sfqid} has expired", errno=710, sqlstate="02000"
+                )
+            # RESULT_SCAN is a new SELECT, not a restoration of the original statement.
+            self._store_result(CachedQueryResult(source.table, source.table.num_rows, source.columns, transformed))
             return
 
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
@@ -504,6 +514,7 @@ class FakeSnowflakeCursor:
 
         affected_count = None
         result: pyarrow.Table | None = None
+        columns: tuple[tuple[str, str], ...] | None = None
         try:
             if isinstance(transformed, exp.Copy):
                 sql = copy_into(
@@ -514,7 +525,9 @@ class FakeSnowflakeCursor:
                     self._conn.table_stages,
                     params,
                 )
-                result = self._duck_conn.sql(sql).to_arrow_table()
+                relation = self._duck_conn.sql(sql)
+                assert relation is not None
+                result, columns = _materialize_relation(relation)
             elif transformed.args.get("create_file_format_name"):
                 # File formats persist without committing the caller's DML. A separate DuckDB
                 # cursor uses an independent transaction, avoiding cross-database writes too.
@@ -525,7 +538,8 @@ class FakeSnowflakeCursor:
                 logger.log_sql(sql, params)
                 # a relation returns arrow without the extra copy made by the DB-API result
                 relation = self._duck_conn.sql(sql, params=params)
-                result = relation.to_arrow_table() if relation is not None else None
+                if relation is not None:
+                    result, columns = _materialize_relation(relation)
         except duckdb.BinderException as e:
             msg = e.args[0]
             duplicate_key = "Duplicate struct entry name" in msg or "Duplicate named argument" in msg
@@ -706,24 +720,17 @@ class FakeSnowflakeCursor:
 
         if result_sql:
             logger.log_sql(result_sql)
-            result = self._duck_conn.sql(result_sql).to_arrow_table()
+            relation = self._duck_conn.sql(result_sql)
+            assert relation is not None
+            result, columns = _materialize_relation(relation)
 
-        assert result is not None
-        self._arrow_table = result
+        assert result is not None and columns is not None
         if transformed.args.get("merge_counts"):
             # a merge returns a count per operation, but snowflake reports their total as the
             # rows affected, not the single row those counts are in
-            affected_count = int(sum(c[0].as_py() for c in self._arrow_table.columns))
-        self._rowcount = affected_count if affected_count is not None else self._arrow_table.num_rows
-        self._sfqid = str(uuid.uuid4())
-
-        self._last_sql = result_sql or sql
-        self._last_params = None if result_sql else params
-        self._last_transformed = transformed
-
-        self._conn.results_cache[self._sfqid] = CachedQueryResult(
-            self._arrow_table, self._rowcount, self._last_sql, self._last_params, self._last_transformed
-        )
+            affected_count = int(sum(c[0].as_py() for c in result.columns))
+        rowcount = affected_count if affected_count is not None else result.num_rows
+        self._store_result(CachedQueryResult(result, rowcount, columns, transformed))
 
     def executemany(
         self,
@@ -848,6 +855,12 @@ class FakeResultBatch(ResultBatch):
 
     def populate_data(self, connection: SnowflakeConnection | None = None, **kwargs: Any) -> Self:
         raise NotImplementedError()
+
+
+def _materialize_relation(relation: DuckDBPyRelation) -> tuple[pyarrow.Table, tuple[tuple[str, str], ...]]:
+    # Arrow physical types alone lose DuckDB logical types such as JSON.
+    columns = tuple(zip(relation.columns, (str(type_) for type_ in relation.types), strict=True))
+    return relation.to_arrow_table(), columns
 
 
 def _affected_count(table: pyarrow.Table | None) -> int:

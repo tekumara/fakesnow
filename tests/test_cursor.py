@@ -283,6 +283,19 @@ def test_execute_async_and_get_results_from_sfqid(cur: snowflake.connector.curso
     assert cur.description
 
 
+def test_get_results_description_after_source_table_is_dropped(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create temporary table result_description_source as select 42::number(8,2) as answer")
+    cur.execute("select answer from result_description_source")
+    sfqid = cur.sfqid
+    assert sfqid
+
+    cur.execute("drop table result_description_source")
+    cur.get_results_from_sfqid(sfqid)
+    cur.fetchall()
+    assert cur.description
+    assert [(c.name, c.type_code, c.precision, c.scale) for c in cur.description] == [("ANSWER", 0, 8, 2)]
+
+
 def test_get_results_from_sfqid_not_found(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.get_results_from_sfqid("00000000-0000-0000-0000-000000000000")
     with pytest.raises(

@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from typing import Any
 from urllib.parse import quote
 
-import pyarrow as pa
 import snowflake.connector.errors
 from sqlglot import Expr, exp
 from starlette.applications import Starlette
@@ -24,7 +23,7 @@ from starlette.routing import Route
 from fakesnow import statement_type
 from fakesnow.arrow import to_ipc, to_sf
 from fakesnow.converter import from_binding
-from fakesnow.cursor import FakeSnowflakeCursor, QueryResultMetadata
+from fakesnow.cursor import CachedQueryResult, FakeSnowflakeCursor, QueryResultMetadata
 from fakesnow.dialect import parse_one
 from fakesnow.expr import normalise_ident
 from fakesnow.fakes import FakeSnowflakeConnection
@@ -187,7 +186,11 @@ async def _query_request(request: Request, conn: FakeSnowflakeConnection) -> JSO
         if put_stage_data := transformed.args.get("put_stage_data"):
             return upload_response(request, put_stage_data)
 
-        rowtype = describe_as_rowtype(cur._describe_last_sql())  # noqa: SLF001
+        sfqid = cur.sfqid
+        assert sfqid
+        cached = conn.results_cache[sfqid]
+        metadata = QueryResultMetadata(type_id, batch_rowcount if batch is not None else None)
+        response = query_result_response(conn, sfqid, cached, metadata)
 
     except (snowflake.connector.errors.ProgrammingError, snowflake.connector.errors.OperationalError) as e:
         logger.info(f"{sql_text=} {type(e).__name__} {e}")
@@ -211,18 +214,15 @@ async def _query_request(request: Request, conn: FakeSnowflakeConnection) -> JSO
         # and https://github.com/snowflakedb/gosnowflake/blob/8ed4c75ffd707dd712ad843f40189843ace683c4/restful.go#L318
         raise ServerError(status_code=500, code="261000", message=msg) from None
 
-    sfqid = cur.sfqid
-    assert sfqid
-    cached = conn.results_cache[sfqid]
-    metadata = QueryResultMetadata(rowtype, type_id, batch_rowcount if batch is not None else None)
-    if cached.metadata is None:
-        cached.metadata = metadata
-    return query_result_response(conn, sfqid, cached.table, metadata)
+    cached.metadata = metadata
+    return response
 
 
 def query_result_response(
-    conn: FakeSnowflakeConnection, sfqid: str, arrow_table: pa.Table, metadata: QueryResultMetadata
+    conn: FakeSnowflakeConnection, sfqid: str, cached: CachedQueryResult, metadata: QueryResultMetadata
 ) -> JSONResponse:
+    arrow_table = cached.table
+    rowtype = cached.rowtype()
     batch_rowcount = metadata.batch_rowcount
     if batch_rowcount is not None and arrow_table and metadata.type_id in DML_TYPE_IDS:
         # the batch ran as multiple statements, but the client sent one, so report the total
@@ -237,7 +237,7 @@ def query_result_response(
             ],
         }
     elif arrow_table:
-        batch_bytes = to_ipc(to_sf(arrow_table, metadata.rowtype))
+        batch_bytes = to_ipc(to_sf(arrow_table, rowtype))
         result = {"queryResultFormat": "arrow", "rowsetBase64": b64encode(batch_bytes).decode("utf-8")}
     else:
         result = {"queryResultFormat": "arrow", "rowsetBase64": ""}
@@ -246,7 +246,7 @@ def query_result_response(
         {
             "data": {
                 "parameters": [{"name": "TIMEZONE", "value": "Etc/UTC"}],
-                "rowtype": metadata.rowtype,
+                "rowtype": rowtype,
                 "total": 1 if batch_rowcount is not None else arrow_table.num_rows if arrow_table else 0,
                 "queryId": sfqid,
                 "statementTypeId": metadata.type_id,
@@ -266,7 +266,7 @@ def query_result(request: Request) -> JSONResponse:
         cached = conn.results_cache.get(sfqid)
         if cached is None or cached.metadata is None:
             raise ServerError(status_code=404, code="000709", message=f"Statement {sfqid} not found")
-        return query_result_response(conn, sfqid, cached.table, cached.metadata)
+        return query_result_response(conn, sfqid, cached, cached.metadata)
     except ServerError as e:
         return e.response()
 

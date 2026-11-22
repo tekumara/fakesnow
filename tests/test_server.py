@@ -860,6 +860,76 @@ def test_server_retrieves_stored_query_result_after_source_is_dropped(
     assert scur.fetchall() == [(42,)]
 
 
+def test_server_result_scan_after_source_table_is_dropped(
+    scur: snowflake.connector.cursor.SnowflakeCursor,
+) -> None:
+    scur.execute("create temporary table result_scan_source as select 42 as answer")
+    scur.execute("select answer from result_scan_source")
+    sfqid = scur.sfqid
+    assert sfqid
+
+    scur.execute("drop table result_scan_source")
+    scur.execute(f"select * from table(result_scan('{sfqid}'))")
+    assert scur.fetchall() == [(42,)]
+
+
+def test_server_result_scan_variant_after_source_is_dropped(
+    scur: snowflake.connector.cursor.SnowflakeCursor,
+) -> None:
+    scur.execute("create temporary table result_scan_variant as select parse_json('{\"a\":1}') as value")
+    scur.execute("select value from result_scan_variant")
+    sfqid = scur.sfqid
+    assert sfqid
+
+    scur.execute("drop table result_scan_variant")
+    scur.execute(f"select * from table(result_scan('{sfqid}'))")
+    assert indent(scur.fetchall()) == [('{\n  "a": 1\n}',)]
+
+
+def test_server_result_scan_empty_variant_after_source_is_dropped(
+    scur: snowflake.connector.cursor.SnowflakeCursor,
+) -> None:
+    scur.execute("create temporary table result_scan_variant as select parse_json('{\"a\":1}') as value")
+    scur.execute("select value from result_scan_variant where false")
+    sfqid = scur.sfqid
+    assert sfqid
+
+    scur.execute("drop table result_scan_variant")
+    scur.execute(f"select * from table(result_scan('{sfqid}'))")
+    assert scur.fetchall() == []
+    assert scur.description
+    assert [(column.name, column.type_code) for column in scur.description] == [("VALUE", 5)]
+
+
+def test_server_result_scan_has_own_query_id(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    scur.execute("select 42 as answer")
+    sfqid = scur.sfqid
+    assert sfqid
+
+    scur.execute(f"select * from table(result_scan('{sfqid}'))")
+    assert scur.sfqid and scur.sfqid != sfqid
+
+
+def test_server_retrieves_dml_and_result_scan_with_independent_rowcounts(
+    scur: snowflake.connector.cursor.SnowflakeCursor,
+) -> None:
+    scur.execute("create temporary table result_scan_dml (value int)")
+    scur.execute("insert into result_scan_dml values (1), (2)")
+    sfqid = scur.sfqid
+    assert sfqid
+
+    scur.execute(f"select * from table(result_scan('{sfqid}'))")
+    scan_sfqid = scur.sfqid
+    assert scan_sfqid
+    scur.get_results_from_sfqid(scan_sfqid)
+    scur.fetchall()
+    assert scur.rowcount == 1
+
+    scur.get_results_from_sfqid(sfqid)
+    scur.fetchall()
+    assert scur.rowcount == 2
+
+
 def test_server_retrieves_stored_query_result_from_another_connection(server: dict) -> None:
     # Two connections to the same server instance use the same query result cache.
     server["session_parameters"].pop("FAKESNOW_DB_PATH")
