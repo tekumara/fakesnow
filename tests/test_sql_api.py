@@ -5,6 +5,7 @@ from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor
 from threading import Barrier
 from typing import Any
+from urllib.parse import parse_qs, urljoin, urlsplit
 
 import pytest
 import requests
@@ -62,7 +63,21 @@ def test_sql_api_result_set_metadata(api: tuple[str, dict[str, str], str]) -> No
     assert result["resultSetMetaData"]["numRows"] == 1
     columns = result["resultSetMetaData"]["rowType"]
     assert [(c["name"], c["type"], c["scale"]) for c in columns] == [("ID", "fixed", 0), ("TOTAL", "fixed", 2)]
-    assert result["statementStatusUrl"] == f"/api/v2/statements/{result['statementHandle']}"
+
+
+def test_sql_api_statement_status_url(api: tuple[str, dict[str, str], str]) -> None:
+    response = submit(api, "select 1")
+    assert response.status_code == 200, response.text
+    result = response.json()
+    status_url = urlsplit(result["statementStatusUrl"])
+    assert status_url.path == f"/api/v2/statements/{result['statementHandle']}"
+    assert parse_qs(status_url.query)["requestId"] == [result["requestId"]]
+    uuid.UUID(result["requestId"])
+
+    url, headers, _ = api
+    status = requests.get(urljoin(url, result["statementStatusUrl"]), headers=headers, timeout=30)
+    assert status.status_code == 200, status.text
+    assert status.json()["statementHandle"] == result["statementHandle"]
 
 
 def test_sql_api_positional_bindings_preserve_null_position(api: tuple[str, dict[str, str], str]) -> None:

@@ -13,6 +13,7 @@ from dataclasses import dataclass, field
 from datetime import date
 from decimal import Decimal
 from typing import Any
+from urllib.parse import urlencode
 
 import pyarrow as pa
 import snowflake.connector.errors
@@ -39,6 +40,7 @@ _UNITS_PER_SECOND = {"s": 1, "ms": 1_000, "us": 1_000_000, "ns": 1_000_000_000}
 @dataclass
 class Statement:
     handle: str = field(default_factory=lambda: str(uuid.uuid4()))
+    request_id: str = field(default_factory=lambda: str(uuid.uuid4()))
     created_on: int = field(default_factory=lambda: int(time.time() * 1000))
     task: asyncio.Task[None] | None = None
     response: dict[str, Any] | None = None
@@ -128,7 +130,7 @@ class SqlApi:
             # Only a successfully executed (or still running) request is deduplicated.
             statement = None
         if statement is None:
-            statement = Statement()
+            statement = Statement(request_id=request_id or str(uuid.uuid4()))
             self.statements[statement.handle] = statement
             if request_id:
                 self.requests[request_id] = statement
@@ -256,6 +258,8 @@ class SqlApi:
                 "partitionInfo": partition_info,
             }
             status = statement.status("090001", "Statement executed successfully.")
+            status["requestId"] = statement.request_id
+            status["statementStatusUrl"] = f"{statement.status_url}?{urlencode({'requestId': statement.request_id})}"
             response = status | {"resultSetMetaData": metadata, "data": partitions[0]}
             for i, part in enumerate(partitions[1:], 1):
                 partition_info[i]["uncompressedSize"] = len(_json_bytes(status | {"data": part}))
