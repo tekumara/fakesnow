@@ -50,6 +50,25 @@ def test_binding_qmark_adjacent_cast(_fakesnow: None) -> None:
         assert cur.fetchone() == (Decimal("12.50"),)
 
 
+@pytest.mark.parametrize(
+    ("sql", "params"),
+    [
+        ("select ?", ()),
+        ("select ?, ?", ("x",)),
+    ],
+)
+def test_binding_qmark_missing_reports_compilation_error(_fakesnow: None, sql: str, params: tuple[str, ...]) -> None:
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+        pytest.raises(snowflake.connector.errors.ProgrammingError) as error,
+    ):
+        cur.execute(sql, params)
+    assert error.value.errno == 2049
+    assert error.value.sqlstate == "42601"
+    assert error.value.raw_msg
+
+
 def test_binding_conn_kwarg(_fakesnow: None):
     assert snowflake.connector.paramstyle == "pyformat"
 

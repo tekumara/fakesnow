@@ -151,25 +151,24 @@ class SqlApi:
         return self._result(statement, 0)
 
     @staticmethod
-    def _bindings(bindings: object) -> tuple[Any, ...] | None:
+    def _bindings(bindings: object) -> dict[str, Any] | None:
         if not isinstance(bindings, dict):
             raise ValueError("bindings must be an object")
         if not bindings:
             return None
-        if set(bindings) != {str(i) for i in range(1, len(bindings) + 1)}:
-            raise ValueError("binding positions must start at 1 and be contiguous")
-        values = []
-        for i in range(1, len(bindings) + 1):
-            binding = bindings[str(i)]
+        values = {}
+        for position, binding in bindings.items():
+            if not isinstance(position, str) or not re.fullmatch(r"[1-9][0-9]*", position):
+                raise ValueError("binding positions must be positive integers")
             if not isinstance(binding, dict) or not isinstance(binding.get("type"), str) or "value" not in binding:
                 raise ValueError("each binding must have a type and value")
             if binding["value"] is not None and not isinstance(binding["value"], str):
                 raise ValueError("binding values must be strings or null")
-            values.append(from_binding(binding))
-        return tuple(values)
+            values[position] = from_binding(binding)
+        return values
 
     async def _run(
-        self, statement: Statement, body: dict[str, Any], bindings: tuple[Any, ...] | None, nullable: bool, limit: int
+        self, statement: Statement, body: dict[str, Any], bindings: dict[str, Any] | None, nullable: bool, limit: int
     ) -> None:
         worker = asyncio.create_task(run_in_threadpool(self._execute, statement, body, bindings, nullable))
         timed_out = False
@@ -219,7 +218,7 @@ class SqlApi:
                 statement.status_code = 500
 
     def _execute(
-        self, statement: Statement, body: dict[str, Any], bindings: tuple[Any, ...] | None, nullable: bool
+        self, statement: Statement, body: dict[str, Any], bindings: dict[str, Any] | None, nullable: bool
     ) -> dict[str, Any]:
         expressions = [expression for expression in parse(body["statement"]) if expression is not None]
         if len(expressions) != 1:

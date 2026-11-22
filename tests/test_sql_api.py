@@ -94,9 +94,23 @@ def test_sql_api_positional_bindings_preserve_null_position(api: tuple[str, dict
     assert response.json()["data"] == [["first", None, "third"]]
 
 
-def test_sql_api_rejects_missing_binding_position(api: tuple[str, dict[str, str], str]) -> None:
-    response = submit(api, "select ?", bindings={"2": {"type": "TEXT", "value": "x"}})
-    assert response.status_code == 400
+@pytest.mark.parametrize(
+    ("sql", "bindings"),
+    [
+        ("select ?", {"2": {"type": "TEXT", "value": "x"}}),
+        ("select ?, ?", {"1": {"type": "TEXT", "value": "a"}, "3": {"type": "TEXT", "value": "c"}}),
+    ],
+)
+def test_sql_api_rejects_missing_binding_position(
+    api: tuple[str, dict[str, str], str], sql: str, bindings: dict[str, dict[str, str]]
+) -> None:
+    response = submit(api, sql, bindings=bindings)
+    assert response.status_code == 422
+    error = response.json()
+    assert error["code"] == "002049"
+    assert error["sqlState"] == "42601"
+    assert error["message"]
+    assert error["statementHandle"]
 
 
 @pytest.mark.parametrize(

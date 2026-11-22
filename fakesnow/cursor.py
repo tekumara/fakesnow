@@ -249,6 +249,13 @@ class FakeSnowflakeCursor:
         except snowflake.connector.errors.ProgrammingError as e:
             self._sqlstate = e.sqlstate
             raise e
+        except duckdb.InvalidInputException as e:
+            message = str(e)
+            if "Values were not provided for the following parameters:" not in message:
+                raise
+            error = snowflake.connector.errors.ProgrammingError(msg=message, errno=2049, sqlstate="42601")
+            self._sqlstate = error.sqlstate
+            raise error from None
         except ParseError as e:
             error = syntax_error(e)
             self._sqlstate = error.sqlstate
