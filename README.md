@@ -163,6 +163,20 @@ Additional parameters that may be helpful:
 - Session parameter `CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED` set to `false`
 - Network timeout set to 1 second (since retries aren't needed in testing)
 
+#### Snowflake SQL API v2
+
+The server also supports the Snowflake SQL API v2 for single statements. Requests require a `Bearer` header, but Fakesnow does not validate the token. Example:
+
+```sh
+curl -X POST http://127.0.0.1:64616/api/v2/statements \
+  -H 'Authorization: Bearer fake' \
+  -H 'Content-Type: application/json' \
+  -d '{"statement":"select 1 as value"}'
+```
+
+Each newly submitted statement uses a fresh session against the server's
+shared in-memory database. Connector sessions configured with `FAKESNOW_DB_PATH` are not shared with the v2 API.
+
 #### Connecting from the Snowflake CLI
 
 Update Snowflake's [config.toml](https://docs.snowflake.com/en/developer-guide/snowflake-cli/connecting/configure-cli):

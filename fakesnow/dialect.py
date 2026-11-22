@@ -14,6 +14,7 @@ class FakeSnowflakeDialect(Snowflake):
     class Tokenizer(Snowflake.Tokenizer):
         # Snowflake uses ? for positional binds, so ?:: is a placeholder followed
         # by a cast, not the generic SQLGlot try-cast operator.
+        # https://github.com/tobymao/sqlglot/issues/9313
         KEYWORDS: ClassVar[dict[str, TokenType]] = {
             key: value for key, value in Snowflake.Tokenizer.KEYWORDS.items() if key != "?::"
         }

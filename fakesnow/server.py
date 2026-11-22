@@ -29,6 +29,7 @@ from fakesnow.expr import normalise_ident
 from fakesnow.fakes import FakeSnowflakeConnection
 from fakesnow.instance import FakeSnow
 from fakesnow.rowtype import ColumnInfo, describe_as_rowtype
+from fakesnow.sql_api import SqlApi
 from fakesnow.statement_type import DML_TYPE_IDS, statement_type_id
 from fakesnow.transforms import SERVER_VERSION, stage
 
@@ -453,4 +454,4 @@ routes = [
     Route("/queries/{sfqid}/result", query_result, methods=["GET"]),
 ]
 
-app = Starlette(debug=True, routes=routes)
+app = Starlette(debug=True, routes=[*routes, *SqlApi(shared_fs).routes])
