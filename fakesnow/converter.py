@@ -3,15 +3,23 @@ from __future__ import annotations
 import binascii
 import datetime
 from datetime import date, time, timezone
+from decimal import Decimal
+from typing import Any
 
 # convert server bindings from strings into python types
 
 
-def from_binding(binding: dict[str, str]) -> int | bytes | bool | date | time | datetime.datetime | str:
+def from_binding(
+    binding: dict[str, Any],
+) -> int | float | Decimal | bytes | bool | date | time | datetime.datetime | str | None:
     type_ = binding["type"]
     value = binding["value"]
+    if value is None:
+        return None
     if type_ == "FIXED":
-        return int(value)
+        return Decimal(value) if any(c in value for c in ".eE") else int(value)
+    elif type_ == "REAL":
+        return float(value)
     elif type_ == "BINARY":
         return from_binary(value)
     # TODO: not strictly needed

@@ -1,8 +1,26 @@
 import datetime
+from decimal import Decimal
 
 import pytest
 
 from fakesnow.converter import from_binding
+
+
+def test_from_binding_fixed_decimal() -> None:
+    value = from_binding({"type": "FIXED", "value": "12.50"})
+    assert isinstance(value, Decimal)
+    assert value == Decimal("12.50")
+
+
+def test_from_binding_real() -> None:
+    value = from_binding({"type": "REAL", "value": "1.25"})
+    assert isinstance(value, float)
+    assert value == 1.25
+
+
+@pytest.mark.parametrize("type_", ["FIXED", "BOOLEAN"])
+def test_from_binding_null(type_: str) -> None:
+    assert from_binding({"type": type_, "value": None}) is None
 
 
 def test_from_binding_binary() -> None:
