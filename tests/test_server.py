@@ -871,19 +871,6 @@ def test_server_retrieves_stored_query_result_after_source_is_dropped(
     assert scur.fetchall() == [(42,)]
 
 
-def test_server_result_scan_after_source_table_is_dropped(
-    scur: snowflake.connector.cursor.SnowflakeCursor,
-) -> None:
-    scur.execute("create temporary table result_scan_source as select 42 as answer")
-    scur.execute("select answer from result_scan_source")
-    sfqid = scur.sfqid
-    assert sfqid
-
-    scur.execute("drop table result_scan_source")
-    scur.execute(f"select * from table(result_scan('{sfqid}'))")
-    assert scur.fetchall() == [(42,)]
-
-
 def test_server_result_scan_variant_after_source_is_dropped(
     scur: snowflake.connector.cursor.SnowflakeCursor,
 ) -> None:
