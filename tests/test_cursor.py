@@ -63,6 +63,42 @@ def test_executemany(cur: snowflake.connector.cursor.SnowflakeCursor):
     assert cur.fetchall() == customers
 
 
+def test_executemany_reports_total_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create temporary table batch_counts (id int)")
+    cur.executemany("insert into batch_counts values (%s)", [(1,), (2,), (3,)])
+
+    assert cur.rowcount == 3
+
+
+def test_result_scan_of_executemany_returns_aggregate_count(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create temporary table batch_scan (id int)")
+    cur.executemany("insert into batch_scan values (%s)", [(1,), (2,), (3,)])
+    sfqid = cur.sfqid
+    assert sfqid
+
+    cur.execute(f"select * from table(result_scan('{sfqid}'))")
+    assert cur.fetchall() == [(3,)]
+
+
+def test_executemany_update_reports_total_rowcount(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create temporary table batch_update (id int)")
+    cur.execute("insert into batch_update values (1), (2)")
+    cur.executemany("update batch_update set id = id + 10 where id = %s", [(1,), (2,)])
+
+    assert cur.rowcount == 2
+
+
+def test_result_scan_of_executemany_update_returns_last_result(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("create temporary table batch_update (id int)")
+    cur.execute("insert into batch_update values (1), (2)")
+    cur.executemany("update batch_update set id = id + 10 where id = %s", [(1,), (2,)])
+    sfqid = cur.sfqid
+    assert sfqid
+
+    cur.execute(f"select * from table(result_scan('{sfqid}'))")
+    assert cur.fetchall() == [(1, 0)]
+
+
 def test_execute_string(conn: snowflake.connector.SnowflakeConnection):
     *_, cur = conn.execute_string(
         """
@@ -259,6 +295,20 @@ def test_sqlstate(cur: snowflake.connector.cursor.SnowflakeCursor):
         cur.execute("select * from this_table_does_not_exist")
 
     assert cur.sqlstate == "42S02"
+
+
+def test_description_before_execute(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    assert cur.description is None
+
+
+def test_execute_replaces_pending_async_result(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute_async("select 1")
+    sfqid = cur.sfqid
+    assert sfqid
+    cur.get_results_from_sfqid(sfqid)
+
+    cur.execute("select 2")
+    assert cur.fetchall() == [(2,)]
 
 
 def test_sfqid(cur: snowflake.connector.cursor.SnowflakeCursor):

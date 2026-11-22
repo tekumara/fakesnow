@@ -231,6 +231,17 @@ def test_server_array_binding_returns_one_count_row(server_query: ServerQuery) -
     assert result["data"]["total"] == 1
 
 
+def test_server_result_scan_of_array_binding_returns_aggregate_count(server_query: ServerQuery) -> None:
+    assert server_query("create temporary table batch_scan (id int)")["success"]
+    original = server_query("insert into batch_scan values (?)", {"1": {"type": "FIXED", "value": ["1", "2", "3"]}})
+    assert original["success"]
+
+    scan = server_query(f"select * from table(result_scan('{original['data']['queryId']}'))")
+    assert scan["success"]
+    table = pa.ipc.open_stream(b64decode(scan["data"]["rowsetBase64"])).read_all()
+    assert table.to_pylist() == [{"number of rows inserted": 3}]
+
+
 def test_server_merge_response_total(server_query: ServerQuery) -> None:
     assert server_query("create table target (id int, name varchar)")["success"]
     assert server_query("insert into target values (1, 'a')")["success"]

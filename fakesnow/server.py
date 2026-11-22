@@ -176,11 +176,9 @@ async def _query_request(request: Request, conn: FakeSnowflakeConnection) -> JSO
         if batch is None:
             await run_in_threadpool(cur.execute, sql_text, binding_params=params, server=True)
         else:
-            # snowflake runs an array binding as one statement and reports the rows affected
-            # across the whole batch, so accumulate them as we execute row by row
-            for row in batch:
-                await run_in_threadpool(cur.execute, sql_text, binding_params=row, server=True)
-                batch_rowcount += cur.rowcount or 0
+            # An array binding is one statement; the cursor retains its aggregate result.
+            await run_in_threadpool(cur.executemany, sql_text, batch, server=True)
+            batch_rowcount = cur.rowcount or 0
         transformed = cur._last_transformed  # noqa: SLF001
         assert transformed
         if put_stage_data := transformed.args.get("put_stage_data"):

@@ -165,8 +165,9 @@ class FakeSnowflakeCursor:
         return describe_as_result_metadata(self.fetchall())
 
     @property
-    def description(self) -> list[ResultMetadata]:
-        assert self._current_result is not None
+    def description(self) -> list[ResultMetadata] | None:
+        if self._current_result is None:
+            return None
         return rowtype_as_result_metadata(self._current_result.rowtype())
 
     def _describe_only(self, command: str) -> list | None:
@@ -210,6 +211,7 @@ class FakeSnowflakeCursor:
     ) -> FakeSnowflakeCursor:
         try:
             self._sqlstate = None
+            self._prefetch_hook = None
 
             if os.environ.get("FAKESNOW_DEBUG") == "snowflake":
                 p = params or kwargs.get("binding_params")
@@ -742,12 +744,51 @@ class FakeSnowflakeCursor:
             # see https://docs.snowflake.com/en/developer-guide/python-connector/python-connector-api
             raise NotImplementedError("executemany dict params")
 
-        # TODO: support insert optimisations
-        # the snowflake connector will optimise inserts into a single query
-        # unless num_statements != 1 .. but for simplicity we execute each
-        # query one by one, which means the response differs
+        # Snowflake combines INSERT bindings into one statement. Other embedded DML runs
+        # separately: rowcount is the total, but the query ID belongs to the last execution.
+        batch_counts: list[int] | None = None
+        affected_count: int | None = None
         for p in seqparams:
-            self.execute(command, p)
+            if kwargs.get("server"):
+                self.execute(command, binding_params=p, **kwargs)
+            else:
+                self.execute(command, p, **kwargs)
+
+            transformed = self._last_transformed
+            if (
+                transformed
+                and (
+                    isinstance(transformed, (exp.Insert, exp.Update, exp.Delete, exp.Merge, exp.MultitableInserts))
+                    or transformed.args.get("merge_counts")
+                )
+                and not transformed.args.get("create_stage_name")
+                and not transformed.args.get("create_file_format_name")
+            ):
+                assert self._current_result is not None
+                affected_count = (affected_count or 0) + self._current_result.rowcount
+                if kwargs.get("server") or isinstance(transformed, (exp.Insert, exp.MultitableInserts)):
+                    counts = [int(column[0].as_py()) for column in self._current_result.table.columns]
+                    batch_counts = (
+                        counts
+                        if batch_counts is None
+                        else [total + count for total, count in zip(batch_counts, counts, strict=True)]
+                    )
+
+        if batch_counts is not None:
+            assert self._current_result is not None and self._sfqid and affected_count is not None
+            result = self._current_result
+            table = pyarrow.Table.from_arrays(
+                [
+                    pyarrow.array([count], type=column.type)
+                    for count, column in zip(batch_counts, result.table.columns, strict=True)
+                ],
+                schema=result.table.schema,
+            )
+            self._store_result(
+                CachedQueryResult(table, affected_count, result.columns, result.transformed), self._sfqid
+            )
+        elif affected_count is not None:
+            self._rowcount = affected_count
 
         return self
 
