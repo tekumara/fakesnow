@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from decimal import Decimal
 from typing import cast
 
 import pandas as pd
@@ -38,6 +39,15 @@ def test_binding_qmark(_fakesnow: None):
         # this has no effect after connection created, so qmark style still works
         snowflake.connector.paramstyle = "pyformat"
         cur.execute("select * from customers where id = ?", (1,))
+
+
+def test_binding_qmark_adjacent_cast(_fakesnow: None) -> None:
+    with (
+        snowflake.connector.connect(database="db1", schema="schema1", paramstyle="qmark") as conn,
+        conn.cursor() as cur,
+    ):
+        cur.execute("select ?::number(10,2)", (Decimal("12.50"),))
+        assert cur.fetchone() == (Decimal("12.50"),)
 
 
 def test_binding_conn_kwarg(_fakesnow: None):
