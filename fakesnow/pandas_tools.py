@@ -92,7 +92,8 @@ def write_pandas(
     **kwargs: Any,
 ) -> WritePandasResult:
     if not quote_identifiers:
-        # the connector's sql_column_identifier check, raised before any SQL is sent
+        # Follow the connector's check, raised before any SQL is sent. Its
+        # sql_column_identifier helper is private, in snowflake.connector._internal.
         for col in df.columns:
             if not re.fullmatch(r"[A-Za-z_][A-Za-z0-9_$]*", str(col)):
                 raise ProgrammingError(
