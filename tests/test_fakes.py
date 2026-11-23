@@ -818,6 +818,19 @@ def test_unquoted_column_does_not_match_quoted_lower_case_column(cur: snowflake.
     assert "invalid identifier 'ID'" in str(excinfo.value)
 
 
+def test_ddl_after_a_runtime_error_checks_column_case(
+    conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor
+):
+    cur.execute('create table "foo" ("bar" int)')
+    _abort_transaction(conn, cur)
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute('create table copied as select bar from "foo"')
+
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (904, "42000")
+    assert "invalid identifier 'BAR'" in str(excinfo.value)
+
+
 def test_quoted_lower_case_column_does_not_match_unquoted_column(cur: snowflake.connector.cursor.SnowflakeCursor):
     cur.execute("create table customers (id int)")
 
