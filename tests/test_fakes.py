@@ -880,13 +880,35 @@ def test_temporary_table_foreign_key_drop_referenced(
 def test_temporary_table_permanent_foreign_key(
     cur: snowflake.connector.cursor.SnowflakeCursor, constraint: str
 ) -> None:
-    # a permanent table's foreign key references the permanent table, even when a temporary table shares its name.
-    # Snowflake doesn't enforce foreign keys, so read DuckDB's constraint metadata to check it was kept, as written.
+    # a permanent table's foreign key is kept as written while the session has a temporary table. Snowflake doesn't
+    # enforce foreign keys, so read DuckDB's constraint metadata to check it was kept.
     cur.execute("create table table1 (x int primary key)")
-    cur.execute("create temporary table table1 (x int)")
+    cur.execute("create temporary table table3 (x int)")
     cur.execute(f"create table table2 ({constraint})")
     sql = "select constraint_text from duckdb_constraints() where table_name = 'TABLE2' and constraint_type = 'FOREIGN KEY'"
     assert cur.execute(sql).fetchall() == [("FOREIGN KEY (X) REFERENCES SCHEMA1.TABLE1(X)",)]
+
+
+@pytest.mark.xfail(
+    reason="DuckDB can't reference the temp catalog from a permanent table, so fakesnow keeps the foreign key on the "
+    "permanent table the temporary one shadows",
+    raises=pytest.fail.Exception,
+)
+@pytest.mark.parametrize(
+    "constraint",
+    ["x int references db1.schema1.table1 (x)", "x int, foreign key (x) references table1 (x)"],
+    ids=["qualified", "unqualified"],
+)
+def test_temporary_table_foreign_key_resolves_temporary(
+    cur: snowflake.connector.cursor.SnowflakeCursor, constraint: str
+) -> None:
+    # Snowflake resolves a foreign key's reference to a temporary table that shadows the name, qualified or not, so the
+    # CREATE fails when the temporary table has no key on those columns.
+    cur.execute("create table table1 (x int primary key)")
+    cur.execute("create temporary table table1 (x int)")
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(f"create table table2 ({constraint})")
+    assert "001456 (42601): SQL compilation error:\nprimary or unique key does not exist" in str(excinfo.value)
 
 
 @pytest.mark.parametrize(

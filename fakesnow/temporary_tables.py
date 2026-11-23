@@ -70,7 +70,9 @@ class TemporaryTables:
             # COPY resolves its target by its Snowflake name for table stages and load history.
             if isinstance(parent, exp.Copy):
                 return expression
-            # Foreign keys left in a CREATE are a permanent table's, which reference permanent tables.
+            # Foreign keys left in a CREATE are a permanent table's. Snowflake resolves one to a temporary table
+            # that shadows the referenced name, but DuckDB can't reference the temp catalog from a permanent table,
+            # so it keeps referencing the permanent table.
             if expression.find_ancestor(exp.Reference):
                 return expression
             name = expression.table if isinstance(expression, exp.Column) else expression.name
