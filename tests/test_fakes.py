@@ -8,6 +8,7 @@ import re
 import tempfile
 from decimal import Decimal
 
+import duckdb
 import pytest
 import pytz
 import snowflake.connector
@@ -649,6 +650,58 @@ def test_connection_runs_statements_after_a_table_case_error(cur: snowflake.conn
 
     cur.execute("select 1")
     assert cur.fetchall() == [(1,)]
+
+
+def _abort_transaction(
+    conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor
+) -> None:
+    # outside autocommit, a runtime error aborts the transaction, see #499
+    conn.autocommit(False)
+    cur.execute("begin")
+    with pytest.raises(ProgrammingError):
+        cur.execute("select cast('bad' as int)")
+
+
+def test_ddl_after_a_runtime_error_checks_table_case(
+    conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor
+):
+    cur.execute('create table "customers" (id int)')
+    _abort_transaction(conn, cur)
+
+    # DDL ends the aborted transaction, and only then can the names be checked
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("create table copied as select * from customers")
+
+    assert "002003 (42S02): SQL compilation error:\nObject 'CUSTOMERS' does not exist or not authorized." in str(
+        excinfo.value
+    )
+    cur.execute("select count(*) from information_schema.tables where table_name = 'COPIED'")
+    assert cur.fetchall() == [(0,)]
+
+
+def test_ddl_after_a_runtime_error_runs(
+    conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor
+):
+    cur.execute('create table "customers" (id int)')
+    cur.execute('insert into "customers" values (7)')
+    _abort_transaction(conn, cur)
+
+    cur.execute('create table copied as select * from "customers"')
+
+    assert cur.execute("select * from copied").fetchall() == [(7,)]
+
+
+def test_query_after_a_runtime_error_still_fails(
+    conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor
+):
+    cur.execute('create table "customers" (id int)')
+    _abort_transaction(conn, cur)
+
+    # only DDL ends the aborted transaction
+    with pytest.raises(duckdb.TransactionException, match="aborted"):
+        cur.execute('select * from "customers"')
+    with pytest.raises(duckdb.TransactionException, match="aborted"):
+        cur.execute("select * from customers")
 
 
 def test_quoted_lower_case_name_does_not_match_unquoted_table(cur: snowflake.connector.cursor.SnowflakeCursor):
