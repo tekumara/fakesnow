@@ -28,7 +28,7 @@ import fakesnow.macros as macros
 import fakesnow.transforms as transforms
 from fakesnow import logger
 from fakesnow.copy_into import copy_into
-from fakesnow.dialect import parse_one, syntax_error
+from fakesnow.dialect import FakesnowDuckDB, parse_one, syntax_error
 from fakesnow.params import MutableParams
 from fakesnow.rowtype import ColumnInfo, columns_as_rowtype, describe_as_result_metadata, rowtype_as_result_metadata
 from fakesnow.transforms import stage
@@ -447,7 +447,7 @@ class FakeSnowflakeCursor:
 
         cmd = expr.key_command(transformed)
 
-        sql = transformed.sql(dialect="duckdb")
+        sql = transformed.sql(dialect=FakesnowDuckDB)
 
         if not sql:
             raise NotImplementedError(transformed.sql(dialect="snowflake"))
