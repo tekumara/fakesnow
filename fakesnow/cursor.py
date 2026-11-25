@@ -1,6 +1,7 @@
 # ruff: noqa: SLF001
 from __future__ import annotations
 
+import importlib
 import os
 import re
 import sys
@@ -15,7 +16,6 @@ import duckdb
 import pyarrow  # needed by to_arrow_table()
 import snowflake.connector.errors
 from duckdb import DuckDBPyConnection, DuckDBPyRelation
-from snowflake.connector._internal.binding_converters import ClientSideBindingConverter
 from snowflake.connector.cursor import ResultMetadata
 from snowflake.connector.result_batch import ResultBatch
 from sqlglot import Expr, exp
@@ -41,6 +41,14 @@ if TYPE_CHECKING:
 
     # avoid circular import
     from fakesnow.conn import FakeSnowflakeConnection
+
+
+try:  # Connector 5.x
+    _Converter = importlib.import_module("snowflake.connector._internal.binding_converters").ClientSideBindingConverter
+except ModuleNotFoundError as e:  # Connector 4.x
+    if e.name not in {"snowflake.connector._internal", "snowflake.connector._internal.binding_converters"}:
+        raise
+    _Converter = importlib.import_module("snowflake.connector.converter").SnowflakeConverter
 
 
 SCHEMA_UNSET = "schema_unset"
@@ -124,7 +132,7 @@ class FakeSnowflakeCursor:
         self._arrow_table_fetch_index = None
         self._rowcount = None
         self._sfqid = None
-        self._converter = ClientSideBindingConverter()
+        self._converter = _Converter()
         self._prefetch_hook: Callable[[], None] | None = None
 
     def __enter__(self) -> Self:

@@ -2,8 +2,11 @@ import re
 from collections.abc import Iterable
 from typing import TypedDict
 
-from snowflake.connector._internal.type_codes import get_type_code
+# Connector 5 re-exports this for backwards compatibility, but does not mark it public for type checkers.
+from snowflake.connector.constants import FIELD_ID_TO_NAME  # pyright: ignore[reportPrivateImportUsage]
 from snowflake.connector.cursor import ResultMetadata
+
+_TYPE_CODE_BY_NAME = {name.lower(): code for code, name in FIELD_ID_TO_NAME.items()}
 
 
 class ColumnInfo(TypedDict):
@@ -94,7 +97,7 @@ def rowtype_as_result_metadata(rowtype: Iterable[ColumnInfo]) -> list[ResultMeta
     return [
         ResultMetadata(
             c["name"],
-            get_type_code(c["type"]),
+            _TYPE_CODE_BY_NAME[c["type"]],
             c["length"] if c["type"] == "text" else None,
             c["length"],
             c["precision"],
