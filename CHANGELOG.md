@@ -2,6 +2,48 @@
 
 # Changelog
 
+## [0.13.0](https://github.com/tekumara/fakesnow/compare/v0.12.1...v0.13.0) (2026-11-25)
+
+
+### ⚠ BREAKING CHANGES
+
+* add back support for snowflake-connector-python 4.x
+
+### Features
+
+* add back support for snowflake-connector-python 4.x ([133d5e4](https://github.com/tekumara/fakesnow/commit/133d5e40d7717bad2812184054a042bfea76209b))
+* support Snowflake SQL API v2 ([7bb09c4](https://github.com/tekumara/fakesnow/commit/7bb09c4cb33c4781003de3bbb6419d739489d341))
+* support snowflake-connector-python 5.x ([#451](https://github.com/tekumara/fakesnow/issues/451)) ([aa0f544](https://github.com/tekumara/fakesnow/commit/aa0f54478d82d2a892b02d942a662386b4cccd36))
+
+
+### Bug Fixes
+
+* a statement that fails to compile no longer aborts the transaction ([#470](https://github.com/tekumara/fakesnow/issues/470)) ([b20fe7b](https://github.com/tekumara/fakesnow/commit/b20fe7bfd6972db2b77f2d481f16c489771b9509))
+* align batched and pending query results ([1c09f60](https://github.com/tekumara/fakesnow/commit/1c09f60acb3a3100e842c3bf5791e5aa6b2abc07))
+* align in-process metadata with connector 5 ([4425ade](https://github.com/tekumara/fakesnow/commit/4425ade8b391d41171c839ecbdded1a6956911d5))
+* convert numeric and null server bindings ([168012c](https://github.com/tekumara/fakesnow/commit/168012c4caf364c7c0406f27d5de0765c59f56fe))
+* include request ID in statement status URLs ([ab4a900](https://github.com/tekumara/fakesnow/commit/ab4a9001c34212d750c0d48b154174cd6f124fdc))
+* parse casts after positional bindings ([3c06a6b](https://github.com/tekumara/fakesnow/commit/3c06a6bb989ac897b1faa0a4e37b2bbf20418b83))
+* preserve metadata for cached query results ([9ef315e](https://github.com/tekumara/fakesnow/commit/9ef315e5f7422b04234b10f6c07aa140bd431d65))
+* preserve staged filenames in connector 5 uploads ([ad662d0](https://github.com/tekumara/fakesnow/commit/ad662d0e00fbe723041808246937db0cdba497c5))
+* replay SQL errors on statement retries ([64b7ff5](https://github.com/tekumara/fakesnow/commit/64b7ff5f61cde702a5b9db4f5cb05fcea7fb35e4))
+* report missing positional bindings as compilation errors ([2c82294](https://github.com/tekumara/fakesnow/commit/2c82294aba646728ce1e31128e753c52cc448e4e))
+* return raw error message from server query errors ([b2efcd5](https://github.com/tekumara/fakesnow/commit/b2efcd59b94c43cbc4f674e1cd2b741ef74518ba)), closes [#507](https://github.com/tekumara/fakesnow/issues/507)
+* **server:** reject unsafe Go wildcard uploads ([f0caf67](https://github.com/tekumara/fakesnow/commit/f0caf6700573f8f49e48f94768350be548bd9ee0))
+* **server:** return a NULL timestamp as NULL, not 1970-01-01 ([#465](https://github.com/tekumara/fakesnow/issues/465)) ([6d0c04c](https://github.com/tekumara/fakesnow/commit/6d0c04c92611cdf61c6318b87b498a943d2cfa0f))
+* **server:** support Go and JDBC stage uploads ([b322b63](https://github.com/tekumara/fakesnow/commit/b322b635d1df5aa1e24cabda221248dd7d84a178))
+* support connector 5 in server mode ([3f4168f](https://github.com/tekumara/fakesnow/commit/3f4168fea53e3f1b6853396df1b01b0fa73e646d))
+
+
+### Performance Improvements
+
+* avoid duckdb 2 extra arrow copy ([#503](https://github.com/tekumara/fakesnow/issues/503)) ([1a376bd](https://github.com/tekumara/fakesnow/commit/1a376bd03b285ed13eb4edac1a97c9df75c8066a))
+
+
+### Chores
+
+* **deps-dev:** bump the pip group across 1 directory with 5 updates ([#506](https://github.com/tekumara/fakesnow/issues/506)) ([90505e0](https://github.com/tekumara/fakesnow/commit/90505e08ac7f0a6ff32b859e530d2296c7864f3a))
+
 ## [0.12.1](https://github.com/tekumara/fakesnow/compare/v0.12.0...v0.12.1) (2026-10-25)
 
 
