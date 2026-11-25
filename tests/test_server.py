@@ -293,8 +293,10 @@ def test_server_errors(scur: snowflake.connector.cursor.SnowflakeCursor) -> None
 
     assert excinfo.value.errno == 2003
     assert excinfo.value.sqlstate == "42S02"
-    assert excinfo.value.msg
-    assert "THIS_TABLE_DOES_NOT_EXIST" in excinfo.value.msg
+    assert excinfo.value.raw_msg
+    assert not excinfo.value.raw_msg.startswith("002003")
+    assert excinfo.value.msg == f"002003 (42S02): {excinfo.value.raw_msg}"
+    assert "THIS_TABLE_DOES_NOT_EXIST" in excinfo.value.raw_msg
 
 
 def test_server_fetch_pandas_all(scur: snowflake.connector.cursor.SnowflakeCursor) -> None:

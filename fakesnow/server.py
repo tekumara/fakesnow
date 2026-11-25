@@ -201,7 +201,7 @@ async def _query_request(request: Request, conn: FakeSnowflakeConnection) -> JSO
                     "sqlState": e.sqlstate,
                 },
                 "code": code,
-                "message": e.msg,
+                "message": e.raw_msg,
                 "success": False,
             }
         )
