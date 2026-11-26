@@ -41,6 +41,8 @@ jobs:
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
         with:
+          # Use the host Docker daemon instead of the default docker-container builder
+          # to avoid copying image tarballs on --load in test_docker.py.
           driver: docker
       - name: Cache virtualenv
         id: cache-venv
