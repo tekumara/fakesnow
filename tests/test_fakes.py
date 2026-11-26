@@ -8,6 +8,7 @@ import re
 import tempfile
 from decimal import Decimal
 
+import duckdb
 import pytest
 import pytz
 import snowflake.connector
@@ -628,6 +629,291 @@ def test_unquoted_identifiers_are_upper_cased(dcur: snowflake.connector.cursor.S
     assert dcur.fetchall() == [
         {"FIRST_NAME": "Jenny", "FNAME": "Jenny"},
     ]
+
+
+def test_unquoted_name_does_not_match_quoted_lower_case_table(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table "customers" (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from customers")
+
+    assert "002003 (42S02): SQL compilation error:\nObject 'CUSTOMERS' does not exist or not authorized." in str(
+        excinfo.value
+    )
+
+
+def test_connection_runs_statements_after_a_table_case_error(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table "customers" (id int)')
+
+    with pytest.raises(ProgrammingError):
+        cur.execute("select * from customers")
+
+    cur.execute("select 1")
+    assert cur.fetchall() == [(1,)]
+
+
+def _abort_transaction(
+    conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor
+) -> None:
+    # outside autocommit, a runtime error aborts the transaction, see #499
+    conn.autocommit(False)
+    cur.execute("begin")
+    with pytest.raises(ProgrammingError):
+        cur.execute("select cast('bad' as int)")
+
+
+def test_ddl_after_a_runtime_error_checks_table_case(
+    conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor
+):
+    cur.execute('create table "customers" (id int)')
+    _abort_transaction(conn, cur)
+
+    # DDL ends the aborted transaction, and only then can the names be checked
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("create table copied as select * from customers")
+
+    assert "002003 (42S02): SQL compilation error:\nObject 'CUSTOMERS' does not exist or not authorized." in str(
+        excinfo.value
+    )
+    cur.execute("select count(*) from information_schema.tables where table_name = 'COPIED'")
+    assert cur.fetchall() == [(0,)]
+
+
+def test_ddl_after_a_runtime_error_runs(
+    conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor
+):
+    cur.execute('create table "customers" (id int)')
+    cur.execute('insert into "customers" values (7)')
+    _abort_transaction(conn, cur)
+
+    cur.execute('create table copied as select * from "customers"')
+
+    assert cur.execute("select * from copied").fetchall() == [(7,)]
+
+
+def test_query_after_a_runtime_error_still_fails(
+    conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor
+):
+    cur.execute('create table "customers" (id int)')
+    _abort_transaction(conn, cur)
+
+    # only DDL ends the aborted transaction
+    with pytest.raises(duckdb.TransactionException, match="aborted"):
+        cur.execute('select * from "customers"')
+    with pytest.raises(duckdb.TransactionException, match="aborted"):
+        cur.execute("select * from customers")
+
+
+def test_quoted_lower_case_name_does_not_match_unquoted_table(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table customers (id int)")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute('select * from "customers"')
+
+    assert "002003 (42S02): SQL compilation error:\nObject '\"customers\"' does not exist or not authorized." in str(
+        excinfo.value
+    )
+
+
+def test_schema_qualified_table_name_is_reported_with_current_database(
+    cur: snowflake.connector.cursor.SnowflakeCursor,
+):
+    cur.execute('create table "customers" (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from schema1.customers")
+
+    assert (
+        "002003 (42S02): SQL compilation error:\nObject 'DB1.SCHEMA1.CUSTOMERS' does not exist or not authorized."
+        in str(excinfo.value)
+    )
+
+
+def test_quoted_name_matches_its_own_case(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table "customers" (id int)')
+    cur.execute('insert into "customers" values (1)')
+
+    cur.execute('select id from "customers"')
+    assert cur.fetchall() == [(1,)]
+
+
+def test_unquoted_schema_does_not_match_quoted_lower_case_schema(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create schema db1."jaffles"')
+    cur.execute('create table db1."jaffles".customers (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from db1.jaffles.customers")
+
+    assert "002003 (02000): SQL compilation error:\nSchema 'DB1.JAFFLES' does not exist or not authorized." in str(
+        excinfo.value
+    )
+
+
+def test_unquoted_schema_in_current_database_does_not_match_quoted_lower_case_schema(
+    cur: snowflake.connector.cursor.SnowflakeCursor,
+):
+    cur.execute('create schema db1."jaffles"')
+    cur.execute('create table db1."jaffles".customers (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from jaffles.customers")
+
+    assert "002003 (02000): SQL compilation error:\nSchema 'DB1.JAFFLES' does not exist or not authorized." in str(
+        excinfo.value
+    )
+
+
+def test_unquoted_database_does_not_match_quoted_lower_case_database(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create database "db_lc"')
+    cur.execute('create schema "db_lc".jaffles')
+    cur.execute('create table "db_lc".jaffles.customers (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from db_lc.jaffles.customers")
+
+    assert "002003 (02000): SQL compilation error:\nDatabase 'DB_LC' does not exist or not authorized." in str(
+        excinfo.value
+    )
+
+
+def test_joined_table_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table customers (id int)")
+    cur.execute('create table "orders" (customer_id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select * from customers c join orders o on o.customer_id = c.id")
+
+    assert "Object 'ORDERS' does not exist or not authorized." in str(excinfo.value)
+
+
+def test_insert_target_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table "customers" (id int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("insert into customers values (1)")
+
+    assert "002003 (42S02): SQL compilation error:\nTable 'CUSTOMERS' does not exist or not authorized." in str(
+        excinfo.value
+    )
+
+
+def test_use_schema_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create schema db1."jaffles"')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("use schema db1.jaffles")
+
+    assert "002043 (02000): SQL compilation error:\nObject does not exist, or operation cannot be performed." in str(
+        excinfo.value
+    )
+
+
+def test_unquoted_column_does_not_match_quoted_lower_case_column(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table customers ("id" int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select id from customers")
+
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (904, "42000")
+    assert "invalid identifier 'ID'" in str(excinfo.value)
+
+
+def test_ddl_after_a_runtime_error_checks_column_case(
+    conn: snowflake.connector.SnowflakeConnection, cur: snowflake.connector.cursor.SnowflakeCursor
+):
+    cur.execute('create table "foo" ("bar" int)')
+    _abort_transaction(conn, cur)
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute('create table copied as select bar from "foo"')
+
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (904, "42000")
+    assert "invalid identifier 'BAR'" in str(excinfo.value)
+
+
+def test_quoted_lower_case_column_does_not_match_unquoted_column(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table customers (id int)")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute('select "id" from customers')
+
+    assert (excinfo.value.errno, excinfo.value.sqlstate) == (904, "42000")
+    assert "invalid identifier '\"id\"'" in str(excinfo.value)
+
+
+def test_qualified_column_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table customers ("id" int)')
+    cur.execute("create table orders (customer_id int)")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("select o.customer_id from orders o join customers c on c.id = o.customer_id")
+
+    assert "invalid identifier 'C.ID'" in str(excinfo.value)
+
+
+def test_column_name_case_follows_a_cte(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table customers ("id" int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute('with c as (select "id" from customers) select id from c')
+
+    assert "invalid identifier 'ID'" in str(excinfo.value)
+
+
+def test_insert_column_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute("create table customers (id int)")
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute('insert into customers ("Id") values (1)')
+
+    assert "invalid identifier '\"Id\"'" in str(excinfo.value)
+
+
+def test_update_column_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table customers ("id" int)')
+
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute("update customers set id = 1")
+
+    assert "invalid identifier 'ID'" in str(excinfo.value)
+
+
+def test_column_names_match_their_own_case_and_aliases(cur: snowflake.connector.cursor.SnowflakeCursor):
+    cur.execute('create table customers ("id" int, name varchar)')
+    cur.execute("insert into customers (\"id\", NAME) values (1, 'a')")
+
+    cur.execute('select "id" as id, Name from customers order by ID')
+    assert cur.fetchall() == [(1, "a")]
+
+    cur.execute('with c as (select "id" as id from customers) select c.id from c where Id = 1')
+    assert cur.fetchall() == [(1,)]
+
+
+@pytest.mark.parametrize(
+    "sql",
+    [
+        'with c(id) as (select 1 as "id") select id from c',
+        'select id from (select 1 as "id") c(id)',
+        'with c("id") as (select 1 as id) select "id" from c',
+    ],
+)
+def test_column_list_names_the_columns(cur: snowflake.connector.cursor.SnowflakeCursor, sql: str):
+    cur.execute(sql)
+    assert cur.fetchall() == [(1,)]
+
+
+@pytest.mark.parametrize(
+    ("sql", "identifier"),
+    [
+        ('with c(id) as (select 1 as "id") select "id" from c', '"id"'),
+        ('with c("id") as (select 1 as id) select id from c', "ID"),
+    ],
+)
+def test_column_list_name_is_case_sensitive(cur: snowflake.connector.cursor.SnowflakeCursor, sql: str, identifier: str):
+    with pytest.raises(ProgrammingError) as excinfo:
+        cur.execute(sql)
+
+    assert f"invalid identifier '{identifier}'" in str(excinfo.value)
 
 
 def test_timestamp_ltz_with_precision(cur: snowflake.connector.cursor.SnowflakeCursor):
