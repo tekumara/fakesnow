@@ -3,6 +3,13 @@ name: release-docker
 on:
   release:
     types: [published]
+  pull_request:
+    paths:
+      - Dockerfile
+      - .dockerignore
+      - pyproject.toml
+      - integration_tests/test_docker.py
+      - .github/workflows/release-docker.yml
   workflow_dispatch:
 
 jobs:
@@ -17,6 +24,7 @@ jobs:
       checks: read
     steps:
       - name: Wait for checks to succeed
+        if: github.event_name != 'pull_request'
         uses: poseidon/wait-for-status-checks@v0.7.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
@@ -41,9 +49,12 @@ jobs:
           key: ${{ runner.os }}-py${{ steps.setup-python.outputs.python-version }}-venv-${{ hashFiles('pyproject.toml') }}
       - if: steps.cache-venv.outputs.cache-hit != 'true'
         run: make install
-      - name: Test Docker image
-        run: uv run pytest integration_tests/test_docker.py
+      - name: Test Docker images
+        run: |
+          FAKESNOW_DOCKER_PLATFORM=linux/amd64 uv run pytest integration_tests/test_docker.py
+          FAKESNOW_DOCKER_PLATFORM=linux/arm64 uv run pytest integration_tests/test_docker.py
       - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
         uses: docker/login-action@v4
         with:
           registry: ghcr.io
@@ -63,12 +74,13 @@ jobs:
         with:
           context: .
           platforms: linux/amd64,linux/arm64
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           sbom: true
           provenance: true
       - name: Generate artifact attestation
+        if: github.event_name != 'pull_request'
         uses: actions/attest@v4
         with:
           subject-name: ghcr.io/tekumara/fakesnow

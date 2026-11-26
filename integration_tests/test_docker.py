@@ -16,12 +16,12 @@ IMAGE_TAG = "fakesnow-test:latest"
 
 @pytest.fixture(scope="session")
 def docker_image() -> Iterator[str]:
-    # testcontainers-python uses docker-py, which does not expose BuildKit; use the Docker CLI instead.
-    subprocess.run(
-        ["docker", "build", "--tag", IMAGE_TAG, str(REPO_ROOT)],
-        check=True,
-        env={**os.environ, "DOCKER_BUILDKIT": "1"},
-    )
+    # Use buildx so CI warms the active BuildKit builder cache reused by the push step.
+    cmd = ["docker", "buildx", "build", "--load", "--provenance=false", "--tag", IMAGE_TAG]
+    if platform := os.environ.get("FAKESNOW_DOCKER_PLATFORM"):
+        cmd.extend(["--platform", platform])
+    cmd.append(str(REPO_ROOT))
+    subprocess.run(cmd, check=True)
     try:
         yield IMAGE_TAG
     finally:
@@ -30,11 +30,14 @@ def docker_image() -> Iterator[str]:
 
 @pytest.fixture(scope="session")
 def docker_fakesnow(docker_image: str) -> Iterator[DockerContainer]:
-    with (
+    container = (
         DockerContainer(docker_image)
         .with_exposed_ports(PORT)
-        .waiting_for(LogMessageWaitStrategy("Application startup complete").with_startup_timeout(30)) as container
-    ):
+        .waiting_for(LogMessageWaitStrategy("Application startup complete").with_startup_timeout(60))
+    )
+    if platform := os.environ.get("FAKESNOW_DOCKER_PLATFORM"):
+        container = container.with_kwargs(platform=platform)
+    with container:
         yield container
 
 
@@ -50,7 +53,7 @@ def docker_connect(docker_fakesnow: DockerContainer) -> snowflake.connector.Snow
         port=port,
         protocol="http",
         session_parameters={"CLIENT_OUT_OF_BAND_TELEMETRY_ENABLED": False},
-        network_timeout=5,
+        network_timeout=15,
     )
 
 
