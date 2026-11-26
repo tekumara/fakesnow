@@ -10,7 +10,7 @@ requires-python = ">=3.11"
 dependencies = [
     "duckdb~=2.0.0",
     "pyarrow",
-    "snowflake-connector-python",
+    "snowflake-connector-python>=5",
     "sqlglot~=30.22.0",
 ]
 
