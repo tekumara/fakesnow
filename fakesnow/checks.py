@@ -126,6 +126,40 @@ def _missing_qualifiers(node: exp.Table) -> tuple[bool, bool]:
     return no_database, no_schema
 
 
+def referenced_tables(expression: Expr) -> list[exp.Table]:
+    """Tables a statement reads or writes, which must already exist under the name given.
+
+    Query sources (including joins and CTE bodies) and the target of INSERT, UPDATE, DELETE and
+    MERGE. Not the object a CREATE, DROP, ALTER or SHOW names, nor table functions, stages, CTE
+    names or INFORMATION_SCHEMA.
+    """
+
+    tables = [
+        source
+        for scope in traverse_scope(expression)
+        for source in scope.sources.values()
+        if isinstance(source, exp.Table)
+    ]
+
+    if isinstance(expression, (exp.Insert, exp.Update, exp.Delete, exp.Merge)):
+        this = expression.args.get("this")
+        if isinstance(this, exp.Schema):
+            this = this.this
+        if isinstance(this, exp.Table):
+            tables.append(this)
+        if isinstance(using := expression.args.get("using"), exp.Table) and using.name.upper() not in _cte_names(
+            expression
+        ):
+            tables.append(using)
+
+    return [
+        t
+        for t in tables
+        if isinstance(t.this, exp.Identifier)
+        and not (isinstance(db := t.args.get("db"), exp.Identifier) and db.name.upper() == "INFORMATION_SCHEMA")
+    ]
+
+
 def equal(left: exp.Identifier, right: exp.Identifier) -> bool:
     # as per https://docs.snowflake.com/en/sql-reference/identifiers-syntax#label-identifier-casing
     lid = left.this if left.quoted else left.this.upper()
