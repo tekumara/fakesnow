@@ -518,6 +518,7 @@ def test_identifier() -> None:
 
 
 def test_indices_to_object() -> None:
+    # DuckDB reserves SEMI for SEMI JOIN, so SQLGlot quotes it as an identifier.
     assert (
         sqlglot.parse_one("SELECT myarray[0] FROM table1").transform(indices_to_json_extract).sql()
         == "SELECT JSON_EXTRACT(myarray, '$[0]') FROM table1"
@@ -525,7 +526,7 @@ def test_indices_to_object() -> None:
 
     assert (
         sqlglot.parse_one("SELECT name['k'] FROM semi").transform(indices_to_json_extract).sql(dialect="duckdb")
-        == "SELECT name -> '$.k' FROM semi"
+        == "SELECT name -> '$.k' FROM \"semi\""
     )
 
     # Keys with special characters (e.g. periods) must use direct key lookup instead of
@@ -534,14 +535,14 @@ def test_indices_to_object() -> None:
         sqlglot.parse_one("SELECT meta['key.with.period'] FROM semi")
         .transform(indices_to_json_extract)
         .sql(dialect="duckdb")
-        == "SELECT meta -> 'key.with.period' FROM semi"
+        == "SELECT meta -> 'key.with.period' FROM \"semi\""
     )
 
     assert (
         sqlglot.parse_one("SELECT meta['key.with.period']::varchar FROM semi", read="snowflake")
         .transform(indices_to_json_extract)
         .sql(dialect="duckdb")
-        == "SELECT CAST(meta ->> 'key.with.period' AS TEXT) FROM semi"
+        == "SELECT CAST(meta ->> 'key.with.period' AS TEXT) FROM \"semi\""
     )
 
 

@@ -31,12 +31,9 @@ class FakeSnow:
         # Connection setup can create shared databases and schemas. Serialize the
         # existence checks and creation so concurrent connections cannot race.
         self._connect_lock = threading.Lock()
-        # SQLGlot's DuckDB transpilation still emits legacy arrow lambdas; keep the
-        # DuckDB 2.0 compatibility setting enabled.
         self.duck_conn = duckdb.connect(
             database=":memory:",
             config={
-                "lambda_syntax": "ENABLE_SINGLE_ARROW",
                 # Snowflake keeps a transaction active when a statement in it fails, see
                 # https://docs.snowflake.com/en/sql-reference/transactions#failed-statements-within-a-transaction
                 # so like DuckDB 1.x don't abort the transaction on parser, binder or catalog errors.

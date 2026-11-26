@@ -115,7 +115,7 @@ def test_transform_merge_table_alias_target() -> None:
             WHERE t1.t1Key = t2.t2Key
             AND t2.merge_op = 2"""),
         strip("""
-            INSERT INTO table1 AS t1(t1Key, val, status)
+            INSERT INTO table1 AS t1 (t1Key, val, status)
             SELECT t2.t2Key, 'newVal', t2.newStatus
             FROM merge_candidates AS t2
             WHERE t2.merge_op = 3"""),

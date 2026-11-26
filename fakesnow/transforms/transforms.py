@@ -1512,29 +1512,22 @@ def alter_session(expression: Expr) -> Expr:
     ):
         items = alter_session.args.get("expressions") or []
 
-        if items and isinstance(items[0], exp.SetItem) and (ident := items[0].find(exp.Identifier)):
-            name = ident.this.upper()
+        if items and isinstance(items[0], exp.SetItem):
+            action = items[0].this
+            name_expr = action.this if isinstance(action, exp.EQ) else action
+            rhs = action.expression if isinstance(action, exp.EQ) else None
+            if isinstance(name_expr, (exp.Identifier, exp.Var)):
+                name = name_expr.name.upper()
 
-            if name == "QUOTED_IDENTIFIERS_IGNORE_CASE" and (
-                bool(alter_session.args.get("unset"))
-                or (
-                    isinstance(items[0].this, exp.EQ)
-                    and (rhs := items[0].this.args.get("expression"))
-                    and isinstance(rhs, exp.Boolean)
-                    and rhs.this is False
-                )
-            ):
-                return SUCCESS_NOP
+                if name == "QUOTED_IDENTIFIERS_IGNORE_CASE" and (
+                    bool(alter_session.args.get("unset")) or (isinstance(rhs, exp.Boolean) and rhs.this is False)
+                ):
+                    return SUCCESS_NOP
 
-            elif (
-                name == "AUTOCOMMIT"
-                and isinstance(items[0].this, exp.EQ)
-                and (rhs := items[0].this.args.get("expression"))
-                and isinstance(rhs, exp.Boolean)
-            ):
-                new = SUCCESS_NOP.copy()
-                new.args["set_autocommit"] = rhs.this
-                return new
+                elif name == "AUTOCOMMIT" and isinstance(rhs, exp.Boolean):
+                    new = SUCCESS_NOP.copy()
+                    new.args["set_autocommit"] = rhs.this
+                    return new
 
         raise NotImplementedError(expression.sql(dialect="snowflake"))
 
