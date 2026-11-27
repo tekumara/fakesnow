@@ -80,12 +80,30 @@ def test_same_named_temporary_tables_in_different_schemas(cur: snowflake.connect
 
     cur.execute(
         """
-        SELECT schema1.shared.origin AS o1, other_schema.shared.origin AS o2
-        FROM schema1.shared
-        JOIN other_schema.shared ON schema1.shared.id = other_schema.shared.id
+        SELECT a.origin AS o1, b.origin AS o2
+        FROM schema1.shared AS a
+        JOIN other_schema.shared AS b ON a.id = b.id
         """
     )
     assert cur.fetchall() == [("s1", "s2")]
+
+
+def test_unaliased_same_named_temporary_table_join_errors(cur: snowflake.connector.cursor.SnowflakeCursor) -> None:
+    cur.execute("CREATE SCHEMA other_schema")
+    cur.execute("USE SCHEMA schema1")
+    cur.execute("CREATE TEMP TABLE schema1.shared (id INT, origin VARCHAR)")
+    cur.execute("CREATE TEMP TABLE other_schema.shared (id INT, origin VARCHAR)")
+
+    with pytest.raises(snowflake.connector.errors.ProgrammingError) as excinfo:
+        cur.execute(
+            """
+            SELECT schema1.shared.origin AS o1, other_schema.shared.origin AS o2
+            FROM schema1.shared
+            JOIN other_schema.shared ON schema1.shared.id = other_schema.shared.id
+            """
+        )
+    assert excinfo.value.errno == 2027
+    assert excinfo.value.sqlstate == "42601"
 
 
 def test_temporary_table_shadows_permanent_and_drop_reveals_it(

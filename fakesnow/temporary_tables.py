@@ -801,13 +801,6 @@ class TemporaryTableCatalog:
         # SET/WHERE column qualifiers.
         col_root = scope.expression if isinstance(scope.expression, exp.Select) else statement
 
-        # Track unaliased logical table names in this scope to avoid duplicate implicit aliases
-        # when joining same-named tables from different schemas (e.g. s1.t JOIN s2.t).
-        unaliased_counts: dict[str, int] = {}
-        for table in tables:
-            if not table.args.get("alias") and (name := _ident_name(table.this)):
-                unaliased_counts[name] = unaliased_counts.get(name, 0) + 1
-
         for table in tables:
             skip_ids.add(id(table))
             if self._initialized and _is_info_schema_overlay_target(table):
@@ -818,18 +811,10 @@ class TemporaryTableCatalog:
             orig_db = _ident_name(table.args.get("db"))
             temp, public_perm = self._resolve_table(table, current_database, current_schema, live)
             if temp is not None:
-                explicit_alias = table.args.get("alias")
-                if explicit_alias is not None:
-                    alias = explicit_alias
-                    bound_alias = _ident_name(explicit_alias.this) or temp.table
-                elif unaliased_counts.get(temp.table, 0) == 1:
-                    # Hygienic implicit alias preservation: keeps unqualified t.col valid in DuckDB.
-                    alias = exp.TableAlias(this=exp.Identifier(this=temp.table, quoted=True))
-                    bound_alias = temp.table
-                else:
-                    # Collision within scope (e.g. s1.t JOIN s2.t): bind under physical name.
-                    alias = None
-                    bound_alias = temp.physical_name
+                # Hygienic implicit alias preservation: keeps unqualified t.col valid in DuckDB
+                # and matches Snowflake's duplicate-alias rejection for unaliased same-name joins.
+                alias = table.args.get("alias") or exp.TableAlias(this=exp.Identifier(this=temp.table, quoted=True))
+                bound_alias = _ident_name(alias.this) or temp.table
                 _rewrite_to_temp(table, temp.physical_name, alias=alias)
                 _strip_qualified_column_prefixes(col_root, orig_catalog, orig_db, temp.table, bound_alias)
             elif public_perm is not None:

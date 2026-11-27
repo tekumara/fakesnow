@@ -566,8 +566,12 @@ class FakeSnowflakeCursor:
                     result, columns = _materialize_relation(relation)
         except duckdb.BinderException as e:
             msg = e.args[0]
-            duplicate_key = "Duplicate struct entry name" in msg or "Duplicate named argument" in msg
-            errno, sqlstate = (100103, "22000") if duplicate_key else (2043, "02000")
+            if "Duplicate struct entry name" in msg or "Duplicate named argument" in msg:
+                errno, sqlstate = 100103, "22000"
+            elif "duplicate alias" in msg:
+                errno, sqlstate = 2027, "42601"
+            else:
+                errno, sqlstate = 2043, "02000"
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=errno, sqlstate=sqlstate) from e
         except duckdb.ResourceInUseException as e:
             # DuckDB reports a duplicate CREATE DATABASE as an attach conflict.
