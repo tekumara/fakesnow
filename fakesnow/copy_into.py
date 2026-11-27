@@ -6,7 +6,7 @@ from collections.abc import Sequence
 from dataclasses import dataclass, field
 from enum import Enum
 from glob import escape as glob_escape
-from typing import Any, NamedTuple, Protocol, cast
+from typing import TYPE_CHECKING, Any, NamedTuple, Protocol, cast
 from urllib.parse import urlparse, urlunparse
 
 import duckdb
@@ -19,6 +19,9 @@ from fakesnow import logger
 from fakesnow.params import MutableParams, pop_qmark_param
 from fakesnow.transforms.file_format import lookup_file_format
 from fakesnow.transforms.options import parse_options
+
+if TYPE_CHECKING:
+    from fakesnow.temporary_tables import TempTable
 
 Params = Sequence[Any] | dict[Any, Any]
 
@@ -48,6 +51,7 @@ def copy_into(
     expr: exp.Copy,
     table_stages: stage.TableStages,
     params: MutableParams | None = None,
+    target_temp: TempTable | None = None,
 ) -> str:
     cparams = _params(
         expr, params, duck_conn=duck_conn, current_database=current_database, current_schema=current_schema
@@ -56,7 +60,15 @@ def copy_into(
     table = _extract_table(expr.this)
     from_source = _from_source(expr)
     source = (
-        stage_url_from_var(from_source[1:], duck_conn, current_database, current_schema, table_stages, table)
+        stage_url_from_var(
+            from_source[1:],
+            duck_conn,
+            current_database,
+            current_schema,
+            table_stages,
+            table,
+            target_temp=target_temp,
+        )
         if from_source.startswith("@")
         else from_source
     )
@@ -64,20 +76,22 @@ def copy_into(
     if not urls:
         return "SELECT 'Copy executed with 0 files processed.' AS status"
 
-    schema = table.db or current_schema
-    assert schema
+    logical_database = target_temp.database if target_temp else (table.catalog or current_database)
+    logical_schema = target_temp.schema if target_temp else (table.db or current_schema)
+    logical_table = target_temp.table if target_temp else table.name
+    assert logical_schema
 
     parquet_info = None
     if isinstance(cparams.file_format, ReadParquet):
         from_ = expr.args["files"][0]
         if not isinstance(from_, exp.Subquery):
             if cparams.match_by_column_name != MatchByColumnName.NONE:
-                target_cols = _get_table_columns(table, duck_conn, current_database, schema)
+                target_cols = _get_table_columns(table, duck_conn, current_database, logical_schema)
                 parquet_columns = {url: _get_parquet_column_names(url, duck_conn) for url in urls}
                 parquet_info = ParquetLoadInfo(parquet_columns, target_columns=target_cols)
             else:
                 # Parquet without MATCH_BY_COLUMN_NAME or subquery requires a single VARIANT column
-                columns = _describe_table(table, duck_conn, current_database, schema)
+                columns = _describe_table(table, duck_conn, current_database, logical_schema)
                 is_single_variant = len(columns) == 1 and columns[0][1] == "JSON"
                 if not is_single_variant:
                     raise snowflake.connector.errors.ProgrammingError(
@@ -92,15 +106,19 @@ def copy_into(
 
     histories: list[LoadHistoryRecord] = []
     load_time = datetime.datetime.now(datetime.UTC).isoformat()
+    load_history_table = (
+        f"{logical_database}._fs_information_schema._fs_load_history"
+        if logical_database
+        else "_fs_information_schema._fs_load_history"
+    )
     try:
         check_sql = (
-            "SELECT 1 FROM _fs_information_schema._fs_load_history "
-            "WHERE FILE_NAME = ? AND TABLE_NAME = ? AND SCHEMA_NAME = ? LIMIT 1"
+            f"SELECT 1 FROM {load_history_table} WHERE FILE_NAME = ? AND TABLE_NAME = ? AND SCHEMA_NAME = ? LIMIT 1"
         )
 
         for i, url in zip(inserts, urls, strict=False):
             # Check if file has been loaded into this table before
-            if duck_conn.execute(check_sql, [url, table.name, schema]).fetchall() and not cparams.force:
+            if duck_conn.execute(check_sql, [url, logical_table, logical_schema]).fetchall() and not cparams.force:
                 affected_count = 0
                 status = "LOAD_SKIPPED"
                 error_limit = None
@@ -121,9 +139,9 @@ def copy_into(
                     os.remove(path)
 
             history = LoadHistoryRecord(
-                schema_name=schema,
+                schema_name=logical_schema,
                 file_name=url,
-                table_name=table.name,
+                table_name=logical_table,
                 last_load_time=load_time,
                 status=status,
                 row_count=affected_count,
@@ -139,7 +157,7 @@ def copy_into(
 
         if insert_histories := [h for h in histories if h.status != "LOAD_SKIPPED"]:
             duck_conn.executemany(
-                "INSERT INTO _fs_information_schema._fs_load_history VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                f"INSERT INTO {load_history_table} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
                 [tuple(history) for history in insert_histories],
             )
 
@@ -330,6 +348,8 @@ def stage_url_from_var(
     current_schema: str | None,
     table_stages: stage.TableStages,
     target_table: exp.Table,
+    *,
+    target_temp: TempTable | None = None,
 ) -> str:
     # a stage reference can include a path suffix, eg: @stage1/dir/file.csv.gz
     stage_var, _, path = var.partition("/")
@@ -337,7 +357,11 @@ def stage_url_from_var(
     fqname = f"{database_name}.{schema_name}.{name}"
 
     if stage.is_table_stage(name):
-        target = (target_table.catalog or current_database, target_table.db or current_schema, target_table.name)
+        target = (
+            target_temp.logical_name
+            if target_temp is not None
+            else (target_table.catalog or current_database, target_table.db or current_schema, target_table.name)
+        )
         url = stage.internal_dir(table_stages.resolve_for_copy(database_name, schema_name, name, target))
     else:
         rows = duck_conn.execute(

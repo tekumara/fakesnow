@@ -31,6 +31,7 @@ from fakesnow.copy_into import copy_into
 from fakesnow.dialect import parse_one, syntax_error
 from fakesnow.params import MutableParams
 from fakesnow.rowtype import ColumnInfo, columns_as_rowtype, describe_as_result_metadata, rowtype_as_result_metadata
+from fakesnow.temporary_tables import TEMP_CATALOG, TEMP_INFO_COLUMNS_VIEW, TEMP_SCHEMA
 from fakesnow.transforms import stage
 from fakesnow.transforms.merge import operations as merge_operations
 
@@ -427,7 +428,6 @@ class FakeSnowflakeCursor:
                 ),
                 copy=False,
             )
-            .transform(lambda e: transforms.create_table_as(e, self._duck_conn), copy=False)
         )
 
     def _transform_explode(self, expression: Expr) -> list[Expr]:
@@ -462,11 +462,6 @@ class FakeSnowflakeCursor:
 
         cmd = expr.key_command(transformed)
 
-        sql = transformed.sql(dialect="duckdb")
-
-        if not sql:
-            raise NotImplementedError(transformed.sql(dialect="snowflake"))
-
         if (
             cmd == "CREATE"
             and isinstance(transformed, exp.Command)
@@ -494,40 +489,51 @@ class FakeSnowflakeCursor:
             self._store_result(CachedQueryResult(source.table, source.table.num_rows, source.columns, transformed))
             return
 
+        # Snowflake implicitly commits any active transaction before executing DDL statements,
+        # whether the transaction started implicitly (autocommit=False) or via explicit BEGIN.
+        # Commit before temporary-table preparation so catalog lookups do not run inside an
+        # aborted transaction and temp catalog DDL is never rolled back.
+        # see https://docs.snowflake.com/en/sql-reference/transactions#ddl
+        # and https://docs.snowflake.com/en/sql-reference/sql-ddl-summary
+        is_ddl = (
+            (
+                isinstance(transformed, (exp.Alter, exp.Comment, exp.Create, exp.Drop, exp.TruncateTable))
+                and not transformed.args.get("merge_internal")
+            )
+            or bool(transformed.args.get("create_stage_name"))
+            or bool(transformed.args.get("table_comment"))
+            or bool(transformed.args.get("col_comments"))
+        )
+        if is_ddl and (self._conn._in_transaction or not self._conn._autocommit):
+            self._duck_conn.commit()
+            self._conn._in_transaction = False
+
+        plan = self._conn.temp_tables.prepare(transformed, self._conn.database, self._conn.schema)
+        transformed = plan.expression.transform(lambda e: transforms.create_table_as(e, self._duck_conn), copy=False)
+        cmd = expr.key_command(transformed)
+
+        sql = transformed.sql(dialect="duckdb")
+
+        if not sql:
+            raise NotImplementedError(transformed.sql(dialect="snowflake"))
+
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
             sql = f"SELECT setseed({seed}); {sql}"
 
         result_sql = None
 
-        if not self._conn._autocommit:
-            # Snowflake implicitly commits the active transaction before executing DDL statements
-            # This will also cause the DDL statement to run in its own transaction and commit
-            # see https://docs.snowflake.com/en/sql-reference/transactions#ddl
-            # and https://docs.snowflake.com/en/sql-reference/sql-ddl-summary
-            # TODO: include DESCRIBE, SHOW, USE in this list of DDL statements
-            if isinstance(transformed, (exp.Alter, exp.Comment, exp.Create, exp.Drop)) or transformed.args.get(
-                "create_stage_name"
-            ):
-                self._duck_conn.commit()
-                self._conn._in_transaction = False
-
+        if (
+            not self._conn._autocommit
             # Start implicit transaction for DML (INSERT, UPDATE, DELETE, MERGE, COPY)
             # see https://docs.snowflake.com/en/sql-reference/transactions#autocommit
             # don't treat CREATE STAGE or CREATE FILE FORMAT as DML statements (they're transformed to INSERTs)
-            elif (
-                isinstance(transformed, (exp.Insert, exp.Update, exp.Delete, exp.Merge, exp.Copy))
-                and not transformed.args.get("create_stage_name")
-                and not transformed.args.get("create_file_format_name")
-                and not self._conn._in_transaction
-            ):
-                self._duck_conn.begin()
-                self._conn._in_transaction = True
-
-            # In transaction book keeping
-            elif isinstance(transformed, exp.Transaction):
-                self._conn._in_transaction = True
-            elif isinstance(transformed, (exp.Commit, exp.Rollback)):
-                self._conn._in_transaction = False
+            and isinstance(transformed, (exp.Insert, exp.Update, exp.Delete, exp.Merge, exp.Copy))
+            and not transformed.args.get("create_stage_name")
+            and not transformed.args.get("create_file_format_name")
+            and not self._conn._in_transaction
+        ):
+            self._duck_conn.begin()
+            self._conn._in_transaction = True
 
         affected_count = None
         result: pyarrow.Table | None = None
@@ -541,6 +547,7 @@ class FakeSnowflakeCursor:
                     transformed,
                     self._conn.table_stages,
                     params,
+                    target_temp=plan.copy_target_temp,
                 )
                 relation = self._duck_conn.sql(sql)
                 assert relation is not None
@@ -587,7 +594,12 @@ class FakeSnowflakeCursor:
             msg = cast(str, e.args[0]).split("\n")[0]
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100035, sqlstate="22007") from e
 
-        self._conn.table_stages.record_temporary_table(transformed, self._conn.database, self._conn.schema)
+        if isinstance(transformed, exp.Transaction):
+            self._conn._in_transaction = True
+        elif isinstance(transformed, (exp.Commit, exp.Rollback)):
+            self._conn._in_transaction = False
+
+        self._conn.temp_tables.commit(plan, in_transaction=self._conn._in_transaction)
 
         if set_database := transformed.args.get("set_database"):
             self._conn.database = set_database
@@ -656,12 +668,21 @@ class FakeSnowflakeCursor:
         elif cmd in {"DESCRIBE TABLE", "DESCRIBE VIEW"}:
             # DESCRIBE TABLE/VIEW has already been run above to detect and error if the table exists
             # We now rerun DESCRIBE TABLE/VIEW but transformed with columns to match Snowflake
-            result_sql = transformed.transform(
-                lambda e: transforms.describe_table(e, self._conn.database, self._conn.schema)
-            ).sql(dialect="duckdb")
+            if plan.describe_temp is not None:
+                t = plan.describe_temp
+                result_sql = transforms.describe_table_sql(
+                    t.database,
+                    t.schema,
+                    t.table,
+                    source=f"{TEMP_CATALOG}.{TEMP_SCHEMA}.{TEMP_INFO_COLUMNS_VIEW}",
+                )
+            else:
+                result_sql = transformed.transform(
+                    lambda e: transforms.describe_table(e, self._conn.database, self._conn.schema)
+                ).sql(dialect="duckdb")
 
         elif eid := transformed.find(exp.Identifier, bfs=False):
-            ident = eid.name
+            ident = plan.logical_result_name or eid.name
             if cmd == "CREATE SCHEMA" and ident:
                 table = transformed.find(exp.Table)
                 assert table and table.db
@@ -682,7 +703,14 @@ class FakeSnowflakeCursor:
                 result_sql = SQL_CREATED_TABLE.substitute(name=ident)
 
                 # a newly created table object has no load history
-                if table := transformed.find(exp.Table):
+                if plan.created_logical_target is not None:
+                    catalog, schema, table_name = plan.created_logical_target
+                    self._duck_conn.execute(
+                        f"DELETE FROM {catalog}._fs_information_schema._fs_load_history "
+                        "WHERE SCHEMA_NAME = ? AND TABLE_NAME = ?",
+                        [schema, table_name],
+                    )
+                elif table := transformed.find(exp.Table):
                     catalog = table.catalog or self._conn.database
                     schema = table.db or self._conn.schema
                     assert catalog and schema

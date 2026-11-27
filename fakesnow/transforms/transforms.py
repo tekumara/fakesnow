@@ -167,6 +167,9 @@ def create_clone(expression: Expr) -> Expr:
         return exp.Create(
             this=expression.this,
             kind="TABLE",
+            replace=expression.args.get("replace"),
+            exists=expression.args.get("exists"),
+            properties=expression.args.get("properties"),
             expression=exp.Select(
                 expressions=[
                     exp.Star(),
@@ -242,11 +245,27 @@ SELECT
     NULL::VARCHAR AS "comment",
     NULL::VARCHAR AS "policy name",
     NULL::JSON AS "privacy domain",
-FROM _fs_information_schema._fs_columns
-WHERE table_catalog = '${catalog}' AND table_schema = '${schema}' AND table_name = '${table}'
+FROM ${source}
+WHERE table_catalog = ${catalog} AND table_schema = ${schema} AND table_name = ${table}
 ORDER BY ordinal_position
 """
 )
+
+
+def describe_table_sql(
+    catalog: str | None,
+    schema: str | None,
+    table: str,
+    *,
+    source: str = "_fs_information_schema._fs_columns",
+) -> str:
+    return SQL_DESCRIBE_TABLE.substitute(
+        source=source,
+        catalog=exp.Literal.string(catalog or "").sql(dialect="duckdb"),
+        schema=exp.Literal.string(schema or "").sql(dialect="duckdb"),
+        table=exp.Literal.string(table).sql(dialect="duckdb"),
+    )
+
 
 SQL_DESCRIBE_INFO_SCHEMA = Template(
     """
@@ -290,7 +309,7 @@ def describe_table(expression: Expr, current_database: str | None = None, curren
             return sqlglot.parse_one(SQL_DESCRIBE_INFO_SCHEMA.substitute(view=f"{schema}.{table.name}"), read="duckdb")
 
         return sqlglot.parse_one(
-            SQL_DESCRIBE_TABLE.substitute(catalog=catalog, schema=schema, table=table.name),
+            describe_table_sql(catalog, schema, table.name),
             read="duckdb",
         )
 

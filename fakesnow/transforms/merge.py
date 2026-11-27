@@ -101,7 +101,9 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> Expr:
     WHERE MERGE_OP IS NOT NULL
     """
 
-    return sqlglot.parse_one(sql)
+    stmt = sqlglot.parse_one(sql)
+    stmt.args["merge_internal"] = True
+    return stmt
 
 
 def _mutations(merge_expr: exp.Merge) -> list[Expr]:
@@ -132,7 +134,9 @@ def _mutations(merge_expr: exp.Merge) -> list[Expr]:
                     WHERE {join_expr}
                     AND {source_tbl}.merge_op = {w_idx}
                 """
-                statements.append(sqlglot.parse_one(delete_sql))
+                stmt = sqlglot.parse_one(delete_sql)
+                stmt.args["merge_internal"] = True
+                statements.append(stmt)
             elif isinstance(then, exp.Update):
                 # when the update statement has a table alias, duckdb doesn't support the alias in the set
                 # column name, so we use e.this.this to get just the column name without its table prefix
@@ -146,7 +150,9 @@ def _mutations(merge_expr: exp.Merge) -> list[Expr]:
                     WHERE {join_expr}
                     AND {source_tbl}.merge_op = {w_idx}
                 """
-                statements.append(sqlglot.parse_one(update_sql))
+                stmt = sqlglot.parse_one(update_sql)
+                stmt.args["merge_internal"] = True
+                statements.append(stmt)
             else:
                 raise AssertionError(f"Expected 'Update' or 'Delete', got {then}")
         else:
@@ -160,7 +166,9 @@ def _mutations(merge_expr: exp.Merge) -> list[Expr]:
                 FROM merge_candidates AS {source_tbl}
                 WHERE {source_tbl}.merge_op = {w_idx}
             """
-            statements.append(sqlglot.parse_one(insert_sql))
+            stmt = sqlglot.parse_one(insert_sql)
+            stmt.args["merge_internal"] = True
+            statements.append(stmt)
 
     return statements
 
@@ -226,4 +234,5 @@ def _counts(merge_expr: exp.Merge) -> Expr:
     # marks the statement that produces the merge result, so the cursor can report the rows
     # affected across all the operations rather than the single row of counts
     counts.set("merge_counts", True)
+    counts.args["merge_internal"] = True
     return counts
