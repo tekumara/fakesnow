@@ -31,7 +31,6 @@ from fakesnow.copy_into import copy_into
 from fakesnow.dialect import parse_one, syntax_error
 from fakesnow.params import MutableParams
 from fakesnow.rowtype import ColumnInfo, columns_as_rowtype, describe_as_result_metadata, rowtype_as_result_metadata
-from fakesnow.temporary_tables import TEMP_CATALOG, TEMP_INFO_COLUMNS_VIEW, TEMP_SCHEMA
 from fakesnow.transforms import stage
 from fakesnow.transforms.merge import operations as merge_operations
 
@@ -508,8 +507,8 @@ class FakeSnowflakeCursor:
             self._duck_conn.commit()
             self._conn._in_transaction = False
 
-        plan = self._conn.temp_tables.prepare(transformed, self._conn.database, self._conn.schema)
-        transformed = plan.expression.transform(lambda e: transforms.create_table_as(e, self._duck_conn), copy=False)
+        bound = self._conn.temp_tables.prepare(transformed, self._conn.database, self._conn.schema)
+        transformed = bound.expression.transform(lambda e: transforms.create_table_as(e, self._duck_conn), copy=False)
         cmd = expr.key_command(transformed)
 
         sql = transformed.sql(dialect="duckdb")
@@ -540,14 +539,15 @@ class FakeSnowflakeCursor:
         columns: tuple[tuple[str, str], ...] | None = None
         try:
             if isinstance(transformed, exp.Copy):
+                assert bound.target is not None
                 sql = copy_into(
                     self._duck_conn,
                     self._conn.database,
                     self._conn.schema,
                     transformed,
                     self._conn.table_stages,
+                    bound.target,
                     params,
-                    target_temp=plan.copy_target_temp,
                 )
                 relation = self._duck_conn.sql(sql)
                 assert relation is not None
@@ -599,7 +599,7 @@ class FakeSnowflakeCursor:
         elif isinstance(transformed, (exp.Commit, exp.Rollback)):
             self._conn._in_transaction = False
 
-        self._conn.temp_tables.commit(plan, in_transaction=self._conn._in_transaction)
+        bound.commit(in_transaction=self._conn._in_transaction)
 
         if set_database := transformed.args.get("set_database"):
             self._conn.database = set_database
@@ -668,21 +668,10 @@ class FakeSnowflakeCursor:
         elif cmd in {"DESCRIBE TABLE", "DESCRIBE VIEW"}:
             # DESCRIBE TABLE/VIEW has already been run above to detect and error if the table exists
             # We now rerun DESCRIBE TABLE/VIEW but transformed with columns to match Snowflake
-            if plan.describe_temp is not None:
-                t = plan.describe_temp
-                result_sql = transforms.describe_table_sql(
-                    t.database,
-                    t.schema,
-                    t.table,
-                    source=f"{TEMP_CATALOG}.{TEMP_SCHEMA}.{TEMP_INFO_COLUMNS_VIEW}",
-                )
-            else:
-                result_sql = transformed.transform(
-                    lambda e: transforms.describe_table(e, self._conn.database, self._conn.schema)
-                ).sql(dialect="duckdb")
+            result_sql = self._conn.temp_tables.describe_sql(bound, self._conn.database, self._conn.schema)
 
         elif eid := transformed.find(exp.Identifier, bfs=False):
-            ident = plan.logical_result_name or eid.name
+            ident = bound.target.table if bound.target is not None else eid.name
             if cmd == "CREATE SCHEMA" and ident:
                 table = transformed.find(exp.Table)
                 assert table and table.db
@@ -703,21 +692,11 @@ class FakeSnowflakeCursor:
                 result_sql = SQL_CREATED_TABLE.substitute(name=ident)
 
                 # a newly created table object has no load history
-                if plan.created_logical_target is not None:
-                    catalog, schema, table_name = plan.created_logical_target
+                if bound.target is not None and not transformed.args.get("exists"):
                     self._duck_conn.execute(
-                        f"DELETE FROM {catalog}._fs_information_schema._fs_load_history "
+                        f"DELETE FROM {bound.target.database}._fs_information_schema._fs_load_history "
                         "WHERE SCHEMA_NAME = ? AND TABLE_NAME = ?",
-                        [schema, table_name],
-                    )
-                elif table := transformed.find(exp.Table):
-                    catalog = table.catalog or self._conn.database
-                    schema = table.db or self._conn.schema
-                    assert catalog and schema
-                    self._duck_conn.execute(
-                        f"DELETE FROM {catalog}._fs_information_schema._fs_load_history "
-                        "WHERE SCHEMA_NAME = ? AND TABLE_NAME = ?",
-                        [schema, table.name],
+                        [bound.target.schema, bound.target.table],
                     )
 
             elif cmd.startswith("ALTER") and ident:

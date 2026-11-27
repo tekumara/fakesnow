@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 
 import duckdb
@@ -10,7 +11,7 @@ from duckdb import DuckDBPyConnection
 from sqlglot import Expr, exp
 from sqlglot.optimizer.scope import Scope, traverse_scope
 
-from fakesnow.transforms.transforms import SUCCESS_NOP
+from fakesnow.transforms.transforms import SUCCESS_NOP, describe_table, describe_table_sql
 
 TEMP_CATALOG = "temp"
 TEMP_SCHEMA = "main"
@@ -156,6 +157,32 @@ class TempTable:
 
 
 @dataclass(frozen=True)
+class ResolvedTable:
+    """Uniform logical identity for a statement's target table (permanent or temporary)."""
+
+    database: str
+    schema: str
+    table: str
+    is_temporary: bool
+
+    @property
+    def logical_name(self) -> LogicalName:
+        return (self.database, self.schema, self.table)
+
+
+@dataclass(frozen=True)
+class BoundStatement:
+    """Result of binding a normalized statement against the session catalog."""
+
+    expression: Expr
+    target: ResolvedTable | None
+    _commit: Callable[[bool], None]
+
+    def commit(self, *, in_transaction: bool) -> None:
+        self._commit(in_transaction)
+
+
+@dataclass(frozen=True)
 class _PendingCreate:
     table: TempTable
     replaced: TempTable | None = None
@@ -174,18 +201,13 @@ class _PendingRename:
 
 
 @dataclass
-class PreparedStatement:
-    expression: Expr
+class _PendingEffects:
     create_temp: _PendingCreate | None = None
     drop_temps: list[TempTable] = field(default_factory=list)
     rename_temp: _PendingRename | None = None
     altered_temp: TempTable | None = None
     altered_text_lengths: list[tuple[str, int]] = field(default_factory=list)
-    describe_temp: TempTable | None = None
     comment_temp: tuple[TempTable, str] | None = None
-    copy_target_temp: TempTable | None = None
-    logical_result_name: str | None = None
-    created_logical_target: LogicalName | None = None
 
 
 class TemporaryTableCatalog:
@@ -336,14 +358,24 @@ class TemporaryTableCatalog:
         expression: Expr,
         current_database: str | None,
         current_schema: str | None,
-    ) -> PreparedStatement:
-        """Rewrite a normalized Snowflake AST against the session's temporary-table overlay."""
-        plan = PreparedStatement(expression=expression)
+    ) -> BoundStatement:
+        """Bind a normalized Snowflake AST against the session's temporary-table overlay."""
+        effects = _PendingEffects()
+        resolved_target: ResolvedTable | None = None
+        bound_expr = expression
+
+        def make_bound(expr_out: Expr, target: ResolvedTable | None) -> BoundStatement:
+            return BoundStatement(
+                expression=expr_out,
+                target=target,
+                _commit=lambda in_tx: self._apply_effects(effects, in_transaction=in_tx),
+            )
 
         # Handle table_comment already extracted by extract_comment_on_table for
         # COMMENT ON TABLE / ALTER TABLE SET COMMENT (transformed into SUCCESS_NOP).
         if (
-            not isinstance(expression, exp.Create)
+            self._initialized
+            and not isinstance(expression, exp.Create)
             and (table_comment := expression.args.get("table_comment"))
             and isinstance(table_comment, tuple)
             and len(table_comment) == 2
@@ -353,53 +385,73 @@ class TemporaryTableCatalog:
                 live = {t.logical_name: t for t in self._live_catalog_rows()}
                 temp, _ = self._resolve_table(target_table, current_database, current_schema, live)
                 if temp is not None:
-                    plan.comment_temp = (temp, comment)
+                    effects.comment_temp = (temp, comment)
                     expression.args.pop("table_comment", None)
-                    return plan
+                    return make_bound(
+                        expression,
+                        ResolvedTable(temp.database, temp.schema, temp.table, is_temporary=True),
+                    )
 
-        is_create_temp = _is_create_temp_table(expression)
-        if not self._initialized and not is_create_temp:
-            # Fast path when no temp tables exist in this session; still honor $public
-            # fallback for unqualified query/DML references if PUBLIC exists.
-            if current_database and current_schema and current_schema != "PUBLIC":
-                self._rewrite_references(expression, current_database, current_schema, {}, set())
-            return plan
-
-        live_rows = self._live_catalog_rows()
-        live = {t.logical_name: t for t in live_rows}
+        live = {t.logical_name: t for t in self._live_catalog_rows()}
         skip_ids: set[int] = set()
 
         # 1. Statement targets (must be classified distinctly from query sources).
-        if is_create_temp:
+        if _is_create_temp_table(expression):
             assert isinstance(expression, exp.Create)
-            self._prepare_create_temp(expression, current_database, current_schema, live, plan, skip_ids)
+            resolved_target = self._prepare_create_temp(
+                expression, current_database, current_schema, live, effects, skip_ids
+            )
         elif _is_create_perm_table(expression):
             assert isinstance(expression, exp.Create)
             target = _extract_target_table(expression.this)
             if target is not None:
                 skip_ids.add(id(target))
+                resolved_target = _permanent_resolved_table(target, current_database, current_schema)
         elif isinstance(expression, exp.Drop) and str(expression.args.get("kind") or "").upper() == "TABLE":
-            self._prepare_drop(expression, current_database, current_schema, live, plan, skip_ids)
+            resolved_target = self._prepare_drop(expression, current_database, current_schema, live, effects, skip_ids)
         elif isinstance(expression, exp.Alter) and str(expression.args.get("kind") or "").upper() == "TABLE":
-            if self._prepare_alter(expression, current_database, current_schema, live, plan, skip_ids):
-                return plan
+            replaced_expr, resolved_target = self._prepare_alter(
+                expression, current_database, current_schema, live, effects, skip_ids
+            )
+            if replaced_expr is not None:
+                return make_bound(replaced_expr, resolved_target)
         elif isinstance(expression, exp.TruncateTable):
             self._prepare_truncate(expression, current_database, current_schema, live, skip_ids)
         elif isinstance(expression, exp.Describe) and str(expression.args.get("kind") or "").upper() in (
             "TABLE",
             "VIEW",
         ):
-            self._prepare_describe(expression, current_database, current_schema, live, plan, skip_ids)
+            resolved_target = self._prepare_describe(expression, current_database, current_schema, live, skip_ids)
         elif isinstance(expression, exp.Copy):
-            self._prepare_copy(expression, current_database, current_schema, live, plan, skip_ids)
+            resolved_target = self._prepare_copy(expression, current_database, current_schema, live, skip_ids)
         elif isinstance(expression, exp.Insert):
             self._prepare_dml_target(expression, current_database, current_schema, live, skip_ids, allow_alias=False)
         elif isinstance(expression, (exp.Update, exp.Delete)):
             self._prepare_dml_target(expression, current_database, current_schema, live, skip_ids, allow_alias=True)
 
         # 2. Query sources, subqueries, JOINs, LIKE/USING sources, and INFORMATION_SCHEMA overlays.
-        self._rewrite_references(expression, current_database, current_schema, live, skip_ids)
-        return plan
+        if self._initialized or (current_database and current_schema and current_schema != "PUBLIC"):
+            self._rewrite_references(bound_expr, current_database, current_schema, live, skip_ids)
+        return make_bound(bound_expr, resolved_target)
+
+    def describe_sql(
+        self,
+        bound: BoundStatement,
+        current_database: str | None,
+        current_schema: str | None,
+    ) -> str:
+        """Build the Snowflake-compatible DESCRIBE TABLE/VIEW SQL for a bound statement."""
+        if bound.target is not None and bound.target.is_temporary:
+            t = bound.target
+            return describe_table_sql(
+                t.database,
+                t.schema,
+                t.table,
+                source=f"{TEMP_CATALOG}.{TEMP_SCHEMA}.{TEMP_INFO_COLUMNS_VIEW}",
+            )
+        return bound.expression.transform(lambda e: describe_table(e, current_database, current_schema)).sql(
+            dialect="duckdb"
+        )
 
     def _prepare_create_temp(
         self,
@@ -407,19 +459,19 @@ class TemporaryTableCatalog:
         current_database: str | None,
         current_schema: str | None,
         live: dict[LogicalName, TempTable],
-        plan: PreparedStatement,
+        effects: _PendingEffects,
         skip_ids: set[int],
-    ) -> None:
+    ) -> ResolvedTable | None:
         target = _extract_target_table(expression.this)
         if target is None:
-            return
+            return None
         skip_ids.add(id(target))
 
         table_name = _ident_name(target.this)
         db = _ident_name(target.args.get("catalog")) or current_database
         schema = _ident_name(target.args.get("db")) or current_schema
         if not (db and schema and table_name):
-            return
+            return None
 
         schema_oid = self._schema_oid(db, schema)
         if schema_oid is None:
@@ -442,7 +494,7 @@ class TemporaryTableCatalog:
         replace = bool(expression.args.get("replace"))
         if_not_exists = bool(expression.args.get("exists"))
 
-        plan.logical_result_name = table_name
+        resolved = ResolvedTable(db, schema, table_name, is_temporary=True)
 
         if existing is not None:
             if if_not_exists:
@@ -450,7 +502,7 @@ class TemporaryTableCatalog:
                 _set_temp_target(target, existing.physical_name)
                 expression.args.pop("table_comment", None)
                 expression.args.pop("text_lengths", None)
-                return
+                return resolved
             if not replace:
                 raise snowflake.connector.errors.ProgrammingError(
                     msg=f"SQL compilation error:\nObject '{table_name}' already exists.",
@@ -481,14 +533,14 @@ class TemporaryTableCatalog:
             table=table_name,
             owner_schema_oid=schema_oid,
         )
-        plan.create_temp = _PendingCreate(
+        effects.create_temp = _PendingCreate(
             table=new_table,
             replaced=existing,
             comment=comment,
             text_lengths=text_lengths,
             like_source=like_source,
         )
-        plan.created_logical_target = (db, schema, table_name)
+        return resolved
 
     def _prepare_drop(
         self,
@@ -496,9 +548,9 @@ class TemporaryTableCatalog:
         current_database: str | None,
         current_schema: str | None,
         live: dict[LogicalName, TempTable],
-        plan: PreparedStatement,
+        effects: _PendingEffects,
         skip_ids: set[int],
-    ) -> None:
+    ) -> ResolvedTable | None:
         tables: list[exp.Table] = []
         if isinstance(expression.this, exp.Table):
             tables.append(expression.this)
@@ -506,16 +558,22 @@ class TemporaryTableCatalog:
             if isinstance(tbl, exp.Table) and tbl not in tables:
                 tables.append(tbl)
 
+        first_target: ResolvedTable | None = None
         for table in tables:
             skip_ids.add(id(table))
             temp, public_perm = self._resolve_table(table, current_database, current_schema, live)
             if temp is not None:
                 _rewrite_to_temp(table, temp.physical_name, alias=None)
-                plan.drop_temps.append(temp)
-                if plan.logical_result_name is None:
-                    plan.logical_result_name = temp.table
+                effects.drop_temps.append(temp)
+                if first_target is None:
+                    first_target = ResolvedTable(temp.database, temp.schema, temp.table, is_temporary=True)
             elif public_perm is not None:
                 _qualify_table(table, *public_perm)
+                if first_target is None:
+                    first_target = ResolvedTable(*public_perm, is_temporary=False)
+            elif first_target is None:
+                first_target = _permanent_resolved_table(table, current_database, current_schema)
+        return first_target
 
     def _prepare_alter(
         self,
@@ -523,27 +581,28 @@ class TemporaryTableCatalog:
         current_database: str | None,
         current_schema: str | None,
         live: dict[LogicalName, TempTable],
-        plan: PreparedStatement,
+        effects: _PendingEffects,
         skip_ids: set[int],
-    ) -> bool:
-        """Prepare ALTER TABLE. Returns True if execution is replaced by a catalog-only rename."""
+    ) -> tuple[Expr | None, ResolvedTable | None]:
+        """Prepare ALTER TABLE. Returns (replacement_expr, target) when handled as a catalog-only rename."""
         target = expression.this
         if not isinstance(target, exp.Table):
-            return False
+            return None, None
         skip_ids.add(id(target))
 
         temp, public_perm = self._resolve_table(target, current_database, current_schema, live)
         if temp is None:
             if public_perm is not None:
                 _qualify_table(target, *public_perm)
-            return False
+                return None, ResolvedTable(*public_perm, is_temporary=False)
+            return None, _permanent_resolved_table(target, current_database, current_schema)
 
         actions = expression.args.get("actions") or []
         if len(actions) == 1 and isinstance(actions[0], exp.AlterRename) and isinstance(actions[0].this, exp.Table):
             new_tbl = actions[0].this
             new_name = _ident_name(new_tbl.this)
             if not new_name:
-                return False
+                return None, ResolvedTable(temp.database, temp.schema, temp.table, is_temporary=True)
             new_db = _ident_name(new_tbl.args.get("catalog")) or temp.database
             new_schema = _ident_name(new_tbl.args.get("db")) or temp.schema
             new_schema_oid = self._schema_oid(new_db, new_schema)
@@ -560,21 +619,20 @@ class TemporaryTableCatalog:
                     errno=2002,
                     sqlstate="42710",
                 )
-            plan.rename_temp = _PendingRename(
+            effects.rename_temp = _PendingRename(
                 table=temp,
                 new_database=new_db,
                 new_schema=new_schema,
                 new_table=new_name,
                 new_schema_oid=new_schema_oid,
             )
-            plan.expression = SUCCESS_NOP.copy()
-            return True
+            return SUCCESS_NOP.copy(), ResolvedTable(new_db, new_schema, new_name, is_temporary=True)
 
         _rewrite_to_temp(target, temp.physical_name, alias=None)
-        plan.altered_temp = temp
+        effects.altered_temp = temp
         if text_lengths := expression.args.pop("text_lengths", None):
-            plan.altered_text_lengths = list(text_lengths)
-        return False
+            effects.altered_text_lengths = list(text_lengths)
+        return None, ResolvedTable(temp.database, temp.schema, temp.table, is_temporary=True)
 
     def _prepare_truncate(
         self,
@@ -604,22 +662,23 @@ class TemporaryTableCatalog:
         current_database: str | None,
         current_schema: str | None,
         live: dict[LogicalName, TempTable],
-        plan: PreparedStatement,
         skip_ids: set[int],
-    ) -> None:
+    ) -> ResolvedTable | None:
         table = expression.find(exp.Table)
         if table is None:
-            return
+            return None
         skip_ids.add(id(table))
         if _ident_name(table.args.get("db")) == "_FS_INFORMATION_SCHEMA":
-            return
+            return None
 
         temp, public_perm = self._resolve_table(table, current_database, current_schema, live)
         if temp is not None:
             _rewrite_to_temp(table, temp.physical_name, alias=None)
-            plan.describe_temp = temp
-        elif public_perm is not None:
+            return ResolvedTable(temp.database, temp.schema, temp.table, is_temporary=True)
+        if public_perm is not None:
             _qualify_table(table, *public_perm)
+            return ResolvedTable(*public_perm, is_temporary=False)
+        return _permanent_resolved_table(table, current_database, current_schema)
 
     def _prepare_copy(
         self,
@@ -627,20 +686,21 @@ class TemporaryTableCatalog:
         current_database: str | None,
         current_schema: str | None,
         live: dict[LogicalName, TempTable],
-        plan: PreparedStatement,
         skip_ids: set[int],
-    ) -> None:
+    ) -> ResolvedTable | None:
         target = _extract_target_table(expression.this)
         if target is None:
-            return
+            return None
         skip_ids.add(id(target))
 
         temp, public_perm = self._resolve_table(target, current_database, current_schema, live)
         if temp is not None:
             _rewrite_to_temp(target, temp.physical_name, alias=None)
-            plan.copy_target_temp = temp
-        elif public_perm is not None:
+            return ResolvedTable(temp.database, temp.schema, temp.table, is_temporary=True)
+        if public_perm is not None:
             _qualify_table(target, *public_perm)
+            return ResolvedTable(*public_perm, is_temporary=False)
+        return _permanent_resolved_table(target, current_database, current_schema)
 
     def _prepare_dml_target(
         self,
@@ -799,11 +859,11 @@ class TemporaryTableCatalog:
         )
         table.replace(subquery)
 
-    def commit(self, plan: PreparedStatement, *, in_transaction: bool) -> None:
+    def _apply_effects(self, effects: _PendingEffects, *, in_transaction: bool) -> None:
         """Apply catalog and session-local metadata updates after DuckDB execution succeeds."""
-        if plan.create_temp is not None:
+        if effects.create_temp is not None:
             self._ensure_initialized()
-            pending = plan.create_temp
+            pending = effects.create_temp
             tbl = pending.table
             if pending.replaced is not None:
                 self._remove_temp_record(pending.replaced, drop_physical=True)
@@ -832,12 +892,12 @@ class TemporaryTableCatalog:
             if pending.text_lengths:
                 self._upsert_text_lengths(tbl.physical_name, pending.text_lengths)
 
-        if plan.drop_temps:
-            for dropped in plan.drop_temps:
+        if effects.drop_temps:
+            for dropped in effects.drop_temps:
                 self._remove_temp_record(dropped, drop_physical=False)
 
-        if plan.rename_temp is not None:
-            ren = plan.rename_temp
+        if effects.rename_temp is not None:
+            ren = effects.rename_temp
             self._duck_conn.execute(
                 f"""
                 UPDATE {TEMP_CATALOG}.{TEMP_SCHEMA}.{TEMP_CATALOG_TABLE}
@@ -848,20 +908,20 @@ class TemporaryTableCatalog:
                 [ren.new_database, ren.new_schema, ren.new_table, ren.new_schema_oid, ren.table.temp_id],
             )
 
-        if plan.altered_temp is not None:
+        if effects.altered_temp is not None:
             self._duck_conn.execute(
                 f"""
                 UPDATE {TEMP_CATALOG}.{TEMP_SCHEMA}.{TEMP_CATALOG_TABLE}
                 SET last_altered = CURRENT_TIMESTAMP
                 WHERE temp_id = ?
                 """,
-                [plan.altered_temp.temp_id],
+                [effects.altered_temp.temp_id],
             )
-            if plan.altered_text_lengths:
-                self._upsert_text_lengths(plan.altered_temp.physical_name, plan.altered_text_lengths)
+            if effects.altered_text_lengths:
+                self._upsert_text_lengths(effects.altered_temp.physical_name, effects.altered_text_lengths)
 
-        if plan.comment_temp is not None:
-            tbl, comment = plan.comment_temp
+        if effects.comment_temp is not None:
+            tbl, comment = effects.comment_temp
             self._set_table_comment(tbl.physical_name, comment)
             self._duck_conn.execute(
                 f"""
@@ -935,6 +995,19 @@ def _extract_target_table(node: Expr | None) -> exp.Table | None:
     if isinstance(node, exp.Schema):
         node = node.this
     return node if isinstance(node, exp.Table) else None
+
+
+def _permanent_resolved_table(
+    table: exp.Table,
+    current_database: str | None,
+    current_schema: str | None,
+) -> ResolvedTable | None:
+    name = _ident_name(table.this)
+    db = _ident_name(table.args.get("catalog")) or current_database
+    schema = _ident_name(table.args.get("db")) or current_schema
+    if not (db and schema and name):
+        return None
+    return ResolvedTable(db, schema, name, is_temporary=False)
 
 
 def _is_create_temp_table(expression: Expr) -> bool:
