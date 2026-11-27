@@ -63,11 +63,21 @@ def array_construct_etc(expression: Expr) -> Expr:
 
     Convert ARRAY_CONSTRUCT args to json_array.
 
-    Cast ARRAY_CONSTRUCT_COMPACT result to JSON, from LIST.
+    Cast ARRAY_CONSTRUCT_COMPACT result to JSON, except in supported LIST argument positions.
     """
     if isinstance(expression, exp.ArrayConstructCompact):
+        argument: Expr = expression
+        while isinstance(argument.parent, exp.Paren):
+            argument = argument.parent
+        if argument.arg_key == "this" and isinstance(
+            argument.parent,
+            (exp.ArrayContains, exp.ArrayPosition, exp.ArrayDistinct, exp.ArraySlice, exp.ArrayToString),
+        ):
+            # These functions consume a LIST. Other positions, including values inside
+            # ARRAY_CONSTRUCT, still need JSON to allow arrays mixed with scalar values.
+            return expression
         # sqlglot natively transpiles ArrayConstructCompact to LIST_FILTER in duckdb dialect,
-        # but we need to cast to JSON to match Snowflake's return type
+        # but we need to cast to JSON to match Snowflake's return type.
         return exp.Cast(this=expression, to=exp.DataType(this=exp.DataType.Type.JSON))
     elif isinstance(expression, exp.Array) and isinstance(expression.parent, exp.Select):
         return exp.Anonymous(this="json_array", expressions=expression.expressions)
