@@ -10,10 +10,18 @@ def merge(merge_expr: Expr) -> list[Expr]:
     if not isinstance(merge_expr, exp.Merge):
         return [merge_expr]
 
-    return [_create_merge_candidates(merge_expr), *_mutations(merge_expr), _counts(merge_expr)]
+    source = merge_expr.args["using"]
+    assert isinstance(source, Expr)
+    # An alias takes precedence over the table name. Subqueries and VALUES
+    # sources carry their name in an alias as well.
+    alias = source.args.get("alias")
+    source_id = alias.this if isinstance(alias, exp.TableAlias) else source.this
+    assert isinstance(source_id, exp.Identifier)
+
+    return [_create_merge_candidates(merge_expr, source_id), *_mutations(merge_expr, source_id), _counts(merge_expr)]
 
 
-def _create_merge_candidates(merge_expr: exp.Merge) -> Expr:
+def _create_merge_candidates(merge_expr: exp.Merge, source_id: exp.Identifier) -> Expr:
     """
     Given a merge statement, produce a temporary table that joins together the target and source tables.
     The merge_op column identifies which merge clause applies to the row.
@@ -22,15 +30,6 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> Expr:
 
     source = merge_expr.args.get("using")
     assert isinstance(source, Expr)
-    # a source is either a table, or a subquery or values list that carries its name in an alias,
-    # eg: USING (VALUES (1, 'a')) AS s (id, name)
-    source_id = (
-        (alias := source.args.get("alias")) and alias.this
-        if isinstance(source, (exp.Subquery, exp.Values))
-        else source.this
-    )
-    assert isinstance(source_id, exp.Identifier)
-
     join_expr = merge_expr.args.get("on")
     assert isinstance(join_expr, Expr)
 
@@ -106,15 +105,13 @@ def _create_merge_candidates(merge_expr: exp.Merge) -> Expr:
     return stmt
 
 
-def _mutations(merge_expr: exp.Merge) -> list[Expr]:
+def _mutations(merge_expr: exp.Merge, source_id: exp.Identifier) -> list[Expr]:
     """
     Given a merge statement, produce a list of delete, update and insert statements that use the
-    merge_candidates and source table to update the target target.
+    merge_candidates and source table to update the target.
     """
     target_tbl = merge_expr.this
-    source = merge_expr.args.get("using")
-    assert isinstance(source, Expr)
-    source_tbl = source.alias_or_name
+    source_tbl = source_id.sql()
     join_expr = merge_expr.args.get("on")
 
     statements: list[Expr] = []
