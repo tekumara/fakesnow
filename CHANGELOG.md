@@ -2,6 +2,23 @@
 
 # Changelog
 
+## [0.13.1](https://github.com/tekumara/fakesnow/compare/v0.13.0...v0.13.1) (2026-11-28)
+
+
+### Features
+
+* support schema-qualified temporary tables ([#510](https://github.com/tekumara/fakesnow/issues/510)) ([e55d1d6](https://github.com/tekumara/fakesnow/commit/e55d1d69a4152939fd57580c4956350da5ca2972))
+
+
+### Bug Fixes
+
+* preserve aliased source columns in MERGE ([#511](https://github.com/tekumara/fakesnow/issues/511)) ([b5bf4dc](https://github.com/tekumara/fakesnow/commit/b5bf4dcbc127a9b21f4e6c924b79feaa66274924))
+
+
+### Chores
+
+* **deps:** update sqlglot to 30.35.0 ([20b7f94](https://github.com/tekumara/fakesnow/commit/20b7f94c8ba4435a9f0db0ac69782050c7169ec2))
+
 ## [0.13.0](https://github.com/tekumara/fakesnow/compare/v0.12.1...v0.13.0) (2026-11-25)
 
 
