@@ -125,6 +125,7 @@ LEFT JOIN duckdb_columns ddb_columns
  AND ddb_columns.table_name = columns.table_name
  AND ddb_columns.column_name = columns.column_name
 where schema_name != '_fs_information_schema'
+  and columns.table_catalog != 'temp'
 """
 
 

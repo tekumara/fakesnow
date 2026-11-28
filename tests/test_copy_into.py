@@ -568,6 +568,19 @@ def test_copy_temp_table_stage_after_schema_switch(dcur: snowflake.connector.cur
     assert dcur.fetchall() == [{"status": "Copy executed with 0 files processed."}]
 
 
+def test_copy_qualified_temporary_table_stage(dcur: snowflake.connector.cursor.DictCursor, tmp_path: Path) -> None:
+    dcur.execute("CREATE SCHEMA other_schema")
+    dcur.execute("USE SCHEMA schema1")
+    dcur.execute("CREATE TEMP TABLE other_schema.qualified_stage_table (a INT, b INT)")
+    path = tmp_path / "data.csv"
+    path.write_text("1,2\n")
+    dcur.execute(f"PUT 'file://{path}' @other_schema.%qualified_stage_table AUTO_COMPRESS=FALSE")
+
+    dcur.execute("COPY INTO other_schema.qualified_stage_table FROM @other_schema.%qualified_stage_table")
+    dcur.execute("SELECT a, b FROM other_schema.qualified_stage_table")
+    assert dcur.fetchall() == [{"A": 1, "B": 2}]
+
+
 @pytest.fixture
 def temporary_table_stage_sessions(
     _fakesnow: None, tmp_path: Path

@@ -427,7 +427,6 @@ class FakeSnowflakeCursor:
                 ),
                 copy=False,
             )
-            .transform(lambda e: transforms.create_table_as(e, self._duck_conn), copy=False)
         )
 
     def _transform_explode(self, expression: Expr) -> list[Expr]:
@@ -462,11 +461,6 @@ class FakeSnowflakeCursor:
 
         cmd = expr.key_command(transformed)
 
-        sql = transformed.sql(dialect="duckdb")
-
-        if not sql:
-            raise NotImplementedError(transformed.sql(dialect="snowflake"))
-
         if (
             cmd == "CREATE"
             and isinstance(transformed, exp.Command)
@@ -494,52 +488,65 @@ class FakeSnowflakeCursor:
             self._store_result(CachedQueryResult(source.table, source.table.num_rows, source.columns, transformed))
             return
 
+        # Snowflake implicitly commits any active transaction before executing DDL statements,
+        # whether the transaction started implicitly (autocommit=False) or via explicit BEGIN.
+        # Commit before temporary-table preparation so catalog lookups do not run inside an
+        # aborted transaction and temp catalog DDL is never rolled back.
+        # see https://docs.snowflake.com/en/sql-reference/transactions#ddl
+        # and https://docs.snowflake.com/en/sql-reference/sql-ddl-summary
+        is_ddl = (
+            (
+                isinstance(transformed, (exp.Alter, exp.Comment, exp.Create, exp.Drop, exp.TruncateTable))
+                and not transformed.args.get("merge_internal")
+            )
+            or bool(transformed.args.get("create_stage_name"))
+            or bool(transformed.args.get("table_comment"))
+            or bool(transformed.args.get("col_comments"))
+        )
+        if is_ddl and (self._conn._in_transaction or not self._conn._autocommit):
+            self._duck_conn.commit()
+            self._conn._in_transaction = False
+
+        bound = self._conn.temp_tables.prepare(transformed, self._conn.database, self._conn.schema)
+        transformed = bound.expression.transform(lambda e: transforms.create_table_as(e, self._duck_conn), copy=False)
+        cmd = expr.key_command(transformed)
+
+        sql = transformed.sql(dialect="duckdb")
+
+        if not sql:
+            raise NotImplementedError(transformed.sql(dialect="snowflake"))
+
         if transformed.find(exp.Select) and (seed := transformed.args.get("seed")):
             sql = f"SELECT setseed({seed}); {sql}"
 
         result_sql = None
 
-        if not self._conn._autocommit:
-            # Snowflake implicitly commits the active transaction before executing DDL statements
-            # This will also cause the DDL statement to run in its own transaction and commit
-            # see https://docs.snowflake.com/en/sql-reference/transactions#ddl
-            # and https://docs.snowflake.com/en/sql-reference/sql-ddl-summary
-            # TODO: include DESCRIBE, SHOW, USE in this list of DDL statements
-            if isinstance(transformed, (exp.Alter, exp.Comment, exp.Create, exp.Drop)) or transformed.args.get(
-                "create_stage_name"
-            ):
-                self._duck_conn.commit()
-                self._conn._in_transaction = False
-
+        if (
+            not self._conn._autocommit
             # Start implicit transaction for DML (INSERT, UPDATE, DELETE, MERGE, COPY)
             # see https://docs.snowflake.com/en/sql-reference/transactions#autocommit
             # don't treat CREATE STAGE or CREATE FILE FORMAT as DML statements (they're transformed to INSERTs)
-            elif (
-                isinstance(transformed, (exp.Insert, exp.Update, exp.Delete, exp.Merge, exp.Copy))
-                and not transformed.args.get("create_stage_name")
-                and not transformed.args.get("create_file_format_name")
-                and not self._conn._in_transaction
-            ):
-                self._duck_conn.begin()
-                self._conn._in_transaction = True
-
-            # In transaction book keeping
-            elif isinstance(transformed, exp.Transaction):
-                self._conn._in_transaction = True
-            elif isinstance(transformed, (exp.Commit, exp.Rollback)):
-                self._conn._in_transaction = False
+            and isinstance(transformed, (exp.Insert, exp.Update, exp.Delete, exp.Merge, exp.Copy))
+            and not transformed.args.get("create_stage_name")
+            and not transformed.args.get("create_file_format_name")
+            and not self._conn._in_transaction
+        ):
+            self._duck_conn.begin()
+            self._conn._in_transaction = True
 
         affected_count = None
         result: pyarrow.Table | None = None
         columns: tuple[tuple[str, str], ...] | None = None
         try:
             if isinstance(transformed, exp.Copy):
+                assert bound.target is not None
                 sql = copy_into(
                     self._duck_conn,
                     self._conn.database,
                     self._conn.schema,
                     transformed,
                     self._conn.table_stages,
+                    bound.target,
                     params,
                 )
                 relation = self._duck_conn.sql(sql)
@@ -559,8 +566,12 @@ class FakeSnowflakeCursor:
                     result, columns = _materialize_relation(relation)
         except duckdb.BinderException as e:
             msg = e.args[0]
-            duplicate_key = "Duplicate struct entry name" in msg or "Duplicate named argument" in msg
-            errno, sqlstate = (100103, "22000") if duplicate_key else (2043, "02000")
+            if "Duplicate struct entry name" in msg or "Duplicate named argument" in msg:
+                errno, sqlstate = 100103, "22000"
+            elif "duplicate alias" in msg:
+                errno, sqlstate = 2027, "42601"
+            else:
+                errno, sqlstate = 2043, "02000"
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=errno, sqlstate=sqlstate) from e
         except duckdb.ResourceInUseException as e:
             # DuckDB reports a duplicate CREATE DATABASE as an attach conflict.
@@ -587,7 +598,12 @@ class FakeSnowflakeCursor:
             msg = cast(str, e.args[0]).split("\n")[0]
             raise snowflake.connector.errors.ProgrammingError(msg=msg, errno=100035, sqlstate="22007") from e
 
-        self._conn.table_stages.record_temporary_table(transformed, self._conn.database, self._conn.schema)
+        if isinstance(transformed, exp.Transaction):
+            self._conn._in_transaction = True
+        elif isinstance(transformed, (exp.Commit, exp.Rollback)):
+            self._conn._in_transaction = False
+
+        bound.commit(in_transaction=self._conn._in_transaction)
 
         if set_database := transformed.args.get("set_database"):
             self._conn.database = set_database
@@ -656,12 +672,10 @@ class FakeSnowflakeCursor:
         elif cmd in {"DESCRIBE TABLE", "DESCRIBE VIEW"}:
             # DESCRIBE TABLE/VIEW has already been run above to detect and error if the table exists
             # We now rerun DESCRIBE TABLE/VIEW but transformed with columns to match Snowflake
-            result_sql = transformed.transform(
-                lambda e: transforms.describe_table(e, self._conn.database, self._conn.schema)
-            ).sql(dialect="duckdb")
+            result_sql = self._conn.temp_tables.describe_sql(bound, self._conn.database, self._conn.schema)
 
         elif eid := transformed.find(exp.Identifier, bfs=False):
-            ident = eid.name
+            ident = bound.target.table if bound.target is not None else eid.name
             if cmd == "CREATE SCHEMA" and ident:
                 table = transformed.find(exp.Table)
                 assert table and table.db
@@ -682,14 +696,11 @@ class FakeSnowflakeCursor:
                 result_sql = SQL_CREATED_TABLE.substitute(name=ident)
 
                 # a newly created table object has no load history
-                if table := transformed.find(exp.Table):
-                    catalog = table.catalog or self._conn.database
-                    schema = table.db or self._conn.schema
-                    assert catalog and schema
+                if bound.target is not None and not transformed.args.get("exists"):
                     self._duck_conn.execute(
-                        f"DELETE FROM {catalog}._fs_information_schema._fs_load_history "
+                        f"DELETE FROM {bound.target.database}._fs_information_schema._fs_load_history "
                         "WHERE SCHEMA_NAME = ? AND TABLE_NAME = ?",
-                        [schema, table.name],
+                        [bound.target.schema, bound.target.table],
                     )
 
             elif cmd.startswith("ALTER") and ident:

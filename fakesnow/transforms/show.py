@@ -550,6 +550,7 @@ select
     'N' as is_iceberg
 from information_schema.tables
 where not (table_schema == '_fs_information_schema')
+  and table_catalog != 'temp'
 """
 
 # see https://docs.snowflake.com/en/sql-reference/sql/show-tables
