@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import datetime
 
+import pytest
 import snowflake.connector
 import sqlglot
 
@@ -582,6 +583,26 @@ def test_merge_with_source_subquery(conn: snowflake.connector.SnowflakeConnectio
         {"ID": 1, "BATCH_NUMBER": 1, "ACTIVE_STATUS": 1, "END_DATE": datetime.date(2001, 1, 1)},
         {"ID": 2, "BATCH_NUMBER": 2, "ACTIVE_STATUS": 1, "END_DATE": None},
     ]
+
+
+@pytest.mark.parametrize("source_alias", ["src", '"source rows"'])
+def test_merge_matched_only_with_aliased_source(
+    cur: snowflake.connector.cursor.SnowflakeCursor, source_alias: str
+) -> None:
+    cur.execute("CREATE OR REPLACE TABLE merge_target (id INT, value VARCHAR)")
+    cur.execute("CREATE OR REPLACE TABLE merge_source (id INT, value VARCHAR)")
+    cur.execute("INSERT INTO merge_target VALUES (1, 'old'), (2, 'unchanged')")
+    cur.execute("INSERT INTO merge_source VALUES (1, 'updated'), (3, 'unmatched')")
+
+    cur.execute(f"""
+        MERGE INTO merge_target AS tgt USING merge_source AS {source_alias}
+        ON tgt.id = {source_alias}.id
+        WHEN MATCHED THEN UPDATE SET tgt.value = {source_alias}.value
+    """)
+    assert cur.fetchall() == [(1,)]
+
+    cur.execute("SELECT id, value FROM merge_target ORDER BY id")
+    assert cur.fetchall() == [(1, "updated"), (2, "unchanged")]
 
 
 def test_merge_with_bind_params(_fakesnow: None) -> None:
