@@ -388,6 +388,7 @@ class FakeSnowflakeCursor:
             .transform(transforms.array_agg, copy=False)
             .transform(transforms.object_agg, copy=False)
             .transform(transforms.array_construct_etc, copy=False)
+            .transform(transforms.array_flatten, copy=False)
             .transform(transforms.dateadd_date_cast, copy=False)
             .transform(transforms.dateadd_string_literal_timestamp_cast, copy=False)
             .transform(transforms.datediff_string_literal_timestamp_cast, copy=False)
